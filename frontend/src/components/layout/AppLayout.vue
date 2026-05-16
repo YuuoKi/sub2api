@@ -24,7 +24,8 @@
 
 <script setup lang="ts">
 import '@/styles/onboarding.css'
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useAppStore } from '@/stores'
 import { useAuthStore } from '@/stores/auth'
 import { useOnboardingTour } from '@/composables/useOnboardingTour'
@@ -34,15 +35,30 @@ import AppHeader from './AppHeader.vue'
 
 const appStore = useAppStore()
 const authStore = useAuthStore()
+const route = useRoute()
 const sidebarCollapsed = computed(() => appStore.sidebarCollapsed)
 const isAdmin = computed(() => authStore.user?.role === 'admin')
+const isVideoGatewayRoute = computed(() => route.path.startsWith('/admin/video'))
 
 const { replayTour } = useOnboardingTour({
   storageKey: isAdmin.value ? 'admin_guide' : 'user_guide',
-  autoStart: true
+  autoStart: !isVideoGatewayRoute.value
 })
 
 const onboardingStore = useOnboardingStore()
+
+watch(
+  isVideoGatewayRoute,
+  (isVideoRoute) => {
+    if (!isVideoRoute) return
+    const driver = onboardingStore.getDriverInstance()
+    if (driver?.isActive?.()) {
+      driver.destroy()
+      onboardingStore.setDriverInstance(null)
+    }
+  },
+  { immediate: true },
+)
 
 onMounted(() => {
   onboardingStore.setReplayCallback(replayTour)

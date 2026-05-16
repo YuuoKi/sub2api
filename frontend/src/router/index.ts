@@ -443,7 +443,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: true,
-      title: 'Video Gateway'
+      title: 'AI 视频网关'
     }
   },
   {
@@ -453,7 +453,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: true,
-      title: 'Video Providers'
+      title: '模型通道'
     }
   },
   {
@@ -463,7 +463,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: true,
-      title: 'Create Video Task'
+      title: '创建视频任务'
     }
   },
   {
@@ -473,7 +473,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: true,
-      title: 'Video Tasks'
+      title: '视频任务列表'
     }
   },
   {
@@ -483,7 +483,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: true,
-      title: 'Video Task Detail'
+      title: '视频任务详情'
     }
   },
   {

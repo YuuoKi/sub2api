@@ -3,12 +3,12 @@
     <div class="space-y-6">
       <div class="flex flex-col gap-3 border-b border-gray-200 pb-4 dark:border-dark-700 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">Create Video Task</h1>
-          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Submit a text, image or reference video task</p>
+          <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">创建视频任务</h1>
+          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">提交文生视频、图生视频或参考视频任务，创建成功后自动进入任务详情</p>
         </div>
         <RouterLink class="btn btn-outline" to="/admin/video/tasks">
           <Icon name="document" size="sm" />
-          Tasks
+          任务列表
         </RouterLink>
       </div>
 
@@ -16,24 +16,24 @@
         <section class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
           <form class="space-y-4" @submit.prevent="submitTask">
             <div>
-              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Provider</label>
+              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">供应商通道</label>
               <select v-model.number="form.provider_account_id" class="input" required @change="syncProviderModel">
-                <option :value="0" disabled>Select provider</option>
+                <option :value="0" disabled>请选择通道</option>
                 <option v-for="provider in enabledProviders" :key="provider.id" :value="provider.id">
-                  {{ provider.display_name }} · {{ provider.default_model }}
+                  {{ provider.display_name }} | {{ provider.default_model }}
                 </option>
               </select>
             </div>
 
             <div class="grid gap-4 sm:grid-cols-2">
               <div>
-                <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Task Type</label>
+                <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">任务类型</label>
                 <select v-model="form.task_type" class="input">
                   <option v-for="item in taskTypeOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
                 </select>
               </div>
               <div>
-                <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Model</label>
+                <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">模型</label>
                 <input v-model="form.model" class="input" maxlength="200" />
               </div>
             </div>
@@ -41,26 +41,32 @@
             <div>
               <div class="mb-1 flex items-center justify-between gap-3">
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Prompt</label>
-                <button class="text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-300" type="button" @click="insertMockFailure">
-                  Insert mock:fail
-                </button>
+                <div class="flex flex-wrap gap-3">
+                  <button class="text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-300" type="button" @click="applyMockSuccess">
+                    填入成功演示
+                  </button>
+                  <button class="text-xs font-medium text-red-600 hover:text-red-700 dark:text-red-300" type="button" @click="applyMockFailure">
+                    填入失败演示
+                  </button>
+                </div>
               </div>
               <textarea v-model="form.prompt" class="input min-h-36 resize-y" maxlength="8000" required />
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Mock 失败演示会在 Prompt 中加入 <code>mock:fail</code>，提交后可在详情页看到失败处理时间线。</p>
             </div>
 
             <div>
-              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Negative Prompt</label>
+              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">负向提示词</label>
               <textarea v-model="form.negative_prompt" class="input min-h-20 resize-y" maxlength="4000" />
             </div>
 
             <div>
-              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Reference Image URL</label>
+              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">参考图 URL</label>
               <input v-model="form.reference_image_url" class="input" maxlength="1000" placeholder="https://..." />
             </div>
 
             <div class="grid gap-4 sm:grid-cols-3">
               <div>
-                <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Aspect Ratio</label>
+                <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">画幅比例</label>
                 <select v-model="form.aspect_ratio" class="input">
                   <option value="16:9">16:9</option>
                   <option value="9:16">9:16</option>
@@ -69,11 +75,11 @@
                 </select>
               </div>
               <div>
-                <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Duration</label>
+                <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">时长（秒）</label>
                 <input v-model.number="form.duration" class="input" type="number" min="1" max="60" />
               </div>
               <div>
-                <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Resolution</label>
+                <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">分辨率</label>
                 <select v-model="form.resolution" class="input">
                   <option value="720p">720p</option>
                   <option value="1080p">1080p</option>
@@ -84,13 +90,13 @@
 
             <button class="btn btn-primary" type="submit" :disabled="submitting || !form.provider_account_id">
               <Icon name="play" size="sm" />
-              Submit
+              创建任务
             </button>
           </form>
         </section>
 
         <section class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
-          <h2 class="text-base font-semibold text-gray-900 dark:text-white">Provider State</h2>
+          <h2 class="text-base font-semibold text-gray-900 dark:text-white">通道状态</h2>
           <div class="mt-4 space-y-3">
             <div v-for="provider in providers" :key="provider.id" class="flex items-center justify-between gap-3 rounded-lg border border-gray-200 p-3 dark:border-dark-700">
               <div class="min-w-0">
@@ -101,15 +107,18 @@
               </div>
               <div class="text-right text-xs">
                 <div :class="provider.enabled ? 'text-emerald-600 dark:text-emerald-300' : 'text-gray-500 dark:text-gray-400'">
-                  {{ provider.enabled ? 'Enabled' : 'Disabled' }}
+                  {{ providerEnabledLabel(provider.enabled) }}
                 </div>
-                <div class="mt-1 text-gray-500 dark:text-gray-400">{{ provider.api_key_configured ? provider.masked_key || 'Configured' : 'No key' }}</div>
+                <div class="mt-1 text-gray-500 dark:text-gray-400">{{ providerKeyLabel(provider.api_key_configured, provider.masked_key) }}</div>
               </div>
+            </div>
+            <div v-if="!enabledProviders.length" class="rounded-lg border border-dashed border-gray-200 p-4 text-sm text-gray-500 dark:border-dark-700 dark:text-gray-400">
+              暂无可用通道，请先到模型通道页面确认 Mock Provider 已启用。
             </div>
           </div>
           <RouterLink class="btn btn-outline mt-5" to="/admin/video/providers">
             <Icon name="key" size="sm" />
-            Configure Providers
+            配置模型通道
           </RouterLink>
         </section>
       </div>
@@ -126,7 +135,7 @@ import { adminAPI } from '@/api/admin'
 import { videoTaskAPI, type VideoProviderAccount, type VideoTaskCreatePayload } from '@/api/admin/video'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
-import { providerBadgeClass, taskTypeOptions } from './videoUtils'
+import { providerBadgeClass, providerEnabledLabel, providerKeyLabel, taskTypeOptions } from './videoUtils'
 
 const router = useRouter()
 const appStore = useAppStore()
@@ -137,7 +146,7 @@ const form = reactive<VideoTaskCreatePayload>({
   provider_account_id: 0,
   task_type: 'text_to_video',
   model: '',
-  prompt: 'Generate a concise product demo clip for a secure enterprise API console.',
+  prompt: '生成一段企业 API 管理后台的安全产品演示短片，画面清晰、节奏简洁。',
   negative_prompt: '',
   reference_image_url: '',
   aspect_ratio: '16:9',
@@ -158,7 +167,7 @@ async function loadProviders() {
       form.model = first.default_model
     }
   } catch (err) {
-    appStore.showError(extractApiErrorMessage(err, 'Failed to load video providers'))
+    appStore.showError(extractApiErrorMessage(err, '加载模型通道失败'))
   }
 }
 
@@ -169,8 +178,24 @@ function syncProviderModel() {
   }
 }
 
-function insertMockFailure() {
-  form.prompt = form.prompt.includes('mock:fail') ? form.prompt : `${form.prompt.trim()} mock:fail`.trim()
+function selectMockProvider() {
+  const mock = enabledProviders.value.find((provider) => provider.provider === 'mock')
+  if (!mock) return
+  form.provider_account_id = mock.id
+  form.model = mock.default_model
+}
+
+function applyMockSuccess() {
+  selectMockProvider()
+  form.task_type = 'text_to_video'
+  form.prompt = '生成一段企业 API 管理后台的安全产品演示短片，画面清晰、节奏简洁。'
+  form.negative_prompt = ''
+}
+
+function applyMockFailure() {
+  selectMockProvider()
+  form.task_type = 'text_to_video'
+  form.prompt = '模拟视频供应商失败链路，用于 P0.5 内测验收 mock:fail'
 }
 
 async function submitTask() {
@@ -183,10 +208,10 @@ async function submitTask() {
       reference_image_url: form.reference_image_url?.trim(),
       model: form.model?.trim(),
     })
-    appStore.showSuccess('Video task created')
+    appStore.showSuccess('视频任务已创建')
     router.push(`/admin/video/tasks/${task.id}`)
   } catch (err) {
-    appStore.showError(extractApiErrorMessage(err, 'Failed to create video task'))
+    appStore.showError(extractApiErrorMessage(err, '创建视频任务失败'))
   } finally {
     submitting.value = false
   }

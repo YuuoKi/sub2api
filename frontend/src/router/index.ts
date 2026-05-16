@@ -433,6 +433,60 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/video',
+    redirect: '/admin/video/dashboard'
+  },
+  {
+    path: '/admin/video/dashboard',
+    name: 'AdminVideoDashboard',
+    component: () => import('@/views/admin/video/VideoDashboardView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Video Gateway'
+    }
+  },
+  {
+    path: '/admin/video/providers',
+    name: 'AdminVideoProviders',
+    component: () => import('@/views/admin/video/VideoProvidersView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Video Providers'
+    }
+  },
+  {
+    path: '/admin/video/create',
+    name: 'AdminVideoCreateTask',
+    component: () => import('@/views/admin/video/VideoCreateTaskView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Create Video Task'
+    }
+  },
+  {
+    path: '/admin/video/tasks',
+    name: 'AdminVideoTasks',
+    component: () => import('@/views/admin/video/VideoTasksView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Video Tasks'
+    }
+  },
+  {
+    path: '/admin/video/tasks/:id',
+    name: 'AdminVideoTaskDetail',
+    component: () => import('@/views/admin/video/VideoTaskDetailView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Video Task Detail'
+    }
+  },
+  {
     path: '/monitor',
     name: 'ChannelStatus',
     component: () => import('@/views/user/ChannelStatusView.vue'),

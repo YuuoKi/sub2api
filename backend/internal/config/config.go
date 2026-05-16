@@ -78,6 +78,7 @@ type Config struct {
 	RateLimit               RateLimitConfig               `mapstructure:"rate_limit"`
 	Pricing                 PricingConfig                 `mapstructure:"pricing"`
 	Gateway                 GatewayConfig                 `mapstructure:"gateway"`
+	VideoGateway            VideoGatewayConfig            `mapstructure:"video_gateway"`
 	APIKeyAuth              APIKeyAuthCacheConfig         `mapstructure:"api_key_auth_cache"`
 	SubscriptionCache       SubscriptionCacheConfig       `mapstructure:"subscription_cache"`
 	SubscriptionMaintenance SubscriptionMaintenanceConfig `mapstructure:"subscription_maintenance"`
@@ -171,6 +172,14 @@ type IdempotencyConfig struct {
 	CleanupIntervalSeconds int `mapstructure:"cleanup_interval_seconds"`
 	// CleanupBatchSize 每次清理的最大记录数。
 	CleanupBatchSize int `mapstructure:"cleanup_batch_size"`
+}
+
+type VideoGatewayConfig struct {
+	EncryptionKey       string `mapstructure:"encryption_key"`
+	WorkerEnabled       bool   `mapstructure:"worker_enabled"`
+	PollIntervalSeconds int    `mapstructure:"poll_interval_seconds"`
+	TaskTimeoutMinutes  int    `mapstructure:"task_timeout_minutes"`
+	WorkerBatchSize     int    `mapstructure:"worker_batch_size"`
 }
 
 type LinuxDoConnectConfig struct {
@@ -1328,6 +1337,7 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 	cfg.Log.StacktraceLevel = strings.ToLower(strings.TrimSpace(cfg.Log.StacktraceLevel))
 	cfg.Log.Output.FilePath = strings.TrimSpace(cfg.Log.Output.FilePath)
 	cfg.Gateway.ForcedCodexInstructionsTemplateFile = strings.TrimSpace(cfg.Gateway.ForcedCodexInstructionsTemplateFile)
+	cfg.VideoGateway.EncryptionKey = strings.TrimSpace(cfg.VideoGateway.EncryptionKey)
 	if cfg.Gateway.ForcedCodexInstructionsTemplateFile != "" {
 		content, err := os.ReadFile(cfg.Gateway.ForcedCodexInstructionsTemplateFile)
 		if err != nil {
@@ -1583,6 +1593,13 @@ func setDefaults() {
 
 	// TOTP
 	viper.SetDefault("totp.encryption_key", "")
+
+	// Video gateway
+	viper.SetDefault("video_gateway.encryption_key", "")
+	viper.SetDefault("video_gateway.worker_enabled", true)
+	viper.SetDefault("video_gateway.poll_interval_seconds", 2)
+	viper.SetDefault("video_gateway.task_timeout_minutes", 15)
+	viper.SetDefault("video_gateway.worker_batch_size", 20)
 
 	// Default
 	// Admin credentials are created via the setup flow (web wizard / CLI / AUTO_SETUP).
@@ -1875,6 +1892,25 @@ func (c *Config) Validate() error {
 
 	// Gemini OAuth 配置校验：client_id 与 client_secret 必须同时设置或同时留空。
 	// 留空时表示使用内置的 Gemini CLI OAuth 客户端（其 client_secret 通过环境变量注入）。
+	if key := strings.TrimSpace(c.VideoGateway.EncryptionKey); key != "" {
+		decoded, err := hex.DecodeString(key)
+		if err != nil {
+			return fmt.Errorf("video_gateway.encryption_key must be hex encoded: %w", err)
+		}
+		if len(decoded) != 32 {
+			return fmt.Errorf("video_gateway.encryption_key must be 32 bytes (64 hex chars)")
+		}
+	}
+	if c.VideoGateway.PollIntervalSeconds <= 0 {
+		return fmt.Errorf("video_gateway.poll_interval_seconds must be positive")
+	}
+	if c.VideoGateway.TaskTimeoutMinutes <= 0 {
+		return fmt.Errorf("video_gateway.task_timeout_minutes must be positive")
+	}
+	if c.VideoGateway.WorkerBatchSize <= 0 {
+		return fmt.Errorf("video_gateway.worker_batch_size must be positive")
+	}
+
 	geminiClientID := strings.TrimSpace(c.Gemini.OAuth.ClientID)
 	geminiClientSecret := strings.TrimSpace(c.Gemini.OAuth.ClientSecret)
 	if (geminiClientID == "") != (geminiClientSecret == "") {

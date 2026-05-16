@@ -93,6 +93,7 @@ var ProviderSet = wire.NewSet(
 	NewChannelMonitorRequestTemplateRepository,
 	NewContentModerationRepository,
 	NewAffiliateRepository,
+	NewVideoGatewayRepository,
 
 	// Cache implementations
 	NewGatewayCache,
@@ -124,6 +125,7 @@ var ProviderSet = wire.NewSet(
 
 	// Encryptors
 	NewAESEncryptor,
+	NewVideoKeyEncryptor,
 
 	// Backup infrastructure
 	NewPgDumper,

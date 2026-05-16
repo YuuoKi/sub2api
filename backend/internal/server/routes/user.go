@@ -118,5 +118,16 @@ func RegisterUserRoutes(
 			monitors.GET("", h.ChannelMonitor.List)
 			monitors.GET("/:id/status", h.ChannelMonitor.GetStatus)
 		}
+
+		video := authenticated.Group("/video")
+		{
+			tasks := video.Group("/tasks")
+			{
+				tasks.GET("", h.Video.ListTasks)
+				tasks.POST("", h.Video.CreateTask)
+				tasks.GET("/:id", h.Video.GetTask)
+				tasks.POST("/:id/cancel", h.Video.CancelTask)
+			}
+		}
 	}
 }

@@ -153,7 +153,7 @@ func resolvePageImagePath(pagesDir, imagesDir, filename string) (string, bool) {
 	if err != nil || !isPathWithinBase(realTarget, realImagesDir) {
 		return "", false
 	}
-	return realTarget, true
+	return cleanedTarget, true
 }
 
 func cleanPageImageRelativePath(filename string) (string, bool) {

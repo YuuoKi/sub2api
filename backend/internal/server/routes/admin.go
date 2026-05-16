@@ -94,9 +94,21 @@ func RegisterAdminRoutes(
 
 		// 风控中心
 		registerContentModerationRoutes(admin, h)
+		registerAdminVideoRoutes(admin, h)
 
 		// 邀请返利（专属用户管理）
 		registerAffiliateRoutes(admin, h)
+	}
+}
+
+func registerAdminVideoRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	video := admin.Group("/video")
+	{
+		video.GET("/providers", h.Admin.Video.ListProviders)
+		video.POST("/providers", h.Admin.Video.CreateProvider)
+		video.PATCH("/providers/:id", h.Admin.Video.UpdateProvider)
+		video.POST("/providers/:id/test", h.Admin.Video.TestProvider)
+		video.GET("/dashboard", h.Admin.Video.Dashboard)
 	}
 }
 

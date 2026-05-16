@@ -854,6 +854,22 @@ totp:
   encryption_key: ""
 
 # =============================================================================
+# Video Gateway P0 Configuration
+# 视频网关 P0 配置
+# =============================================================================
+video_gateway:
+  # Production must set a fixed 32-byte hex key for upstream video provider keys.
+  # 生产环境必须配置固定的 32 字节 hex 密钥，用于加密视频上游 API Key。
+  # If left empty in development, the service falls back to totp.encryption_key
+  # and logs a dev-only warning.
+  # Generate with / 生成命令: openssl rand -hex 32
+  encryption_key: ""
+  worker_enabled: true
+  poll_interval_seconds: 2
+  task_timeout_minutes: 15
+  worker_batch_size: 20
+
+# =============================================================================
 # LinuxDo Connect OAuth Login (SSO)
 # LinuxDo Connect OAuth 登录（用于 Sub2API 用户登录）
 # =============================================================================

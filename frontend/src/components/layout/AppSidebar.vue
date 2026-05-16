@@ -731,6 +731,19 @@ const adminNavItems = computed((): NavItem[] => {
         { path: '/admin/channels/monitor', label: t('nav.channelMonitor'), icon: SignalIcon, featureFlag: flagChannelMonitor },
       ],
     },
+    {
+      path: '/admin/video',
+      label: 'Video Gateway',
+      icon: SignalIcon,
+      hideInSimpleMode: true,
+      expandOnly: true,
+      children: [
+        { path: '/admin/video/dashboard', label: 'Dashboard', icon: ChartIcon },
+        { path: '/admin/video/providers', label: 'Providers', icon: ServerIcon },
+        { path: '/admin/video/create', label: 'Create Task', icon: TicketIcon },
+        { path: '/admin/video/tasks', label: 'Tasks', icon: OrderListIcon },
+      ],
+    },
     { path: '/admin/subscriptions', label: t('nav.subscriptions'), icon: CreditCardIcon, hideInSimpleMode: true },
     { path: '/admin/accounts', label: t('nav.accounts'), icon: GlobeIcon },
     { path: '/admin/announcements', label: t('nav.announcements'), icon: BellIcon },
@@ -827,7 +840,7 @@ function isActive(path: string): boolean {
 
 function isGroupActive(item: NavItem): boolean {
   if (!item.children) return false
-  return item.children.some(child => route.path === child.path)
+  return item.children.some(child => route.path === child.path || route.path.startsWith(child.path + '/'))
 }
 
 function isGroupExpanded(item: NavItem): boolean {

@@ -66,12 +66,17 @@
 import { computed, onMounted } from 'vue'
 import { useAppStore } from '@/stores'
 import { sanitizeUrl } from '@/utils/url'
+import { isVideoGatewayDemoMode, VIDEO_GATEWAY_PRODUCT_NAME } from '@/utils/productMode'
 
 const appStore = useAppStore()
 
-const siteName = computed(() => appStore.siteName || 'Sub2API')
+const siteName = computed(() => isVideoGatewayDemoMode ? VIDEO_GATEWAY_PRODUCT_NAME : appStore.siteName || 'Sub2API')
 const siteLogo = computed(() => sanitizeUrl(appStore.siteLogo || '', { allowRelative: true, allowDataUrl: true }))
-const siteSubtitle = computed(() => appStore.cachedPublicSettings?.site_subtitle || 'Subscription to API Conversion Platform')
+const siteSubtitle = computed(() =>
+  isVideoGatewayDemoMode
+    ? '统一管理企业 AI 视频模型通道、任务和结果回收'
+    : appStore.cachedPublicSettings?.site_subtitle || 'Subscription to API Conversion Platform'
+)
 const settingsLoaded = computed(() => appStore.publicSettingsLoaded)
 
 const currentYear = computed(() => new Date().getFullYear())

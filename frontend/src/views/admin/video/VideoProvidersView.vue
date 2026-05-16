@@ -4,7 +4,7 @@
       <div class="flex flex-col gap-3 border-b border-gray-200 pb-4 dark:border-dark-700 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">模型通道</h1>
-          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">管理 Mock Provider、Seedance 2.0 和 Kling 的启用状态与 Key 配置</p>
+          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">管理演示通道与未来真实模型通道的启用状态和调用凭证。</p>
         </div>
         <button class="btn btn-outline" type="button" :disabled="loading" @click="loadProviders">
           <Icon name="refresh" size="sm" :class="{ 'animate-spin': loading }" />
@@ -18,10 +18,12 @@
             <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-dark-700">
               <thead class="bg-gray-50 text-left text-xs uppercase text-gray-500 dark:bg-dark-700/40 dark:text-gray-400">
                 <tr>
-                  <th class="px-5 py-3 font-medium">供应商</th>
+                  <th class="px-5 py-3 font-medium">通道名称</th>
+                  <th class="px-5 py-3 font-medium">通道类型</th>
                   <th class="px-5 py-3 font-medium">状态</th>
-                  <th class="px-5 py-3 font-medium">API Key</th>
+                  <th class="px-5 py-3 font-medium">Key 状态</th>
                   <th class="px-5 py-3 font-medium">默认模型</th>
+                  <th class="px-5 py-3 font-medium">每分钟限额</th>
                   <th class="px-5 py-3 font-medium">更新时间</th>
                   <th class="px-5 py-3 font-medium">操作</th>
                 </tr>
@@ -30,25 +32,27 @@
                 <tr v-for="provider in providers" :key="provider.id" :class="selected?.id === provider.id ? 'bg-gray-50 dark:bg-dark-700/40' : ''">
                   <td class="px-5 py-3">
                     <span class="inline-flex rounded-md px-2 py-1 text-xs font-medium" :class="providerBadgeClass(provider.provider)">
-                      {{ provider.display_name }}
+                      {{ providerDisplayName(provider) }}
                     </span>
                     <div class="mt-1 max-w-xs text-xs text-gray-500 dark:text-gray-400">{{ providerDescription(provider.provider) }}</div>
                   </td>
+                  <td class="px-5 py-3 text-gray-700 dark:text-gray-200">{{ providerLabel(provider.provider) }}</td>
                   <td class="px-5 py-3">
                     <button
                       type="button"
                       class="inline-flex rounded-md px-2 py-1 text-xs font-medium"
-                      :class="provider.enabled ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-gray-100 text-gray-700 dark:bg-dark-700 dark:text-gray-200'"
+                      :class="providerRuntimeStatusClass(providerRuntimeStatus(provider))"
                       :disabled="savingId === provider.id"
                       @click="toggleEnabled(provider)"
                     >
-                      {{ providerEnabledLabel(provider.enabled) }}
+                      {{ providerRuntimeStatus(provider) }}
                     </button>
                   </td>
                   <td class="px-5 py-3 text-gray-700 dark:text-gray-200">
                     {{ providerKeyLabel(provider.api_key_configured, provider.masked_key) }}
                   </td>
-                  <td class="px-5 py-3 text-gray-700 dark:text-gray-200">{{ provider.default_model || '-' }}</td>
+                  <td class="px-5 py-3 text-gray-700 dark:text-gray-200">{{ modelDisplayName(provider.provider, provider.default_model) }}</td>
+                  <td class="px-5 py-3 text-gray-700 dark:text-gray-200">{{ provider.rate_limit_per_minute }}</td>
                   <td class="px-5 py-3 text-gray-500 dark:text-gray-400">{{ formatDate(provider.updated_at) }}</td>
                   <td class="px-5 py-3">
                     <div class="flex gap-2">
@@ -64,7 +68,7 @@
                   </td>
                 </tr>
                 <tr v-if="!loading && !providers.length">
-                  <td colspan="6" class="px-5 py-8 text-center text-sm text-gray-500 dark:text-gray-400">暂无通道</td>
+                  <td colspan="8" class="px-5 py-8 text-center text-sm text-gray-500 dark:text-gray-400">暂无通道，请确认数据库迁移已执行。</td>
                 </tr>
               </tbody>
             </table>
@@ -79,7 +83,7 @@
               <input v-model="form.display_name" class="input" maxlength="120" />
             </div>
             <div>
-              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Base URL</label>
+              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">上游地址</label>
               <input v-model="form.base_url" class="input" maxlength="500" />
             </div>
             <div>
@@ -87,7 +91,7 @@
               <input v-model="form.default_model" class="input" maxlength="200" />
             </div>
             <div>
-              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">API Key</label>
+              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">上游调用凭证 / API Key</label>
               <input v-model="form.api_key" class="input" type="password" autocomplete="off" placeholder="留空表示保留当前 Key" maxlength="4000" />
               <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">当前：{{ providerKeyLabel(selected.api_key_configured, selected.masked_key) }}</p>
             </div>
@@ -110,7 +114,7 @@
               </button>
             </div>
           </form>
-          <div v-else class="mt-6 text-sm text-gray-500 dark:text-gray-400">请选择一个通道</div>
+          <div v-else class="mt-6 text-sm text-gray-500 dark:text-gray-400">请选择一个通道进行编辑或测试。</div>
 
           <div v-if="testResult" class="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm dark:border-dark-700 dark:bg-dark-700/40">
             <div class="flex items-center justify-between gap-3">
@@ -141,10 +145,14 @@ import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import {
   formatDate,
+  modelDisplayName,
   providerBadgeClass,
   providerDescription,
-  providerEnabledLabel,
+  providerDisplayName,
   providerKeyLabel,
+  providerLabel,
+  providerRuntimeStatus,
+  providerRuntimeStatusClass,
   providerTestMessage,
 } from './videoUtils'
 
@@ -168,11 +176,11 @@ const form = reactive({
 
 function selectProvider(provider: VideoProviderAccount) {
   selected.value = provider
-  form.display_name = provider.display_name
+  form.display_name = providerDisplayName(provider)
   form.enabled = provider.enabled
   form.api_key = ''
   form.base_url = provider.base_url
-  form.default_model = provider.default_model
+  form.default_model = modelDisplayName(provider.provider, provider.default_model)
   form.rate_limit_per_minute = provider.rate_limit_per_minute
   testResult.value = null
 }

@@ -24,11 +24,11 @@
       <!-- Right: Announcements + Docs + Language + Subscriptions + Balance + User Dropdown -->
       <div class="flex items-center gap-3">
         <!-- Announcement Bell -->
-        <AnnouncementBell v-if="user" />
+        <AnnouncementBell v-if="user && !isVideoGatewayDemoMode" />
 
         <!-- Docs Link -->
         <a
-          v-if="docUrl"
+          v-if="docUrl && !isVideoGatewayDemoMode"
           :href="docUrl"
           target="_blank"
           rel="noopener noreferrer"
@@ -42,11 +42,11 @@
         <LocaleSwitcher />
 
         <!-- Subscription Progress (for users with active subscriptions) -->
-        <SubscriptionProgressMini v-if="user" />
+        <SubscriptionProgressMini v-if="user && !isVideoGatewayDemoMode" />
 
         <!-- Balance Display -->
         <div
-          v-if="user"
+          v-if="user && !isVideoGatewayDemoMode"
           class="hidden items-center gap-2 rounded-xl bg-primary-50 px-3 py-1.5 dark:bg-primary-900/20 sm:flex"
         >
           <svg
@@ -87,8 +87,8 @@
               <div class="text-sm font-medium text-gray-900 dark:text-white">
                 {{ displayName }}
               </div>
-              <div class="text-xs capitalize text-gray-500 dark:text-dark-400">
-                {{ user.role }}
+                <div class="text-xs capitalize text-gray-500 dark:text-dark-400">
+                {{ isVideoGatewayDemoMode ? '管理员' : user.role }}
               </div>
             </div>
             <Icon name="chevronDown" size="sm" class="hidden text-gray-400 md:block" />
@@ -102,11 +102,11 @@
                 <div class="text-sm font-medium text-gray-900 dark:text-white">
                   {{ displayName }}
                 </div>
-                <div class="text-xs text-gray-500 dark:text-dark-400">{{ user.email }}</div>
+                <div v-if="!isVideoGatewayDemoMode" class="text-xs text-gray-500 dark:text-dark-400">{{ user.email }}</div>
               </div>
 
               <!-- Balance (mobile only) -->
-              <div class="border-b border-gray-100 px-4 py-2 dark:border-dark-700 sm:hidden">
+              <div v-if="!isVideoGatewayDemoMode" class="border-b border-gray-100 px-4 py-2 dark:border-dark-700 sm:hidden">
                 <div class="text-xs text-gray-500 dark:text-dark-400">
                   {{ t('common.balance') }}
                 </div>
@@ -116,18 +116,18 @@
               </div>
 
               <div class="py-1">
-                <router-link to="/profile" @click="closeDropdown" class="dropdown-item">
+                <router-link v-if="!isVideoGatewayDemoMode" to="/profile" @click="closeDropdown" class="dropdown-item">
                   <Icon name="user" size="sm" />
                   {{ t('nav.profile') }}
                 </router-link>
 
-                <router-link to="/keys" @click="closeDropdown" class="dropdown-item">
+                <router-link v-if="!isVideoGatewayDemoMode" to="/keys" @click="closeDropdown" class="dropdown-item">
                   <Icon name="key" size="sm" />
                   {{ t('nav.apiKeys') }}
                 </router-link>
 
                 <a
-                  v-if="authStore.isAdmin"
+                  v-if="authStore.isAdmin && !isVideoGatewayDemoMode"
                   href="https://github.com/Wei-Shaw/sub2api"
                   target="_blank"
                   rel="noopener noreferrer"
@@ -222,6 +222,7 @@ import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import SubscriptionProgressMini from '@/components/common/SubscriptionProgressMini.vue'
 import AnnouncementBell from '@/components/common/AnnouncementBell.vue'
 import Icon from '@/components/icons/Icon.vue'
+import { isVideoGatewayDemoMode, VIDEO_GATEWAY_ADMIN_NAME } from '@/utils/productMode'
 
 const router = useRouter()
 const route = useRoute()
@@ -240,10 +241,11 @@ const avatarUrl = computed(() => user.value?.avatar_url?.trim() || '')
 
 // 只在标准模式的管理员下显示新手引导按钮
 const showOnboardingButton = computed(() => {
-  return !authStore.isSimpleMode && user.value?.role === 'admin'
+  return !isVideoGatewayDemoMode && !authStore.isSimpleMode && user.value?.role === 'admin'
 })
 
 const userInitials = computed(() => {
+  if (isVideoGatewayDemoMode) return '视'
   if (!user.value) return ''
   // Prefer username, fallback to email
   if (user.value.username) {
@@ -258,6 +260,7 @@ const userInitials = computed(() => {
 })
 
 const displayName = computed(() => {
+  if (isVideoGatewayDemoMode) return VIDEO_GATEWAY_ADMIN_NAME
   if (!user.value) return ''
   return user.value.username || user.value.email?.split('@')[0] || ''
 })

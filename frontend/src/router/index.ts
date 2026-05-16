@@ -10,6 +10,12 @@ import { useAdminSettingsStore } from '@/stores/adminSettings'
 import { useNavigationLoadingState } from '@/composables/useNavigationLoading'
 import { useRoutePrefetch } from '@/composables/useRoutePrefetch'
 import { resolveDocumentTitle } from './title'
+import {
+  isVideoGatewayDemoMode,
+  isVideoGatewayDemoRoute,
+  VIDEO_GATEWAY_HOME_PATH,
+  VIDEO_GATEWAY_PRODUCT_NAME,
+} from '@/utils/productMode'
 
 /**
  * Route definitions with lazy loading
@@ -157,7 +163,7 @@ const routes: RouteRecordRaw[] = [
   // ==================== User Routes ====================
   {
     path: '/',
-    redirect: '/home'
+    redirect: () => isVideoGatewayDemoMode ? VIDEO_GATEWAY_HOME_PATH : '/home'
   },
   {
     path: '/dashboard',
@@ -354,7 +360,7 @@ const routes: RouteRecordRaw[] = [
   // ==================== Admin Routes ====================
   {
     path: '/admin',
-    redirect: '/admin/dashboard'
+    redirect: () => isVideoGatewayDemoMode ? VIDEO_GATEWAY_HOME_PATH : '/admin/dashboard'
   },
   {
     path: '/admin/dashboard',
@@ -770,7 +776,7 @@ router.beforeEach((to, _from, next) => {
     const menuItem = publicItems.find((item) => item.id === id)
       ?? (authStore.isAdmin ? adminSettingsStore.customMenuItems.find((item) => item.id === id) : undefined)
     if (menuItem?.label) {
-      const siteName = appStore.siteName || 'Sub2API'
+      const siteName = isVideoGatewayDemoMode ? VIDEO_GATEWAY_PRODUCT_NAME : appStore.siteName || 'Sub2API'
       document.title = `${menuItem.label} - ${siteName}`
     } else {
       document.title = resolveDocumentTitle(to.meta.title, appStore.siteName, to.meta.titleKey as string)
@@ -785,6 +791,11 @@ router.beforeEach((to, _from, next) => {
 
   // If route doesn't require auth, allow access
   if (!requiresAuth) {
+    if (isVideoGatewayDemoMode && !isVideoGatewayDemoRoute(to.path)) {
+      next(authStore.isAuthenticated ? VIDEO_GATEWAY_HOME_PATH : '/login')
+      return
+    }
+
     // If already authenticated and trying to access login/register, redirect to appropriate dashboard
     if (authStore.isAuthenticated && (to.path === '/login' || to.path === '/register')) {
       // In backend mode, non-admin users should NOT be redirected away from login
@@ -794,7 +805,7 @@ router.beforeEach((to, _from, next) => {
         return
       }
       // Admin users go to admin dashboard, regular users go to user dashboard
-      next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
+      next(authStore.isAdmin ? (isVideoGatewayDemoMode ? VIDEO_GATEWAY_HOME_PATH : '/admin/dashboard') : '/dashboard')
       return
     }
     // Backend mode: block public pages for unauthenticated users (except login, key-usage, setup)
@@ -822,7 +833,12 @@ router.beforeEach((to, _from, next) => {
   // Check admin requirement
   if (requiresAdmin && !authStore.isAdmin) {
     // User is authenticated but not admin, redirect to user dashboard
-    next('/dashboard')
+    next(isVideoGatewayDemoMode ? VIDEO_GATEWAY_HOME_PATH : '/dashboard')
+    return
+  }
+
+  if (isVideoGatewayDemoMode && authStore.isAuthenticated && !isVideoGatewayDemoRoute(to.path)) {
+    next(VIDEO_GATEWAY_HOME_PATH)
     return
   }
 
@@ -831,7 +847,7 @@ router.beforeEach((to, _from, next) => {
   if (to.meta.requiresPayment) {
     const paymentEnabled = appStore.cachedPublicSettings?.payment_enabled
     if (!paymentEnabled) {
-      next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
+      next(authStore.isAdmin ? (isVideoGatewayDemoMode ? VIDEO_GATEWAY_HOME_PATH : '/admin/dashboard') : '/dashboard')
       return
     }
   }
@@ -839,7 +855,7 @@ router.beforeEach((to, _from, next) => {
   if (to.meta.requiresRiskControl) {
     const riskControlEnabled = appStore.cachedPublicSettings?.risk_control_enabled === true
     if (!riskControlEnabled) {
-      next(authStore.isAdmin ? '/admin/settings' : '/dashboard')
+      next(authStore.isAdmin ? (isVideoGatewayDemoMode ? VIDEO_GATEWAY_HOME_PATH : '/admin/settings') : '/dashboard')
       return
     }
   }
@@ -856,7 +872,7 @@ router.beforeEach((to, _from, next) => {
 
     if (restrictedPaths.some((path) => to.path.startsWith(path))) {
       // 简易模式下访问受限页面,重定向到仪表板
-      next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
+      next(authStore.isAdmin ? (isVideoGatewayDemoMode ? VIDEO_GATEWAY_HOME_PATH : '/admin/dashboard') : '/dashboard')
       return
     }
   }

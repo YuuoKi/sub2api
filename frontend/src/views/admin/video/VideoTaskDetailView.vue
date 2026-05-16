@@ -10,12 +10,15 @@
             <span class="text-gray-300 dark:text-dark-500">/</span>
             <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">#{{ task?.id || route.params.id }}</h1>
           </div>
-          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ task ? shortText(task.prompt, 140) : '加载中' }}</p>
+          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">查看单个任务的参数、处理时间线、结果或失败原因。</p>
         </div>
         <div class="flex flex-wrap gap-2">
           <button v-if="task && !isTerminalStatus(task.status)" class="btn btn-outline" type="button" :disabled="cancelling" @click="cancelTask">
             <Icon name="ban" size="sm" />
             取消任务
+          </button>
+          <button v-if="task" class="btn btn-outline" type="button" @click="copyToCreate">
+            复制参数
           </button>
           <button class="btn btn-outline" type="button" :disabled="loading" @click="loadTask">
             <Icon name="refresh" size="sm" :class="{ 'animate-spin': loading }" />
@@ -34,12 +37,12 @@
           </div>
         </div>
         <div class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-800">
-          <div class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">供应商</div>
+          <div class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">通道</div>
           <div class="mt-2 text-lg font-semibold text-gray-900 dark:text-white">{{ providerLabel(task.provider) }}</div>
         </div>
         <div class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-800">
           <div class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">模型</div>
-          <div class="mt-2 truncate text-lg font-semibold text-gray-900 dark:text-white">{{ task.model }}</div>
+          <div class="mt-2 truncate text-lg font-semibold text-gray-900 dark:text-white">{{ modelDisplayName(task.provider, task.model) }}</div>
         </div>
         <div class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-800">
           <div class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">更新时间</div>
@@ -85,17 +88,27 @@
       </div>
 
       <section v-if="task" class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
-        <h2 class="text-base font-semibold text-gray-900 dark:text-white">结果</h2>
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2 class="text-base font-semibold text-gray-900 dark:text-white">结果区</h2>
+          <button v-if="task.result_url" class="btn btn-sm btn-outline" type="button" @click="copyResultUrl">
+            复制结果链接
+          </button>
+        </div>
         <div class="mt-4 space-y-3 text-sm">
-          <div v-if="task.result_url" class="flex flex-wrap items-center gap-3">
-            <a class="inline-flex items-center gap-2 font-medium text-primary-600 hover:text-primary-700 dark:text-primary-300" :href="task.result_url" target="_blank" rel="noreferrer">
-              <Icon name="externalLink" size="sm" />
-              {{ task.result_url }}
-            </a>
+          <div v-if="task.result_url" class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-800 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-200">
+            <div class="font-medium">视频生成成功，结果链接已回收。</div>
+            <p class="mt-1 text-xs text-emerald-700 dark:text-emerald-300">演示通道返回本地闭环结果；正式通道配置 API Key 后会回收上游真实结果。</p>
           </div>
-          <div v-else class="text-gray-500 dark:text-gray-400">暂无结果链接</div>
-          <div v-if="task.error_message" class="rounded-lg border border-red-200 bg-red-50 p-3 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
-            {{ errorMessageLabel(task.error_message) }}
+          <div v-else-if="task.status !== 'failed'" class="rounded-lg border border-dashed border-gray-200 p-4 text-gray-500 dark:border-dark-700 dark:text-gray-400">
+            暂无结果链接。任务完成后这里会显示结果入口。
+          </div>
+          <div v-if="task.error_message" class="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
+            <div class="font-medium">{{ errorMessageLabel(task.error_message) }}</div>
+            <ul class="mt-3 list-disc space-y-1 pl-5 text-xs">
+              <li>检查提示词是否过短、冲突或触发演示失败场景。</li>
+              <li>更换模型通道，或确认通道已启用。</li>
+              <li>复制参数重新创建，便于演示失败恢复流程。</li>
+            </ul>
           </div>
         </div>
       </section>
@@ -110,7 +123,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { videoTaskAPI, type VideoTask } from '@/api/admin/video'
@@ -122,14 +135,17 @@ import {
   eventTypeLabel,
   formatDate,
   isTerminalStatus,
+  modelDisplayName,
+  promptDisplayText,
   providerLabel,
-  shortText,
+  saveTaskDraft,
   statusBadgeClass,
   statusLabel,
   taskTypeLabel,
 } from './videoUtils'
 
 const route = useRoute()
+const router = useRouter()
 const appStore = useAppStore()
 const task = ref<VideoTask | null>(null)
 const loading = ref(false)
@@ -141,14 +157,13 @@ const parameterRows = computed(() => {
   if (!task.value) return []
   return [
     { label: '任务类型', value: taskTypeLabel(task.value.task_type) },
-    { label: 'Prompt', value: task.value.prompt },
+    { label: '提示词', value: promptDisplayText(task.value.prompt) },
     { label: '负向提示词', value: task.value.negative_prompt },
     { label: '参考图', value: task.value.reference_image_url },
     { label: '参考视频', value: task.value.reference_video_url },
     { label: '画幅比例', value: task.value.aspect_ratio },
     { label: '时长', value: `${task.value.duration}s` },
     { label: '分辨率', value: task.value.resolution },
-    { label: '上游任务 ID', value: task.value.upstream_task_id },
   ]
 })
 
@@ -182,6 +197,27 @@ async function cancelTask() {
   } finally {
     cancelling.value = false
   }
+}
+
+async function copyText(value: string, successMessage: string) {
+  try {
+    await navigator.clipboard.writeText(value)
+    appStore.showSuccess(successMessage)
+  } catch {
+    appStore.showError('复制失败，请手动选择内容复制。')
+  }
+}
+
+function copyResultUrl() {
+  if (!task.value?.result_url) return
+  copyText(task.value.result_url, '结果链接已复制。')
+}
+
+function copyToCreate() {
+  if (!task.value) return
+  saveTaskDraft(task.value)
+  appStore.showInfo('已复制任务参数，可在创建页调整后重新提交。')
+  router.push('/admin/video/create')
 }
 
 onMounted(async () => {

@@ -9,15 +9,23 @@
     <!-- Logo/Brand -->
     <div class="sidebar-header" :class="{ 'sidebar-header-collapsed': sidebarCollapsed }">
       <!-- Custom Logo or Default Logo -->
-      <div class="sidebar-logo flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl shadow-glow">
-        <img v-if="settingsLoaded" :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
+      <div
+        class="sidebar-logo flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl shadow-glow"
+        :class="{ 'bg-slate-900 dark:bg-emerald-600': isVideoGatewayDemoMode }"
+      >
+        <svg v-if="isVideoGatewayDemoMode" class="h-6 w-6 text-white" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M4 8.5C4 7.12 5.12 6 6.5 6h7.75c1.38 0 2.5 1.12 2.5 2.5v7c0 1.38-1.12 2.5-2.5 2.5H6.5A2.5 2.5 0 014 15.5v-7z" stroke="currentColor" stroke-width="1.7" />
+          <path d="M16.75 10.25l3.25-1.9v7.3l-3.25-1.9v-3.5z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
+          <path d="M8.25 9.25l4.5 2.75-4.5 2.75v-5.5z" fill="currentColor" />
+        </svg>
+        <img v-else-if="settingsLoaded" :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
       </div>
       <div class="sidebar-brand" :class="{ 'sidebar-brand-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">
         <span class="sidebar-brand-title text-lg font-bold text-gray-900 dark:text-white">
           {{ siteName }}
         </span>
         <!-- Version Badge -->
-        <VersionBadge :version="siteVersion" />
+        <VersionBadge v-if="!isVideoGatewayDemoMode" :version="siteVersion" />
       </div>
     </div>
 
@@ -94,7 +102,7 @@
         </div>
 
         <!-- Personal Section for Admin (hidden in simple mode) -->
-        <div v-if="!authStore.isSimpleMode" class="sidebar-section">
+        <div v-if="!authStore.isSimpleMode && !isVideoGatewayDemoMode" class="sidebar-section">
           <div class="sidebar-section-title" :class="{ 'sidebar-section-title-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">
             <span class="sidebar-section-title-text" :class="{ 'sidebar-section-title-text-collapsed': sidebarCollapsed }">
               {{ t('nav.myAccount') }}
@@ -187,6 +195,7 @@ import { useAdminSettingsStore, useAppStore, useAuthStore, useOnboardingStore } 
 import VersionBadge from '@/components/common/VersionBadge.vue'
 import { sanitizeSvg } from '@/utils/sanitize'
 import { FeatureFlags, makeSidebarFlag } from '@/utils/featureFlags'
+import { isVideoGatewayDemoMode, VIDEO_GATEWAY_PRODUCT_NAME } from '@/utils/productMode'
 
 interface NavItem {
   path: string
@@ -242,7 +251,7 @@ const isDark = ref(document.documentElement.classList.contains('dark'))
 const expandedGroups = ref<Set<string>>(new Set())
 
 // Site settings from appStore (cached, no flicker)
-const siteName = computed(() => appStore.siteName)
+const siteName = computed(() => isVideoGatewayDemoMode ? VIDEO_GATEWAY_PRODUCT_NAME : appStore.siteName)
 const siteLogo = computed(() => appStore.siteLogo)
 const siteVersion = computed(() => appStore.siteVersion)
 const settingsLoaded = computed(() => appStore.publicSettingsLoaded)
@@ -715,6 +724,17 @@ const customMenuItemsForAdmin = computed(() => {
 
 // Admin navigation items
 const adminNavItems = computed((): NavItem[] => {
+  const videoItems: NavItem[] = [
+    { path: '/admin/video/dashboard', label: '视频总览', icon: ChartIcon },
+    { path: '/admin/video/providers', label: '模型通道', icon: ServerIcon },
+    { path: '/admin/video/create', label: '创建任务', icon: TicketIcon },
+    { path: '/admin/video/tasks', label: '任务列表', icon: OrderListIcon },
+  ]
+
+  if (isVideoGatewayDemoMode) {
+    return videoItems
+  }
+
   const baseItems: NavItem[] = [
     { path: '/admin/dashboard', label: t('nav.dashboard'), icon: DashboardIcon },
     { path: '/admin/ops', label: t('nav.ops'), icon: ChartIcon, featureFlag: flagOpsMonitoring },
@@ -738,10 +758,7 @@ const adminNavItems = computed((): NavItem[] => {
       hideInSimpleMode: true,
       expandOnly: true,
       children: [
-        { path: '/admin/video/dashboard', label: '视频总览', icon: ChartIcon },
-        { path: '/admin/video/providers', label: '模型通道', icon: ServerIcon },
-        { path: '/admin/video/create', label: '创建任务', icon: TicketIcon },
-        { path: '/admin/video/tasks', label: '任务列表', icon: OrderListIcon },
+        ...videoItems,
       ],
     },
     { path: '/admin/subscriptions', label: t('nav.subscriptions'), icon: CreditCardIcon, hideInSimpleMode: true },

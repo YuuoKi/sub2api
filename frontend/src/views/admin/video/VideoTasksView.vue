@@ -4,7 +4,7 @@
       <div class="flex flex-col gap-3 border-b border-gray-200 pb-4 dark:border-dark-700 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">任务列表</h1>
-          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">按状态和供应商查看最近的视频生成任务</p>
+          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">按状态和通道查看最近任务，快速定位结果、失败原因并复制参数重新创建。</p>
         </div>
         <div class="flex flex-wrap gap-2">
           <RouterLink class="btn btn-primary" to="/admin/video/create">
@@ -25,7 +25,7 @@
             <option v-for="status in statusOptions" :key="status.value" :value="status.value">{{ status.label }}</option>
           </select>
           <select v-model="filters.provider" class="input" @change="resetAndLoad">
-            <option value="">全部供应商</option>
+            <option value="">全部通道</option>
             <option v-for="provider in providerOptions" :key="provider.value" :value="provider.value">{{ provider.label }}</option>
           </select>
           <div class="flex justify-end">
@@ -43,10 +43,11 @@
             <thead class="bg-gray-50 text-left text-xs uppercase text-gray-500 dark:bg-dark-700/40 dark:text-gray-400">
               <tr>
                 <th class="px-5 py-3 font-medium">任务</th>
-                <th class="px-5 py-3 font-medium">供应商</th>
+                <th class="px-5 py-3 font-medium">通道</th>
                 <th class="px-5 py-3 font-medium">状态</th>
                 <th class="px-5 py-3 font-medium">创建时间</th>
                 <th class="px-5 py-3 font-medium">结果入口</th>
+                <th class="px-5 py-3 font-medium">操作</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-100 dark:divide-dark-700">
@@ -55,14 +56,14 @@
                   <RouterLink class="font-medium text-gray-900 hover:text-primary-600 dark:text-white dark:hover:text-primary-300" :to="`/admin/video/tasks/${task.id}`">
                     #{{ task.id }} | {{ taskTypeLabel(task.task_type) }}
                   </RouterLink>
-                  <div class="mt-1 max-w-xl truncate text-xs text-gray-500 dark:text-gray-400">{{ shortText(task.prompt, 140) }}</div>
+                  <div class="mt-1 max-w-xl truncate text-xs text-gray-500 dark:text-gray-400">{{ shortText(promptDisplayText(task.prompt), 140) }}</div>
                   <div v-if="task.error_message" class="mt-1 max-w-xl truncate text-xs text-red-600 dark:text-red-300">失败原因：{{ errorMessageLabel(task.error_message) }}</div>
                 </td>
                 <td class="px-5 py-3">
                   <span class="inline-flex rounded-md px-2 py-1 text-xs font-medium" :class="providerBadgeClass(task.provider)">
                     {{ providerLabel(task.provider) }}
                   </span>
-                  <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ task.model }}</div>
+                  <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ modelDisplayName(task.provider, task.model) }}</div>
                 </td>
                 <td class="px-5 py-3">
                   <span class="inline-flex rounded-md px-2 py-1 text-xs font-medium" :class="statusBadgeClass(task.status)">
@@ -77,9 +78,19 @@
                   </a>
                   <span v-else class="text-gray-400">-</span>
                 </td>
+                <td class="px-5 py-3">
+                  <button class="btn btn-sm btn-outline" type="button" @click="copyToCreate(task)">
+                    复制参数
+                  </button>
+                </td>
               </tr>
               <tr v-if="!loading && !tasks.length">
-                <td colspan="5" class="px-5 py-8 text-center text-sm text-gray-500 dark:text-gray-400">暂无任务</td>
+                <td colspan="6" class="px-5 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                  <div class="space-y-3">
+                    <div>没有任务。可以先创建一个演示任务验证流转。</div>
+                    <RouterLink class="btn btn-sm btn-outline" to="/admin/video/create">创建一个演示任务</RouterLink>
+                  </div>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -99,7 +110,7 @@
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { videoTaskAPI, type VideoProvider, type VideoTask, type VideoTaskListParams, type VideoTaskStatus } from '@/api/admin/video'
@@ -108,9 +119,12 @@ import { extractApiErrorMessage } from '@/utils/apiError'
 import {
   errorMessageLabel,
   formatDate,
+  modelDisplayName,
   providerBadgeClass,
   providerLabel,
   providerOptions,
+  promptDisplayText,
+  saveTaskDraft,
   shortText,
   statusBadgeClass,
   statusLabel,
@@ -119,6 +133,7 @@ import {
 } from './videoUtils'
 
 const appStore = useAppStore()
+const router = useRouter()
 const loading = ref(false)
 const tasks = ref<VideoTask[]>([])
 const filters = reactive({ status: '', provider: '' })
@@ -160,6 +175,12 @@ function clearFilters() {
 function changePage(page: number) {
   pagination.page = page
   loadTasks()
+}
+
+function copyToCreate(task: VideoTask) {
+  saveTaskDraft(task)
+  appStore.showInfo('已复制任务参数，可在创建页调整后重新提交。')
+  router.push('/admin/video/create')
 }
 
 onMounted(loadTasks)

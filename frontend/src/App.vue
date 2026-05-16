@@ -7,6 +7,7 @@ import { resolveDocumentTitle } from '@/router/title'
 import AnnouncementPopup from '@/components/common/AnnouncementPopup.vue'
 import { useAppStore, useAuthStore, useSubscriptionStore, useAnnouncementStore } from '@/stores'
 import { getSetupStatus } from '@/api/setup'
+import { isVideoGatewayDemoMode } from '@/utils/productMode'
 
 const router = useRouter()
 const route = useRoute()
@@ -53,19 +54,21 @@ watch(
   () => authStore.isAuthenticated,
   (isAuthenticated, oldValue) => {
     if (isAuthenticated) {
-      // User logged in: preload subscriptions and start polling
-      subscriptionStore.fetchActiveSubscriptions().catch((error) => {
-        console.error('Failed to preload subscriptions:', error)
-      })
-      subscriptionStore.startPolling()
+      if (!isVideoGatewayDemoMode) {
+        // User logged in: preload subscriptions and start polling
+        subscriptionStore.fetchActiveSubscriptions().catch((error) => {
+          console.error('Failed to preload subscriptions:', error)
+        })
+        subscriptionStore.startPolling()
 
-      // Announcements: new login vs page refresh restore
-      if (oldValue === false) {
-        // New login: delay 3s then force fetch
-        setTimeout(() => announcementStore.fetchAnnouncements(true), 3000)
-      } else {
-        // Page refresh restore (oldValue was undefined)
-        announcementStore.fetchAnnouncements()
+        // Announcements: new login vs page refresh restore
+        if (oldValue === false) {
+          // New login: delay 3s then force fetch
+          setTimeout(() => announcementStore.fetchAnnouncements(true), 3000)
+        } else {
+          // Page refresh restore (oldValue was undefined)
+          announcementStore.fetchAnnouncements()
+        }
       }
 
       // Register visibility change listener
@@ -82,7 +85,7 @@ watch(
 
 // Route change trigger (throttled by store)
 router.afterEach(() => {
-  if (authStore.isAuthenticated) {
+  if (authStore.isAuthenticated && !isVideoGatewayDemoMode) {
     announcementStore.fetchAnnouncements()
   }
 })
@@ -115,5 +118,5 @@ onMounted(async () => {
   <NavigationProgress />
   <RouterView />
   <Toast />
-  <AnnouncementPopup />
+  <AnnouncementPopup v-if="!isVideoGatewayDemoMode" />
 </template>

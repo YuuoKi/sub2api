@@ -670,6 +670,13 @@ const flagAdminPayment = () => adminSettingsStore.paymentEnabled
 // 可用渠道紧挨渠道状态之上，让用户"先看自己能用什么、再看对应状态"。
 function buildSelfNavItems(withDashboard: boolean): NavItem[] {
   const items: NavItem[] = []
+  if (isVideoGatewayDemoMode) {
+    return [
+      { path: '/admin/video/create', label: '发起调用', icon: TicketIcon },
+      { path: '/admin/video/tasks', label: '我的调用', icon: OrderListIcon },
+      { path: '/profile', label: t('nav.profile'), icon: UserIcon },
+    ]
+  }
   if (withDashboard) {
     items.push({ path: '/dashboard', label: t('nav.dashboard'), icon: DashboardIcon })
   }
@@ -724,12 +731,19 @@ const customMenuItemsForAdmin = computed(() => {
 
 // Admin navigation items
 const adminNavItems = computed((): NavItem[] => {
-  const videoItems: NavItem[] = [
-    { path: '/admin/video/dashboard', label: '视频总览', icon: ChartIcon },
-    { path: '/admin/video/providers', label: '模型通道', icon: ServerIcon },
-    { path: '/admin/video/create', label: '创建任务', icon: TicketIcon },
-    { path: '/admin/video/tasks', label: '任务列表', icon: OrderListIcon },
-  ]
+  const videoItems: NavItem[] = isVideoGatewayDemoMode
+    ? [
+        { path: '/admin/video/dashboard', label: 'API 网关驾驶舱', icon: ChartIcon },
+        { path: '/admin/video/providers', label: 'API 通道池', icon: ServerIcon },
+        { path: '/admin/video/create', label: '发起调用', icon: TicketIcon },
+        { path: '/admin/video/tasks', label: '调用任务', icon: OrderListIcon },
+      ]
+    : [
+        { path: '/admin/video/dashboard', label: '视频总览', icon: ChartIcon },
+        { path: '/admin/video/providers', label: '模型通道', icon: ServerIcon },
+        { path: '/admin/video/create', label: '创建任务', icon: TicketIcon },
+        { path: '/admin/video/tasks', label: '任务列表', icon: OrderListIcon },
+      ]
 
   if (isVideoGatewayDemoMode) {
     return videoItems

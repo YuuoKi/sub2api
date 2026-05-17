@@ -164,6 +164,32 @@ func (r *memoryVideoGatewayRepo) CountProviderTasksSince(_ context.Context, _ ti
 	return map[string]map[string]int64{}, nil
 }
 
+func (r *memoryVideoGatewayRepo) ProviderAccountTaskStatsSince(_ context.Context, since time.Time) (map[int64]VideoProviderRuntimeStats, error) {
+	out := map[int64]VideoProviderRuntimeStats{}
+	for _, task := range r.tasks {
+		item := out[task.ProviderAccountID]
+		if !task.CreatedAt.Before(since) {
+			item.TodayTasks++
+			if task.Status == VideoStatusFailed {
+				item.TodayFailures++
+			}
+		}
+		switch task.Status {
+		case VideoStatusQueued, VideoStatusSubmitted, VideoStatusRunning:
+			item.CurrentInflight++
+		}
+		if task.Status == VideoStatusFailed && task.ErrorMessage != "" {
+			if item.LastErrorAt == nil || task.UpdatedAt.After(*item.LastErrorAt) {
+				updatedAt := task.UpdatedAt
+				item.LastError = task.ErrorMessage
+				item.LastErrorAt = &updatedAt
+			}
+		}
+		out[task.ProviderAccountID] = item
+	}
+	return out, nil
+}
+
 func (r *memoryVideoGatewayRepo) ListRecentTasksByStatus(_ context.Context, _ string, _ int) ([]*VideoTask, error) {
 	return []*VideoTask{}, nil
 }
@@ -269,6 +295,135 @@ func TestVideoProviderKeyNeverReturnedInPlaintext(t *testing.T) {
 	}
 	if !items[0].APIKeyConfigured {
 		t.Fatal("expected api_key_configured")
+	}
+}
+
+func TestVideoGatewayAutoRouteSkipsUnavailableAccounts(t *testing.T) {
+	ctx := context.Background()
+	repo := newMemoryVideoGatewayRepo()
+	availableID := repo.seedMockProvider()
+	now := time.Now().UTC()
+	unavailable := []*VideoProviderAccount{
+		{
+			ID:           repo.nextProviderID,
+			Provider:     VideoProviderSeedance,
+			DisplayName:  "Seedance Missing Key",
+			Enabled:      true,
+			DefaultModel: defaultVideoModel(VideoProviderSeedance),
+			Metadata: map[string]any{
+				"key_status":      videoKeyStatusMissing,
+				"health_status":   videoHealthStatusNeedsKey,
+				"diagnostic_type": "Key 未配置",
+			},
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		{
+			ID:           repo.nextProviderID + 1,
+			Provider:     VideoProviderKling,
+			DisplayName:  "Kling Disabled",
+			Enabled:      false,
+			DefaultModel: defaultVideoModel(VideoProviderKling),
+			Metadata: map[string]any{
+				"key_status":    videoKeyStatusDisabled,
+				"health_status": videoHealthStatusDisabled,
+			},
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		{
+			ID:           repo.nextProviderID + 2,
+			Provider:     VideoProviderSeedance,
+			DisplayName:  "Seedance Auth Failed",
+			Enabled:      true,
+			MaskedKey:    "sdnc***demo",
+			DefaultModel: defaultVideoModel(VideoProviderSeedance),
+			Metadata: map[string]any{
+				"key_status":      videoKeyStatusAuthFailed,
+				"health_status":   videoHealthStatusAuthFailed,
+				"diagnostic_type": "鉴权失败",
+			},
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		{
+			ID:           repo.nextProviderID + 3,
+			Provider:     VideoProviderKling,
+			DisplayName:  "Kling Rate Limited",
+			Enabled:      true,
+			MaskedKey:    "klng***demo",
+			DefaultModel: defaultVideoModel(VideoProviderKling),
+			Metadata: map[string]any{
+				"key_status":      videoKeyStatusRateLimited,
+				"health_status":   videoHealthStatusRateLimited,
+				"diagnostic_type": "触发限流",
+			},
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+	}
+	for _, account := range unavailable {
+		repo.providers[account.ID] = cloneVideoProvider(account)
+		repo.nextProviderID = account.ID + 1
+	}
+	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, nil)
+
+	var task *VideoTask
+	for i := 0; i < 10; i++ {
+		var err error
+		task, err = svc.CreateTask(ctx, VideoTaskCreateParams{
+			TaskType:  VideoTaskTypeTextToVideo,
+			Prompt:    "create a short launch video for an enterprise API workflow",
+			CreatedBy: 101,
+		})
+		if err != nil {
+			t.Fatalf("auto route create task %d: %v", i+1, err)
+		}
+	}
+	if task.ProviderAccountID != availableID {
+		t.Fatalf("expected available provider %d, got %d", availableID, task.ProviderAccountID)
+	}
+	if len(repo.tasks) != 10 {
+		t.Fatalf("expected ten routed tasks, got %d", len(repo.tasks))
+	}
+	events, err := repo.ListTaskEvents(ctx, task.ID, 20)
+	if err != nil {
+		t.Fatalf("list task events: %v", err)
+	}
+	if len(events) == 0 || events[0].EventType != "routed" {
+		t.Fatalf("expected first routed event, got %#v", events)
+	}
+	if events[0].Payload["strategy"] != VideoRouteStrategyLeastInflight {
+		t.Fatalf("expected least_inflight strategy, got %#v", events[0].Payload["strategy"])
+	}
+	skipped, ok := events[0].Payload["skipped_accounts"].([]videoRouteSkip)
+	if !ok {
+		t.Fatalf("expected skipped account records, got %#v", events[0].Payload["skipped_accounts"])
+	}
+	if len(skipped) != 4 {
+		t.Fatalf("expected four skipped accounts, got %d", len(skipped))
+	}
+}
+
+func TestVideoGatewayTaskOwnershipBoundary(t *testing.T) {
+	ctx := context.Background()
+	repo := newMemoryVideoGatewayRepo()
+	repo.seedMockProvider()
+	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, nil)
+
+	task, err := svc.CreateTask(ctx, VideoTaskCreateParams{
+		TaskType:  VideoTaskTypeTextToVideo,
+		Prompt:    "ownership check",
+		CreatedBy: 101,
+	})
+	if err != nil {
+		t.Fatalf("create task: %v", err)
+	}
+	if _, _, err := svc.GetTask(ctx, task.ID, 202, false); err == nil {
+		t.Fatal("expected a different non-admin user to be blocked")
+	}
+	if _, _, err := svc.GetTask(ctx, task.ID, 202, true); err != nil {
+		t.Fatalf("expected admin to read task: %v", err)
 	}
 }
 

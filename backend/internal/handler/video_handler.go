@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -20,7 +22,7 @@ func NewVideoHandler(video *service.VideoGatewayService) *VideoHandler {
 }
 
 type videoTaskCreateRequest struct {
-	ProviderAccountID int64  `json:"provider_account_id" binding:"required,min=1"`
+	ProviderAccountID int64  `json:"provider_account_id" binding:"omitempty,min=0"`
 	TaskType          string `json:"task_type" binding:"required,oneof=text_to_video image_to_video reference_to_video"`
 	Model             string `json:"model" binding:"omitempty,max=200"`
 	Prompt            string `json:"prompt" binding:"required,max=8000"`
@@ -33,28 +35,58 @@ type videoTaskCreateRequest struct {
 }
 
 type videoTaskResponse struct {
-	ID                int64                    `json:"id"`
-	ProviderAccountID int64                    `json:"provider_account_id"`
-	Provider          string                   `json:"provider"`
-	Model             string                   `json:"model"`
-	TaskType          string                   `json:"task_type"`
-	Prompt            string                   `json:"prompt"`
-	NegativePrompt    string                   `json:"negative_prompt"`
-	ReferenceImageURL string                   `json:"reference_image_url"`
-	ReferenceVideoURL string                   `json:"reference_video_url"`
-	AspectRatio       string                   `json:"aspect_ratio"`
-	Duration          int                      `json:"duration"`
-	Resolution        string                   `json:"resolution"`
-	Status            string                   `json:"status"`
-	UpstreamTaskID    string                   `json:"upstream_task_id"`
-	ResultURL         string                   `json:"result_url"`
-	ErrorMessage      string                   `json:"error_message"`
-	CostEstimate      float64                  `json:"cost_estimate"`
-	CreatedBy         int64                    `json:"created_by"`
-	CreatedAt         string                   `json:"created_at"`
-	UpdatedAt         string                   `json:"updated_at"`
-	CompletedAt       *string                  `json:"completed_at"`
-	Events            []videoTaskEventResponse `json:"events,omitempty"`
+	ID                  int64                    `json:"id"`
+	ProviderAccountID   int64                    `json:"provider_account_id"`
+	ProviderAccountName string                   `json:"provider_account_name"`
+	Provider            string                   `json:"provider"`
+	Model               string                   `json:"model"`
+	TaskType            string                   `json:"task_type"`
+	Prompt              string                   `json:"prompt"`
+	NegativePrompt      string                   `json:"negative_prompt"`
+	ReferenceImageURL   string                   `json:"reference_image_url"`
+	ReferenceVideoURL   string                   `json:"reference_video_url"`
+	AspectRatio         string                   `json:"aspect_ratio"`
+	Duration            int                      `json:"duration"`
+	Resolution          string                   `json:"resolution"`
+	Status              string                   `json:"status"`
+	UpstreamTaskID      string                   `json:"upstream_task_id"`
+	ResultURL           string                   `json:"result_url"`
+	ErrorMessage        string                   `json:"error_message"`
+	CostEstimate        float64                  `json:"cost_estimate"`
+	CreatedBy           int64                    `json:"created_by"`
+	CreatedByEmail      string                   `json:"created_by_email"`
+	CreatedByName       string                   `json:"created_by_name"`
+	CreatedByLabel      string                   `json:"created_by_label"`
+	RoutingStrategy     string                   `json:"routing_strategy"`
+	RoutingReason       string                   `json:"routing_reason"`
+	CreatedAt           string                   `json:"created_at"`
+	UpdatedAt           string                   `json:"updated_at"`
+	CompletedAt         *string                  `json:"completed_at"`
+	Events              []videoTaskEventResponse `json:"events,omitempty"`
+}
+
+type videoProviderAccountResponse struct {
+	ID                 int64  `json:"id"`
+	Provider           string `json:"provider"`
+	DisplayName        string `json:"display_name"`
+	Enabled            bool   `json:"enabled"`
+	APIKeyConfigured   bool   `json:"api_key_configured"`
+	MaskedKey          string `json:"masked_key"`
+	BaseURL            string `json:"base_url"`
+	DefaultModel       string `json:"default_model"`
+	RateLimitPerMinute int    `json:"rate_limit_per_minute"`
+	KeyStatus          string `json:"key_status"`
+	HealthStatus       string `json:"health_status"`
+	DiagnosticType     string `json:"diagnostic_type"`
+	SuggestedAction    string `json:"suggested_action"`
+	Priority           int    `json:"priority"`
+	CurrentInflight    int64  `json:"current_inflight"`
+	TodayTasks         int64  `json:"today_tasks"`
+	TodayFailures      int64  `json:"today_failures"`
+	LastError          string `json:"last_error"`
+	LastTestAt         string `json:"last_test_at"`
+	RouteAvailable     bool   `json:"route_available"`
+	RouteSkipReason    string `json:"route_skip_reason"`
 }
 
 type videoTaskEventResponse struct {
@@ -64,6 +96,19 @@ type videoTaskEventResponse struct {
 	Message     string         `json:"message"`
 	Payload     map[string]any `json:"payload_json"`
 	CreatedAt   string         `json:"created_at"`
+}
+
+func (h *VideoHandler) ListProviders(c *gin.Context) {
+	items, err := h.video.ListProviderAccounts(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	out := make([]videoProviderAccountResponse, 0, len(items))
+	for _, item := range items {
+		out = append(out, videoProviderAccountToResponse(item))
+	}
+	response.Success(c, gin.H{"items": out})
 }
 
 func (h *VideoHandler) ListTasks(c *gin.Context) {
@@ -166,30 +211,99 @@ func videoTaskToResponse(task *service.VideoTask, events []*service.VideoTaskEve
 			CreatedAt:   formatTaskTime(event.CreatedAt),
 		})
 	}
+	routingStrategy := videoTaskEventPayloadString(events, "routed", "strategy")
+	routingReason := videoTaskEventPayloadString(events, "routed", "reason")
 	return videoTaskResponse{
-		ID:                task.ID,
-		ProviderAccountID: task.ProviderAccountID,
-		Provider:          task.Provider,
-		Model:             task.Model,
-		TaskType:          task.TaskType,
-		Prompt:            task.Prompt,
-		NegativePrompt:    task.NegativePrompt,
-		ReferenceImageURL: task.ReferenceImageURL,
-		ReferenceVideoURL: task.ReferenceVideoURL,
-		AspectRatio:       task.AspectRatio,
-		Duration:          task.Duration,
-		Resolution:        task.Resolution,
-		Status:            task.Status,
-		UpstreamTaskID:    task.UpstreamTaskID,
-		ResultURL:         task.ResultURL,
-		ErrorMessage:      task.ErrorMessage,
-		CostEstimate:      task.CostEstimate,
-		CreatedBy:         task.CreatedBy,
-		CreatedAt:         formatTaskTime(task.CreatedAt),
-		UpdatedAt:         formatTaskTime(task.UpdatedAt),
-		CompletedAt:       completed,
-		Events:            eventResponses,
+		ID:                  task.ID,
+		ProviderAccountID:   task.ProviderAccountID,
+		ProviderAccountName: task.ProviderAccountName,
+		Provider:            task.Provider,
+		Model:               task.Model,
+		TaskType:            task.TaskType,
+		Prompt:              task.Prompt,
+		NegativePrompt:      task.NegativePrompt,
+		ReferenceImageURL:   task.ReferenceImageURL,
+		ReferenceVideoURL:   task.ReferenceVideoURL,
+		AspectRatio:         task.AspectRatio,
+		Duration:            task.Duration,
+		Resolution:          task.Resolution,
+		Status:              task.Status,
+		UpstreamTaskID:      task.UpstreamTaskID,
+		ResultURL:           task.ResultURL,
+		ErrorMessage:        task.ErrorMessage,
+		CostEstimate:        task.CostEstimate,
+		CreatedBy:           task.CreatedBy,
+		CreatedByEmail:      task.CreatedByEmail,
+		CreatedByName:       task.CreatedByName,
+		CreatedByLabel:      videoCreatedByLabel(task),
+		RoutingStrategy:     routingStrategy,
+		RoutingReason:       routingReason,
+		CreatedAt:           formatTaskTime(task.CreatedAt),
+		UpdatedAt:           formatTaskTime(task.UpdatedAt),
+		CompletedAt:         completed,
+		Events:              eventResponses,
 	}
+}
+
+func videoProviderAccountToResponse(item *service.VideoProviderAccount) videoProviderAccountResponse {
+	if item == nil {
+		return videoProviderAccountResponse{}
+	}
+	return videoProviderAccountResponse{
+		ID:                 item.ID,
+		Provider:           item.Provider,
+		DisplayName:        item.DisplayName,
+		Enabled:            item.Enabled,
+		APIKeyConfigured:   item.APIKeyConfigured,
+		MaskedKey:          item.MaskedKey,
+		BaseURL:            item.BaseURL,
+		DefaultModel:       item.DefaultModel,
+		RateLimitPerMinute: item.RateLimitPerMinute,
+		KeyStatus:          item.KeyStatus,
+		HealthStatus:       item.HealthStatus,
+		DiagnosticType:     item.DiagnosticType,
+		SuggestedAction:    item.SuggestedAction,
+		Priority:           item.Priority,
+		CurrentInflight:    item.CurrentInflight,
+		TodayTasks:         item.TodayTasks,
+		TodayFailures:      item.TodayFailures,
+		LastError:          item.LastError,
+		LastTestAt:         formatOptionalTaskTime(item.LastTestAt),
+		RouteAvailable:     item.RouteAvailable,
+		RouteSkipReason:    item.RouteSkipReason,
+	}
+}
+
+func videoCreatedByLabel(task *service.VideoTask) string {
+	if task == nil {
+		return ""
+	}
+	name := strings.TrimSpace(task.CreatedByName)
+	email := strings.TrimSpace(task.CreatedByEmail)
+	switch {
+	case name != "" && email != "":
+		return name + " / " + email
+	case name != "":
+		return name
+	case email != "":
+		return email
+	default:
+		return fmt.Sprintf("用户 #%d", task.CreatedBy)
+	}
+}
+
+func videoTaskEventPayloadString(events []*service.VideoTaskEvent, eventType, key string) string {
+	for _, event := range events {
+		if event == nil || event.EventType != eventType || event.Payload == nil {
+			continue
+		}
+		value, ok := event.Payload[key]
+		if !ok || value == nil {
+			continue
+		}
+		return strings.TrimSpace(fmt.Sprint(value))
+	}
+	return ""
 }
 
 func parseTaskID(c *gin.Context) (int64, bool) {
@@ -206,4 +320,11 @@ func formatTaskTime(t time.Time) string {
 		return ""
 	}
 	return t.UTC().Format(time.RFC3339)
+}
+
+func formatOptionalTaskTime(t *time.Time) string {
+	if t == nil {
+		return ""
+	}
+	return formatTaskTime(*t)
 }

@@ -15,6 +15,18 @@ export interface VideoProviderAccount {
   default_model: string
   rate_limit_per_minute: number
   metadata_json: Record<string, unknown>
+  key_status: string
+  health_status: string
+  diagnostic_type: string
+  suggested_action: string
+  priority: number
+  current_inflight: number
+  today_tasks: number
+  today_failures: number
+  last_error: string
+  last_test_at: string
+  route_available: boolean
+  route_skip_reason: string
   created_at: string
   updated_at: string
 }
@@ -41,6 +53,8 @@ export interface VideoProviderTestResult {
 
 export interface VideoTaskSummary {
   id: number
+  provider_account_id: number
+  provider_account_name: string
   provider: VideoProvider
   model: string
   task_type: VideoTaskType
@@ -49,6 +63,10 @@ export interface VideoTaskSummary {
   result_url: string
   error_message: string
   cost_estimate: number
+  created_by: number
+  created_by_email: string
+  created_by_name: string
+  created_by_label: string
   created_at: string
   updated_at: string
   completed_at: string | null
@@ -61,10 +79,33 @@ export interface VideoProviderStatus {
   api_key_configured: boolean
   masked_key: string
   default_model: string
+  key_status: string
+  health_status: string
+  diagnostic_type: string
+  suggested_action: string
+  route_available: boolean
+  route_skip_reason: string
+  priority: number
+  current_inflight: number
+  last_error: string
+  last_test_at: string
   updated_at: string
   today_tasks: number
   running_tasks: number
   failed_tasks: number
+}
+
+export interface VideoHealthDiagnostic {
+  provider: VideoProvider
+  display_name: string
+  route_account: string
+  key_status: string
+  last_test_at: string
+  exception_type: string
+  impact_tasks: number
+  recent_error: string
+  suggested_action: string
+  status: string
 }
 
 export interface VideoUsageSummary {
@@ -83,6 +124,7 @@ export interface VideoDashboard {
   queued_tasks: number
   running_tasks: number
   provider_status: VideoProviderStatus[]
+  health_diagnostics: VideoHealthDiagnostic[]
   recent_failures: VideoTaskSummary[]
   recent_successes: VideoTaskSummary[]
   usage_overview: VideoUsageSummary[]
@@ -98,7 +140,6 @@ export interface VideoTaskEvent {
 }
 
 export interface VideoTask extends VideoTaskSummary {
-  provider_account_id: number
   negative_prompt: string
   reference_image_url: string
   reference_video_url: string
@@ -106,12 +147,13 @@ export interface VideoTask extends VideoTaskSummary {
   duration: number
   resolution: string
   upstream_task_id: string
-  created_by: number
+  routing_strategy: string
+  routing_reason: string
   events?: VideoTaskEvent[]
 }
 
 export interface VideoTaskCreatePayload {
-  provider_account_id: number
+  provider_account_id?: number
   task_type: VideoTaskType
   model?: string
   prompt: string
@@ -163,6 +205,11 @@ async function dashboard(): Promise<VideoDashboard> {
   return data
 }
 
+async function listTaskProviders(): Promise<{ items: VideoProviderAccount[] }> {
+  const { data } = await apiClient.get<{ items: VideoProviderAccount[] }>('/video/providers')
+  return data
+}
+
 async function listTasks(params: VideoTaskListParams = {}): Promise<VideoTaskListResponse> {
   const { data } = await apiClient.get<VideoTaskListResponse>('/video/tasks', { params })
   return data
@@ -192,6 +239,7 @@ export const videoAdminAPI = {
 }
 
 export const videoTaskAPI = {
+  listProviders: listTaskProviders,
   list: listTasks,
   create: createTask,
   get: getTask,

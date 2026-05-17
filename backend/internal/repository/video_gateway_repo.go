@@ -19,6 +19,20 @@ func NewVideoGatewayRepository(db *sql.DB) service.VideoGatewayRepository {
 	return &videoGatewayRepository{db: db}
 }
 
+const videoTaskSelectColumns = `
+		vt.id, vt.provider_account_id, vt.provider, vt.model, vt.task_type, vt.prompt, vt.negative_prompt,
+		vt.reference_image_url, vt.reference_video_url, vt.aspect_ratio, vt.duration, vt.resolution,
+		vt.status, vt.upstream_task_id, vt.result_url, vt.error_message, vt.cost_estimate,
+		vt.created_by, vt.created_at, vt.updated_at, vt.completed_at,
+		COALESCE(vpa.display_name, ''), COALESCE(u.email, ''), COALESCE(u.username, '')
+`
+
+const videoTaskJoinSQL = `
+		FROM video_tasks vt
+		LEFT JOIN video_provider_accounts vpa ON vpa.id = vt.provider_account_id
+		LEFT JOIN users u ON u.id = vt.created_by
+`
+
 func (r *videoGatewayRepository) CreateProviderAccount(ctx context.Context, account *service.VideoProviderAccount) error {
 	metadata, err := marshalJSONMap(account.Metadata)
 	if err != nil {
@@ -150,14 +164,7 @@ func (r *videoGatewayRepository) CreateTask(ctx context.Context, task *service.V
 }
 
 func (r *videoGatewayRepository) GetTask(ctx context.Context, id int64) (*service.VideoTask, error) {
-	const q = `
-		SELECT id, provider_account_id, provider, model, task_type, prompt, negative_prompt,
-		       reference_image_url, reference_video_url, aspect_ratio, duration, resolution,
-		       status, upstream_task_id, result_url, error_message, cost_estimate,
-		       created_by, created_at, updated_at, completed_at
-		FROM video_tasks
-		WHERE id = $1
-	`
+	q := "SELECT" + videoTaskSelectColumns + videoTaskJoinSQL + " WHERE vt.id = $1"
 	task, err := scanVideoTask(r.db.QueryRowContext(ctx, q, id))
 	if err != nil {
 		return nil, translatePersistenceError(err, service.ErrVideoTaskNotFound, nil)
@@ -170,19 +177,19 @@ func (r *videoGatewayRepository) ListTasks(ctx context.Context, params service.V
 	args := []any{}
 	if strings.TrimSpace(params.Status) != "" {
 		args = append(args, params.Status)
-		where = append(where, fmt.Sprintf("status = $%d", len(args)))
+		where = append(where, fmt.Sprintf("vt.status = $%d", len(args)))
 	}
 	if strings.TrimSpace(params.Provider) != "" {
 		args = append(args, params.Provider)
-		where = append(where, fmt.Sprintf("provider = $%d", len(args)))
+		where = append(where, fmt.Sprintf("vt.provider = $%d", len(args)))
 	}
 	if !params.IsAdmin {
 		args = append(args, params.CreatedBy)
-		where = append(where, fmt.Sprintf("created_by = $%d", len(args)))
+		where = append(where, fmt.Sprintf("vt.created_by = $%d", len(args)))
 	}
 	whereSQL := strings.Join(where, " AND ")
 	var total int64
-	countQ := "SELECT COUNT(*) FROM video_tasks WHERE " + whereSQL
+	countQ := "SELECT COUNT(*) FROM video_tasks vt WHERE " + whereSQL
 	if err := r.db.QueryRowContext(ctx, countQ, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
@@ -195,14 +202,8 @@ func (r *videoGatewayRepository) ListTasks(ctx context.Context, params service.V
 		pageSize = 20
 	}
 	args = append(args, pageSize, (page-1)*pageSize)
-	q := `
-		SELECT id, provider_account_id, provider, model, task_type, prompt, negative_prompt,
-		       reference_image_url, reference_video_url, aspect_ratio, duration, resolution,
-		       status, upstream_task_id, result_url, error_message, cost_estimate,
-		       created_by, created_at, updated_at, completed_at
-		FROM video_tasks
-		WHERE ` + whereSQL + fmt.Sprintf(`
-		ORDER BY created_at DESC, id DESC
+	q := "SELECT" + videoTaskSelectColumns + videoTaskJoinSQL + " WHERE " + whereSQL + fmt.Sprintf(`
+		ORDER BY vt.created_at DESC, vt.id DESC
 		LIMIT $%d OFFSET $%d
 	`, len(args)-1, len(args))
 	rows, err := r.db.QueryContext(ctx, q, args...)
@@ -221,14 +222,9 @@ func (r *videoGatewayRepository) ListRunnableTasks(ctx context.Context, limit in
 	if limit <= 0 {
 		limit = 20
 	}
-	const q = `
-		SELECT id, provider_account_id, provider, model, task_type, prompt, negative_prompt,
-		       reference_image_url, reference_video_url, aspect_ratio, duration, resolution,
-		       status, upstream_task_id, result_url, error_message, cost_estimate,
-		       created_by, created_at, updated_at, completed_at
-		FROM video_tasks
-		WHERE status IN ('queued', 'submitted', 'running')
-		ORDER BY updated_at ASC, id ASC
+	q := "SELECT" + videoTaskSelectColumns + videoTaskJoinSQL + `
+		WHERE vt.status IN ('queued', 'submitted', 'running')
+		ORDER BY vt.updated_at ASC, vt.id ASC
 		LIMIT $1
 	`
 	rows, err := r.db.QueryContext(ctx, q, limit)
@@ -384,18 +380,66 @@ func (r *videoGatewayRepository) CountProviderTasksSince(ctx context.Context, si
 	return out, rows.Err()
 }
 
+func (r *videoGatewayRepository) ProviderAccountTaskStatsSince(ctx context.Context, since time.Time) (map[int64]service.VideoProviderRuntimeStats, error) {
+	const statsQ = `
+		SELECT provider_account_id,
+		       COUNT(*) FILTER (WHERE created_at >= $1),
+		       COUNT(*) FILTER (WHERE status IN ('queued', 'submitted', 'running')),
+		       COUNT(*) FILTER (WHERE status = 'failed' AND created_at >= $1)
+		FROM video_tasks
+		GROUP BY provider_account_id
+	`
+	rows, err := r.db.QueryContext(ctx, statsQ, since)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	out := map[int64]service.VideoProviderRuntimeStats{}
+	for rows.Next() {
+		var providerAccountID int64
+		var item service.VideoProviderRuntimeStats
+		if err := rows.Scan(&providerAccountID, &item.TodayTasks, &item.CurrentInflight, &item.TodayFailures); err != nil {
+			return nil, err
+		}
+		out[providerAccountID] = item
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	const errorsQ = `
+		SELECT DISTINCT ON (provider_account_id) provider_account_id, error_message, updated_at
+		FROM video_tasks
+		WHERE status = 'failed' AND COALESCE(error_message, '') <> ''
+		ORDER BY provider_account_id, updated_at DESC, id DESC
+	`
+	errorRows, err := r.db.QueryContext(ctx, errorsQ)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = errorRows.Close() }()
+	for errorRows.Next() {
+		var providerAccountID int64
+		var lastError string
+		var lastErrorAt time.Time
+		if err := errorRows.Scan(&providerAccountID, &lastError, &lastErrorAt); err != nil {
+			return nil, err
+		}
+		item := out[providerAccountID]
+		item.LastError = lastError
+		item.LastErrorAt = &lastErrorAt
+		out[providerAccountID] = item
+	}
+	return out, errorRows.Err()
+}
+
 func (r *videoGatewayRepository) ListRecentTasksByStatus(ctx context.Context, status string, limit int) ([]*service.VideoTask, error) {
 	if limit <= 0 {
 		limit = 8
 	}
-	const q = `
-		SELECT id, provider_account_id, provider, model, task_type, prompt, negative_prompt,
-		       reference_image_url, reference_video_url, aspect_ratio, duration, resolution,
-		       status, upstream_task_id, result_url, error_message, cost_estimate,
-		       created_by, created_at, updated_at, completed_at
-		FROM video_tasks
-		WHERE status = $1
-		ORDER BY updated_at DESC, id DESC
+	q := "SELECT" + videoTaskSelectColumns + videoTaskJoinSQL + `
+		WHERE vt.status = $1
+		ORDER BY vt.updated_at DESC, vt.id DESC
 		LIMIT $2
 	`
 	rows, err := r.db.QueryContext(ctx, q, status, limit)
@@ -497,6 +541,9 @@ func scanVideoTask(row scanner) (*service.VideoTask, error) {
 		&task.CreatedAt,
 		&task.UpdatedAt,
 		&completed,
+		&task.ProviderAccountName,
+		&task.CreatedByEmail,
+		&task.CreatedByName,
 	)
 	if err != nil {
 		return nil, err

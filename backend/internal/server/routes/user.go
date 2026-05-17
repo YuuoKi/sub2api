@@ -121,6 +121,7 @@ func RegisterUserRoutes(
 
 		video := authenticated.Group("/video")
 		{
+			video.GET("/providers", h.Video.ListProviders)
 			tasks := video.Group("/tasks")
 			{
 				tasks.GET("", h.Video.ListTasks)

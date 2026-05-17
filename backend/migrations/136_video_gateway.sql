@@ -1,5 +1,5 @@
--- Video gateway P0 tables. This module is intentionally independent from the
--- existing LLM account scheduler and user API key system.
+-- Video gateway P0 tables. The video surface is a thin adapter around the
+-- existing user/auth/logging patterns while keeping the LLM scheduler untouched.
 
 CREATE TABLE IF NOT EXISTS video_provider_accounts (
     id BIGSERIAL PRIMARY KEY,

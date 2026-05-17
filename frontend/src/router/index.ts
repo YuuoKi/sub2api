@@ -449,7 +449,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: true,
-      title: 'AI 视频网关'
+      title: isVideoGatewayDemoMode ? 'API 网关驾驶舱' : 'AI 视频网关'
     }
   },
   {
@@ -459,7 +459,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: true,
-      title: '模型通道'
+      title: isVideoGatewayDemoMode ? 'API 通道池' : '模型通道'
     }
   },
   {
@@ -468,8 +468,8 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/admin/video/VideoCreateTaskView.vue'),
     meta: {
       requiresAuth: true,
-      requiresAdmin: true,
-      title: '创建视频任务'
+      requiresAdmin: false,
+      title: isVideoGatewayDemoMode ? '发起调用' : '创建视频任务'
     }
   },
   {
@@ -478,8 +478,8 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/admin/video/VideoTasksView.vue'),
     meta: {
       requiresAuth: true,
-      requiresAdmin: true,
-      title: '视频任务列表'
+      requiresAdmin: false,
+      title: isVideoGatewayDemoMode ? '调用任务' : '视频任务列表'
     }
   },
   {
@@ -488,8 +488,8 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/admin/video/VideoTaskDetailView.vue'),
     meta: {
       requiresAuth: true,
-      requiresAdmin: true,
-      title: '视频任务详情'
+      requiresAdmin: false,
+      title: isVideoGatewayDemoMode ? '调用详情' : '视频任务详情'
     }
   },
   {

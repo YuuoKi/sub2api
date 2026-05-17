@@ -22,6 +22,8 @@ const (
 	VideoStatusSucceeded = "succeeded"
 	VideoStatusFailed    = "failed"
 	VideoStatusCancelled = "cancelled"
+
+	VideoRouteStrategyLeastInflight = "least_inflight"
 )
 
 var (
@@ -55,32 +57,47 @@ type VideoProviderAccount struct {
 	DefaultModel        string
 	RateLimitPerMinute  int
 	Metadata            map[string]any
+	KeyStatus           string
+	HealthStatus        string
+	DiagnosticType      string
+	SuggestedAction     string
+	Priority            int
+	CurrentInflight     int64
+	TodayTasks          int64
+	TodayFailures       int64
+	LastError           string
+	LastTestAt          *time.Time
+	RouteAvailable      bool
+	RouteSkipReason     string
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
 }
 
 type VideoTask struct {
-	ID                int64
-	ProviderAccountID int64
-	Provider          string
-	Model             string
-	TaskType          string
-	Prompt            string
-	NegativePrompt    string
-	ReferenceImageURL string
-	ReferenceVideoURL string
-	AspectRatio       string
-	Duration          int
-	Resolution        string
-	Status            string
-	UpstreamTaskID    string
-	ResultURL         string
-	ErrorMessage      string
-	CostEstimate      float64
-	CreatedBy         int64
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
-	CompletedAt       *time.Time
+	ID                  int64
+	ProviderAccountID   int64
+	ProviderAccountName string
+	Provider            string
+	Model               string
+	TaskType            string
+	Prompt              string
+	NegativePrompt      string
+	ReferenceImageURL   string
+	ReferenceVideoURL   string
+	AspectRatio         string
+	Duration            int
+	Resolution          string
+	Status              string
+	UpstreamTaskID      string
+	ResultURL           string
+	ErrorMessage        string
+	CostEstimate        float64
+	CreatedBy           int64
+	CreatedByEmail      string
+	CreatedByName       string
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+	CompletedAt         *time.Time
 }
 
 type VideoTaskEvent struct {
@@ -108,22 +125,46 @@ type VideoProviderStatus struct {
 	APIKeyConfigured bool
 	MaskedKey        string
 	DefaultModel     string
+	KeyStatus        string
+	HealthStatus     string
+	DiagnosticType   string
+	SuggestedAction  string
+	RouteAvailable   bool
+	RouteSkipReason  string
+	Priority         int
+	CurrentInflight  int64
+	LastError        string
+	LastTestAt       *time.Time
 	UpdatedAt        time.Time
 	TodayTasks       int64
 	RunningTasks     int64
 	FailedTasks      int64
 }
 
+type VideoHealthDiagnostic struct {
+	Provider        string
+	DisplayName     string
+	RouteAccount    string
+	KeyStatus       string
+	LastTestAt      *time.Time
+	ExceptionType   string
+	ImpactTasks     int64
+	RecentError     string
+	SuggestedAction string
+	Status          string
+}
+
 type VideoDashboard struct {
-	TodayTasks      int64
-	SuccessRate     float64
-	FailedTasks     int64
-	QueuedTasks     int64
-	RunningTasks    int64
-	ProviderStatus  []VideoProviderStatus
-	RecentFailures  []*VideoTask
-	RecentSuccesses []*VideoTask
-	UsageOverview   []VideoUsageSummary
+	TodayTasks        int64
+	SuccessRate       float64
+	FailedTasks       int64
+	QueuedTasks       int64
+	RunningTasks      int64
+	ProviderStatus    []VideoProviderStatus
+	HealthDiagnostics []VideoHealthDiagnostic
+	RecentFailures    []*VideoTask
+	RecentSuccesses   []*VideoTask
+	UsageOverview     []VideoUsageSummary
 }
 
 type VideoProviderCreateParams struct {
@@ -197,8 +238,17 @@ type VideoGatewayRepository interface {
 
 	CountTasksSince(ctx context.Context, since time.Time) (map[string]int64, error)
 	CountProviderTasksSince(ctx context.Context, since time.Time) (map[string]map[string]int64, error)
+	ProviderAccountTaskStatsSince(ctx context.Context, since time.Time) (map[int64]VideoProviderRuntimeStats, error)
 	ListRecentTasksByStatus(ctx context.Context, status string, limit int) ([]*VideoTask, error)
 	UsageSummarySince(ctx context.Context, since time.Time) ([]VideoUsageSummary, error)
+}
+
+type VideoProviderRuntimeStats struct {
+	TodayTasks      int64
+	CurrentInflight int64
+	TodayFailures   int64
+	LastError       string
+	LastErrorAt     *time.Time
 }
 
 func IsTerminalVideoStatus(status string) bool {

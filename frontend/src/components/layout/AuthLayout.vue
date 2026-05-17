@@ -74,7 +74,7 @@ const siteName = computed(() => isVideoGatewayDemoMode ? VIDEO_GATEWAY_PRODUCT_N
 const siteLogo = computed(() => sanitizeUrl(appStore.siteLogo || '', { allowRelative: true, allowDataUrl: true }))
 const siteSubtitle = computed(() =>
   isVideoGatewayDemoMode
-    ? '统一管理企业 AI 视频模型通道、任务和结果回收'
+    ? '统一托管多平台 API Key，集中调度视频生成任务，追踪用量、结果与失败原因。'
     : appStore.cachedPublicSettings?.site_subtitle || 'Subscription to API Conversion Platform'
 )
 const settingsLoaded = computed(() => appStore.publicSettingsLoaded)

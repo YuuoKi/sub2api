@@ -5,7 +5,7 @@
         <div>
           <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? 'API 通道池' : '模型通道' }}</h1>
           <p class="mt-1 max-w-4xl text-sm text-gray-500 dark:text-gray-400">
-            {{ isVideoGatewayDemoMode ? '集中管理企业可用的视频模型 API 通道。Key 加密保存，前端只展示脱敏状态；调用任务由网关按启用状态、限流和队列统一分发。' : '管理演示通道与未来真实模型通道的启用状态和调用凭证。' }}
+            {{ isVideoGatewayDemoMode ? '老板先看哪些账号能用、哪些异常、下一步该处理什么；技术配置放在右侧详情里。' : '管理演示通道与未来真实模型通道的启用状态和调用凭证。' }}
           </p>
         </div>
         <button class="btn btn-outline" type="button" :disabled="loading" @click="loadProviders">
@@ -13,6 +13,24 @@
           刷新
         </button>
       </div>
+
+      <section v-if="isVideoGatewayDemoMode" class="grid gap-3 md:grid-cols-3">
+        <div class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-800">
+          <div class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">老板先看</div>
+          <div class="mt-2 text-sm font-semibold text-gray-900 dark:text-white">Key 状态是否正常</div>
+          <p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">正常、需要配置、鉴权失败、限流都会用人话展示。</p>
+        </div>
+        <div class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-800">
+          <div class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">员工无需选择</div>
+          <div class="mt-2 text-sm font-semibold text-gray-900 dark:text-white">网关自动挑可用账号</div>
+          <p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">通道池只影响系统路由，不让普通用户手动调度。</p>
+        </div>
+        <div class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-800">
+          <div class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">运维处理</div>
+          <div class="mt-2 text-sm font-semibold text-gray-900 dark:text-white">看建议动作而不是日志</div>
+          <p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">先配置 Key、检查鉴权、降并发或启停账号。</p>
+        </div>
+      </section>
 
       <div class="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
         <section class="rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-800">
@@ -22,15 +40,21 @@
                 <tr>
                   <th class="px-5 py-3 font-medium">通道名称</th>
                   <th class="px-5 py-3 font-medium">Key 状态</th>
-                  <th class="px-5 py-3 font-medium">启用状态</th>
+                  <th class="px-5 py-3 font-medium">是否启用</th>
                   <th class="px-5 py-3 font-medium">今日调用</th>
                   <th class="px-5 py-3 font-medium">当前处理中</th>
                   <th class="px-5 py-3 font-medium">最近异常</th>
-                  <th class="px-5 py-3 font-medium">操作</th>
+                  <th class="px-5 py-3 font-medium">建议动作</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-100 dark:divide-dark-700">
-                <tr v-for="provider in providers" :key="provider.id" :class="selected?.id === provider.id ? 'bg-gray-50 dark:bg-dark-700/40' : ''">
+                <tr
+                  v-for="provider in providers"
+                  :key="provider.id"
+                  class="cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-700/40"
+                  :class="selected?.id === provider.id ? 'bg-gray-50 dark:bg-dark-700/40' : ''"
+                  @click="selectProvider(provider)"
+                >
                   <td class="px-5 py-3">
                     <span class="inline-flex rounded-md px-2 py-1 text-xs font-medium" :class="providerBadgeClass(provider.provider)">
                       {{ providerDisplayName(provider) }}
@@ -43,40 +67,22 @@
                     </span>
                   </td>
                   <td class="px-5 py-3">
-                    <button
-                      type="button"
+                    <span
                       class="inline-flex rounded-md px-2 py-1 text-xs font-medium"
                       :class="providerRuntimeStatusClass(providerRuntimeStatus(provider))"
-                      :disabled="savingId === provider.id"
-                      @click="toggleEnabled(provider)"
                     >
-                      {{ providerRuntimeStatus(provider) }}
-                    </button>
+                      {{ provider.enabled ? '启用' : '停用' }}
+                    </span>
                   </td>
                   <td class="px-5 py-3 text-gray-700 dark:text-gray-200">{{ provider.today_tasks }}</td>
                   <td class="px-5 py-3 text-gray-700 dark:text-gray-200">{{ provider.current_inflight }}</td>
                   <td class="px-5 py-3">
                     <div class="max-w-xs text-xs text-gray-600 dark:text-gray-300">
-                      {{ provider.last_error || provider.diagnostic_type || provider.route_skip_reason || '-' }}
-                    </div>
-                    <div v-if="provider.suggested_action" class="mt-1 max-w-xs text-xs text-amber-700 dark:text-amber-300">
-                      {{ provider.suggested_action }}
+                      {{ humanIssueLabel(provider.last_error || provider.diagnostic_type || provider.route_skip_reason || provider.key_status) }}
                     </div>
                   </td>
-                  <td class="px-5 py-3">
-                    <div class="flex flex-wrap gap-2">
-                      <button class="btn btn-sm btn-outline" type="button" @click="selectProvider(provider)">
-                        <Icon name="edit" size="xs" />
-                        编辑
-                      </button>
-                      <button class="btn btn-sm btn-outline" type="button" :disabled="testingId === provider.id" @click="testProvider(provider.id)">
-                        <Icon name="beaker" size="xs" />
-                        测试
-                      </button>
-                      <button class="btn btn-sm btn-outline" type="button" :disabled="savingId === provider.id" @click="toggleEnabled(provider)">
-                        {{ provider.enabled ? '停用' : '启用' }}
-                      </button>
-                    </div>
+                  <td class="px-5 py-3 text-xs leading-5 text-amber-700 dark:text-amber-300">
+                    {{ providerSuggestedAction(provider) }}
                   </td>
                 </tr>
                 <tr v-if="!loading && !providers.length">
@@ -90,9 +96,9 @@
         </section>
 
         <section class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
-          <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? 'API 通道配置' : '通道配置' }}</h2>
+          <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? '通道详情 / 技术配置' : '通道配置' }}</h2>
           <p v-if="isVideoGatewayDemoMode" class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            API Key 将加密保存，前端只显示脱敏状态。留空表示保留当前 Key。
+            左侧表格给老板看，右侧保留技术配置。API Key 加密保存，前端只显示脱敏状态；留空表示保留当前 Key。
           </p>
           <form v-if="selected" class="mt-4 space-y-4" @submit.prevent="saveProvider">
             <div>
@@ -152,6 +158,7 @@
       <section class="rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-800">
         <div class="border-b border-gray-200 px-5 py-4 dark:border-dark-700">
           <h2 class="text-base font-semibold text-gray-900 dark:text-white">API 健康诊断</h2>
+          <p v-if="isVideoGatewayDemoMode" class="mt-1 text-sm text-gray-500 dark:text-gray-400">这里不是报错堆栈，而是告诉老板哪个 API 账号影响了任务，以及下一步该处理什么。</p>
         </div>
         <div class="overflow-x-auto">
           <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-dark-700">
@@ -178,10 +185,10 @@
                   </span>
                 </td>
                 <td class="px-5 py-3 text-gray-500 dark:text-gray-400">{{ formatDate(item.last_test_at) }}</td>
-                <td class="px-5 py-3 text-gray-700 dark:text-gray-200">{{ item.exception_type }}</td>
+                <td class="px-5 py-3 text-gray-700 dark:text-gray-200">{{ humanIssueLabel(item.exception_type || item.key_status) }}</td>
                 <td class="px-5 py-3 text-gray-700 dark:text-gray-200">{{ item.impact_tasks }}</td>
-                <td class="px-5 py-3 text-gray-700 dark:text-gray-200">{{ item.recent_error || '-' }}</td>
-                <td class="px-5 py-3 text-amber-700 dark:text-amber-300">{{ item.suggested_action || '-' }}</td>
+                <td class="px-5 py-3 text-gray-700 dark:text-gray-200">{{ humanIssueLabel(item.recent_error) }}</td>
+                <td class="px-5 py-3 text-amber-700 dark:text-amber-300">{{ diagnosticSuggestedAction(item) }}</td>
                 <td class="px-5 py-3">
                   <span class="inline-flex rounded-md px-2 py-1 text-xs font-medium" :class="item.status === '正常' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300'">
                     {{ item.status }}
@@ -209,7 +216,9 @@ import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import { isVideoGatewayDemoMode } from '@/utils/productMode'
 import {
+  diagnosticSuggestedAction,
   formatDate,
+  humanIssueLabel,
   keyStatusClass,
   providerBadgeClass,
   providerDescription,
@@ -218,13 +227,13 @@ import {
   providerLabel,
   providerRuntimeStatus,
   providerRuntimeStatusClass,
+  providerSuggestedAction,
   providerTestMessage,
 } from './videoUtils'
 
 const appStore = useAppStore()
 const loading = ref(false)
 const saving = ref(false)
-const savingId = ref<number | null>(null)
 const testingId = ref<number | null>(null)
 const providers = ref<VideoProviderAccount[]>([])
 const selected = ref<VideoProviderAccount | null>(null)
@@ -289,18 +298,6 @@ async function saveProvider() {
     appStore.showError(extractApiErrorMessage(err, isVideoGatewayDemoMode ? '保存 API 通道配置失败' : '保存通道配置失败'))
   } finally {
     saving.value = false
-  }
-}
-
-async function toggleEnabled(provider: VideoProviderAccount) {
-  savingId.value = provider.id
-  try {
-    await adminAPI.video.updateProvider(provider.id, { enabled: !provider.enabled })
-    await loadProviders()
-  } catch (err) {
-    appStore.showError(extractApiErrorMessage(err, isVideoGatewayDemoMode ? '更新 API 通道状态失败' : '更新通道状态失败'))
-  } finally {
-    savingId.value = null
   }
 }
 

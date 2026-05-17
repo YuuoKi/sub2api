@@ -5,7 +5,7 @@
         <div>
           <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? '通过 API 网关发起视频调用' : '创建视频任务' }}</h1>
           <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            {{ isVideoGatewayDemoMode ? '任务将通过已启用的 API 通道提交，系统负责排队、限流、状态查询和结果回收。' : '提交文生视频、图生视频或参考视频任务，创建成功后自动进入任务详情。' }}
+            {{ isVideoGatewayDemoMode ? '员工只需要选择模板、填写提示词，系统会自动选择可用 API 账号并回收结果。' : '提交文生视频、图生视频或参考视频任务，创建成功后自动进入任务详情。' }}
           </p>
         </div>
         <RouterLink class="btn btn-outline" to="/admin/video/tasks">
@@ -13,6 +13,20 @@
           {{ isVideoGatewayDemoMode ? '调用任务' : '任务列表' }}
         </RouterLink>
       </div>
+
+      <section v-if="isVideoGatewayDemoMode" class="rounded-lg border border-teal-200 bg-teal-50 p-5 dark:border-teal-500/20 dark:bg-teal-500/10">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p class="text-sm font-medium text-teal-700 dark:text-teal-200">主路径</p>
+            <h2 class="mt-2 text-xl font-semibold text-gray-950 dark:text-white">通过网关提交调用</h2>
+            <p class="mt-2 text-sm text-teal-800 dark:text-teal-100">普通员工不需要选择账号、不需要理解调度；提交后系统会自动选择可用 API 账号。</p>
+          </div>
+          <RouterLink class="btn btn-primary" to="/admin/video/tasks">
+            <Icon name="document" size="sm" />
+            查看调用任务
+          </RouterLink>
+        </div>
+      </section>
 
       <section v-if="isVideoGatewayDemoMode" class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
         <div class="grid gap-3 md:grid-cols-6">
@@ -44,30 +58,14 @@
         </div>
       </section>
 
-      <div class="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
+      <div class="grid gap-6 xl:grid-cols-[1fr_0.78fr]">
         <section class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
           <form class="space-y-4" @submit.prevent="submitTask">
             <div>
-              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">{{ isVideoGatewayDemoMode ? 'API 通道' : '供应商通道' }}</label>
-              <select v-model.number="form.provider_account_id" class="input" @change="syncProviderModel">
-                <option :value="0">{{ isVideoGatewayDemoMode ? '自动选择可用演示通道' : '自动选择可用通道' }}</option>
-                <option v-for="provider in enabledProviders" :key="provider.id" :value="provider.id">
-                  {{ providerDisplayName(provider) }} | {{ modelDisplayName(provider.provider, provider.default_model) }} | {{ providerRuntimeStatus(provider) }}
-                </option>
+              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">{{ isVideoGatewayDemoMode ? '调用类型' : '任务类型' }}</label>
+              <select v-model="form.task_type" class="input">
+                <option v-for="item in taskTypeOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
               </select>
-            </div>
-
-            <div class="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">{{ isVideoGatewayDemoMode ? '调用类型' : '任务类型' }}</label>
-                <select v-model="form.task_type" class="input">
-                  <option v-for="item in taskTypeOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
-                </select>
-              </div>
-              <div>
-                <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">模型</label>
-                <input v-model="form.model" class="input" maxlength="200" />
-              </div>
             </div>
 
             <div>
@@ -91,6 +89,12 @@
             <details class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-dark-700 dark:bg-dark-700/30">
               <summary class="cursor-pointer text-sm font-semibold text-gray-900 dark:text-white">高级参数</summary>
               <div class="mt-4 space-y-4">
+                <div>
+                  <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">模型偏好（可选）</label>
+                  <input v-model="form.model" class="input" maxlength="200" />
+                  <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">默认由网关按可用账号选择；普通员工可以保持不改。</p>
+                </div>
+
                 <div>
                   <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">负向提示词</label>
                   <textarea v-model="form.negative_prompt" class="input min-h-20 resize-y" maxlength="4000" />
@@ -134,14 +138,15 @@
 
             <button class="btn btn-primary" type="submit" :disabled="submitting || Boolean(validationMessage)">
               <Icon name="play" size="sm" />
-              {{ isVideoGatewayDemoMode ? '通过网关提交任务' : '创建任务' }}
+              {{ isVideoGatewayDemoMode ? '通过网关提交调用' : '创建任务' }}
             </button>
+            <p v-if="isVideoGatewayDemoMode" class="text-xs text-gray-500 dark:text-gray-400">系统会自动选择可用 API 账号。</p>
           </form>
         </section>
 
         <div class="space-y-6">
           <section v-if="isVideoGatewayDemoMode" class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
-            <h2 class="text-base font-semibold text-gray-900 dark:text-white">为什么通过网关提交？</h2>
+            <h2 class="text-base font-semibold text-gray-900 dark:text-white">右侧只做说明，不需要员工调度</h2>
             <div class="mt-4 space-y-3">
               <div v-for="reason in gatewayReasons" :key="reason" class="flex items-start gap-3 text-sm text-gray-600 dark:text-gray-300">
                 <Icon name="checkCircle" size="sm" class="mt-0.5 shrink-0 text-emerald-600 dark:text-emerald-300" />
@@ -151,7 +156,8 @@
           </section>
 
           <section class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
-            <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? 'API 通道状态' : '通道状态' }}</h2>
+            <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? 'API 通道状态（系统自动参考）' : '通道状态' }}</h2>
+            <p v-if="isVideoGatewayDemoMode" class="mt-1 text-sm text-gray-500 dark:text-gray-400">这些状态帮助解释系统为什么能自动路由，普通员工不需要手动选择。</p>
             <div class="mt-4 space-y-3">
               <div v-for="provider in providers" :key="provider.id" class="flex items-center justify-between gap-3 rounded-lg border border-gray-200 p-3 dark:border-dark-700">
                 <div class="min-w-0">
@@ -200,7 +206,6 @@ import {
   providerDisplayName,
   providerEnabledLabel,
   providerKeyLabel,
-  providerRuntimeStatus,
   taskTypeOptions,
 } from './videoUtils'
 
@@ -251,19 +256,19 @@ const demoTemplates: DemoTemplate[] = [
 ]
 
 const gatewaySubmitSteps = [
-  { title: '选择 API 通道' },
-  { title: '填写任务参数' },
-  { title: '网关排队' },
-  { title: '上游生成' },
-  { title: '状态回收' },
+  { title: '选择调用模板' },
+  { title: '填写提示词' },
+  { title: '系统自动选账号' },
+  { title: '网关提交调用' },
+  { title: '回收状态与原因' },
   { title: '查看结果' },
 ]
 
 const gatewayReasons = [
-  '不暴露员工直接接触 API Key',
-  '自动记录任务状态',
-  '失败原因可追踪',
-  '后续可接入限流、并发和用量审计',
+  '员工不接触 API Key，也不需要理解账号调度。',
+  '系统会自动选择可用 API 账号并记录路由结果。',
+  '成功结果和失败原因都会回收到任务详情。',
+  '后续接 Seedance/Kling 真实通道时，员工入口不需要变化。',
 ]
 
 const form = reactive<VideoTaskCreatePayload>({
@@ -372,7 +377,7 @@ async function submitTask() {
       delete payload.provider_account_id
     }
     const task = await videoTaskAPI.create(payload)
-    appStore.showSuccess(isVideoGatewayDemoMode ? '调用任务已进入网关队列，可在详情查看处理进度。' : '任务已进入队列，可在详情查看处理进度。')
+    appStore.showSuccess(isVideoGatewayDemoMode ? '调用已提交，系统会自动选择可用 API 账号。' : '任务已进入队列，可在详情查看处理进度。')
     router.push(`/admin/video/tasks/${task.id}`)
   } catch (err) {
     appStore.showError(extractApiErrorMessage(err, isVideoGatewayDemoMode ? '发起视频调用失败' : '创建视频任务失败'))

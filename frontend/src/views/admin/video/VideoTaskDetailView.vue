@@ -30,8 +30,21 @@
       </div>
 
       <section v-if="task" class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
-        <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? '状态概览' : '任务概览' }}</h2>
-        <div class="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? '调用结果概览' : '任务概览' }}</h2>
+          <div class="flex flex-wrap gap-2">
+            <a v-if="task.result_url" class="btn btn-sm btn-outline" :href="task.result_url" target="_blank" rel="noreferrer">
+              {{ isVideoGatewayDemoMode ? '打开结果链接' : '打开结果' }}
+            </a>
+            <button v-if="task.result_url" class="btn btn-sm btn-outline" type="button" @click="copyResultUrl">
+              复制结果链接
+            </button>
+            <button class="btn btn-sm btn-outline" type="button" @click="copyToCreate">
+              {{ isVideoGatewayDemoMode ? '复制参数重新发起' : '复制参数' }}
+            </button>
+          </div>
+        </div>
+        <div class="mt-4 grid gap-4 lg:grid-cols-[0.7fr_1.2fr_1fr]">
           <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-700">
             <div class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">{{ isVideoGatewayDemoMode ? '调用状态' : '状态' }}</div>
             <div class="mt-2">
@@ -41,27 +54,38 @@
             </div>
           </div>
           <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-700">
-            <div class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">{{ isVideoGatewayDemoMode ? 'API 通道' : '通道' }}</div>
-            <div class="mt-2 text-lg font-semibold text-gray-900 dark:text-white">{{ providerLabel(task.provider) }}</div>
+            <div class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">{{ isVideoGatewayDemoMode ? '调用结果 / 失败原因' : '结果 / 失败原因' }}</div>
+            <div class="mt-2 text-sm font-semibold text-gray-900 dark:text-white">{{ outcomeTitle }}</div>
+            <p class="mt-1 text-xs leading-5" :class="task.error_message ? 'text-red-600 dark:text-red-300' : 'text-gray-500 dark:text-gray-400'">{{ outcomeDescription }}</p>
           </div>
           <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-700">
-            <div class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">模型</div>
-            <div class="mt-2 truncate text-lg font-semibold text-gray-900 dark:text-white">{{ modelDisplayName(task.provider, task.model) }}</div>
-          </div>
-          <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-700">
-            <div class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">更新时间</div>
-            <div class="mt-2 text-sm font-medium text-gray-900 dark:text-white">{{ formatDate(task.updated_at) }}</div>
+            <div class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">下一步动作</div>
+            <div class="mt-2 text-sm font-semibold text-gray-900 dark:text-white">{{ nextActionTitle }}</div>
+            <p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">{{ nextActionDescription }}</p>
           </div>
         </div>
       </section>
 
-      <div v-if="task" class="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
+      <section v-if="task" class="rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-800">
+        <div class="border-b border-gray-200 px-5 py-4 dark:border-dark-700">
+          <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? 'API 通道与路由' : '通道信息' }}</h2>
+          <p v-if="isVideoGatewayDemoMode" class="mt-1 text-sm text-gray-500 dark:text-gray-400">先看系统实际把调用路由到了哪个账号，以及为什么这么选。</p>
+        </div>
+        <dl class="divide-y divide-gray-100 text-sm dark:divide-dark-700">
+          <div v-for="row in channelRows" :key="row.label" class="grid gap-2 px-5 py-3 sm:grid-cols-[160px_1fr]">
+            <dt class="text-gray-500 dark:text-gray-400">{{ row.label }}</dt>
+            <dd class="min-w-0 break-words text-gray-900 dark:text-gray-100">{{ row.value || '-' }}</dd>
+          </div>
+        </dl>
+      </section>
+
+      <div v-if="task" class="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
         <section class="rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-800">
           <div class="border-b border-gray-200 px-5 py-4 dark:border-dark-700">
-            <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? 'API 通道信息' : '任务参数' }}</h2>
+            <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? '完整提示词与调用参数' : '任务参数' }}</h2>
           </div>
           <dl class="divide-y divide-gray-100 text-sm dark:divide-dark-700">
-            <div v-for="row in channelRows" :key="row.label" class="grid gap-2 px-5 py-3 sm:grid-cols-[160px_1fr]">
+            <div v-for="row in parameterRows" :key="row.label" class="grid gap-2 px-5 py-3 sm:grid-cols-[160px_1fr]">
               <dt class="text-gray-500 dark:text-gray-400">{{ row.label }}</dt>
               <dd class="min-w-0 break-words text-gray-900 dark:text-gray-100">{{ row.value || '-' }}</dd>
             </div>
@@ -91,66 +115,6 @@
           </div>
         </section>
       </div>
-
-      <section v-if="task" class="rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-800">
-        <div class="border-b border-gray-200 px-5 py-4 dark:border-dark-700">
-          <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? '调用参数' : '任务参数' }}</h2>
-        </div>
-        <dl class="divide-y divide-gray-100 text-sm dark:divide-dark-700">
-          <div v-for="row in parameterRows" :key="row.label" class="grid gap-2 px-5 py-3 sm:grid-cols-[160px_1fr]">
-            <dt class="text-gray-500 dark:text-gray-400">{{ row.label }}</dt>
-            <dd class="min-w-0 break-words text-gray-900 dark:text-gray-100">{{ row.value || '-' }}</dd>
-          </div>
-        </dl>
-      </section>
-
-      <section v-if="task" class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? '结果 / 失败原因' : '结果区' }}</h2>
-          <div class="flex flex-wrap gap-2">
-            <a v-if="task.result_url" class="btn btn-sm btn-outline" :href="task.result_url" target="_blank" rel="noreferrer">
-              {{ isVideoGatewayDemoMode ? '打开结果链接' : '打开结果' }}
-            </a>
-            <button v-if="task.result_url" class="btn btn-sm btn-outline" type="button" @click="copyResultUrl">
-              复制结果链接
-            </button>
-            <button class="btn btn-sm btn-outline" type="button" @click="copyToCreate">
-              {{ isVideoGatewayDemoMode ? '复制参数复用' : '复制参数' }}
-            </button>
-          </div>
-        </div>
-        <div class="mt-4 space-y-3 text-sm">
-          <div v-if="task.result_url" class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-800 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-200">
-            <div class="font-medium">{{ isVideoGatewayDemoMode ? '调用成功，结果链接已由网关回收。' : '视频生成成功，结果链接已回收。' }}</div>
-            <p class="mt-1 text-xs text-emerald-700 dark:text-emerald-300">
-              {{ isVideoGatewayDemoMode ? '演示通道返回闭环结果；真实通道配置 API Key 后会回收上游真实结果。' : '演示通道返回本地闭环结果；正式通道配置 API Key 后会回收上游真实结果。' }}
-            </p>
-            <ul v-if="isVideoGatewayDemoMode" class="mt-3 list-disc space-y-1 pl-5 text-xs">
-              <li>打开结果链接</li>
-              <li>复制结果链接</li>
-              <li>复制参数复用</li>
-            </ul>
-          </div>
-          <div v-else-if="task.status !== 'failed'" class="rounded-lg border border-dashed border-gray-200 p-4 text-gray-500 dark:border-dark-700 dark:text-gray-400">
-            {{ isVideoGatewayDemoMode ? '暂无结果链接。状态回收完成后这里会显示结果入口。' : '暂无结果链接。任务完成后这里会显示结果入口。' }}
-          </div>
-          <div v-if="task.error_message" class="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
-            <div class="font-medium">{{ isVideoGatewayDemoMode ? '调用失败原因' : '失败原因' }}：{{ errorMessageLabel(task.error_message) }}</div>
-            <ul class="mt-3 list-disc space-y-1 pl-5 text-xs">
-              <template v-if="isVideoGatewayDemoMode">
-                <li>检查提示词是否触发上游审核</li>
-                <li>切换 API 通道</li>
-                <li>复制参数重新发起调用</li>
-              </template>
-              <template v-else>
-                <li>检查提示词是否过短、冲突或触发演示失败场景。</li>
-                <li>更换模型通道，或确认通道已启用。</li>
-                <li>复制参数重新创建，便于演示失败恢复流程。</li>
-              </template>
-            </ul>
-          </div>
-        </div>
-      </section>
 
       <details v-if="task" class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
         <summary class="cursor-pointer text-base font-semibold text-gray-900 dark:text-white">技术详情</summary>
@@ -198,6 +162,34 @@ const cancelling = ref(false)
 let refreshTimer: ReturnType<typeof setInterval> | null = null
 
 const taskId = computed(() => Number(route.params.id))
+const outcomeTitle = computed(() => {
+  if (!task.value) return '-'
+  if (task.value.error_message) return isVideoGatewayDemoMode ? '调用失败，原因已记录' : '任务失败'
+  if (task.value.result_url) return isVideoGatewayDemoMode ? '调用成功，结果已回收' : '生成成功'
+  if (!isTerminalStatus(task.value.status)) return isVideoGatewayDemoMode ? '处理中，等待结果回收' : '处理中'
+  return isVideoGatewayDemoMode ? '暂无结果' : '暂无结果'
+})
+const outcomeDescription = computed(() => {
+  if (!task.value) return '-'
+  if (task.value.error_message) return errorMessageLabel(task.value.error_message)
+  if (task.value.result_url) return isVideoGatewayDemoMode ? '结果链接已经进入网关任务详情，管理员可以审计完整链路。' : '结果链接已回收。'
+  if (!isTerminalStatus(task.value.status)) return isVideoGatewayDemoMode ? '系统仍在等待上游处理或状态回收。' : '任务仍在处理。'
+  return isVideoGatewayDemoMode ? '没有返回结果链接，请查看时间线确认原因。' : '没有返回结果链接。'
+})
+const nextActionTitle = computed(() => {
+  if (!task.value) return '-'
+  if (task.value.error_message) return '复制参数重新发起'
+  if (task.value.result_url) return '打开或复制结果'
+  if (!isTerminalStatus(task.value.status)) return '等待或刷新状态'
+  return '查看时间线'
+})
+const nextActionDescription = computed(() => {
+  if (!task.value) return '-'
+  if (task.value.error_message) return '先看失败原因，再调整提示词或切换通道重新提交。'
+  if (task.value.result_url) return '结果已经回收，可打开链接或复制给业务方。'
+  if (!isTerminalStatus(task.value.status)) return '系统会继续轮询并回收结果或失败原因。'
+  return '从处理时间线确认最后一次网关事件。'
+})
 const channelRows = computed(() => {
   if (!task.value) return []
   if (isVideoGatewayDemoMode) {

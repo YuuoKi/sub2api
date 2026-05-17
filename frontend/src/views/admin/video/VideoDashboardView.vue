@@ -26,12 +26,21 @@
         v-if="isVideoGatewayDemoMode"
         class="rounded-lg border border-teal-200 bg-teal-50 p-5 dark:border-teal-500/20 dark:bg-teal-500/10"
       >
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p class="text-sm font-medium text-teal-700 dark:text-teal-200">企业 API 网关核心价值</p>
+            <p class="text-sm font-medium text-teal-700 dark:text-teal-200">三秒价值区</p>
             <h2 class="mt-2 text-xl font-semibold text-gray-950 dark:text-white">
-              统一托管多平台 API Key，集中调度视频生成任务，追踪用量、结果与失败原因。
+              统一托管企业视频 API Key，自动路由到可用账号，并回收结果与失败原因。
             </h2>
+            <p class="mt-2 max-w-3xl text-sm text-teal-800 dark:text-teal-100">
+              老板看账号是否能用，员工只提交业务提示词，运维按异常建议处理账号。
+            </p>
+            <div class="mt-4 grid gap-2 sm:grid-cols-3">
+              <RouterLink v-for="role in roleEntrances" :key="role.title" class="rounded-lg border border-teal-200 bg-white/70 p-3 text-sm hover:border-teal-400 dark:border-teal-500/20 dark:bg-dark-800/60" :to="role.to">
+                <div class="font-semibold text-gray-950 dark:text-white">{{ role.title }}</div>
+                <div class="mt-1 text-xs leading-5 text-gray-600 dark:text-gray-300">{{ role.description }}</div>
+              </RouterLink>
+            </div>
           </div>
           <div class="flex flex-wrap gap-2">
             <RouterLink class="btn btn-primary" to="/admin/video/create">
@@ -78,12 +87,12 @@
       <section v-if="isVideoGatewayDemoMode" class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
         <div class="flex flex-col gap-2 border-b border-gray-200 pb-4 dark:border-dark-700 md:flex-row md:items-end md:justify-between">
           <div>
-            <h2 class="text-base font-semibold text-gray-900 dark:text-white">API 调用链路</h2>
-            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">从企业主配置 API Key 到任务分发、状态回收和用量审计的统一网关流程。</p>
+            <h2 class="text-base font-semibold text-gray-900 dark:text-white">业务链路</h2>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">把客户最关心的链路放在一屏：API Key 托管、通道池、自动路由、任务执行、结果回收、异常诊断。</p>
           </div>
-          <span class="text-xs font-medium text-gray-500 dark:text-gray-400">真实通道未启用节点显示为待配置</span>
+          <span class="text-xs font-medium text-gray-500 dark:text-gray-400">员工无需理解调度，系统自动选择可用 API 账号</span>
         </div>
-        <div class="mt-5 grid gap-3 md:grid-cols-4 xl:grid-cols-7">
+        <div class="mt-5 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
           <div
             v-for="node in gatewayFlowNodes"
             :key="node.title"
@@ -225,6 +234,7 @@
       <section v-if="isVideoGatewayDemoMode" class="rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-800">
         <div class="border-b border-gray-200 px-5 py-4 dark:border-dark-700">
           <h2 class="text-base font-semibold text-gray-900 dark:text-white">API 健康诊断</h2>
+          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">这里不是报错堆栈，而是告诉老板哪个 API 账号影响了任务，以及下一步该处理什么。</p>
         </div>
         <div class="overflow-x-auto">
           <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-dark-700">
@@ -242,9 +252,9 @@
               <tr v-for="item in dashboard?.health_diagnostics || []" :key="`${item.provider}-${item.route_account}`">
                 <td class="px-5 py-3 text-gray-700 dark:text-gray-200">{{ providerLabel(item.provider) }}</td>
                 <td class="px-5 py-3 text-gray-700 dark:text-gray-200">{{ item.route_account }}</td>
-                <td class="px-5 py-3 text-gray-700 dark:text-gray-200">{{ item.exception_type }}</td>
-                <td class="px-5 py-3 text-gray-700 dark:text-gray-200">{{ item.recent_error || '-' }}</td>
-                <td class="px-5 py-3 text-amber-700 dark:text-amber-300">{{ item.suggested_action || '-' }}</td>
+                <td class="px-5 py-3 text-gray-700 dark:text-gray-200">{{ humanIssueLabel(item.exception_type || item.key_status) }}</td>
+                <td class="px-5 py-3 text-gray-700 dark:text-gray-200">{{ humanIssueLabel(item.recent_error) }}</td>
+                <td class="px-5 py-3 text-amber-700 dark:text-amber-300">{{ diagnosticSuggestedAction(item) }}</td>
                 <td class="px-5 py-3">
                   <span class="inline-flex rounded-md px-2 py-1 text-xs font-medium" :class="item.status === '正常' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300'">
                     {{ item.status }}
@@ -270,8 +280,10 @@ import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import { isVideoGatewayDemoMode } from '@/utils/productMode'
 import {
+  diagnosticSuggestedAction,
   errorMessageLabel,
   formatDate,
+  humanIssueLabel,
   keyStatusClass,
   modelDisplayName,
   providerBadgeClass,
@@ -293,7 +305,7 @@ const dashboard = ref<VideoDashboard | null>(null)
 const pageTitle = computed(() => isVideoGatewayDemoMode ? 'API 网关驾驶舱' : '视频总览')
 const pageDescription = computed(() =>
   isVideoGatewayDemoMode
-    ? '集中查看企业视频模型 API 通道、Key 配置、并发队列、调用任务和结果回收状态。'
+    ? '给老板、员工和运维共用的一张网关总览图：看账号、发调用、查异常。'
     : '查看视频任务吞吐、成功率、失败和通道状态。',
 )
 
@@ -307,6 +319,12 @@ type StatItem = {
   value: string | number
   hint?: string
 }
+
+const roleEntrances = [
+  { title: '老板看总览', description: '看 API 账号是否可用、今天处理了多少、哪里异常。', to: '/admin/video' },
+  { title: '员工发起调用', description: '只选模板和写提示词，系统自动选账号。', to: '/admin/video/create' },
+  { title: '运维处理异常', description: '直接看影响账号和建议动作。', to: '/admin/video/providers' },
+]
 
 const statItems = computed<StatItem[]>(() => {
   const d = dashboard.value
@@ -334,15 +352,14 @@ const gatewayFlowNodes = computed(() => {
   const d = dashboard.value
   const hasTasks = (d?.today_tasks || 0) > 0
   const hasResults = Boolean((d?.recent_successes || []).length || (d?.recent_failures || []).length)
-  const hasUsage = Boolean((d?.usage_overview || []).length)
+  const hasDiagnostics = Boolean((d?.health_diagnostics || []).length)
   return [
-    { title: '企业 API Key', description: '企业主统一配置，员工不直接接触凭证。', done: configuredKeyCount.value > 0, status: '待配置', arrow: false },
-    { title: '加密托管', description: 'Key 由后端保存，前端只看脱敏状态。', done: configuredKeyCount.value > 0, status: '待配置', arrow: true },
-    { title: 'API 通道池', description: '演示通道、Seedance 2.0、Kling 集中管理。', done: providers.value.length > 0, status: '待接入', arrow: true },
-    { title: '限流 / 并发 / 队列', description: '按启用状态和每分钟限额统一排队。', done: enabledProviderCount.value > 0, status: '待配置', arrow: true },
-    { title: '任务分发', description: '调用任务由网关提交到可用 API 通道。', done: hasTasks, status: '待调用', arrow: true },
-    { title: '状态回收', description: '轮询并记录成功结果或失败原因。', done: hasResults, status: '待回收', arrow: true },
-    { title: '用量审计', description: realChannelConfigured.value ? '按通道沉淀调用量和成功率。' : '真实通道启用后扩展成本统计。', done: hasUsage, status: '待接入统计', arrow: true },
+    { title: 'API Key 托管', description: '企业统一配置，员工不直接接触凭证。', done: configuredKeyCount.value > 0, status: '待配置', arrow: false },
+    { title: '通道池', description: '演示通道、Seedance、Kling 统一看状态。', done: providers.value.length > 0, status: '待接入', arrow: true },
+    { title: '自动路由', description: '系统挑选当前可用且处理中较少的账号。', done: enabledProviderCount.value > 0, status: '待配置', arrow: true },
+    { title: '任务执行', description: '员工提交后进入网关队列并分发。', done: hasTasks, status: '待调用', arrow: true },
+    { title: '结果回收', description: '成功结果和失败原因都会回到任务详情。', done: hasResults, status: '待回收', arrow: true },
+    { title: '异常诊断', description: '告诉老板哪个账号影响任务，以及下一步动作。', done: hasDiagnostics, status: '待诊断', arrow: true },
   ]
 })
 

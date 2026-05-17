@@ -21,16 +21,24 @@
       </div>
 
       <section class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-800">
-        <div class="grid gap-3 md:grid-cols-[220px_220px_1fr]">
-          <select v-model="filters.status" class="input" @change="resetAndLoad">
-            <option value="">全部状态</option>
-            <option v-for="status in statusOptions" :key="status.value" :value="status.value">{{ status.label }}</option>
-          </select>
+        <div class="grid gap-3 lg:grid-cols-[1fr_220px_auto] lg:items-center">
+          <div class="flex flex-wrap gap-2">
+            <button
+              v-for="item in quickStatusFilters"
+              :key="item.label"
+              class="btn btn-sm"
+              :class="filters.status === item.status ? 'btn-primary' : 'btn-outline'"
+              type="button"
+              @click="applyQuickStatus(item.status)"
+            >
+              {{ item.label }}
+            </button>
+          </div>
           <select v-model="filters.provider" class="input" @change="resetAndLoad">
             <option value="">{{ isVideoGatewayDemoMode ? '全部 API 通道' : '全部通道' }}</option>
             <option v-for="provider in providerOptions" :key="provider.value" :value="provider.value">{{ provider.label }}</option>
           </select>
-          <div class="flex justify-end">
+          <div class="flex justify-start lg:justify-end">
             <button class="btn btn-outline" type="button" @click="clearFilters">
               <Icon name="x" size="sm" />
               清空筛选
@@ -47,9 +55,10 @@
                 <th class="px-5 py-3 font-medium">{{ isVideoGatewayDemoMode ? '调用任务' : '任务' }}</th>
                 <th v-if="authStore.isAdmin" class="px-5 py-3 font-medium">发起人</th>
                 <th class="px-5 py-3 font-medium">{{ isVideoGatewayDemoMode ? 'API 通道' : '通道' }}</th>
+                <th class="px-5 py-3 font-medium">路由账号</th>
                 <th class="px-5 py-3 font-medium">{{ isVideoGatewayDemoMode ? '调用状态' : '状态' }}</th>
+                <th class="px-5 py-3 font-medium">结果 / 失败原因</th>
                 <th class="px-5 py-3 font-medium">创建时间</th>
-                <th class="px-5 py-3 font-medium">结果入口</th>
                 <th class="px-5 py-3 font-medium">操作</th>
               </tr>
             </thead>
@@ -60,9 +69,6 @@
                     #{{ task.id }} | {{ taskTypeLabel(task.task_type) }}
                   </RouterLink>
                   <div class="prompt-summary mt-1 max-w-xl text-xs text-gray-500 dark:text-gray-400">{{ promptDisplayText(task.prompt) }}</div>
-                  <div v-if="task.error_message" class="mt-1 max-w-xl truncate text-xs text-red-600 dark:text-red-300">
-                    {{ isVideoGatewayDemoMode ? '调用失败原因' : '失败原因' }}：{{ errorMessageLabel(task.error_message) }}
-                  </div>
                 </td>
                 <td v-if="authStore.isAdmin" class="px-5 py-3 text-gray-700 dark:text-gray-200">
                   {{ createdByLabel(task) }}
@@ -71,22 +77,29 @@
                   <span class="inline-flex rounded-md px-2 py-1 text-xs font-medium" :class="providerBadgeClass(task.provider)">
                     {{ providerLabel(task.provider) }}
                   </span>
-                  <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">路由账号：{{ routeAccountLabel(task) }}</div>
                   <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ modelDisplayName(task.provider, task.model) }}</div>
+                </td>
+                <td class="px-5 py-3 text-gray-700 dark:text-gray-200">
+                  <div class="font-medium">{{ routeAccountLabel(task) }}</div>
+                  <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ isVideoGatewayDemoMode ? '系统自动路由' : '实际路由账号' }}</div>
                 </td>
                 <td class="px-5 py-3">
                   <span class="inline-flex rounded-md px-2 py-1 text-xs font-medium" :class="statusBadgeClass(task.status)">
                     {{ statusLabel(task.status) }}
                   </span>
                 </td>
-                <td class="px-5 py-3 text-gray-500 dark:text-gray-400">{{ formatDate(task.created_at) }}</td>
                 <td class="px-5 py-3">
                   <a v-if="task.result_url" class="inline-flex items-center gap-1 text-primary-600 hover:text-primary-700 dark:text-primary-300" :href="task.result_url" target="_blank" rel="noreferrer">
                     <Icon name="externalLink" size="xs" />
                     打开结果
                   </a>
-                  <span v-else class="text-gray-400">-</span>
+                  <div v-else-if="task.error_message" class="max-w-sm rounded-md border border-red-200 bg-red-50 p-2 text-xs leading-5 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
+                    <div class="font-medium">{{ isVideoGatewayDemoMode ? '调用失败原因' : '失败原因' }}</div>
+                    <div>{{ errorMessageLabel(task.error_message) }}</div>
+                  </div>
+                  <span v-else class="text-gray-400">等待回收</span>
                 </td>
+                <td class="px-5 py-3 text-gray-500 dark:text-gray-400">{{ formatDate(task.created_at) }}</td>
                 <td class="px-5 py-3">
                   <div class="flex flex-wrap gap-2">
                     <a v-if="task.result_url" class="btn btn-sm btn-outline" :href="task.result_url" target="_blank" rel="noreferrer">打开结果</a>
@@ -100,7 +113,7 @@
                 </td>
               </tr>
               <tr v-if="!loading && !tasks.length">
-                <td :colspan="authStore.isAdmin ? 7 : 6" class="px-5 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                <td :colspan="authStore.isAdmin ? 8 : 7" class="px-5 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
                   <div class="space-y-3">
                     <div>{{ isVideoGatewayDemoMode ? '当前还没有调用任务。你可以先通过演示通道发起一次调用，验证网关流转。' : '没有任务。可以先创建一个演示任务验证流转。' }}</div>
                     <RouterLink class="btn btn-sm btn-outline" to="/admin/video/create">{{ isVideoGatewayDemoMode ? '发起一次演示调用' : '创建一个演示任务' }}</RouterLink>
@@ -146,7 +159,6 @@ import {
   saveTaskDraft,
   statusBadgeClass,
   statusLabel,
-  statusOptions,
   taskTypeLabel,
 } from './videoUtils'
 
@@ -157,6 +169,12 @@ const loading = ref(false)
 const tasks = ref<VideoTask[]>([])
 const filters = reactive({ status: '', provider: '' })
 const pagination = reactive({ page: 1, page_size: 20, total: 0, pages: 1 })
+const quickStatusFilters: Array<{ label: string; status: '' | VideoTaskStatus }> = [
+  { label: '全部', status: '' },
+  { label: '成功', status: 'succeeded' },
+  { label: '处理中', status: 'running' },
+  { label: '失败', status: 'failed' },
+]
 
 async function loadTasks() {
   loading.value = true
@@ -188,6 +206,11 @@ function resetAndLoad() {
 function clearFilters() {
   filters.status = ''
   filters.provider = ''
+  resetAndLoad()
+}
+
+function applyQuickStatus(status: '' | VideoTaskStatus) {
+  filters.status = status
   resetAndLoad()
 }
 

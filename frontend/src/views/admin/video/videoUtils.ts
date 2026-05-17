@@ -77,12 +77,12 @@ export function providerDescription(provider: string): string {
 
 export function providerKeyLabel(configured: boolean, maskedKey?: string, keyStatus?: string): string {
   if (keyStatus === 'normal') return isVideoGatewayDemoMode ? '正常可用' : '已配置 Key'
-  if (keyStatus === 'missing') return '未配置 Key'
-  if (keyStatus === 'disabled') return '停用'
+  if (keyStatus === 'missing') return isVideoGatewayDemoMode ? '需要配置 Key' : '未配置 Key'
+  if (keyStatus === 'disabled') return isVideoGatewayDemoMode ? '账号已停用' : '停用'
   if (keyStatus === 'auth_failed') return '鉴权失败'
-  if (keyStatus === 'rate_limited') return '触发限流'
+  if (keyStatus === 'rate_limited') return isVideoGatewayDemoMode ? '上游限流' : '触发限流'
   if (keyStatus === 'quota_exhausted') return '额度不足'
-  if (!configured) return isVideoGatewayDemoMode ? '未配置 API Key' : '未配置 Key'
+  if (!configured) return isVideoGatewayDemoMode ? '需要配置 Key' : '未配置 Key'
   if (isVideoGatewayDemoMode) return '已配置 / 已脱敏'
   return maskedKey ? `已脱敏：${maskedKey}` : '已配置 Key'
 }
@@ -92,16 +92,16 @@ export function providerEnabledLabel(enabled: boolean): string {
 }
 
 export function providerRuntimeStatus(provider: Pick<VideoProviderAccount, 'provider' | 'enabled' | 'api_key_configured'> & Partial<VideoProviderAccount>): string {
-  if (!provider.enabled) return '停用'
+  if (!provider.enabled) return isVideoGatewayDemoMode ? '账号已停用' : '停用'
   if (provider.route_available === true) return '正常可用'
-  if (provider.route_skip_reason) return provider.route_skip_reason
-  if (provider.diagnostic_type) return provider.diagnostic_type
-  if (provider.key_status === 'missing') return '未配置 Key'
+  if (provider.key_status === 'missing') return isVideoGatewayDemoMode ? '需要配置 Key' : '未配置 Key'
   if (provider.key_status === 'auth_failed') return '鉴权失败'
-  if (provider.key_status === 'rate_limited') return '触发限流'
+  if (provider.key_status === 'rate_limited') return isVideoGatewayDemoMode ? '上游限流' : '触发限流'
   if (provider.key_status === 'quota_exhausted') return '额度不足'
+  if (provider.route_skip_reason) return humanIssueLabel(provider.route_skip_reason)
+  if (provider.diagnostic_type) return humanIssueLabel(provider.diagnostic_type)
   if (provider.provider === 'mock') return isVideoGatewayDemoMode ? '演示可用' : '可演示'
-  if (!provider.api_key_configured) return '待配置'
+  if (!provider.api_key_configured) return isVideoGatewayDemoMode ? '需要配置 Key' : '待配置'
   return isVideoGatewayDemoMode ? '可调用' : '已配置'
 }
 
@@ -115,9 +115,12 @@ export function providerRuntimeStatusClass(status: string): string {
       return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300'
     case '待配置':
     case '未配置 Key':
+    case '需要配置 Key':
     case '触发限流':
+    case '上游限流':
       return 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300'
     case '停用':
+    case '账号已停用':
       return 'bg-gray-100 text-gray-700 dark:bg-dark-700 dark:text-gray-200'
     default:
       return 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-300'
@@ -150,9 +153,52 @@ export function createdByLabel(task: Partial<VideoTask>): string {
 }
 
 export function routingStrategyLabel(strategy?: string): string {
-  if (strategy === 'least_inflight') return 'least_inflight（处理中最少）'
+  if (strategy === 'least_inflight') return isVideoGatewayDemoMode ? '系统自动选择处理中最少的可用账号' : 'least_inflight（处理中最少）'
   if (strategy === 'explicit') return '指定账号'
   return strategy || '-'
+}
+
+export function humanIssueLabel(value?: string | null): string {
+  const normalized = (value || '').trim().toLowerCase()
+  if (!normalized) return '-'
+  if (normalized.includes('missing') || normalized.includes('not configured') || normalized.includes('未配置') || normalized.includes('待配置')) return '需要配置 Key'
+  if (normalized.includes('disabled') || normalized.includes('停用')) return '账号已停用'
+  if (normalized.includes('rate') || normalized.includes('limit') || normalized.includes('限流')) return '上游限流'
+  if (normalized.includes('auth') || normalized.includes('unauthorized') || normalized.includes('鉴权')) return '鉴权失败'
+  if (normalized.includes('quota') || normalized.includes('额度')) return '额度不足'
+  if (normalized === '正常') return '正常'
+  return value || '-'
+}
+
+export function providerSuggestedAction(provider: Partial<VideoProviderAccount>): string {
+  if (!provider.enabled) return isVideoGatewayDemoMode ? '确认还需要这个账号后再启用。' : '按业务需要启用通道。'
+  if (provider.key_status === 'missing' || !provider.api_key_configured) return '请配置测试或正式 API Key，再启用真实调用。'
+  if (provider.key_status === 'auth_failed') return '请重新粘贴有效 Key，保存后再测试。'
+  if (provider.key_status === 'rate_limited') return '请降低并发，或临时切换到其他可用账号。'
+  if (provider.key_status === 'quota_exhausted') return '请补充上游额度，或切换到可用账号。'
+  if (provider.suggested_action) return actionMessageLabel(provider.suggested_action, provider.key_status)
+  if (provider.route_skip_reason) return actionMessageLabel(provider.route_skip_reason, provider.key_status)
+  return provider.route_available ? '保持启用，继续观察调用成功率。' : '请查看配置详情并执行一次通道测试。'
+}
+
+export function diagnosticSuggestedAction(item: { key_status?: string; suggested_action?: string; recent_error?: string; status?: string }): string {
+  if (item.status === '正常') return '无需处理，继续观察。'
+  if (item.key_status === 'missing') return '请先配置测试或正式 API Key。'
+  if (item.key_status === 'disabled') return '确认业务需要后再启用该账号。'
+  if (item.key_status === 'auth_failed') return '请检查 Key 是否过期或填错，更新后重新测试。'
+  if (item.key_status === 'rate_limited') return '请降低并发，或切换到其他可用账号。'
+  if (item.key_status === 'quota_exhausted') return '请补充上游额度，或暂停使用该账号。'
+  return actionMessageLabel(item.suggested_action || item.recent_error || '', item.key_status)
+}
+
+function actionMessageLabel(message?: string | null, keyStatus?: string): string {
+  const issue = humanIssueLabel(keyStatus || message)
+  if (issue === '需要配置 Key') return '请配置测试或正式 API Key，再启用真实调用。'
+  if (issue === '账号已停用') return '确认业务需要后再启用该账号。'
+  if (issue === '上游限流') return '请降低并发，或切换到其他可用账号。'
+  if (issue === '鉴权失败') return '请检查 Key 是否过期或填错，更新后重新测试。'
+  if (issue === '额度不足') return '请补充上游额度，或切换到可用账号。'
+  return message || '请查看通道配置并执行一次测试。'
 }
 
 export function eventTypeLabel(eventType: string): string {

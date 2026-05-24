@@ -9,7 +9,7 @@
         <div class="flex flex-wrap gap-2">
           <RouterLink class="btn btn-outline" to="/admin/video/providers">
             <Icon name="server" size="sm" />
-            {{ isVideoGatewayDemoMode ? 'API 通道池' : '模型通道' }}
+            {{ isVideoGatewayDemoMode ? '通道池' : '模型通道' }}
           </RouterLink>
           <RouterLink class="btn btn-primary" to="/admin/video/create">
             <Icon name="plus" size="sm" />
@@ -30,11 +30,21 @@
           <div>
             <p class="text-sm font-medium text-teal-700 dark:text-teal-200">三秒价值区</p>
             <h2 class="mt-2 text-xl font-semibold text-gray-950 dark:text-white">
-              统一托管企业视频 API Key，自动路由到可用账号，并回收结果与失败原因。
+              统一托管企业视频 API 密钥（Key），自动调度到可用账号，并回收结果与失败原因。
             </h2>
             <p class="mt-2 max-w-3xl text-sm text-teal-800 dark:text-teal-100">
-              老板看账号是否能用，员工只提交业务提示词，运维按异常建议处理账号。
+              老板看整体任务、通道健康和失败情况；员工只提交业务提示词，运维按异常建议处理账号。
             </p>
+            <div class="mt-4 grid gap-2 sm:grid-cols-2">
+              <div class="rounded-lg border border-teal-200 bg-white/70 p-3 dark:border-teal-500/20 dark:bg-dark-800/60">
+                <div class="text-xs font-semibold text-teal-700 dark:text-teal-200">内部可验收版本</div>
+                <div class="mt-1 text-sm text-gray-700 dark:text-gray-200">内部可验收，但真实通道未完成。</div>
+              </div>
+              <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-500/20 dark:bg-amber-500/10">
+                <div class="text-xs font-semibold text-amber-700 dark:text-amber-200">真实生产状态</div>
+                <div class="mt-1 text-sm text-gray-700 dark:text-gray-200">暂不可用于真实生产，待 Phase 4C 授权验证。</div>
+              </div>
+            </div>
             <div class="mt-4 grid gap-2 sm:grid-cols-3">
               <RouterLink v-for="role in roleEntrances" :key="role.title" class="rounded-lg border border-teal-200 bg-white/70 p-3 text-sm hover:border-teal-400 dark:border-teal-500/20 dark:bg-dark-800/60" :to="role.to">
                 <div class="font-semibold text-gray-950 dark:text-white">{{ role.title }}</div>
@@ -49,7 +59,7 @@
             </RouterLink>
             <RouterLink class="btn btn-outline" to="/admin/video/providers">
               <Icon name="key" size="sm" />
-              管理 API Key
+              管理密钥
             </RouterLink>
           </div>
         </div>
@@ -88,9 +98,9 @@
         <div class="flex flex-col gap-2 border-b border-gray-200 pb-4 dark:border-dark-700 md:flex-row md:items-end md:justify-between">
           <div>
             <h2 class="text-base font-semibold text-gray-900 dark:text-white">业务链路</h2>
-            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">把客户最关心的链路放在一屏：API Key 托管、通道池、自动路由、任务执行、结果回收、异常诊断。</p>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">把客户最关心的链路放在一屏：API 密钥托管、通道池、自动调度、任务执行、结果回收、异常诊断。</p>
           </div>
-          <span class="text-xs font-medium text-gray-500 dark:text-gray-400">员工无需理解调度，系统自动选择可用 API 账号</span>
+          <span class="text-xs font-medium text-gray-500 dark:text-gray-400">员工无需理解调度，系统自动选择可用供应商账号</span>
         </div>
         <div class="mt-5 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
           <div
@@ -162,7 +172,7 @@
                 <tr>
                   <th class="px-5 py-3 font-medium">{{ isVideoGatewayDemoMode ? 'API 通道' : '通道' }}</th>
                   <th class="px-5 py-3 font-medium">状态</th>
-                  <th class="px-5 py-3 font-medium">Key 状态</th>
+                  <th class="px-5 py-3 font-medium">密钥状态</th>
                   <th class="px-5 py-3 font-medium">{{ isVideoGatewayDemoMode ? '今日调用' : '今日任务' }}</th>
                   <th class="px-5 py-3 font-medium">{{ isVideoGatewayDemoMode ? '当前并发' : '处理中' }}</th>
                   <th class="px-5 py-3 font-medium">失败</th>
@@ -186,7 +196,7 @@
                   </td>
                   <td class="px-5 py-3">
                     <span class="inline-flex rounded-md px-2 py-1 text-xs font-medium" :class="keyStatusClass(provider.key_status)">
-                      {{ providerKeyLabel(provider.api_key_configured, provider.masked_key, provider.key_status) }}
+                      {{ providerKeyLabel(provider.api_key_configured, provider.masked_key, provider.key_status, provider.provider) }}
                     </span>
                   </td>
                   <td class="px-5 py-3 text-gray-700 dark:text-gray-200">{{ provider.today_tasks }}</td>
@@ -233,15 +243,15 @@
 
       <section v-if="isVideoGatewayDemoMode" class="rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-800">
         <div class="border-b border-gray-200 px-5 py-4 dark:border-dark-700">
-          <h2 class="text-base font-semibold text-gray-900 dark:text-white">API 健康诊断</h2>
-          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">这里不是报错堆栈，而是告诉老板哪个 API 账号影响了任务，以及下一步该处理什么。</p>
+          <h2 class="text-base font-semibold text-gray-900 dark:text-white">通道健康诊断</h2>
+          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">这里不是报错堆栈，而是告诉老板哪个供应商账号影响了任务，以及下一步该处理什么。</p>
         </div>
         <div class="overflow-x-auto">
           <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-dark-700">
             <thead class="bg-gray-50 text-left text-xs uppercase text-gray-500 dark:bg-dark-700/40 dark:text-gray-400">
               <tr>
                 <th class="px-5 py-3 font-medium">API 通道</th>
-                <th class="px-5 py-3 font-medium">路由账号</th>
+                <th class="px-5 py-3 font-medium">系统调度账号</th>
                 <th class="px-5 py-3 font-medium">异常类型</th>
                 <th class="px-5 py-3 font-medium">最近错误</th>
                 <th class="px-5 py-3 font-medium">建议动作</th>
@@ -305,7 +315,7 @@ const dashboard = ref<VideoDashboard | null>(null)
 const pageTitle = computed(() => isVideoGatewayDemoMode ? 'API 网关驾驶舱' : '视频总览')
 const pageDescription = computed(() =>
   isVideoGatewayDemoMode
-    ? '给老板、员工和运维共用的一张网关总览图：看账号、发调用、查异常。'
+    ? '老板看整体任务、通道健康和失败情况。'
     : '查看视频任务吞吐、成功率、失败和通道状态。',
 )
 
@@ -321,8 +331,8 @@ type StatItem = {
 }
 
 const roleEntrances = [
-  { title: '老板看总览', description: '看 API 账号是否可用、今天处理了多少、哪里异常。', to: '/admin/video' },
-  { title: '员工发起调用', description: '只选模板和写提示词，系统自动选账号。', to: '/admin/video/create' },
+  { title: '老板看总览', description: '看供应商账号是否可用、今天处理了多少、哪里异常。', to: '/admin/video' },
+  { title: '员工发起调用', description: '只选模板和写提示词，系统自动调度账号。', to: '/admin/video/create' },
   { title: '运维处理异常', description: '直接看影响账号和建议动作。', to: '/admin/video/providers' },
 ]
 
@@ -330,8 +340,8 @@ const statItems = computed<StatItem[]>(() => {
   const d = dashboard.value
   if (isVideoGatewayDemoMode) {
     return [
-      { label: '已接入 API 通道', value: providers.value.length, hint: '演示通道 + 真实通道预留' },
-      { label: '已配置 Key', value: configuredKeyCount.value, hint: '前端仅展示脱敏状态' },
+      { label: '已接入供应商通道', value: providers.value.length, hint: '安全演示通道 + 真实通道预留' },
+      { label: '已配置密钥', value: configuredKeyCount.value, hint: '前端仅展示脱敏状态' },
       { label: '启用通道', value: enabledProviderCount.value, hint: '允许员工通过网关调用' },
       { label: '今日 API 调用任务', value: d?.today_tasks ?? 0, hint: '统一记录调用入口' },
       { label: '并发处理中', value: d?.running_tasks ?? 0, hint: `队列等待 ${d?.queued_tasks ?? 0}` },
@@ -354,9 +364,9 @@ const gatewayFlowNodes = computed(() => {
   const hasResults = Boolean((d?.recent_successes || []).length || (d?.recent_failures || []).length)
   const hasDiagnostics = Boolean((d?.health_diagnostics || []).length)
   return [
-    { title: 'API Key 托管', description: '企业统一配置，员工不直接接触凭证。', done: configuredKeyCount.value > 0, status: '待配置', arrow: false },
-    { title: '通道池', description: '演示通道、Seedance、Kling 统一看状态。', done: providers.value.length > 0, status: '待接入', arrow: true },
-    { title: '自动路由', description: '系统挑选当前可用且处理中较少的账号。', done: enabledProviderCount.value > 0, status: '待配置', arrow: true },
+    { title: 'API 密钥托管', description: '企业统一配置，员工不直接接触凭证。', done: configuredKeyCount.value > 0, status: '待配置', arrow: false },
+    { title: '通道池', description: '安全演示通道、Seedance、Kling 统一看状态。', done: providers.value.length > 0, status: '待接入', arrow: true },
+    { title: '自动调度', description: '系统挑选当前可用且处理中较少的账号。', done: enabledProviderCount.value > 0, status: '待配置', arrow: true },
     { title: '任务执行', description: '员工提交后进入网关队列并分发。', done: hasTasks, status: '待调用', arrow: true },
     { title: '结果回收', description: '成功结果和失败原因都会回到任务详情。', done: hasResults, status: '待回收', arrow: true },
     { title: '异常诊断', description: '告诉老板哪个账号影响任务，以及下一步动作。', done: hasDiagnostics, status: '待诊断', arrow: true },
@@ -364,9 +374,9 @@ const gatewayFlowNodes = computed(() => {
 })
 
 const controlItems = computed<Array<{ title: string; description: string; icon: 'key' | 'server' | 'clock' | 'xCircle' | 'externalLink' | 'swap' }>>(() => [
-  { title: '哪些 API Key 已接入', description: `当前已配置 ${configuredKeyCount.value} 个 Key，前端只显示脱敏状态。`, icon: 'key' },
-  { title: '哪些通道允许员工调用', description: `当前启用 ${enabledProviderCount.value} 个 API 通道，可随时启停。`, icon: 'server' },
-  { title: '每个通道每分钟限额', description: '通道池内维护 rate limit，用于后续统一限流。', icon: 'clock' },
+  { title: '哪些 API 密钥已接入', description: `当前已配置 ${configuredKeyCount.value} 个密钥，前端只显示脱敏状态。`, icon: 'key' },
+  { title: '哪些通道允许员工调用', description: `当前启用 ${enabledProviderCount.value} 个供应商通道，可随时启停。`, icon: 'server' },
+  { title: '每个通道每分钟限额', description: '通道池内维护每分钟限额，用于后续统一限流。', icon: 'clock' },
   { title: '当前多少任务正在处理', description: `并发处理中 ${dashboard.value?.running_tasks ?? 0} 个，队列等待 ${dashboard.value?.queued_tasks ?? 0} 个。`, icon: 'server' },
   { title: '哪些任务失败', description: `今日失败 ${dashboard.value?.failed_tasks ?? 0} 个，可进入调用详情查看原因。`, icon: 'xCircle' },
   { title: '哪些调用产生结果', description: `${dashboard.value?.recent_successes?.length ?? 0} 条最近成功调用已回收结果入口。`, icon: 'externalLink' },

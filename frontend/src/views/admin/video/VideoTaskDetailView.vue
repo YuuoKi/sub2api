@@ -8,10 +8,10 @@
               {{ isVideoGatewayDemoMode ? '调用任务' : '任务列表' }}
             </RouterLink>
             <span class="text-gray-300 dark:text-dark-500">/</span>
-            <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? 'API 调用详情' : `#${task?.id || route.params.id}` }}</h1>
+            <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? '调用详情' : `#${task?.id || route.params.id}` }}</h1>
           </div>
           <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            {{ isVideoGatewayDemoMode ? '该任务由 API 网关提交至模型通道，系统负责状态轮询、结果回收和失败记录。' : '查看单个任务的参数、处理时间线、结果或失败原因。' }}
+            {{ isVideoGatewayDemoMode ? '查看任务全过程，包括调度、状态变化和失败原因。' : '查看单个任务的参数、处理时间线、结果或失败原因。' }}
           </p>
         </div>
         <div class="flex flex-wrap gap-2">
@@ -68,8 +68,8 @@
 
       <section v-if="task" class="rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-800">
         <div class="border-b border-gray-200 px-5 py-4 dark:border-dark-700">
-          <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? 'API 通道与路由' : '通道信息' }}</h2>
-          <p v-if="isVideoGatewayDemoMode" class="mt-1 text-sm text-gray-500 dark:text-gray-400">先看系统实际把调用路由到了哪个账号，以及为什么这么选。</p>
+          <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? '供应商通道与调度账号' : '通道信息' }}</h2>
+          <p v-if="isVideoGatewayDemoMode" class="mt-1 text-sm text-gray-500 dark:text-gray-400">先看系统实际把调用调度到了哪个账号，以及为什么这么选。</p>
         </div>
         <dl class="divide-y divide-gray-100 text-sm dark:divide-dark-700">
           <div v-for="row in channelRows" :key="row.label" class="grid gap-2 px-5 py-3 sm:grid-cols-[160px_1fr]">
@@ -77,6 +77,39 @@
             <dd class="min-w-0 break-words text-gray-900 dark:text-gray-100">{{ row.value || '-' }}</dd>
           </div>
         </dl>
+      </section>
+
+      <section v-if="routingTrace" class="rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-800">
+        <div class="border-b border-gray-200 px-5 py-4 dark:border-dark-700">
+          <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? '调度过程 / 路由记录' : '路由记录' }}</h2>
+          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">只展示账号选择、跳过原因和调度策略，不展示任何密钥或凭证字段。</p>
+        </div>
+        <div class="grid gap-4 p-5 lg:grid-cols-3">
+          <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-700">
+            <div class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">调度策略</div>
+            <div class="mt-2 text-sm font-semibold text-gray-900 dark:text-white">{{ routingStrategyLabel(routingTrace.strategy) }}</div>
+          </div>
+          <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-700">
+            <div class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">选中账号</div>
+            <div class="mt-2 text-sm font-semibold text-gray-900 dark:text-white">{{ routingTrace.selected_account_name || `账号 #${routingTrace.selected_account_id}` }}</div>
+            <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ providerLabel(routingTrace.provider) }}</div>
+          </div>
+          <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-700">
+            <div class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">调度原因</div>
+            <div class="mt-2 text-sm font-semibold text-gray-900 dark:text-white">{{ routingTrace.reason || '-' }}</div>
+          </div>
+        </div>
+        <div class="border-t border-gray-200 px-5 py-4 dark:border-dark-700">
+          <h3 class="text-sm font-semibold text-gray-900 dark:text-white">未被选中的账号</h3>
+          <div v-if="routingTrace.skippedAccounts.length" class="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div v-for="account in routingTrace.skippedAccounts" :key="`${account.provider}-${account.id}`" class="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-dark-700 dark:bg-dark-700/30">
+              <div class="text-sm font-medium text-gray-900 dark:text-white">{{ account.display_name || `账号 #${account.id}` }}</div>
+              <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ providerLabel(account.provider) }}</div>
+              <div class="mt-2 text-xs font-medium text-amber-700 dark:text-amber-300">{{ account.reason || '-' }}</div>
+            </div>
+          </div>
+          <div v-else class="mt-3 rounded-lg border border-dashed border-gray-200 p-3 text-sm text-gray-500 dark:border-dark-700 dark:text-gray-400">没有跳过账号。</div>
+        </div>
       </section>
 
       <div v-if="task" class="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
@@ -107,7 +140,7 @@
                 <div class="text-xs text-gray-500 dark:text-gray-400">{{ formatDate(event.created_at) }}</div>
               </div>
               <details v-if="!isVideoGatewayDemoMode && event.payload_json && Object.keys(event.payload_json).length" class="mt-2">
-                <summary class="cursor-pointer text-xs font-medium text-gray-500 dark:text-gray-400">技术 payload</summary>
+                <summary class="cursor-pointer text-xs font-medium text-gray-500 dark:text-gray-400">技术数据（payload）</summary>
                 <pre class="mt-2 max-h-64 overflow-auto rounded-md bg-gray-50 p-3 text-xs text-gray-700 dark:bg-dark-900 dark:text-gray-200">{{ JSON.stringify(event.payload_json, null, 2) }}</pre>
               </details>
             </div>
@@ -117,7 +150,7 @@
       </div>
 
       <details v-if="task" class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
-        <summary class="cursor-pointer text-base font-semibold text-gray-900 dark:text-white">技术详情</summary>
+        <summary class="cursor-pointer text-base font-semibold text-gray-900 dark:text-white">内部技术详情</summary>
         <div v-if="isVideoGatewayDemoMode" class="mt-4 rounded-md bg-gray-50 p-4 text-sm text-gray-600 dark:bg-dark-900 dark:text-gray-300">
           技术详情默认折叠。客户演示模式仅展示调用状态、通道、参数、时间线、结果和失败原因；底层字段保留给内部排障环境。
         </div>
@@ -140,6 +173,7 @@ import {
   errorMessageLabel,
   eventMessageLabel,
   eventTypeLabel,
+  extractRoutingTrace,
   formatDate,
   isTerminalStatus,
   modelDisplayName,
@@ -162,11 +196,12 @@ const cancelling = ref(false)
 let refreshTimer: ReturnType<typeof setInterval> | null = null
 
 const taskId = computed(() => Number(route.params.id))
+const routingTrace = computed(() => task.value ? extractRoutingTrace(task.value) : null)
 const outcomeTitle = computed(() => {
   if (!task.value) return '-'
   if (task.value.error_message) return isVideoGatewayDemoMode ? '调用失败，原因已记录' : '任务失败'
   if (task.value.result_url) return isVideoGatewayDemoMode ? '调用成功，结果已回收' : '生成成功'
-  if (!isTerminalStatus(task.value.status)) return isVideoGatewayDemoMode ? '处理中，等待结果回收' : '处理中'
+  if (!isTerminalStatus(task.value.status)) return isVideoGatewayDemoMode ? '生成中，等待结果回收' : '处理中'
   return isVideoGatewayDemoMode ? '暂无结果' : '暂无结果'
 })
 const outcomeDescription = computed(() => {
@@ -196,12 +231,12 @@ const channelRows = computed(() => {
     return [
       { label: '调用编号', value: `#${task.value.id}` },
       { label: '发起人', value: createdByLabel(task.value) },
-      { label: 'API 通道', value: providerLabel(task.value.provider) },
-      { label: '实际路由账号', value: routeAccountLabel(task.value) },
-      { label: '路由策略', value: routingStrategyLabel(task.value.routing_strategy) },
-      { label: '路由原因', value: task.value.routing_reason || '-' },
+      { label: '供应商通道', value: providerLabel(task.value.provider) },
+      { label: '实际调度账号', value: routeAccountLabel(task.value) },
+      { label: '调度策略', value: routingStrategyLabel(task.value.routing_strategy) },
+      { label: '调度原因', value: task.value.routing_reason || '-' },
       { label: '模型', value: modelDisplayName(task.value.provider, task.value.model) },
-      { label: '网关状态', value: statusLabel(task.value.status) },
+      { label: '当前状态', value: statusLabel(task.value.status) },
       { label: '创建时间', value: formatDate(task.value.created_at) },
       { label: '完成时间', value: task.value.completed_at ? formatDate(task.value.completed_at) : '-' },
     ]

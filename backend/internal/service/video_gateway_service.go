@@ -753,7 +753,7 @@ func (s *VideoGatewayService) prepareProviderForResponse(account *VideoProviderA
 	if account == nil {
 		return
 	}
-	account.APIKeyConfigured = strings.TrimSpace(account.EncryptedAPIKey) != "" || strings.TrimSpace(account.MaskedKey) != ""
+	account.APIKeyConfigured = strings.TrimSpace(account.EncryptedAPIKey) != ""
 	account.PlainAPIKey = ""
 }
 

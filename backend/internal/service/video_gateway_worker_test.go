@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -105,9 +106,18 @@ func (r *memoryVideoGatewayRepo) GetTask(_ context.Context, id int64) (*VideoTas
 	return cloneVideoTask(task), nil
 }
 
-func (r *memoryVideoGatewayRepo) ListTasks(_ context.Context, _ VideoTaskListParams) ([]*VideoTask, int64, error) {
+func (r *memoryVideoGatewayRepo) ListTasks(_ context.Context, params VideoTaskListParams) ([]*VideoTask, int64, error) {
 	out := make([]*VideoTask, 0, len(r.tasks))
 	for _, task := range r.tasks {
+		if params.Status != "" && task.Status != params.Status {
+			continue
+		}
+		if params.Provider != "" && task.Provider != params.Provider {
+			continue
+		}
+		if !params.IsAdmin && task.CreatedBy != params.CreatedBy {
+			continue
+		}
 		out = append(out, cloneVideoTask(task))
 	}
 	return out, int64(len(out)), nil
@@ -298,6 +308,52 @@ func TestVideoProviderKeyNeverReturnedInPlaintext(t *testing.T) {
 	}
 }
 
+func TestVideoProviderMaskedPlaceholderDoesNotMarkRealProviderConfigured(t *testing.T) {
+	ctx := context.Background()
+	repo := newMemoryVideoGatewayRepo()
+	mockID := repo.seedMockProvider()
+	now := time.Now().UTC()
+	realProviderID := repo.nextProviderID
+	repo.nextProviderID++
+	repo.providers[realProviderID] = &VideoProviderAccount{
+		ID:           realProviderID,
+		Provider:     VideoProviderSeedance,
+		DisplayName:  "Seedance Placeholder Only",
+		Enabled:      true,
+		MaskedKey:    "sdnc***demo",
+		DefaultModel: defaultVideoModel(VideoProviderSeedance),
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, nil)
+
+	items, err := svc.ListProviderAccounts(ctx)
+	if err != nil {
+		t.Fatalf("list providers: %v", err)
+	}
+	var mockProvider, realProvider *VideoProviderAccount
+	for _, item := range items {
+		switch item.ID {
+		case mockID:
+			mockProvider = item
+		case realProviderID:
+			realProvider = item
+		}
+	}
+	if mockProvider == nil || !mockProvider.APIKeyConfigured || !mockProvider.RouteAvailable {
+		t.Fatalf("expected mock provider to remain demo-ready, got %#v", mockProvider)
+	}
+	if realProvider == nil {
+		t.Fatal("expected real provider in list")
+	}
+	if realProvider.APIKeyConfigured {
+		t.Fatalf("masked placeholder should not mark real provider configured: %#v", realProvider)
+	}
+	if realProvider.KeyStatus != videoKeyStatusMissing || realProvider.RouteAvailable {
+		t.Fatalf("expected missing-key real provider to be unavailable, got key_status=%s route_available=%v", realProvider.KeyStatus, realProvider.RouteAvailable)
+	}
+}
+
 func TestVideoGatewayAutoRouteSkipsUnavailableAccounts(t *testing.T) {
 	ctx := context.Background()
 	repo := newMemoryVideoGatewayRepo()
@@ -425,6 +481,130 @@ func TestVideoGatewayTaskOwnershipBoundary(t *testing.T) {
 	if _, _, err := svc.GetTask(ctx, task.ID, 202, true); err != nil {
 		t.Fatalf("expected admin to read task: %v", err)
 	}
+}
+
+func TestVideoGatewayTaskListFiltersByEmployeeUnlessAdmin(t *testing.T) {
+	ctx := context.Background()
+	repo := newMemoryVideoGatewayRepo()
+	repo.seedMockProvider()
+	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, nil)
+
+	if _, err := svc.CreateTask(ctx, VideoTaskCreateParams{
+		TaskType:  VideoTaskTypeTextToVideo,
+		Prompt:    "employee one task",
+		CreatedBy: 101,
+	}); err != nil {
+		t.Fatalf("create first task: %v", err)
+	}
+	if _, err := svc.CreateTask(ctx, VideoTaskCreateParams{
+		TaskType:  VideoTaskTypeTextToVideo,
+		Prompt:    "employee two task",
+		CreatedBy: 202,
+	}); err != nil {
+		t.Fatalf("create second task: %v", err)
+	}
+
+	employeeTasks, total, err := svc.ListTasks(ctx, VideoTaskListParams{CreatedBy: 101, IsAdmin: false})
+	if err != nil {
+		t.Fatalf("list employee tasks: %v", err)
+	}
+	if total != 1 || len(employeeTasks) != 1 || employeeTasks[0].CreatedBy != 101 {
+		t.Fatalf("expected only employee 101 task, total=%d tasks=%#v", total, employeeTasks)
+	}
+
+	adminTasks, total, err := svc.ListTasks(ctx, VideoTaskListParams{CreatedBy: 101, IsAdmin: true})
+	if err != nil {
+		t.Fatalf("list admin tasks: %v", err)
+	}
+	if total != 2 || len(adminTasks) != 2 {
+		t.Fatalf("expected admin to see both tasks, total=%d tasks=%#v", total, adminTasks)
+	}
+}
+
+func TestVideoAdapterContractSafeProviderBehavior(t *testing.T) {
+	ctx := context.Background()
+	registry := NewVideoAdapterRegistry()
+	task := &VideoTask{
+		ID:          42,
+		Model:       "mock-video-v1",
+		TaskType:    VideoTaskTypeTextToVideo,
+		Prompt:      "safe adapter contract preview",
+		AspectRatio: "16:9",
+		Duration:    5,
+		Resolution:  "720p",
+	}
+
+	mock := registry[VideoProviderMock]
+	if mock == nil {
+		t.Fatal("mock adapter is not registered")
+	}
+	mockPayload := mock.BuildCreatePayload(&VideoProviderAccount{Provider: VideoProviderMock}, task)
+	if containsSecretField(mockPayload) {
+		t.Fatalf("mock payload should not expose secret-like fields: %#v", mockPayload)
+	}
+	result, err := mock.CreateTask(ctx, &VideoProviderAccount{Provider: VideoProviderMock, Enabled: true}, task)
+	if err != nil {
+		t.Fatalf("mock create task: %v", err)
+	}
+	if result.Status != VideoStatusSubmitted || result.UpstreamTaskID == "" {
+		t.Fatalf("unexpected mock create result: %#v", result)
+	}
+
+	for _, provider := range []string{VideoProviderSeedance, VideoProviderKling} {
+		adapter := registry[provider]
+		if adapter == nil {
+			t.Fatalf("%s adapter is not registered", provider)
+		}
+		preview := adapter.BuildCreatePayload(&VideoProviderAccount{
+			Provider:         provider,
+			APIKeyConfigured: true,
+			PlainAPIKey:      "placeholder-key-should-not-leak",
+			BaseURL:          "demo://safe-provider",
+		}, task)
+		if containsSecretField(preview) || strings.Contains(fmtAny(preview), "placeholder-key-should-not-leak") {
+			t.Fatalf("%s payload preview should not expose credentials: %#v", provider, preview)
+		}
+		if _, err := adapter.CreateTask(ctx, &VideoProviderAccount{Provider: provider, Enabled: true}, task); err == nil || !strings.Contains(err.Error(), "api key is not configured") {
+			t.Fatalf("%s without key should be safely disabled, err=%v", provider, err)
+		}
+		if _, err := adapter.CreateTask(ctx, &VideoProviderAccount{
+			Provider:         provider,
+			Enabled:          true,
+			APIKeyConfigured: true,
+			PlainAPIKey:      "placeholder-key-should-not-leak",
+		}, task); err == nil || !strings.Contains(strings.ToLower(err.Error()), "disabled") {
+			t.Fatalf("%s real call should remain disabled, err=%v", provider, err)
+		}
+	}
+}
+
+func containsSecretField(payload map[string]any) bool {
+	for key, value := range payload {
+		lowerKey := strings.ToLower(key)
+		if strings.Contains(lowerKey, "api_key") ||
+			strings.Contains(lowerKey, "authorization") ||
+			strings.Contains(lowerKey, "cookie") ||
+			strings.Contains(lowerKey, "token") ||
+			strings.Contains(lowerKey, "secret") ||
+			strings.Contains(lowerKey, "password") {
+			return true
+		}
+		if nested, ok := value.(map[string]any); ok && containsSecretField(nested) {
+			return true
+		}
+		if nestedSlice, ok := value.([]map[string]any); ok {
+			for _, nested := range nestedSlice {
+				if containsSecretField(nested) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func fmtAny(value any) string {
+	return strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(strings.ToLower(strings.TrimSpace(fmt.Sprintf("%#v", value))), "\n", " "), "\t", " "))
 }
 
 func cloneVideoProvider(in *VideoProviderAccount) *VideoProviderAccount {

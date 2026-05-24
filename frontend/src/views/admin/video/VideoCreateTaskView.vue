@@ -3,9 +3,9 @@
     <div class="space-y-6">
       <div class="flex flex-col gap-3 border-b border-gray-200 pb-4 dark:border-dark-700 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? '通过 API 网关发起视频调用' : '创建视频任务' }}</h1>
+          <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? '发起调用' : '创建视频任务' }}</h1>
           <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            {{ isVideoGatewayDemoMode ? '员工只需要选择模板、填写提示词，系统会自动选择可用 API 账号并回收结果。' : '提交文生视频、图生视频或参考视频任务，创建成功后自动进入任务详情。' }}
+            {{ isVideoGatewayDemoMode ? '员工从这里发起视频生成任务，不需要接触密钥。' : '提交文生视频、图生视频或参考视频任务，创建成功后自动进入任务详情。' }}
           </p>
         </div>
         <RouterLink class="btn btn-outline" to="/admin/video/tasks">
@@ -18,8 +18,8 @@
         <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p class="text-sm font-medium text-teal-700 dark:text-teal-200">主路径</p>
-            <h2 class="mt-2 text-xl font-semibold text-gray-950 dark:text-white">通过网关提交调用</h2>
-            <p class="mt-2 text-sm text-teal-800 dark:text-teal-100">普通员工不需要选择账号、不需要理解调度；提交后系统会自动选择可用 API 账号。</p>
+            <h2 class="mt-2 text-xl font-semibold text-gray-950 dark:text-white">通过网关提交视频生成任务</h2>
+            <p class="mt-2 text-sm text-teal-800 dark:text-teal-100">普通员工不需要选择账号、不需要理解调度；提交后系统会自动选择可用供应商账号。</p>
           </div>
           <RouterLink class="btn btn-primary" to="/admin/video/tasks">
             <Icon name="document" size="sm" />
@@ -45,16 +45,25 @@
       <section class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
         <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? '调用模板' : '演示模板' }}</h2>
+            <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? '业务提示词模板' : 'Prompt 模板候选' }}</h2>
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              {{ isVideoGatewayDemoMode ? '选择一个业务场景，快速填入网关调用参数。' : '选择一个业务场景，系统会自动填入提示词、任务类型、画幅、时长和分辨率。' }}
+              {{ isVideoGatewayDemoMode ? '选择业务素材模板，快速填入网关调用参数。' : '选择业务素材候选，系统会自动填入提示词、任务类型、画幅、时长和分辨率。' }}
             </p>
           </div>
-          <div class="flex flex-wrap gap-2">
-            <button v-for="template in demoTemplates" :key="template.name" class="btn btn-sm btn-outline" type="button" @click="applyTemplate(template)">
-              {{ template.name }}
-            </button>
-          </div>
+        </div>
+        <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <button
+            v-for="candidate in promptAssetCandidates"
+            :key="candidate.id"
+            class="rounded-lg border border-gray-200 bg-gray-50 p-3 text-left transition hover:border-primary-300 hover:bg-primary-50 dark:border-dark-700 dark:bg-dark-700/30 dark:hover:border-primary-500/40 dark:hover:bg-primary-500/10"
+            type="button"
+            @click="applyTemplate(candidate)"
+          >
+            <span class="inline-flex rounded-md bg-white px-2 py-1 text-xs font-medium text-gray-500 dark:bg-dark-800 dark:text-gray-300">{{ candidate.category }}</span>
+            <span class="mt-3 block text-sm font-semibold text-gray-900 dark:text-white">{{ candidate.name }}</span>
+            <span class="candidate-prompt mt-2 block text-xs leading-5 text-gray-500 dark:text-gray-400">{{ promptDisplayText(candidate.prompt) }}</span>
+            <span class="mt-3 block text-xs font-medium text-gray-600 dark:text-gray-300">{{ candidate.aspect_ratio }} · {{ candidate.duration }}s · {{ candidate.resolution }}</span>
+          </button>
         </div>
       </section>
 
@@ -146,7 +155,7 @@
 
         <div class="space-y-6">
           <section v-if="isVideoGatewayDemoMode" class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
-            <h2 class="text-base font-semibold text-gray-900 dark:text-white">右侧只做说明，不需要员工调度</h2>
+            <h2 class="text-base font-semibold text-gray-900 dark:text-white">右侧只做说明，不需要员工手动调度</h2>
             <div class="mt-4 space-y-3">
               <div v-for="reason in gatewayReasons" :key="reason" class="flex items-start gap-3 text-sm text-gray-600 dark:text-gray-300">
                 <Icon name="checkCircle" size="sm" class="mt-0.5 shrink-0 text-emerald-600 dark:text-emerald-300" />
@@ -156,8 +165,8 @@
           </section>
 
           <section class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
-            <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? 'API 通道状态（系统自动参考）' : '通道状态' }}</h2>
-            <p v-if="isVideoGatewayDemoMode" class="mt-1 text-sm text-gray-500 dark:text-gray-400">这些状态帮助解释系统为什么能自动路由，普通员工不需要手动选择。</p>
+            <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? '供应商通道状态（系统自动参考）' : '通道状态' }}</h2>
+            <p v-if="isVideoGatewayDemoMode" class="mt-1 text-sm text-gray-500 dark:text-gray-400">这些状态帮助解释系统为什么能自动调度，普通员工不需要手动选择。</p>
             <div class="mt-4 space-y-3">
               <div v-for="provider in providers" :key="provider.id" class="flex items-center justify-between gap-3 rounded-lg border border-gray-200 p-3 dark:border-dark-700">
                 <div class="min-w-0">
@@ -170,17 +179,17 @@
                   <div :class="provider.enabled ? 'text-emerald-600 dark:text-emerald-300' : 'text-gray-500 dark:text-gray-400'">
                     {{ providerEnabledLabel(provider.enabled) }}
                   </div>
-                  <div class="mt-1 text-gray-500 dark:text-gray-400">{{ providerKeyLabel(provider.api_key_configured, provider.masked_key, provider.key_status) }}</div>
-                  <div v-if="provider.route_skip_reason" class="mt-1 text-red-600 dark:text-red-300">{{ provider.route_skip_reason }}</div>
+                  <div class="mt-1 text-gray-500 dark:text-gray-400">{{ providerKeyLabel(provider.api_key_configured, provider.masked_key, provider.key_status, provider.provider) }}</div>
+                  <div v-if="provider.route_skip_reason" class="mt-1 text-red-600 dark:text-red-300">{{ humanIssueLabel(provider.route_skip_reason) }}</div>
                 </div>
               </div>
               <div v-if="!enabledProviders.length" class="rounded-lg border border-dashed border-gray-200 p-4 text-sm text-gray-500 dark:border-dark-700 dark:text-gray-400">
-                {{ isVideoGatewayDemoMode ? '暂无可用 API 通道，请先到 API 通道池启用演示通道。' : '暂无可用通道，请先到模型通道页面启用演示通道。' }}
+                {{ isVideoGatewayDemoMode ? '暂无可用供应商通道，请先到通道池启用安全演示通道。' : '暂无可用通道，请先到模型通道页面启用演示通道。' }}
               </div>
             </div>
             <RouterLink v-if="authStore.isAdmin" class="btn btn-outline mt-5" to="/admin/video/providers">
               <Icon name="key" size="sm" />
-              {{ isVideoGatewayDemoMode ? '配置 API 通道' : '配置模型通道' }}
+              {{ isVideoGatewayDemoMode ? '配置供应商通道' : '配置模型通道' }}
             </RouterLink>
           </section>
         </div>
@@ -200,13 +209,18 @@ import { useAuthStore } from '@/stores/auth'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import { isVideoGatewayDemoMode } from '@/utils/productMode'
 import {
+  candidateToTaskPayload,
+  humanIssueLabel,
   loadTaskDraft,
   modelDisplayName,
+  promptAssetCandidates,
+  promptDisplayText,
   providerBadgeClass,
   providerDisplayName,
   providerEnabledLabel,
   providerKeyLabel,
   taskTypeOptions,
+  type PromptAssetCandidate,
 } from './videoUtils'
 
 const router = useRouter()
@@ -215,58 +229,18 @@ const authStore = useAuthStore()
 const providers = ref<VideoProviderAccount[]>([])
 const submitting = ref(false)
 
-type DemoTemplate = {
-  name: string
-  task_type: VideoTaskCreatePayload['task_type']
-  prompt: string
-  negative_prompt: string
-  aspect_ratio: string
-  duration: number
-  resolution: string
-}
-
-const demoTemplates: DemoTemplate[] = [
-  {
-    name: isVideoGatewayDemoMode ? '企业宣传短片调用示例' : '安全产品短片',
-    task_type: 'text_to_video',
-    prompt: '生成一段企业安全产品短片：深色控制台界面、API 通道池状态、网关排队、调用分发、状态回收和结果链接依次出现，画面克制、专业、适合客户演示。',
-    negative_prompt: '夸张霓虹、卡通人物、杂乱背景、低清晰度',
-    aspect_ratio: '16:9',
-    duration: 6,
-    resolution: '720p',
-  },
-  {
-    name: isVideoGatewayDemoMode ? '游戏广告素材调用示例' : '游戏广告素材',
-    task_type: 'text_to_video',
-    prompt: '生成一段游戏广告素材：未来城市赛道、角色快速穿越镜头、最后出现可投放的短视频构图，节奏紧凑但不杂乱。',
-    negative_prompt: '血腥、恐怖、模糊画面、过度闪烁',
-    aspect_ratio: '9:16',
-    duration: 5,
-    resolution: '720p',
-  },
-  {
-    name: isVideoGatewayDemoMode ? '短剧分镜片段调用示例' : '短剧分镜片段',
-    task_type: 'text_to_video',
-    prompt: '生成一段短剧分镜片段：办公室门口的紧张对话、人物表情清晰、镜头从中景切到特写，适合作为剧情预告素材。',
-    negative_prompt: '字幕遮挡、画面抖动、过度夸张表演',
-    aspect_ratio: '16:9',
-    duration: 5,
-    resolution: '720p',
-  },
-]
-
 const gatewaySubmitSteps = [
   { title: '选择调用模板' },
   { title: '填写提示词' },
-  { title: '系统自动选账号' },
+  { title: '系统自动调度账号' },
   { title: '网关提交调用' },
   { title: '回收状态与原因' },
   { title: '查看结果' },
 ]
 
 const gatewayReasons = [
-  '员工不接触 API Key，也不需要理解账号调度。',
-  '系统会自动选择可用 API 账号并记录路由结果。',
+  '员工不接触 API 密钥（Key），也不需要理解账号调度。',
+  '系统会自动选择可用供应商账号并记录调度结果。',
   '成功结果和失败原因都会回收到任务详情。',
   '后续接 Seedance/Kling 真实通道时，员工入口不需要变化。',
 ]
@@ -276,7 +250,7 @@ const form = reactive<VideoTaskCreatePayload>({
   task_type: 'text_to_video',
   model: '',
   prompt: isVideoGatewayDemoMode
-    ? '生成一段企业 AI 视频 API 管理中台演示短片，展示 API Key 托管、通道池、网关排队、状态回收和用量审计。'
+    ? '生成一段企业 AI 视频 API 管理中台演示短片，展示 API 密钥托管、通道池、网关排队、状态回收和用量审计。'
     : '生成一段企业 API 管理后台的安全产品演示短片，画面清晰、节奏简洁。',
   negative_prompt: '',
   reference_image_url: '',
@@ -287,7 +261,7 @@ const form = reactive<VideoTaskCreatePayload>({
 
 const enabledProviders = computed(() => providers.value.filter((provider) => provider.route_available))
 const validationMessage = computed(() => {
-  if (!enabledProviders.value.length) return isVideoGatewayDemoMode ? '没有可用 API 通道：请先前往 API 通道池启用演示通道。' : '没有可用通道：请先前往模型通道页启用演示通道。'
+  if (!enabledProviders.value.length) return isVideoGatewayDemoMode ? '没有可用供应商通道：请先前往通道池启用安全演示通道。' : '没有可用通道：请先前往模型通道页启用演示通道。'
   if (!form.prompt.trim()) return '提示词不能为空：请描述要生成的视频内容。'
   if ((form.duration || 0) < 1 || (form.duration || 0) > 60) return '时长必须在 1 到 60 秒之间。'
   if (form.reference_image_url && !isValidOptionalUrl(form.reference_image_url)) return '参考图 URL 格式不正确：请使用 http 或 https 链接，或留空。'
@@ -307,15 +281,10 @@ async function loadProviders() {
   }
 }
 
-function applyTemplate(template: DemoTemplate) {
+function applyTemplate(template: PromptAssetCandidate) {
   selectPreferredProvider()
-  form.task_type = template.task_type
-  form.prompt = template.prompt
-  form.negative_prompt = template.negative_prompt
-  form.reference_image_url = ''
-  form.aspect_ratio = template.aspect_ratio
-  form.duration = template.duration
-  form.resolution = template.resolution
+  Object.assign(form, candidateToTaskPayload(template))
+  syncProviderModel()
 }
 
 function syncProviderModel() {
@@ -346,7 +315,7 @@ function applyMockSuccess() {
   selectMockProvider()
   form.task_type = 'text_to_video'
   form.prompt = isVideoGatewayDemoMode
-    ? '生成一段企业 AI 视频 API 管理中台演示短片，展示 API Key 托管、API 通道池、限流队列、状态回收和结果链接。'
+    ? '生成一段企业 AI 视频 API 管理中台演示短片，展示 API 密钥托管、通道池、限流队列、状态回收和结果链接。'
     : '生成一段企业 API 管理后台的安全产品演示短片，画面清晰、节奏简洁。'
   form.negative_prompt = ''
 }
@@ -414,3 +383,13 @@ onMounted(async () => {
   applyDraftIfPresent()
 })
 </script>
+
+<style scoped>
+.candidate-prompt {
+  display: -webkit-box;
+  min-height: 3.75rem;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+</style>

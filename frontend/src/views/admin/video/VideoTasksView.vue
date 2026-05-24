@@ -3,9 +3,9 @@
     <div class="space-y-6">
       <div class="flex flex-col gap-3 border-b border-gray-200 pb-4 dark:border-dark-700 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? 'API 调用任务' : '任务列表' }}</h1>
+          <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? '调用任务' : '任务列表' }}</h1>
           <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            {{ isVideoGatewayDemoMode ? '查看所有通过网关提交的视频生成调用，按 API 通道、状态和失败原因追踪结果。' : '按状态和通道查看最近任务，快速定位结果、失败原因并复制参数重新创建。' }}
+            {{ isVideoGatewayDemoMode ? '查看谁发起、当前状态、失败原因。' : '按状态和通道查看最近任务，快速定位结果、失败原因并复制参数重新创建。' }}
           </p>
         </div>
         <div class="flex flex-wrap gap-2">
@@ -35,7 +35,7 @@
             </button>
           </div>
           <select v-model="filters.provider" class="input" @change="resetAndLoad">
-            <option value="">{{ isVideoGatewayDemoMode ? '全部 API 通道' : '全部通道' }}</option>
+            <option value="">{{ isVideoGatewayDemoMode ? '全部供应商通道' : '全部通道' }}</option>
             <option v-for="provider in providerOptions" :key="provider.value" :value="provider.value">{{ provider.label }}</option>
           </select>
           <div class="flex justify-start lg:justify-end">
@@ -54,9 +54,9 @@
               <tr>
                 <th class="px-5 py-3 font-medium">{{ isVideoGatewayDemoMode ? '调用任务' : '任务' }}</th>
                 <th v-if="authStore.isAdmin" class="px-5 py-3 font-medium">发起人</th>
-                <th class="px-5 py-3 font-medium">{{ isVideoGatewayDemoMode ? 'API 通道' : '通道' }}</th>
-                <th class="px-5 py-3 font-medium">路由账号</th>
-                <th class="px-5 py-3 font-medium">{{ isVideoGatewayDemoMode ? '调用状态' : '状态' }}</th>
+                <th class="px-5 py-3 font-medium">{{ isVideoGatewayDemoMode ? '供应商通道' : '通道' }}</th>
+                <th class="px-5 py-3 font-medium">系统调度账号</th>
+                <th class="px-5 py-3 font-medium">当前状态</th>
                 <th class="px-5 py-3 font-medium">结果 / 失败原因</th>
                 <th class="px-5 py-3 font-medium">创建时间</th>
                 <th class="px-5 py-3 font-medium">操作</th>
@@ -81,7 +81,7 @@
                 </td>
                 <td class="px-5 py-3 text-gray-700 dark:text-gray-200">
                   <div class="font-medium">{{ routeAccountLabel(task) }}</div>
-                  <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ isVideoGatewayDemoMode ? '系统自动路由' : '实际路由账号' }}</div>
+                  <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ isVideoGatewayDemoMode ? '系统自动调度' : '实际路由账号' }}</div>
                 </td>
                 <td class="px-5 py-3">
                   <span class="inline-flex rounded-md px-2 py-1 text-xs font-medium" :class="statusBadgeClass(task.status)">
@@ -171,8 +171,8 @@ const filters = reactive({ status: '', provider: '' })
 const pagination = reactive({ page: 1, page_size: 20, total: 0, pages: 1 })
 const quickStatusFilters: Array<{ label: string; status: '' | VideoTaskStatus }> = [
   { label: '全部', status: '' },
-  { label: '成功', status: 'succeeded' },
-  { label: '处理中', status: 'running' },
+  { label: '已完成', status: 'succeeded' },
+  { label: '生成中', status: 'running' },
   { label: '失败', status: 'failed' },
 ]
 

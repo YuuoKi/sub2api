@@ -459,7 +459,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: true,
-      title: isVideoGatewayDemoMode ? 'API 通道池' : '模型通道'
+      title: isVideoGatewayDemoMode ? '通道池' : '模型通道'
     }
   },
   {
@@ -729,6 +729,7 @@ const navigationLoading = useNavigationLoadingState()
 // 延迟初始化预加载，传入 router 实例
 let routePrefetch: ReturnType<typeof useRoutePrefetch> | null = null
 const BACKEND_MODE_ALLOWED_PATHS = ['/login', '/key-usage', '/setup', '/payment/result', '/payment/airwallex', '/legal']
+const BACKEND_MODE_AUTHENTICATED_ALLOWED_PATHS = ['/admin/video/create', '/admin/video/tasks']
 const BACKEND_MODE_CALLBACK_PATHS = [
   '/auth/callback',
   '/auth/linuxdo/callback',
@@ -752,6 +753,10 @@ function isBackendModePublicRouteAllowed(path: string, hasPendingAuthSession: bo
   }
 
   return false
+}
+
+function isBackendModeAuthenticatedRouteAllowed(path: string): boolean {
+  return BACKEND_MODE_AUTHENTICATED_ALLOWED_PATHS.some((allowedPath) => path === allowedPath || path.startsWith(`${allowedPath}/`))
 }
 
 router.beforeEach((to, _from, next) => {
@@ -833,7 +838,7 @@ router.beforeEach((to, _from, next) => {
   // Check admin requirement
   if (requiresAdmin && !authStore.isAdmin) {
     // User is authenticated but not admin, redirect to user dashboard
-    next(isVideoGatewayDemoMode ? VIDEO_GATEWAY_HOME_PATH : '/dashboard')
+    next(isVideoGatewayDemoMode ? '/admin/video/create' : '/dashboard')
     return
   }
 
@@ -880,6 +885,10 @@ router.beforeEach((to, _from, next) => {
   // Backend mode: admin gets full access, non-admin blocked
   if (appStore.backendModeEnabled) {
     if (authStore.isAuthenticated && authStore.isAdmin) {
+      next()
+      return
+    }
+    if (authStore.isAuthenticated && isBackendModeAuthenticatedRouteAllowed(to.path)) {
       next()
       return
     }

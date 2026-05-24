@@ -110,6 +110,11 @@ func registerAdminVideoRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		video.POST("/providers/:id/test", h.Admin.Video.TestProvider)
 		video.GET("/dashboard", h.Admin.Video.Dashboard)
 	}
+	admin.GET("/provider-pool", h.Admin.Video.ProviderPool)
+	admin.GET("/routing-events", h.Admin.Video.RoutingEvents)
+	admin.POST("/skill-analysis/exports", h.Admin.Video.SkillAnalysisExport)
+	admin.GET("/skill-cards", h.Admin.Video.SkillCards)
+	admin.GET("/engine-capability-matrix", h.Admin.Video.DramaEngineCapabilityMatrix)
 }
 
 func registerContentModerationRoutes(admin *gin.RouterGroup, h *handler.Handlers) {

@@ -280,7 +280,7 @@ func TestVideoProviderKeyNeverReturnedInPlaintext(t *testing.T) {
 		Provider:     VideoProviderSeedance,
 		DisplayName:  "Seedance Demo",
 		Enabled:      false,
-		APIKey:       "sk-real-looking-demo-value",
+		APIKey:       "demo-key-fixture",
 		DefaultModel: "seedance-2-0-pro",
 	})
 	if err != nil {
@@ -289,7 +289,7 @@ func TestVideoProviderKeyNeverReturnedInPlaintext(t *testing.T) {
 	if created.PlainAPIKey != "" {
 		t.Fatal("created provider response exposed plaintext key")
 	}
-	if created.MaskedKey == "" || created.MaskedKey == "sk-real-looking-demo-value" {
+	if created.MaskedKey == "" || created.MaskedKey == "demo-key-fixture" {
 		t.Fatalf("expected masked key, got %q", created.MaskedKey)
 	}
 
@@ -458,6 +458,102 @@ func TestVideoGatewayAutoRouteSkipsUnavailableAccounts(t *testing.T) {
 	}
 	if len(skipped) != 4 {
 		t.Fatalf("expected four skipped accounts, got %d", len(skipped))
+	}
+}
+
+func TestDramaGatewayCreatesSkillEventsOnUnifiedAPITask(t *testing.T) {
+	ctx := context.Background()
+	repo := newMemoryVideoGatewayRepo()
+	repo.seedMockProvider()
+	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, nil)
+
+	task, err := svc.CreateDramaTask(ctx, DramaTaskCreateParams{
+		EmployeeAlias: "E001",
+		APIClientID:   "internal_tool_001",
+		ProjectID:     "drama_project_demo_001",
+		DramaType:     "真人短剧",
+		Genre:         "现代都市情感",
+		EpisodeNo:     1,
+		SceneType:     "情绪爆发",
+		ShotRole:      "女主特写反应",
+		DramaticGoal:  "表现反转前的情绪冲击",
+		ReferenceAssets: []DramaReferenceAsset{{
+			AssetType:         "reference_video",
+			AssetID:           "ref_demo_001",
+			SelectedTimeRange: "00:12-00:15",
+		}},
+		Prompt: "女主在雨夜街边听到男主离开的消息，缓慢抬头，眼神从震惊转为克制的愤怒。",
+		PromptStructure: map[string]any{
+			"character_identity": "女主，25岁，现代都市",
+			"dramatic_goal":      "反转前情绪冲击",
+			"camera":             "slow push-in",
+		},
+		RequestedEngineCapabilities: DramaEngineCapabilityRequest{
+			SupportsRealPerson:    true,
+			SupportsImageToVideo:  true,
+			SupportsMotionControl: true,
+		},
+		DurationSeconds: 5,
+		AspectRatio:     "9:16",
+		CreatedBy:       101,
+	})
+	if err != nil {
+		t.Fatalf("create drama task: %v", err)
+	}
+	if task.TaskID != "drama_task_1" {
+		t.Fatalf("unexpected drama task id: %s", task.TaskID)
+	}
+	if task.SelectedProvider != "kling_safe_demo" {
+		t.Fatalf("expected kling safe demo recommendation, got %s", task.SelectedProvider)
+	}
+	if !task.SkillEventCreated || task.SkillEventID == "" || task.PromptArtifactID == "" || task.ShotDecisionID == "" {
+		t.Fatalf("expected skill/prompt/shot events, got %#v", task)
+	}
+	if task.EmployeeAlias != "E001" || task.APIClientID != "internal_tool_001" {
+		t.Fatalf("expected API-first context to be preserved, got %#v", task)
+	}
+}
+
+func TestDramaSkillAnalysisExportIsAnonymizedAndDryRun(t *testing.T) {
+	ctx := context.Background()
+	repo := newMemoryVideoGatewayRepo()
+	repo.seedMockProvider()
+	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, nil)
+
+	if _, err := svc.CreateDramaTask(ctx, DramaTaskCreateParams{
+		EmployeeAlias: "E001",
+		APIClientID:   "internal_tool_001",
+		ProjectID:     "drama_project_demo_001",
+		DramaType:     "AI短剧",
+		SceneType:     "结尾钩子",
+		ShotRole:      "悬念结尾镜头",
+		Prompt:        "主角回头发现门后有第二封信，镜头定格在震惊表情。",
+		RequestedEngineCapabilities: DramaEngineCapabilityRequest{
+			SupportsGlobalReference: true,
+		},
+		CreatedBy: 101,
+	}); err != nil {
+		t.Fatalf("create drama task: %v", err)
+	}
+	export, err := svc.GenerateDramaSkillAnalysisExport(ctx, DramaSkillAnalysisExportRequest{TargetAIModel: "gpt"})
+	if err != nil {
+		t.Fatalf("generate export: %v", err)
+	}
+	if export.SchemaVersion != DramaExportSchemaVersion || !export.Anonymized {
+		t.Fatalf("unexpected export metadata: %#v", export)
+	}
+	records, ok := export.ExportJSON["records"].([]map[string]any)
+	if !ok || len(records) != 1 {
+		t.Fatalf("expected one anonymized record, got %#v", export.ExportJSON["records"])
+	}
+	if records[0]["employee_alias"] != "E001" {
+		t.Fatalf("expected employee alias only, got %#v", records[0])
+	}
+	if strings.Contains(fmtAny(export), "CreatedByEmail") || strings.Contains(fmtAny(export), "authorization") {
+		t.Fatalf("export should not include identity or authorization details: %#v", export)
+	}
+	if !strings.Contains(export.AnalysisPrompt, "不调用") && !strings.Contains(export.AnalysisPrompt, "脱敏") {
+		t.Fatalf("expected dry-run analysis prompt, got %q", export.AnalysisPrompt)
 	}
 }
 

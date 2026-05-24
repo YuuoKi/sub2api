@@ -30,15 +30,15 @@
           <div>
             <p class="text-sm font-medium text-teal-700 dark:text-teal-200">三秒价值区</p>
             <h2 class="mt-2 text-xl font-semibold text-gray-950 dark:text-white">
-              统一托管企业视频 API 密钥（Key），自动调度到可用账号，并回收结果与失败原因。
+              公司统一 API 接收 AI 中剧/短剧任务，中央主机自动路由 provider，并沉淀 Prompt / Shot / Skill 数据。
             </h2>
             <p class="mt-2 max-w-3xl text-sm text-teal-800 dark:text-teal-100">
-              老板看整体任务、通道健康和失败情况；员工只提交业务提示词，运维按异常建议处理账号。
+              员工、脚本、n8n 和内部页面都只是 API client；员工不接触 Seedance/Kling 凭证，老板看通道健康、Skill 学习和导出准备。
             </p>
             <div class="mt-4 grid gap-2 sm:grid-cols-2">
               <div class="rounded-lg border border-teal-200 bg-white/70 p-3 dark:border-teal-500/20 dark:bg-dark-800/60">
                 <div class="text-xs font-semibold text-teal-700 dark:text-teal-200">内部可验收版本</div>
-                <div class="mt-1 text-sm text-gray-700 dark:text-gray-200">内部可验收，但真实通道未完成。</div>
+                <div class="mt-1 text-sm text-gray-700 dark:text-gray-200">API-first 与 Skill 学习准备态可验收，但真实 provider 未验证。</div>
               </div>
               <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-500/20 dark:bg-amber-500/10">
                 <div class="text-xs font-semibold text-amber-700 dark:text-amber-200">真实生产状态</div>
@@ -97,10 +97,10 @@
       <section v-if="isVideoGatewayDemoMode" class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
         <div class="flex flex-col gap-2 border-b border-gray-200 pb-4 dark:border-dark-700 md:flex-row md:items-end md:justify-between">
           <div>
-            <h2 class="text-base font-semibold text-gray-900 dark:text-white">业务链路</h2>
-            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">把客户最关心的链路放在一屏：API 密钥托管、通道池、自动调度、任务执行、结果回收、异常诊断。</p>
+            <h2 class="text-base font-semibold text-gray-900 dark:text-white">API-first 生产链路</h2>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">员工/自动化工具调用公司统一 API，中央主机完成 provider 路由、队列、结果回收和 Skill 学习事件记录。</p>
           </div>
-          <span class="text-xs font-medium text-gray-500 dark:text-gray-400">员工无需理解调度，系统自动选择可用供应商账号</span>
+          <span class="text-xs font-medium text-gray-500 dark:text-gray-400">员工无需接触真实账号或 provider 凭证</span>
         </div>
         <div class="mt-5 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
           <div
@@ -145,8 +145,8 @@
 
       <section v-if="isVideoGatewayDemoMode" class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
         <div class="border-b border-gray-200 pb-4 dark:border-dark-700">
-          <h2 class="text-base font-semibold text-gray-900 dark:text-white">企业主现在能控制什么？</h2>
-          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">把 API 资产、员工调用入口和结果回收集中到一个可审计的管理面板。</p>
+          <h2 class="text-base font-semibold text-gray-900 dark:text-white">老板现在能控制什么？</h2>
+          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">把公司统一 API、provider 冗余、剧种模板、Skill 学习和 AI 分析导出集中到一个内部管理面板。</p>
         </div>
         <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <div v-for="item in controlItems" :key="item.title" class="rounded-lg border border-gray-200 p-4 dark:border-dark-700">
@@ -157,6 +157,19 @@
                 <p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">{{ item.description }}</p>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section v-if="isVideoGatewayDemoMode" class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
+        <div class="border-b border-gray-200 pb-4 dark:border-dark-700">
+          <h2 class="text-base font-semibold text-gray-900 dark:text-white">Skill Learning Center</h2>
+          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">用于生产经验沉淀、公司资产复用和自动化生产准备，不用于监视员工。</p>
+        </div>
+        <div class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div v-for="item in skillLearningItems" :key="item.title" class="rounded-lg border border-gray-200 p-4 dark:border-dark-700">
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-white">{{ item.title }}</h3>
+            <p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">{{ item.description }}</p>
           </div>
         </div>
       </section>
@@ -312,10 +325,10 @@ const appStore = useAppStore()
 const loading = ref(false)
 const dashboard = ref<VideoDashboard | null>(null)
 
-const pageTitle = computed(() => isVideoGatewayDemoMode ? 'API 网关驾驶舱' : '视频总览')
+const pageTitle = computed(() => isVideoGatewayDemoMode ? 'AI 短剧 API 网关驾驶舱' : '视频总览')
 const pageDescription = computed(() =>
   isVideoGatewayDemoMode
-    ? '老板看整体任务、通道健康和失败情况。'
+    ? '老板看公司统一 API、中央主机调度、引擎能力、Skill 学习和安全演示状态。'
     : '查看视频任务吞吐、成功率、失败和通道状态。',
 )
 
@@ -331,9 +344,9 @@ type StatItem = {
 }
 
 const roleEntrances = [
-  { title: '老板看总览', description: '看供应商账号是否可用、今天处理了多少、哪里异常。', to: '/admin/video' },
-  { title: '员工发起调用', description: '只选模板和写提示词，系统自动调度账号。', to: '/admin/video/create' },
-  { title: '运维处理异常', description: '直接看影响账号和建议动作。', to: '/admin/video/providers' },
+  { title: '老板看总览', description: '看公司主机、统一 API、provider 健康和 Skill 沉淀。', to: '/admin/video' },
+  { title: '员工发起调用', description: '只提交剧种、镜头目标和 prompt，系统自动推荐引擎。', to: '/admin/video/create' },
+  { title: '运维处理异常', description: '看影响 provider、fallback 状态和建议动作。', to: '/admin/video/providers' },
 ]
 
 const statItems = computed<StatItem[]>(() => {
@@ -374,14 +387,20 @@ const gatewayFlowNodes = computed(() => {
 })
 
 const controlItems = computed<Array<{ title: string; description: string; icon: 'key' | 'server' | 'clock' | 'xCircle' | 'externalLink' | 'swap' }>>(() => [
-  { title: '哪些 API 密钥已接入', description: `当前已配置 ${configuredKeyCount.value} 个密钥，前端只显示脱敏状态。`, icon: 'key' },
-  { title: '哪些通道允许员工调用', description: `当前启用 ${enabledProviderCount.value} 个供应商通道，可随时启停。`, icon: 'server' },
-  { title: '每个通道每分钟限额', description: '通道池内维护每分钟限额，用于后续统一限流。', icon: 'clock' },
-  { title: '当前多少任务正在处理', description: `并发处理中 ${dashboard.value?.running_tasks ?? 0} 个，队列等待 ${dashboard.value?.queued_tasks ?? 0} 个。`, icon: 'server' },
-  { title: '哪些任务失败', description: `今日失败 ${dashboard.value?.failed_tasks ?? 0} 个，可进入调用详情查看原因。`, icon: 'xCircle' },
-  { title: '哪些调用产生结果', description: `${dashboard.value?.recent_successes?.length ?? 0} 条最近成功调用已回收结果入口。`, icon: 'externalLink' },
-  { title: '后续可接哪个真实通道', description: realChannelConfigured.value ? '已有真实通道可进入联调。' : 'Seedance 2.0 / Kling 均为待配置真实通道。', icon: 'swap' },
+  { title: '统一 API 入口', description: '内部页面、脚本、n8n 和自动化工具都通过公司统一 API。', icon: 'server' },
+  { title: 'provider 凭证隔离', description: `当前已配置 ${configuredKeyCount.value} 个凭证状态，前端只显示脱敏结果。`, icon: 'key' },
+  { title: '并发和预算', description: `并发处理中 ${dashboard.value?.running_tasks ?? 0} 个，队列等待 ${dashboard.value?.queued_tasks ?? 0} 个。`, icon: 'clock' },
+  { title: '失败模式沉淀', description: `今日失败 ${dashboard.value?.failed_tasks ?? 0} 个，可进入调用详情查看原因并进入 Skill 学习。`, icon: 'xCircle' },
+  { title: 'AI Analysis Export', description: '只生成脱敏 JSON 与 Gemini/GPT/Kimi Prompt，不自动调用外部 AI。', icon: 'externalLink' },
+  { title: '真实 provider 前置条件', description: realChannelConfigured.value ? '已有真实通道配置痕迹，仍需授权验证。' : 'Seedance 2.0 / Kling 均为待授权验证。', icon: 'swap' },
 ])
+
+const skillLearningItems = [
+  { title: '员工 Skill Card 草案', description: '按 employee_alias 汇总剧种、场景、镜头选择、prompt 结构和结果反馈。' },
+  { title: '团队 Skill Summary', description: '沉淀团队常用剧种模板、模型选择建议和失败模式。' },
+  { title: 'Prompt Structure Template', description: '把角色身份、场景上下文、戏剧目标、镜头语言和负向词结构化。' },
+  { title: 'AI Analysis Export', description: '生成脱敏 JSON 与 Gemini/GPT/Kimi 分析 Prompt，不发起外部 AI 调用。' },
+]
 
 const workflowSteps = computed(() => {
   const hasDemoProvider = providers.value.some((provider) => provider.provider === 'mock' && provider.enabled)

@@ -110,6 +110,10 @@ export type { TLSFingerprintProfile, CreateProfileRequest, UpdateProfileRequest 
 export type { ContentModerationConfig, ContentModerationLog, ModerationMode } from './riskControl'
 export type {
   VideoDashboard,
+  DramaEngineProfile,
+  DramaProviderPoolItem,
+  DramaSkillAnalysisExport,
+  DramaSkillCard,
   VideoProvider,
   VideoProviderAccount,
   VideoTask,

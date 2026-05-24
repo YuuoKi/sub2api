@@ -180,6 +180,61 @@ export interface VideoTaskListResponse {
   pages: number
 }
 
+export interface DramaEngineProfile {
+  id: string
+  provider_code: string
+  engine_family: string
+  model_name: string
+  model_version: string
+  mode: string
+  best_for_scene_types: string[]
+  weak_for_scene_types: string[]
+  credential_required: boolean
+  real_provider_verified: boolean
+  internal_safe_mode_only: boolean
+  source_note: string
+}
+
+export interface DramaProviderPoolItem {
+  provider_account_status: string
+  provider_code: string
+  display_name: string
+  credential_configured: boolean
+  real_provider_verified: boolean
+  fallback_ready: boolean
+  suitable_scene_types: string[]
+  unsuitable_scene_types: string[]
+  supported_modes: string[]
+  routing_reason: string
+  skipped_reason: string
+  current_inflight: number
+  failure_count_today: number
+  safe_demo_mode: boolean
+}
+
+export interface DramaSkillCard {
+  employee_alias: string
+  scope_type: string
+  drama_types: string[]
+  scene_types: string[]
+  engine_modes: string[]
+  total_tasks: number
+  approval_status: string
+  version: string
+}
+
+export interface DramaSkillAnalysisExport {
+  id: string
+  export_type: string
+  target_ai_model: string
+  anonymized: boolean
+  schema_version: string
+  export_json: Record<string, unknown>
+  analysis_prompt: string
+  analysis_prompts: Record<string, string>
+  created_at: string
+}
+
 async function listProviders(): Promise<{ items: VideoProviderAccount[] }> {
   const { data } = await apiClient.get<{ items: VideoProviderAccount[] }>('/admin/video/providers')
   return data
@@ -202,6 +257,31 @@ async function testProvider(id: number): Promise<VideoProviderTestResult> {
 
 async function dashboard(): Promise<VideoDashboard> {
   const { data } = await apiClient.get<VideoDashboard>('/admin/video/dashboard')
+  return data
+}
+
+async function engineCapabilityMatrix(): Promise<{ items: DramaEngineProfile[] }> {
+  const { data } = await apiClient.get<{ items: DramaEngineProfile[] }>('/admin/engine-capability-matrix')
+  return data
+}
+
+async function providerPool(): Promise<{ items: DramaProviderPoolItem[] }> {
+  const { data } = await apiClient.get<{ items: DramaProviderPoolItem[] }>('/admin/provider-pool')
+  return data
+}
+
+async function routingEvents(): Promise<{ items: Record<string, unknown>[] }> {
+  const { data } = await apiClient.get<{ items: Record<string, unknown>[] }>('/admin/routing-events')
+  return data
+}
+
+async function skillCards(): Promise<{ items: DramaSkillCard[] }> {
+  const { data } = await apiClient.get<{ items: DramaSkillCard[] }>('/admin/skill-cards')
+  return data
+}
+
+async function createSkillAnalysisExport(payload: { target_ai_model: 'gemini' | 'gpt' | 'kimi' | 'all' }): Promise<DramaSkillAnalysisExport> {
+  const { data } = await apiClient.post<DramaSkillAnalysisExport>('/admin/skill-analysis/exports', payload)
   return data
 }
 
@@ -236,6 +316,11 @@ export const videoAdminAPI = {
   updateProvider,
   testProvider,
   dashboard,
+  engineCapabilityMatrix,
+  providerPool,
+  routingEvents,
+  skillCards,
+  createSkillAnalysisExport,
 }
 
 export const videoTaskAPI = {

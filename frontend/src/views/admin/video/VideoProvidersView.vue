@@ -5,7 +5,7 @@
         <div>
           <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? '通道池' : '模型通道' }}</h1>
           <p class="mt-1 max-w-4xl text-sm text-gray-500 dark:text-gray-400">
-            {{ isVideoGatewayDemoMode ? '管理员看哪些供应商通道可用、哪些还没配置真实密钥。' : '管理演示通道与未来真实模型通道的启用状态和调用凭证。' }}
+            {{ isVideoGatewayDemoMode ? '管理员看 Seedance / Kling / 安全演示通道的能力边界、fallback 状态和真实验证缺口。' : '管理演示通道与未来真实模型通道的启用状态和调用凭证。' }}
           </p>
         </div>
         <button class="btn btn-outline" type="button" :disabled="loading" @click="loadProviders">
@@ -29,6 +29,39 @@
           <div class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">运维处理</div>
           <div class="mt-2 text-sm font-semibold text-gray-900 dark:text-white">看建议动作而不是日志</div>
           <p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">先配置真实密钥、检查鉴权、降并发或启停账号。</p>
+        </div>
+      </section>
+
+      <section v-if="isVideoGatewayDemoMode" class="rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-800">
+        <div class="border-b border-gray-200 px-5 py-4 dark:border-dark-700">
+          <h2 class="text-base font-semibold text-gray-900 dark:text-white">引擎能力矩阵</h2>
+          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Seedance、Kling、官方 API、内部授权通道和安全演示通道分开管理；真实 provider 当前均需授权验证。</p>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-dark-700">
+            <thead class="bg-gray-50 text-left text-xs uppercase text-gray-500 dark:bg-dark-700/40 dark:text-gray-400">
+              <tr>
+                <th class="px-5 py-3 font-medium">引擎</th>
+                <th class="px-5 py-3 font-medium">模式</th>
+                <th class="px-5 py-3 font-medium">适合场景</th>
+                <th class="px-5 py-3 font-medium">能力位</th>
+                <th class="px-5 py-3 font-medium">验证状态</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 dark:divide-dark-700">
+              <tr v-for="profile in engineMatrix" :key="profile.provider">
+                <td class="px-5 py-3 font-medium text-gray-900 dark:text-white">{{ profile.provider }}</td>
+                <td class="px-5 py-3 text-gray-700 dark:text-gray-200">{{ profile.mode }}</td>
+                <td class="px-5 py-3 text-gray-600 dark:text-gray-300">{{ profile.bestFor }}</td>
+                <td class="px-5 py-3 text-gray-600 dark:text-gray-300">{{ profile.capabilities }}</td>
+                <td class="px-5 py-3">
+                  <span class="inline-flex rounded-md px-2 py-1 text-xs font-medium" :class="profile.safe ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300'">
+                    {{ profile.status }}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </section>
 
@@ -240,6 +273,49 @@ const selected = ref<VideoProviderAccount | null>(null)
 const testResult = ref<VideoProviderTestResult | null>(null)
 const dashboard = ref<VideoDashboard | null>(null)
 const testResultsByProvider = ref<Record<number, VideoProviderTestResult>>({})
+
+const engineMatrix = [
+  {
+    provider: 'Seedance 2.0',
+    mode: 'text / image / reference-to-video',
+    bestFor: 'AI 中剧、AI 短剧、全局参考、多模态 reference、多镜头潜力',
+    capabilities: '全局参考、图片/视频/音频参考、native audio、运镜/表演/光影控制',
+    status: 'NEEDS_REAL_PROVIDER_VALIDATION',
+    safe: false,
+  },
+  {
+    provider: 'Kling',
+    mode: 'text / image / motion-control / lip sync',
+    bestFor: '真人短剧、漫剧、真人转漫剧、情绪爆发、动作冲突、多角色对话',
+    capabilities: '首尾帧、motion control、lip sync、真人、漫剧、多角色、对话/声音模式',
+    status: 'NEEDS_REAL_PROVIDER_VALIDATION',
+    safe: false,
+  },
+  {
+    provider: '官方 API Provider',
+    mode: 'provider-specific',
+    bestFor: '后续授权真实闭环验证',
+    capabilities: '按官方 API 合同拆分 model version / mode',
+    status: 'NOT_READY',
+    safe: false,
+  },
+  {
+    provider: '内部授权通道',
+    mode: 'adapter readiness',
+    bestFor: '公司主机受控试运行',
+    capabilities: '只允许后端安全配置，前端不展示凭证',
+    status: 'NOT_READY',
+    safe: false,
+  },
+  {
+    provider: '安全演示通道',
+    mode: 'safe demo',
+    bestFor: '内部演示、路由 trace、Skill Learning、错误处理验证',
+    capabilities: '本地安全闭环，不代表真实生产 provider',
+    status: 'INTERNAL_SAFE_MODE_ONLY',
+    safe: true,
+  },
+]
 
 const form = reactive({
   display_name: '',

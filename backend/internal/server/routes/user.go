@@ -130,5 +130,19 @@ func RegisterUserRoutes(
 				tasks.POST("/:id/cancel", h.Video.CancelTask)
 			}
 		}
+
+		drama := authenticated.Group("/drama")
+		{
+			tasks := drama.Group("/tasks")
+			{
+				tasks.GET("", h.Video.ListDramaTasks)
+				tasks.POST("", h.Video.CreateDramaTask)
+				tasks.GET("/:id", h.Video.GetDramaTask)
+			}
+			drama.POST("/shot-decisions", h.Video.RecordDramaShotDecision)
+			drama.POST("/prompt-artifacts", h.Video.RecordDramaPromptArtifact)
+			drama.GET("/providers/recommend", h.Video.RecommendDramaProvider)
+			drama.GET("/providers/capabilities", h.Video.DramaEngineCapabilityMatrix)
+		}
 	}
 }

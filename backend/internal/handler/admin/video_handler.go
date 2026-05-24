@@ -237,6 +237,57 @@ func (h *VideoHandler) Dashboard(c *gin.Context) {
 	response.Success(c, videoDashboardToResponse(dashboard))
 }
 
+func (h *VideoHandler) ProviderPool(c *gin.Context) {
+	items, err := h.video.DramaProviderPool(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, gin.H{"items": items})
+}
+
+func (h *VideoHandler) RoutingEvents(c *gin.Context) {
+	limit := 100
+	if raw := c.Query("limit"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil {
+			limit = parsed
+		}
+	}
+	items, err := h.video.DramaRoutingEvents(c.Request.Context(), limit)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, gin.H{"items": items})
+}
+
+func (h *VideoHandler) SkillCards(c *gin.Context) {
+	items, err := h.video.DramaSkillCards(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, gin.H{"items": items})
+}
+
+func (h *VideoHandler) SkillAnalysisExport(c *gin.Context) {
+	var req service.DramaSkillAnalysisExportRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ErrorFrom(c, infraerrors.BadRequest("VALIDATION_ERROR", err.Error()))
+		return
+	}
+	export, err := h.video.GenerateDramaSkillAnalysisExport(c.Request.Context(), req)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Created(c, export)
+}
+
+func (h *VideoHandler) DramaEngineCapabilityMatrix(c *gin.Context) {
+	response.Success(c, gin.H{"items": h.video.DramaEngineCapabilityMatrix()})
+}
+
 func videoProviderToResponse(item *service.VideoProviderAccount) videoProviderResponse {
 	if item == nil {
 		return videoProviderResponse{}

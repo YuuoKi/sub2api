@@ -191,6 +191,114 @@ func (h *VideoHandler) CancelTask(c *gin.Context) {
 	response.Success(c, videoTaskToResponse(task, nil))
 }
 
+func (h *VideoHandler) CreateDramaTask(c *gin.Context) {
+	var req service.DramaTaskCreateParams
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ErrorFrom(c, infraerrors.BadRequest("VALIDATION_ERROR", err.Error()))
+		return
+	}
+	subject, _ := middleware2.GetAuthSubjectFromContext(c)
+	req.CreatedBy = subject.UserID
+	task, err := h.video.CreateDramaTask(c.Request.Context(), req)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Created(c, task)
+}
+
+func (h *VideoHandler) ListDramaTasks(c *gin.Context) {
+	subject, _ := middleware2.GetAuthSubjectFromContext(c)
+	role, _ := middleware2.GetUserRoleFromContext(c)
+	page, pageSize := response.ParsePagination(c)
+	items, total, err := h.video.ListDramaTasks(c.Request.Context(), service.VideoTaskListParams{
+		Page:      page,
+		PageSize:  pageSize,
+		Status:    c.Query("status"),
+		CreatedBy: subject.UserID,
+		IsAdmin:   role == "admin",
+	}, dramaTaskFilters(c))
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Paginated(c, items, total, page, pageSize)
+}
+
+func (h *VideoHandler) GetDramaTask(c *gin.Context) {
+	subject, _ := middleware2.GetAuthSubjectFromContext(c)
+	role, _ := middleware2.GetUserRoleFromContext(c)
+	task, err := h.video.GetDramaTask(c.Request.Context(), c.Param("id"), subject.UserID, role == "admin")
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, task)
+}
+
+func (h *VideoHandler) RecordDramaShotDecision(c *gin.Context) {
+	var req service.DramaShotDecisionParams
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ErrorFrom(c, infraerrors.BadRequest("VALIDATION_ERROR", err.Error()))
+		return
+	}
+	subject, _ := middleware2.GetAuthSubjectFromContext(c)
+	role, _ := middleware2.GetUserRoleFromContext(c)
+	req.CreatedBy = subject.UserID
+	record, err := h.video.RecordDramaShotDecision(c.Request.Context(), req, subject.UserID, role == "admin")
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Created(c, record)
+}
+
+func (h *VideoHandler) RecordDramaPromptArtifact(c *gin.Context) {
+	var req service.DramaPromptArtifactParams
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ErrorFrom(c, infraerrors.BadRequest("VALIDATION_ERROR", err.Error()))
+		return
+	}
+	subject, _ := middleware2.GetAuthSubjectFromContext(c)
+	role, _ := middleware2.GetUserRoleFromContext(c)
+	req.CreatedBy = subject.UserID
+	record, err := h.video.RecordDramaPromptArtifact(c.Request.Context(), req, subject.UserID, role == "admin")
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Created(c, record)
+}
+
+func (h *VideoHandler) RecommendDramaProvider(c *gin.Context) {
+	recommendation, err := h.video.RecommendDramaProvider(c.Request.Context(), service.DramaProviderRecommendParams{
+		DramaType:          c.Query("drama_type"),
+		SceneType:          c.Query("scene_type"),
+		ShotRole:           c.Query("shot_role"),
+		ReferenceAssetType: c.Query("reference_asset_type"),
+		RequestedEngineCapabilities: service.DramaEngineCapabilityRequest{
+			SupportsRealPerson:      queryBool(c, "supports_real_person"),
+			SupportsImageToVideo:    queryBool(c, "supports_image_to_video"),
+			SupportsMotionControl:   queryBool(c, "supports_motion_control"),
+			SupportsLipsync:         queryBool(c, "supports_lipsync"),
+			SupportsNativeAudio:     queryBool(c, "supports_native_audio"),
+			SupportsGlobalReference: queryBool(c, "supports_global_reference"),
+			SupportsAnimeDrama:      queryBool(c, "supports_anime_drama"),
+		},
+		DurationSeconds: queryInt(c, "duration_seconds"),
+		AspectRatio:     c.Query("aspect_ratio"),
+	})
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, recommendation)
+}
+
+func (h *VideoHandler) DramaEngineCapabilityMatrix(c *gin.Context) {
+	response.Success(c, gin.H{"items": h.video.DramaEngineCapabilityMatrix()})
+}
+
 func videoTaskToResponse(task *service.VideoTask, events []*service.VideoTaskEvent) videoTaskResponse {
 	if task == nil {
 		return videoTaskResponse{}
@@ -313,6 +421,45 @@ func parseTaskID(c *gin.Context) (int64, bool) {
 		return 0, false
 	}
 	return id, true
+}
+
+func dramaTaskFilters(c *gin.Context) map[string]string {
+	return map[string]string{
+		"employee_alias": c.Query("employee_alias"),
+		"api_client_id":  c.Query("api_client_id"),
+		"project_id":     c.Query("project_id"),
+		"drama_type":     c.Query("drama_type"),
+		"genre":          c.Query("genre"),
+		"scene_type":     c.Query("scene_type"),
+		"engine":         c.Query("engine"),
+		"model":          c.Query("model"),
+		"mode":           c.Query("mode"),
+		"status":         c.Query("status"),
+	}
+}
+
+func queryBool(c *gin.Context, key string) bool {
+	raw := strings.TrimSpace(c.Query(key))
+	if raw == "" {
+		return false
+	}
+	value, err := strconv.ParseBool(raw)
+	if err != nil {
+		return raw == "1"
+	}
+	return value
+}
+
+func queryInt(c *gin.Context, key string) int {
+	raw := strings.TrimSpace(c.Query(key))
+	if raw == "" {
+		return 0
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0
+	}
+	return value
 }
 
 func formatTaskTime(t time.Time) string {

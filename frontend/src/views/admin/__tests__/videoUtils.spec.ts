@@ -14,7 +14,8 @@ describe('video gateway Phase 4B utilities', () => {
 
     expect(payload.provider_account_id).toBe(0)
     expect(payload.prompt).toBe(promptAssetCandidates[0].prompt)
-    expect(payload.task_type).toBe('text_to_video')
+    expect(payload.task_type).toBe(promptAssetCandidates[0].task_type)
+    expect(payload.prompt).toContain('短剧')
     expect(payload.duration).toBeGreaterThan(0)
   })
 

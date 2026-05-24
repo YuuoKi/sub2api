@@ -5,7 +5,7 @@
         <div>
           <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? '发起调用' : '创建视频任务' }}</h1>
           <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            {{ isVideoGatewayDemoMode ? '员工从这里发起视频生成任务，不需要接触密钥。' : '提交文生视频、图生视频或参考视频任务，创建成功后自动进入任务详情。' }}
+            {{ isVideoGatewayDemoMode ? '员工或内部工具只调用公司统一 API，提交 AI 中剧/短剧任务，不接触 provider 凭证。' : '提交文生视频、图生视频或参考视频任务，创建成功后自动进入任务详情。' }}
           </p>
         </div>
         <RouterLink class="btn btn-outline" to="/admin/video/tasks">
@@ -18,8 +18,8 @@
         <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p class="text-sm font-medium text-teal-700 dark:text-teal-200">主路径</p>
-            <h2 class="mt-2 text-xl font-semibold text-gray-950 dark:text-white">通过网关提交视频生成任务</h2>
-            <p class="mt-2 text-sm text-teal-800 dark:text-teal-100">普通员工不需要选择账号、不需要理解调度；提交后系统会自动选择可用供应商账号。</p>
+            <h2 class="mt-2 text-xl font-semibold text-gray-950 dark:text-white">通过公司统一 API 提交 AI 中剧/短剧任务</h2>
+            <p class="mt-2 text-sm text-teal-800 dark:text-teal-100">内部页面、脚本、n8n 和自动化工具都只是 API client；中央主机统一路由 provider、记录镜头决策和 Skill 学习事件。</p>
           </div>
           <RouterLink class="btn btn-primary" to="/admin/video/tasks">
             <Icon name="document" size="sm" />
@@ -47,7 +47,7 @@
           <div>
             <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? '业务提示词模板' : 'Prompt 模板候选' }}</h2>
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              {{ isVideoGatewayDemoMode ? '选择业务素材模板，快速填入网关调用参数。' : '选择业务素材候选，系统会自动填入提示词、任务类型、画幅、时长和分辨率。' }}
+              {{ isVideoGatewayDemoMode ? '选择 AI 中剧/短剧生产模板，快速填入统一 API 调用参数。' : '选择业务候选，系统会自动填入提示词、任务类型、画幅、时长和分辨率。' }}
             </p>
           </div>
         </div>
@@ -149,7 +149,7 @@
               <Icon name="play" size="sm" />
               {{ isVideoGatewayDemoMode ? '通过网关提交调用' : '创建任务' }}
             </button>
-            <p v-if="isVideoGatewayDemoMode" class="text-xs text-gray-500 dark:text-gray-400">系统会自动选择可用 API 账号。</p>
+            <p v-if="isVideoGatewayDemoMode" class="text-xs text-gray-500 dark:text-gray-400">系统会自动选择安全演示通道或后续授权 provider，并写入 Prompt / Shot / Engine / Skill 事件。</p>
           </form>
         </section>
 
@@ -230,19 +230,19 @@ const providers = ref<VideoProviderAccount[]>([])
 const submitting = ref(false)
 
 const gatewaySubmitSteps = [
-  { title: '选择调用模板' },
-  { title: '填写提示词' },
-  { title: '系统自动调度账号' },
-  { title: '网关提交调用' },
-  { title: '回收状态与原因' },
-  { title: '查看结果' },
+  { title: '选择剧种模板' },
+  { title: '填写镜头目标' },
+  { title: '统一 API 入队' },
+  { title: '系统推荐引擎' },
+  { title: '记录 Skill 事件' },
+  { title: '回收结果反馈' },
 ]
 
 const gatewayReasons = [
-  '员工不接触 API 密钥（Key），也不需要理解账号调度。',
-  '系统会自动选择可用供应商账号并记录调度结果。',
-  '成功结果和失败原因都会回收到任务详情。',
-  '后续接 Seedance/Kling 真实通道时，员工入口不需要变化。',
+  '员工不接触 API 密钥（Key）、Cookie、token 或真实 provider 账号。',
+  '内部页面、脚本、n8n 和自动化工具都通过公司统一 API 调用。',
+  '系统记录剧种、场景、镜头目标、prompt 结构、引擎选择和结果反馈。',
+  '后续接 Seedance/Kling 授权通道时，员工入口不需要变化。',
 ]
 
 const form = reactive<VideoTaskCreatePayload>({
@@ -250,7 +250,7 @@ const form = reactive<VideoTaskCreatePayload>({
   task_type: 'text_to_video',
   model: '',
   prompt: isVideoGatewayDemoMode
-    ? '生成一段企业 AI 视频 API 管理中台演示短片，展示 API 密钥托管、通道池、网关排队、状态回收和用量审计。'
+    ? '真人短剧第 1 集情绪爆发镜头：女主在雨夜街边听到男主离开的消息，缓慢抬头，眼神从震惊转为克制的愤怒，镜头缓慢推进。'
     : '生成一段企业 API 管理后台的安全产品演示短片，画面清晰、节奏简洁。',
   negative_prompt: '',
   reference_image_url: '',
@@ -315,7 +315,7 @@ function applyMockSuccess() {
   selectMockProvider()
   form.task_type = 'text_to_video'
   form.prompt = isVideoGatewayDemoMode
-    ? '生成一段企业 AI 视频 API 管理中台演示短片，展示 API 密钥托管、通道池、限流队列、状态回收和结果链接。'
+    ? 'AI 短剧结尾钩子：主角推开旧房门，发现桌上有第二封信和一张陌生合影，镜头从信封推进到主角震惊表情。'
     : '生成一段企业 API 管理后台的安全产品演示短片，画面清晰、节奏简洁。'
   form.negative_prompt = ''
 }
@@ -324,7 +324,7 @@ function applyMockFailure() {
   selectMockProvider()
   form.task_type = 'text_to_video'
   form.prompt = isVideoGatewayDemoMode
-    ? '生成一段用于演示 API 调用失败审计的视频任务：提示词会触发预设失败场景，方便查看失败原因和重新发起流程。[fail]'
+    ? '生成一段用于演示 AI 短剧 API 任务失败审计的镜头：提示词会触发预设失败场景，方便查看失败原因、路由记录和 Skill 事件。[fail]'
     : '生成一段用于演示失败处理的视频任务：提示词会触发预设失败场景，方便查看失败原因和重新创建流程。[fail]'
 }
 

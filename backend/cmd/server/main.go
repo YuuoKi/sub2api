@@ -86,7 +86,7 @@ func main() {
 			}
 			// Continue to main server after auto-setup
 		} else {
-			log.Println("First run detected, starting setup wizard...")
+			log.Println("检测到首次运行，启动首次安装向导...")
 			runSetupServer()
 			return
 		}
@@ -113,8 +113,8 @@ func runSetupServer() {
 	// Get server address from config.yaml or environment variables (SERVER_HOST, SERVER_PORT)
 	// This allows users to run setup on a different address if needed
 	addr := config.GetServerAddress()
-	log.Printf("Setup wizard available at http://%s", addr)
-	log.Println("Complete the setup wizard to configure Sub2API")
+	log.Printf("首次安装向导地址：http://%s", addr)
+	log.Println("请完成首次安装向导以配置企业 AI 视频 API 调度中台")
 
 	server := &http.Server{
 		Addr:              addr,

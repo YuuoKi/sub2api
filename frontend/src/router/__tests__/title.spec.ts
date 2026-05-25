@@ -11,8 +11,13 @@ describe('resolveDocumentTitle', () => {
   })
 
   it('站点名为空时，回退默认站点名', () => {
-    expect(resolveDocumentTitle('Dashboard', '')).toBe('Dashboard - Sub2API')
-    expect(resolveDocumentTitle(undefined, '   ')).toBe('Sub2API')
+    expect(resolveDocumentTitle('Dashboard', '')).toBe('Dashboard - 企业 AI 视频 API 调度中台')
+    expect(resolveDocumentTitle(undefined, '   ')).toBe('企业 AI 视频 API 调度中台')
+  })
+
+  it('站点名仍是 upstream 默认值时，回退内部项目身份', () => {
+    expect(resolveDocumentTitle('Login', 'Sub2API')).toBe('Login - 企业 AI 视频 API 调度中台')
+    expect(resolveDocumentTitle(undefined, 'Sub2API')).toBe('企业 AI 视频 API 调度中台')
   })
 
   it('站点名变更时仅影响后续路由标题计算', () => {

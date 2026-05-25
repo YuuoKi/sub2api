@@ -29,19 +29,30 @@
       <!-- Logo/Brand -->
       <div class="mb-8 text-center">
         <!-- Custom Logo or Default Logo -->
-        <template v-if="settingsLoaded">
-          <div
-            class="mb-4 inline-flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl shadow-lg shadow-primary-500/30"
+        <div
+          class="mb-4 inline-flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl shadow-lg shadow-primary-500/30"
+        >
+          <img
+            :src="siteLogo || '/logo.png'"
+            alt="企业 AI 视频 API 调度中台"
+            class="h-full w-full object-contain"
+          />
+        </div>
+        <h1 class="text-gradient mb-2 text-3xl font-bold">
+          {{ siteName }}
+        </h1>
+        <p class="text-sm font-medium text-gray-600 dark:text-dark-300">
+          {{ siteSubtitle }}
+        </p>
+        <div class="mt-3 flex flex-wrap justify-center gap-2 text-[11px] font-semibold">
+          <span
+            v-for="item in identityLabels"
+            :key="item"
+            class="rounded border border-gray-200 bg-white/70 px-2 py-1 text-gray-600 dark:border-dark-700 dark:bg-dark-800/70 dark:text-dark-300"
           >
-            <img :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
-          </div>
-          <h1 class="text-gradient mb-2 text-3xl font-bold">
-            {{ siteName }}
-          </h1>
-          <p class="text-sm text-gray-500 dark:text-dark-400">
-            {{ siteSubtitle }}
-          </p>
-        </template>
+            {{ item }}
+          </span>
+        </div>
       </div>
 
       <!-- Card Container -->
@@ -55,8 +66,9 @@
       </div>
 
       <!-- Copyright -->
-      <div class="mt-8 text-center text-xs text-gray-400 dark:text-dark-500">
-        &copy; {{ currentYear }} {{ siteName }}. All rights reserved.
+      <div class="mt-8 space-y-1 text-center text-xs text-gray-400 dark:text-dark-500">
+        <p>&copy; {{ currentYear }} {{ siteName }}. {{ networkLabel }}.</p>
+        <p>{{ productionStatus }} · {{ commercialStatus }} · {{ realProviderStatus }}</p>
       </div>
     </div>
   </div>
@@ -66,18 +78,32 @@
 import { computed, onMounted } from 'vue'
 import { useAppStore } from '@/stores'
 import { sanitizeUrl } from '@/utils/url'
-import { isVideoGatewayDemoMode, VIDEO_GATEWAY_PRODUCT_NAME } from '@/utils/productMode'
+import {
+  PUBLIC_AUTH_COMMERCIAL_STATUS,
+  PUBLIC_AUTH_NETWORK_LABEL,
+  PUBLIC_AUTH_PRODUCT_NAME,
+  PUBLIC_AUTH_PRODUCT_SUBTITLE,
+  PUBLIC_AUTH_PRODUCTION_STATUS,
+  PUBLIC_AUTH_REAL_PROVIDER_STATUS,
+  PUBLIC_AUTH_SAFE_DEMO_LABEL,
+} from '@/utils/productMode'
 
 const appStore = useAppStore()
 
-const siteName = computed(() => isVideoGatewayDemoMode ? VIDEO_GATEWAY_PRODUCT_NAME : appStore.siteName || 'Sub2API')
+const siteName = computed(() => PUBLIC_AUTH_PRODUCT_NAME)
 const siteLogo = computed(() => sanitizeUrl(appStore.siteLogo || '', { allowRelative: true, allowDataUrl: true }))
-const siteSubtitle = computed(() =>
-  isVideoGatewayDemoMode
-    ? '统一托管多平台 API Key，集中调度视频生成任务，追踪用量、结果与失败原因。'
-    : appStore.cachedPublicSettings?.site_subtitle || 'Subscription to API Conversion Platform'
-)
-const settingsLoaded = computed(() => appStore.publicSettingsLoaded)
+const siteSubtitle = computed(() => PUBLIC_AUTH_PRODUCT_SUBTITLE)
+const networkLabel = PUBLIC_AUTH_NETWORK_LABEL
+const productionStatus = PUBLIC_AUTH_PRODUCTION_STATUS
+const commercialStatus = PUBLIC_AUTH_COMMERCIAL_STATUS
+const realProviderStatus = PUBLIC_AUTH_REAL_PROVIDER_STATUS
+const identityLabels = [
+  PUBLIC_AUTH_NETWORK_LABEL,
+  PUBLIC_AUTH_SAFE_DEMO_LABEL,
+  PUBLIC_AUTH_PRODUCTION_STATUS,
+  PUBLIC_AUTH_COMMERCIAL_STATUS,
+  PUBLIC_AUTH_REAL_PROVIDER_STATUS,
+]
 
 const currentYear = computed(() => new Date().getFullYear())
 

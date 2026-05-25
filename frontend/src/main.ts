@@ -4,7 +4,11 @@ import App from './App.vue'
 import router from './router'
 import i18n, { initI18n } from './i18n'
 import { useAppStore } from '@/stores/app'
-import { isVideoGatewayDemoMode, VIDEO_GATEWAY_PRODUCT_NAME } from '@/utils/productMode'
+import {
+  isVideoGatewayDemoMode,
+  PUBLIC_AUTH_PRODUCT_NAME,
+  VIDEO_GATEWAY_PRODUCT_NAME,
+} from '@/utils/productMode'
 import './style.css'
 
 function initThemeClass() {
@@ -32,7 +36,9 @@ async function bootstrap() {
   if (isVideoGatewayDemoMode) {
     document.title = VIDEO_GATEWAY_PRODUCT_NAME
   } else if (appStore.siteName && appStore.siteName !== 'Sub2API') {
-    document.title = `${appStore.siteName} - AI API Gateway`
+    document.title = `${appStore.siteName} - ${PUBLIC_AUTH_PRODUCT_NAME}`
+  } else {
+    document.title = PUBLIC_AUTH_PRODUCT_NAME
   }
 
   await initI18n()

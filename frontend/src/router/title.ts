@@ -1,5 +1,9 @@
 import { i18n } from '@/i18n'
-import { isVideoGatewayDemoMode, VIDEO_GATEWAY_PRODUCT_NAME } from '@/utils/productMode'
+import {
+  isVideoGatewayDemoMode,
+  PUBLIC_AUTH_PRODUCT_NAME,
+  VIDEO_GATEWAY_PRODUCT_NAME,
+} from '@/utils/productMode'
 
 /**
  * 统一生成页面标题，避免多处写入 document.title 产生覆盖冲突。
@@ -13,7 +17,10 @@ export function resolveDocumentTitle(routeTitle: unknown, siteName?: string, tit
     return VIDEO_GATEWAY_PRODUCT_NAME
   }
 
-  const normalizedSiteName = typeof siteName === 'string' && siteName.trim() ? siteName.trim() : 'Sub2API'
+  const trimmedSiteName = typeof siteName === 'string' ? siteName.trim() : ''
+  const normalizedSiteName = trimmedSiteName && trimmedSiteName !== 'Sub2API'
+    ? trimmedSiteName
+    : PUBLIC_AUTH_PRODUCT_NAME
 
   if (typeof titleKey === 'string' && titleKey.trim()) {
     const translated = i18n.global.t(titleKey)

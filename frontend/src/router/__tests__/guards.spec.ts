@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
+import router from '@/router'
 
 // Mock 导航加载状态
 vi.mock('@/composables/useNavigationLoading', () => {
@@ -78,7 +79,7 @@ function simulateGuard(
       return authState.isAdmin ? '/admin/dashboard' : '/dashboard'
     }
     if (authState.backendModeEnabled && !authState.isAuthenticated) {
-      const allowed = ['/login', '/key-usage', '/setup', '/payment/result']
+      const allowed = ['/internal-pilot', '/login', '/key-usage', '/setup', '/payment/result']
       const callbackPaths = [
         '/auth/callback',
         '/auth/linuxdo/callback',
@@ -127,7 +128,7 @@ function simulateGuard(
     if (authState.isAuthenticated && authState.isAdmin) {
       return null
     }
-    const allowed = ['/login', '/key-usage', '/setup', '/payment/result']
+    const allowed = ['/internal-pilot', '/login', '/key-usage', '/setup', '/payment/result']
     const callbackPaths = [
       '/auth/callback',
       '/auth/linuxdo/callback',
@@ -182,6 +183,19 @@ describe('路由守卫逻辑', () => {
     it('访问 /home 公开页面允许通过', () => {
       const redirect = simulateGuard('/home', { requiresAuth: false }, authState)
       expect(redirect).toBeNull()
+    })
+
+    it('访问 /internal-pilot 公开入口允许通过', () => {
+      const redirect = simulateGuard('/internal-pilot', { requiresAuth: false }, authState)
+      expect(redirect).toBeNull()
+    })
+
+    it('/ 和 /home 均指向内部试运行入口', () => {
+      const rootRoute = router.getRoutes().find((route) => route.path === '/')
+      const homeRoute = router.getRoutes().find((route) => route.path === '/home')
+
+      expect(rootRoute?.redirect).toBe('/internal-pilot')
+      expect(homeRoute?.redirect).toBe('/internal-pilot')
     })
   })
 
@@ -340,6 +354,18 @@ describe('路由守卫逻辑', () => {
       }
       const redirect = simulateGuard('/home', { requiresAuth: false }, authState)
       expect(redirect).toBe('/login')
+    })
+
+    it('unauthenticated: /internal-pilot is allowed', () => {
+      const authState: MockAuthState = {
+        isAuthenticated: false,
+        isAdmin: false,
+        isSimpleMode: false,
+        backendModeEnabled: true,
+        hasPendingAuthSession: false,
+      }
+      const redirect = simulateGuard('/internal-pilot', { requiresAuth: false }, authState)
+      expect(redirect).toBeNull()
     })
 
     it('unauthenticated: /login is allowed', () => {

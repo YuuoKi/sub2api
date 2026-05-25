@@ -182,63 +182,71 @@ export default {
 
   // Setup Wizard
   setup: {
-    title: 'Sub2API Setup',
-    description: 'Configure your Sub2API instance',
+    browserTitle: '首次安装向导',
+    title: '企业 AI 视频 API 调度中台',
+    description: 'AI 中剧 / AI 短剧生产网关',
+    logoAlt: '企业 AI 视频 API 调度中台标识',
+    logoCaption: 'LAN-only 内部试运行入口',
+    footerCopyright: '© 2026 企业 AI 视频 API 调度中台',
+    navigation: {
+      back: '上一步',
+      next: '下一步'
+    },
     database: {
-      title: 'Database Configuration',
-      description: 'Connect to your PostgreSQL database',
-      host: 'Host',
-      port: 'Port',
-      username: 'Username',
-      password: 'Password',
-      databaseName: 'Database Name',
-      sslMode: 'SSL Mode',
-      passwordPlaceholder: 'Password',
+      title: '数据库配置',
+      description: '连接 PostgreSQL 数据库',
+      host: '主机',
+      port: '端口',
+      username: '用户名',
+      password: '密码',
+      databaseName: '数据库名称',
+      sslMode: 'SSL 模式',
+      passwordPlaceholder: '密码',
       ssl: {
-        disable: 'Disable',
-        require: 'Require',
-        verifyCa: 'Verify CA',
-        verifyFull: 'Verify Full'
+        disable: '禁用',
+        require: '要求',
+        verifyCa: '验证 CA',
+        verifyFull: '完全验证'
       }
     },
     redis: {
-      title: 'Redis Configuration',
-      description: 'Connect to your Redis server',
-      host: 'Host',
-      port: 'Port',
-      password: 'Password (optional)',
-      database: 'Database',
-      passwordPlaceholder: 'Password',
-      enableTls: 'Enable TLS',
-      enableTlsHint: 'Use TLS when connecting to Redis (public CA certs)'
+      title: 'Redis 配置',
+      description: '连接 Redis 服务',
+      host: '主机',
+      port: '端口',
+      password: '密码（可选）',
+      database: '数据库',
+      passwordPlaceholder: '密码',
+      enableTls: '启用 TLS',
+      enableTlsHint: '连接 Redis 时使用 TLS（公共 CA 证书）'
     },
     admin: {
-      title: 'Admin Account',
-      description: 'Create your administrator account',
-      email: 'Email',
-      password: 'Password',
-      confirmPassword: 'Confirm Password',
-      passwordPlaceholder: 'Min 8 characters',
-      confirmPasswordPlaceholder: 'Confirm password',
-      passwordMismatch: 'Passwords do not match'
+      title: '管理员账户',
+      description: '创建管理员账号',
+      email: '邮箱',
+      password: '密码',
+      confirmPassword: '确认密码',
+      passwordPlaceholder: '至少 8 个字符',
+      confirmPasswordPlaceholder: '确认密码',
+      passwordMismatch: '两次输入的密码不一致'
     },
     ready: {
-      title: 'Ready to Install',
-      description: 'Review your configuration and complete setup',
-      database: 'Database',
+      title: '准备安装',
+      description: '检查配置并完成首次安装',
+      database: '数据库',
       redis: 'Redis',
-      adminEmail: 'Admin Email'
+      adminEmail: '管理员邮箱'
     },
     status: {
-      testing: 'Testing...',
-      success: 'Connection Successful',
-      testConnection: 'Test Connection',
-      installing: 'Installing...',
-      completeInstallation: 'Complete Installation',
-      completed: 'Installation completed!',
-      redirecting: 'Redirecting to login page...',
-      restarting: 'Service is restarting, please wait...',
-      timeout: 'Service restart is taking longer than expected. Please refresh the page manually.'
+      testing: '测试中...',
+      success: '连接成功',
+      testConnection: '测试连接',
+      installing: '安装中...',
+      completeInstallation: '完成安装',
+      completed: '安装完成！',
+      redirecting: '正在跳转到登录页面...',
+      restarting: '服务正在重启，请稍候...',
+      timeout: '服务重启时间超出预期，请手动刷新页面。'
     }
   },
 

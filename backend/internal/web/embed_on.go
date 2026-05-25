@@ -22,6 +22,7 @@ import (
 const (
 	// NonceHTMLPlaceholder is the placeholder for nonce in HTML script tags
 	NonceHTMLPlaceholder = "__CSP_NONCE_VALUE__"
+	publicAuthProductName = "企业 AI 视频 API 调度中台"
 )
 
 //go:embed all:dist
@@ -219,8 +220,13 @@ func injectSiteTitle(html, settingsJSON []byte) []byte {
 	var cfg struct {
 		SiteName string `json:"site_name"`
 	}
-	if err := json.Unmarshal(settingsJSON, &cfg); err != nil || cfg.SiteName == "" {
+	if err := json.Unmarshal(settingsJSON, &cfg); err != nil {
 		return html
+	}
+
+	siteName := strings.TrimSpace(cfg.SiteName)
+	if siteName == "" || siteName == "Sub2API" {
+		siteName = publicAuthProductName
 	}
 
 	// Find and replace the existing <title>...</title>
@@ -230,7 +236,11 @@ func injectSiteTitle(html, settingsJSON []byte) []byte {
 		return html
 	}
 
-	newTitle := []byte("<title>" + cfg.SiteName + " - AI API Gateway</title>")
+	titleText := siteName
+	if siteName != publicAuthProductName {
+		titleText = siteName + " - " + publicAuthProductName
+	}
+	newTitle := []byte("<title>" + titleText + "</title>")
 	var buf bytes.Buffer
 	buf.Write(html[:titleStart])
 	buf.Write(newTitle)

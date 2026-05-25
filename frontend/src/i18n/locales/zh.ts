@@ -182,8 +182,16 @@ export default {
 
   // Setup Wizard
   setup: {
-    title: 'Sub2API 安装向导',
-    description: '配置您的 Sub2API 实例',
+    browserTitle: '首次安装向导',
+    title: '企业 AI 视频 API 调度中台',
+    description: 'AI 中剧 / AI 短剧生产网关',
+    logoAlt: '企业 AI 视频 API 调度中台标识',
+    logoCaption: 'LAN-only 内部试运行入口',
+    footerCopyright: '© 2026 企业 AI 视频 API 调度中台',
+    navigation: {
+      back: '上一步',
+      next: '下一步'
+    },
     database: {
       title: '数据库配置',
       description: '连接到您的 PostgreSQL 数据库',

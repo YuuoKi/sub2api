@@ -1,5 +1,5 @@
 /**
- * Vue Router configuration for Sub2API frontend
+ * Vue Router configuration for the enterprise AI video API dispatch console
  * Defines all application routes with lazy loading and navigation guards
  */
 
@@ -13,6 +13,7 @@ import { resolveDocumentTitle } from './title'
 import {
   isVideoGatewayDemoMode,
   isVideoGatewayDemoRoute,
+  PUBLIC_AUTH_PRODUCT_NAME,
   VIDEO_GATEWAY_HOME_PATH,
   VIDEO_GATEWAY_PRODUCT_NAME,
 } from '@/utils/productMode'
@@ -28,7 +29,8 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/setup/SetupWizardView.vue'),
     meta: {
       requiresAuth: false,
-      title: 'Setup'
+      title: '首次安装向导',
+      titleKey: 'setup.browserTitle'
     }
   },
 
@@ -36,10 +38,15 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/home',
     name: 'Home',
-    component: () => import('@/views/HomeView.vue'),
+    redirect: '/internal-pilot'
+  },
+  {
+    path: '/internal-pilot',
+    name: 'InternalPilot',
+    component: () => import('@/views/InternalPilotView.vue'),
     meta: {
       requiresAuth: false,
-      title: 'Home'
+      title: '企业 AI 视频 API 调度中台'
     }
   },
   {
@@ -163,7 +170,7 @@ const routes: RouteRecordRaw[] = [
   // ==================== User Routes ====================
   {
     path: '/',
-    redirect: () => isVideoGatewayDemoMode ? VIDEO_GATEWAY_HOME_PATH : '/home'
+    redirect: '/internal-pilot'
   },
   {
     path: '/dashboard',
@@ -728,7 +735,7 @@ let authInitialized = false
 const navigationLoading = useNavigationLoadingState()
 // 延迟初始化预加载，传入 router 实例
 let routePrefetch: ReturnType<typeof useRoutePrefetch> | null = null
-const BACKEND_MODE_ALLOWED_PATHS = ['/login', '/key-usage', '/setup', '/payment/result', '/payment/airwallex', '/legal']
+const BACKEND_MODE_ALLOWED_PATHS = ['/internal-pilot', '/login', '/key-usage', '/setup', '/payment/result', '/payment/airwallex', '/legal']
 const BACKEND_MODE_AUTHENTICATED_ALLOWED_PATHS = ['/admin/video/create', '/admin/video/tasks']
 const BACKEND_MODE_CALLBACK_PATHS = [
   '/auth/callback',
@@ -781,7 +788,7 @@ router.beforeEach((to, _from, next) => {
     const menuItem = publicItems.find((item) => item.id === id)
       ?? (authStore.isAdmin ? adminSettingsStore.customMenuItems.find((item) => item.id === id) : undefined)
     if (menuItem?.label) {
-      const siteName = isVideoGatewayDemoMode ? VIDEO_GATEWAY_PRODUCT_NAME : appStore.siteName || 'Sub2API'
+      const siteName = isVideoGatewayDemoMode ? VIDEO_GATEWAY_PRODUCT_NAME : appStore.siteName || PUBLIC_AUTH_PRODUCT_NAME
       document.title = `${menuItem.label} - ${siteName}`
     } else {
       document.title = resolveDocumentTitle(to.meta.title, appStore.siteName, to.meta.titleKey as string)

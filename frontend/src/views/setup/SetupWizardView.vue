@@ -7,11 +7,25 @@
       <div class="mb-8 text-center">
         <div
           class="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 to-primary-600 shadow-lg"
+          role="img"
+          :aria-label="t('setup.logoAlt')"
         >
-          <Icon name="cog" size="xl" class="text-white" />
+          <Icon name="cog" size="xl" class="text-white" aria-hidden="true" />
         </div>
+        <p class="mb-2 text-sm font-semibold text-primary-600 dark:text-primary-400">
+          {{ t('setup.logoCaption') }}
+        </p>
         <h1 class="text-3xl font-bold text-gray-900 dark:text-white">{{ t('setup.title') }}</h1>
         <p class="mt-2 text-gray-500 dark:text-dark-400">{{ t('setup.description') }}</p>
+        <div class="mt-4 flex flex-wrap items-center justify-center gap-2 text-xs font-medium">
+          <span
+            v-for="badge in identityBadges"
+            :key="badge"
+            class="rounded-full border border-gray-200 bg-white px-3 py-1 text-gray-700 shadow-sm dark:border-dark-700 dark:bg-dark-800 dark:text-dark-200"
+          >
+            {{ badge }}
+          </span>
+        </div>
       </div>
 
       <!-- Progress Steps -->
@@ -441,7 +455,7 @@
             class="btn btn-secondary"
           >
             <Icon name="chevronLeft" size="sm" class="mr-2" :stroke-width="2" />
-            {{ t('common.back') }}
+            {{ t('setup.navigation.back') }}
           </button>
           <div v-else></div>
 
@@ -451,7 +465,7 @@
             :disabled="!canProceed"
             class="btn btn-primary"
           >
-            {{ t('common.next') }}
+            {{ t('setup.navigation.next') }}
             <Icon name="chevronRight" size="sm" class="ml-2" :stroke-width="2" />
           </button>
 
@@ -485,6 +499,11 @@
           </button>
         </div>
       </div>
+
+      <footer class="mt-6 text-center text-xs text-gray-500 dark:text-dark-400">
+        <p>{{ t('setup.footerCopyright') }}</p>
+        <p class="mt-1">{{ footerNotice }}</p>
+      </footer>
     </div>
   </div>
 </template>
@@ -496,8 +515,25 @@ import { testDatabase, testRedis, install, type InstallRequest } from '@/api/set
 import Select from '@/components/common/Select.vue'
 import Toggle from '@/components/common/Toggle.vue'
 import Icon from '@/components/icons/Icon.vue'
+import {
+  PUBLIC_AUTH_COMMERCIAL_STATUS,
+  PUBLIC_AUTH_NETWORK_LABEL,
+  PUBLIC_AUTH_PRODUCTION_STATUS,
+  PUBLIC_AUTH_REAL_PROVIDER_STATUS,
+  PUBLIC_AUTH_SAFE_DEMO_LABEL
+} from '@/utils/productMode'
 
 const { t } = useI18n()
+
+const identityBadges = [
+  PUBLIC_AUTH_NETWORK_LABEL,
+  PUBLIC_AUTH_SAFE_DEMO_LABEL,
+  PUBLIC_AUTH_PRODUCTION_STATUS,
+  PUBLIC_AUTH_COMMERCIAL_STATUS,
+  PUBLIC_AUTH_REAL_PROVIDER_STATUS
+]
+
+const footerNotice = `${PUBLIC_AUTH_NETWORK_LABEL} / ${PUBLIC_AUTH_SAFE_DEMO_LABEL}`
 
 const steps = computed(() => [
   { id: 'database', title: t('setup.database.title') },
@@ -584,7 +620,7 @@ async function testDatabaseConnection() {
   } catch (error: unknown) {
     const err = error as { response?: { data?: { detail?: string; message?: string } }; message?: string }
     errorMessage.value =
-      err.response?.data?.detail || err.response?.data?.message || err.message || 'Connection failed'
+      err.response?.data?.detail || err.response?.data?.message || err.message || '连接失败'
   } finally {
     testingDb.value = false
   }
@@ -601,7 +637,7 @@ async function testRedisConnection() {
   } catch (error: unknown) {
     const err = error as { response?: { data?: { detail?: string; message?: string } }; message?: string }
     errorMessage.value =
-      err.response?.data?.detail || err.response?.data?.message || err.message || 'Connection failed'
+      err.response?.data?.detail || err.response?.data?.message || err.message || '连接失败'
   } finally {
     testingRedis.value = false
   }
@@ -626,7 +662,7 @@ async function performInstall() {
   } catch (error: unknown) {
     const err = error as { response?: { data?: { detail?: string; message?: string } }; message?: string }
     errorMessage.value =
-      err.response?.data?.detail || err.response?.data?.message || err.message || 'Installation failed'
+      err.response?.data?.detail || err.response?.data?.message || err.message || '安装失败'
   } finally {
     installing.value = false
   }

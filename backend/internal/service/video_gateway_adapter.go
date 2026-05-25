@@ -1,8 +1,12 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"strings"
 	"time"
 
@@ -131,17 +135,154 @@ func (a *seedanceVideoAdapter) CreateTask(_ context.Context, account *VideoProvi
 			"reason":   "api key is not configured; real call skipped",
 		})
 	}
-	return nil, infraerrorsUnavailable("SEEDANCE_REAL_CALL_DISABLED", "Seedance adapter skeleton is mapped but real upstream calls are disabled in P0")
+
+	baseURL := account.BaseURL
+	if baseURL == "" {
+		baseURL = "https://ark.cn-beijing.volces.com/api/v3"
+	}
+
+	model := task.Model
+	if model == "" {
+		model = "doubao-seedance-2-0-260128"
+	}
+
+	content := []map[string]any{{"type": "text", "text": task.Prompt}}
+	if task.ReferenceImageURL != "" {
+		content = append(content, map[string]any{"type": "image_url", "image_url": map[string]string{"url": task.ReferenceImageURL}})
+	}
+
+	payload := map[string]any{
+		"model":   model,
+		"content": content,
+	}
+	if task.NegativePrompt != "" {
+		payload["negative_prompt"] = task.NegativePrompt
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("seedance: marshal create payload: %w", err)
+	}
+
+	url := strings.TrimRight(baseURL, "/") + "/contents/generations/tasks"
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("seedance: build create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+account.PlainAPIKey)
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, infraerrorsUnavailable("SEEDANCE_CREATE_HTTP_ERROR", "Seedance create task HTTP error: "+err.Error())
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("seedance: read create response: %w", err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, infraerrorsUnavailable("SEEDANCE_CREATE_UPSTREAM_ERROR",
+			fmt.Sprintf("Seedance create task returned %d: %s", resp.StatusCode, truncate(string(respBody), 500)))
+	}
+
+	var parsed struct {
+		ID     string `json:"id"`
+		Status string `json:"status"`
+		Error  struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(respBody, &parsed); err != nil {
+		return nil, fmt.Errorf("seedance: parse create response: %w", err)
+	}
+
+	if parsed.Error.Message != "" {
+		return nil, infraerrorsUnavailable("SEEDANCE_CREATE_BUSINESS_ERROR", "Seedance: "+parsed.Error.Message)
+	}
+
+	return &VideoAdapterResult{
+		UpstreamTaskID: parsed.ID,
+		Status:         a.NormalizeStatus(parsed.Status),
+		Payload: map[string]any{
+			"provider":    "seedance",
+			"upstream_id": parsed.ID,
+			"model":       model,
+			"created_at":  time.Now().UTC().Format(time.RFC3339),
+		},
+	}, nil
 }
 
-func (a *seedanceVideoAdapter) PollTask(_ context.Context, account *VideoProviderAccount, _ *VideoTask) (*VideoAdapterResult, error) {
+func (a *seedanceVideoAdapter) PollTask(_ context.Context, account *VideoProviderAccount, task *VideoTask) (*VideoAdapterResult, error) {
 	if !account.APIKeyConfigured || strings.TrimSpace(account.PlainAPIKey) == "" {
 		return nil, ErrVideoProviderDisabled.WithMetadata(map[string]string{
 			"provider": "seedance",
 			"reason":   "api key is not configured; poll skipped",
 		})
 	}
-	return nil, infraerrorsUnavailable("SEEDANCE_REAL_POLL_DISABLED", "Seedance poll skeleton is mapped but real upstream calls are disabled in P0")
+
+	baseURL := account.BaseURL
+	if baseURL == "" {
+		baseURL = "https://ark.cn-beijing.volces.com/api/v3"
+	}
+
+	url := strings.TrimRight(baseURL, "/") + "/contents/generations/tasks/" + task.UpstreamTaskID
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("seedance: build poll request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+account.PlainAPIKey)
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, infraerrorsUnavailable("SEEDANCE_POLL_HTTP_ERROR", "Seedance poll task HTTP error: "+err.Error())
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("seedance: read poll response: %w", err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, infraerrorsUnavailable("SEEDANCE_POLL_UPSTREAM_ERROR",
+			fmt.Sprintf("Seedance poll task returned %d: %s", resp.StatusCode, truncate(string(respBody), 500)))
+	}
+
+	var parsed struct {
+		ID      string `json:"id"`
+		Status  string `json:"status"`
+		Content struct {
+			VideoURL string `json:"video_url"`
+		} `json:"content"`
+		Error struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(respBody, &parsed); err != nil {
+		return nil, fmt.Errorf("seedance: parse poll response: %w", err)
+	}
+
+	result := &VideoAdapterResult{
+		UpstreamTaskID: parsed.ID,
+		Status:         a.NormalizeStatus(parsed.Status),
+		ResultURL:      parsed.Content.VideoURL,
+		Payload: map[string]any{
+			"provider": "seedance",
+			"polled_at": time.Now().UTC().Format(time.RFC3339),
+		},
+	}
+
+	if parsed.Error.Message != "" {
+		result.ErrorMessage = parsed.Error.Message
+		result.Status = VideoStatusFailed
+	}
+
+	return result, nil
 }
 
 func (a *seedanceVideoAdapter) CancelTask(_ context.Context, _ *VideoProviderAccount, _ *VideoTask) (*VideoAdapterResult, error) {

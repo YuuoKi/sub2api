@@ -663,13 +663,21 @@ func TestVideoAdapterContractSafeProviderBehavior(t *testing.T) {
 		if _, err := adapter.CreateTask(ctx, &VideoProviderAccount{Provider: provider, Enabled: true}, task); err == nil || !strings.Contains(err.Error(), "api key is not configured") {
 			t.Fatalf("%s without key should be safely disabled, err=%v", provider, err)
 		}
-		if _, err := adapter.CreateTask(ctx, &VideoProviderAccount{
+		_, err := adapter.CreateTask(ctx, &VideoProviderAccount{
 			Provider:         provider,
 			Enabled:          true,
 			APIKeyConfigured: true,
 			PlainAPIKey:      "placeholder-key-should-not-leak",
-		}, task); err == nil || !strings.Contains(strings.ToLower(err.Error()), "disabled") {
+		}, task)
+		if err == nil {
+			t.Fatalf("%s with placeholder key should return error", provider)
+		}
+		errLower := strings.ToLower(err.Error())
+		if provider == VideoProviderKling && !strings.Contains(errLower, "disabled") {
 			t.Fatalf("%s real call should remain disabled, err=%v", provider, err)
+		}
+		if provider == VideoProviderSeedance && !strings.Contains(errLower, "upstream") && !strings.Contains(errLower, "error") {
+			t.Fatalf("%s real call should return upstream error with fake key, err=%v", provider, err)
 		}
 	}
 }

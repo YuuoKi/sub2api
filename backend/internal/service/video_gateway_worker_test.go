@@ -676,8 +676,8 @@ func TestVideoAdapterContractSafeProviderBehavior(t *testing.T) {
 		if provider == VideoProviderKling && !strings.Contains(errLower, "disabled") {
 			t.Fatalf("%s real call should remain disabled, err=%v", provider, err)
 		}
-		if provider == VideoProviderSeedance && !strings.Contains(errLower, "upstream") && !strings.Contains(errLower, "error") {
-			t.Fatalf("%s real call should return upstream error with fake key, err=%v", provider, err)
+		if provider == VideoProviderSeedance && !strings.Contains(errLower, "smoke") && !strings.Contains(errLower, "authorization") {
+			t.Fatalf("%s real call should remain behind the single-smoke gate, err=%v", provider, err)
 		}
 	}
 }

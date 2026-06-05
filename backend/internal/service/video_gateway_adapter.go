@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -135,6 +136,13 @@ func (a *seedanceVideoAdapter) CreateTask(_ context.Context, account *VideoProvi
 			"reason":   "api key is not configured; real call skipped",
 		})
 	}
+	if reasons := seedanceSmokeGateBlockedReasons(account, task); len(reasons) > 0 {
+		return nil, ErrVideoProviderDisabled.WithMetadata(map[string]string{
+			"provider":           "seedance",
+			"reason":             strings.Join(reasons, "; "),
+			"real_call_executed": "false",
+		})
+	}
 
 	baseURL := account.BaseURL
 	if baseURL == "" {
@@ -186,7 +194,7 @@ func (a *seedanceVideoAdapter) CreateTask(_ context.Context, account *VideoProvi
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, infraerrorsUnavailable("SEEDANCE_CREATE_UPSTREAM_ERROR",
-			fmt.Sprintf("Seedance create task returned %d: %s", resp.StatusCode, truncate(string(respBody), 500)))
+			fmt.Sprintf("Seedance create task returned %d (%s): %s", resp.StatusCode, seedanceHTTPErrorType(resp.StatusCode, string(respBody)), truncate(string(respBody), 500)))
 	}
 
 	var parsed struct {
@@ -208,10 +216,13 @@ func (a *seedanceVideoAdapter) CreateTask(_ context.Context, account *VideoProvi
 		UpstreamTaskID: parsed.ID,
 		Status:         a.NormalizeStatus(parsed.Status),
 		Payload: map[string]any{
-			"provider":    "seedance",
-			"upstream_id": parsed.ID,
-			"model":       model,
-			"created_at":  time.Now().UTC().Format(time.RFC3339),
+			"provider":          "seedance",
+			"upstream_id":       parsed.ID,
+			"model":             model,
+			"normalized_status": a.NormalizeStatus(parsed.Status),
+			"qcanvas_status":    qcanvasVideoContractStatus(a.NormalizeStatus(parsed.Status), ""),
+			"redacted_event":    true,
+			"created_at":        time.Now().UTC().Format(time.RFC3339),
 		},
 	}, nil
 }
@@ -221,6 +232,13 @@ func (a *seedanceVideoAdapter) PollTask(_ context.Context, account *VideoProvide
 		return nil, ErrVideoProviderDisabled.WithMetadata(map[string]string{
 			"provider": "seedance",
 			"reason":   "api key is not configured; poll skipped",
+		})
+	}
+	if reasons := seedanceSmokeGateBlockedReasons(account, task); len(reasons) > 0 {
+		return nil, ErrVideoProviderDisabled.WithMetadata(map[string]string{
+			"provider":           "seedance",
+			"reason":             strings.Join(reasons, "; "),
+			"real_call_executed": "false",
 		})
 	}
 
@@ -250,7 +268,7 @@ func (a *seedanceVideoAdapter) PollTask(_ context.Context, account *VideoProvide
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, infraerrorsUnavailable("SEEDANCE_POLL_UPSTREAM_ERROR",
-			fmt.Sprintf("Seedance poll task returned %d: %s", resp.StatusCode, truncate(string(respBody), 500)))
+			fmt.Sprintf("Seedance poll task returned %d (%s): %s", resp.StatusCode, seedanceHTTPErrorType(resp.StatusCode, string(respBody)), truncate(string(respBody), 500)))
 	}
 
 	var parsed struct {
@@ -272,8 +290,11 @@ func (a *seedanceVideoAdapter) PollTask(_ context.Context, account *VideoProvide
 		Status:         a.NormalizeStatus(parsed.Status),
 		ResultURL:      parsed.Content.VideoURL,
 		Payload: map[string]any{
-			"provider": "seedance",
-			"polled_at": time.Now().UTC().Format(time.RFC3339),
+			"provider":          "seedance",
+			"normalized_status": a.NormalizeStatus(parsed.Status),
+			"qcanvas_status":    qcanvasVideoContractStatus(a.NormalizeStatus(parsed.Status), parsed.Error.Message),
+			"redacted_event":    true,
+			"polled_at":         time.Now().UTC().Format(time.RFC3339),
 		},
 	}
 
@@ -301,6 +322,8 @@ func (a *seedanceVideoAdapter) NormalizeStatus(upstream string) string {
 		return VideoStatusSucceeded
 	case "failed", "error":
 		return VideoStatusFailed
+	case "timeout", "timed_out", "expired":
+		return VideoStatusFailed
 	case "cancelled", "canceled", "deleted":
 		return VideoStatusCancelled
 	default:
@@ -314,14 +337,101 @@ func (a *seedanceVideoAdapter) BuildCreatePayload(account *VideoProviderAccount,
 		content = append(content, map[string]any{"type": "image_url", "image_url": task.ReferenceImageURL})
 	}
 	return map[string]any{
-		"base_url":        account.BaseURL,
-		"model":           task.Model,
-		"content":         content,
-		"negative_prompt": task.NegativePrompt,
-		"aspect_ratio":    task.AspectRatio,
-		"duration":        task.Duration,
-		"resolution":      task.Resolution,
-		"source_docs":     "https://www.volcengine.com/docs/82379/1520757?lang=zh",
+		"base_url":                    account.BaseURL,
+		"model":                       task.Model,
+		"content":                     content,
+		"negative_prompt":             task.NegativePrompt,
+		"aspect_ratio":                task.AspectRatio,
+		"duration":                    task.Duration,
+		"resolution":                  task.Resolution,
+		"smoke_gate_required":         true,
+		"asset_persistable":           false,
+		"asset_reuse_allowed":         false,
+		"qcanvas_contract_statuses":   []string{"queued", "running", "succeeded", "failed", "canceled"},
+		"qcanvas_contract_errors":     []string{"auth", "quota", "rate_limit", "provider_down", "invalid_prompt", "unsafe_content", "timeout", "unknown"},
+		"redacted_event_log_required": true,
+		"source_docs":                 "https://www.volcengine.com/docs/82379/1520757?lang=zh",
+	}
+}
+
+func seedanceSmokeGateBlockedReasons(account *VideoProviderAccount, task *VideoTask) []string {
+	reasons := []string{}
+	if strings.TrimSpace(os.Getenv("SUB2API_VIDEO_REAL_SMOKE_ENABLED")) != "1" {
+		reasons = append(reasons, "SUB2API_VIDEO_REAL_SMOKE_ENABLED is not 1")
+	}
+	if !metadataBool(account.Metadata, "single_smoke_authorized") && !metadataBool(account.Metadata, "real_smoke_authorized") {
+		reasons = append(reasons, "provider metadata does not record single smoke authorization")
+	}
+	if strings.TrimSpace(os.Getenv("SUB2API_VIDEO_REDACTED_EVENT_LOG")) == "" {
+		reasons = append(reasons, "redacted event log path is missing")
+	}
+	if strings.TrimSpace(task.Model) == "" || !strings.Contains(strings.ToLower(task.Model), "seedance") {
+		reasons = append(reasons, "seedance model is not explicit")
+	}
+	if task.Duration <= 0 || task.Duration > 5 {
+		reasons = append(reasons, "single smoke duration must be between 1 and 5 seconds")
+	}
+	return reasons
+}
+
+func metadataBool(metadata map[string]any, key string) bool {
+	if metadata == nil {
+		return false
+	}
+	value, ok := metadata[key]
+	if !ok {
+		return false
+	}
+	switch typed := value.(type) {
+	case bool:
+		return typed
+	case string:
+		normalized := strings.ToLower(strings.TrimSpace(typed))
+		return normalized == "1" || normalized == "true" || normalized == "yes"
+	default:
+		return false
+	}
+}
+
+func seedanceHTTPErrorType(statusCode int, body string) string {
+	lower := strings.ToLower(body)
+	switch {
+	case statusCode == http.StatusUnauthorized || statusCode == http.StatusForbidden:
+		return "auth"
+	case statusCode == http.StatusPaymentRequired || strings.Contains(lower, "quota") || strings.Contains(lower, "insufficient"):
+		return "quota"
+	case statusCode == http.StatusTooManyRequests:
+		return "rate_limit"
+	case statusCode == http.StatusRequestTimeout || strings.Contains(lower, "timeout") || strings.Contains(lower, "timed out"):
+		return "timeout"
+	case statusCode >= 500:
+		return "provider_down"
+	case strings.Contains(lower, "prompt"):
+		return "invalid_prompt"
+	case strings.Contains(lower, "unsafe") || strings.Contains(lower, "safety"):
+		return "unsafe_content"
+	default:
+		return "unknown"
+	}
+}
+
+func qcanvasVideoContractStatus(status string, errorMessage string) string {
+	switch normalizeVideoStatus(status) {
+	case VideoStatusQueued, VideoStatusSubmitted:
+		return "queued"
+	case VideoStatusRunning:
+		return "running"
+	case VideoStatusSucceeded:
+		return "succeeded"
+	case VideoStatusCancelled:
+		return "canceled"
+	case VideoStatusFailed:
+		return "failed"
+	default:
+		if strings.Contains(strings.ToLower(errorMessage), "timeout") {
+			return "failed"
+		}
+		return "running"
 	}
 }
 

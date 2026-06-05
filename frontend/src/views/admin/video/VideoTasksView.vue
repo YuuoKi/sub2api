@@ -3,7 +3,7 @@
     <div class="space-y-6">
       <div class="flex flex-col gap-3 border-b border-gray-200 pb-4 dark:border-dark-700 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? '调用任务' : '任务列表' }}</h1>
+          <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? '任务记录' : '任务列表' }}</h1>
           <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
             {{ isVideoGatewayDemoMode ? '查看谁发起、当前状态、失败原因。' : '按状态和通道查看最近任务，快速定位结果、失败原因并复制参数重新创建。' }}
           </p>
@@ -11,7 +11,7 @@
         <div class="flex flex-wrap gap-2">
           <RouterLink class="btn btn-primary" to="/admin/video/create">
             <Icon name="plus" size="sm" />
-            {{ isVideoGatewayDemoMode ? '发起调用' : '创建任务' }}
+            {{ isVideoGatewayDemoMode ? '试跑一条任务' : '创建任务' }}
           </RouterLink>
           <button class="btn btn-outline" type="button" :disabled="loading" @click="loadTasks">
             <Icon name="refresh" size="sm" :class="{ 'animate-spin': loading }" />
@@ -35,8 +35,8 @@
             </button>
           </div>
           <select v-model="filters.provider" class="input" @change="resetAndLoad">
-            <option value="">{{ isVideoGatewayDemoMode ? '全部供应商通道' : '全部通道' }}</option>
-            <option v-for="provider in providerOptions" :key="provider.value" :value="provider.value">{{ provider.label }}</option>
+            <option value="">{{ isVideoGatewayDemoMode ? '全部任务来源' : '全部通道' }}</option>
+            <option v-for="provider in visibleProviderOptions" :key="provider.value" :value="provider.value">{{ provider.label }}</option>
           </select>
           <div class="flex justify-start lg:justify-end">
             <button class="btn btn-outline" type="button" @click="clearFilters">
@@ -52,10 +52,10 @@
           <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-dark-700">
             <thead class="bg-gray-50 text-left text-xs uppercase text-gray-500 dark:bg-dark-700/40 dark:text-gray-400">
               <tr>
-                <th class="px-5 py-3 font-medium">{{ isVideoGatewayDemoMode ? '调用任务' : '任务' }}</th>
+                <th class="px-5 py-3 font-medium">{{ isVideoGatewayDemoMode ? '试跑任务' : '任务' }}</th>
                 <th v-if="authStore.isAdmin" class="px-5 py-3 font-medium">发起人</th>
-                <th class="px-5 py-3 font-medium">{{ isVideoGatewayDemoMode ? '供应商通道' : '通道' }}</th>
-                <th class="px-5 py-3 font-medium">系统调度账号</th>
+                <th class="px-5 py-3 font-medium">{{ isVideoGatewayDemoMode ? '任务来源' : '通道' }}</th>
+                <th class="px-5 py-3 font-medium">{{ isVideoGatewayDemoMode ? '处理账号' : '系统调度账号' }}</th>
                 <th class="px-5 py-3 font-medium">当前状态</th>
                 <th class="px-5 py-3 font-medium">结果 / 失败原因</th>
                 <th class="px-5 py-3 font-medium">创建时间</th>
@@ -94,7 +94,7 @@
                     打开结果
                   </a>
                   <div v-else-if="task.error_message" class="max-w-sm rounded-md border border-red-200 bg-red-50 p-2 text-xs leading-5 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
-                    <div class="font-medium">{{ isVideoGatewayDemoMode ? '调用失败原因' : '失败原因' }}</div>
+                    <div class="font-medium">{{ isVideoGatewayDemoMode ? '任务失败原因' : '失败原因' }}</div>
                     <div>{{ errorMessageLabel(task.error_message) }}</div>
                   </div>
                   <span v-else class="text-gray-400">等待回收</span>
@@ -104,10 +104,10 @@
                   <div class="flex flex-wrap gap-2">
                     <a v-if="task.result_url" class="btn btn-sm btn-outline" :href="task.result_url" target="_blank" rel="noreferrer">打开结果</a>
                     <button class="btn btn-sm btn-outline" type="button" @click="copyToCreate(task)">
-                      {{ isVideoGatewayDemoMode ? '复制参数重新发起' : '复制参数' }}
+                      {{ isVideoGatewayDemoMode ? '复制参数重新提交' : '复制参数' }}
                     </button>
                     <RouterLink class="btn btn-sm btn-outline" :to="`/admin/video/tasks/${task.id}`">
-                      {{ isVideoGatewayDemoMode ? '查看调用详情' : '查看详情' }}
+                      {{ isVideoGatewayDemoMode ? '查看任务详情' : '查看详情' }}
                     </RouterLink>
                   </div>
                 </td>
@@ -115,8 +115,8 @@
               <tr v-if="!loading && !tasks.length">
                 <td :colspan="authStore.isAdmin ? 8 : 7" class="px-5 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
                   <div class="space-y-3">
-                    <div>{{ isVideoGatewayDemoMode ? '当前还没有调用任务。你可以先通过演示通道发起一次调用，验证网关流转。' : '没有任务。可以先创建一个演示任务验证流转。' }}</div>
-                    <RouterLink class="btn btn-sm btn-outline" to="/admin/video/create">{{ isVideoGatewayDemoMode ? '发起一次演示调用' : '创建一个演示任务' }}</RouterLink>
+                    <div>{{ isVideoGatewayDemoMode ? '当前还没有任务记录。你可以先试跑一条任务，检查系统是否能正常接收、处理和记录。' : '没有任务。可以先创建一个演示任务验证流转。' }}</div>
+                    <RouterLink class="btn btn-sm btn-outline" to="/admin/video/create">{{ isVideoGatewayDemoMode ? '试跑一条任务' : '创建一个演示任务' }}</RouterLink>
                   </div>
                 </td>
               </tr>
@@ -137,7 +137,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -169,10 +169,15 @@ const loading = ref(false)
 const tasks = ref<VideoTask[]>([])
 const filters = reactive({ status: '', provider: '' })
 const pagination = reactive({ page: 1, page_size: 20, total: 0, pages: 1 })
+const visibleProviderOptions = computed(() => (
+  isVideoGatewayDemoMode
+    ? providerOptions.filter((provider) => provider.value === 'mock')
+    : providerOptions
+))
 const quickStatusFilters: Array<{ label: string; status: '' | VideoTaskStatus }> = [
   { label: '全部', status: '' },
   { label: '已完成', status: 'succeeded' },
-  { label: '生成中', status: 'running' },
+  { label: isVideoGatewayDemoMode ? '处理中' : '生成中', status: 'running' },
   { label: '失败', status: 'failed' },
 ]
 
@@ -192,7 +197,7 @@ async function loadTasks() {
     pagination.page_size = res.page_size
     pagination.pages = res.pages
   } catch (err) {
-    appStore.showError(extractApiErrorMessage(err, isVideoGatewayDemoMode ? '加载 API 调用任务失败' : '加载任务列表失败'))
+    appStore.showError(extractApiErrorMessage(err, isVideoGatewayDemoMode ? '加载任务记录失败' : '加载任务列表失败'))
   } finally {
     loading.value = false
   }
@@ -221,7 +226,7 @@ function changePage(page: number) {
 
 function copyToCreate(task: VideoTask) {
   saveTaskDraft(task)
-  appStore.showInfo(isVideoGatewayDemoMode ? '已复制调用参数，可在发起调用页调整后重新提交。' : '已复制任务参数，可在创建页调整后重新提交。')
+  appStore.showInfo(isVideoGatewayDemoMode ? '已复制任务参数，可在试跑任务页调整后重新提交。' : '已复制任务参数，可在创建页调整后重新提交。')
   router.push('/admin/video/create')
 }
 

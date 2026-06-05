@@ -27,7 +27,7 @@ func TestInjectSiteTitle(t *testing.T) {
 
 		result := injectSiteTitle(html, settingsJSON)
 
-		assert.Contains(t, string(result), "<title>MyCustomSite - 企业 AI 视频 API 调度中台</title>")
+		assert.Contains(t, string(result), "<title>MyCustomSite - 无界互娱 API 控制台</title>")
 		assert.NotContains(t, string(result), "Sub2API")
 	})
 
@@ -37,7 +37,7 @@ func TestInjectSiteTitle(t *testing.T) {
 
 		result := injectSiteTitle(html, settingsJSON)
 
-		assert.Contains(t, string(result), "<title>企业 AI 视频 API 调度中台</title>")
+		assert.Contains(t, string(result), "<title>无界互娱 API 控制台</title>")
 		assert.NotContains(t, string(result), "Sub2API")
 	})
 
@@ -47,7 +47,7 @@ func TestInjectSiteTitle(t *testing.T) {
 
 		result := injectSiteTitle(html, settingsJSON)
 
-		assert.Contains(t, string(result), "<title>企业 AI 视频 API 调度中台</title>")
+		assert.Contains(t, string(result), "<title>无界互娱 API 控制台</title>")
 		assert.NotContains(t, string(result), "Sub2API")
 	})
 
@@ -57,7 +57,7 @@ func TestInjectSiteTitle(t *testing.T) {
 
 		result := injectSiteTitle(html, settingsJSON)
 
-		assert.Contains(t, string(result), "<title>企业 AI 视频 API 调度中台</title>")
+		assert.Contains(t, string(result), "<title>无界互娱 API 控制台</title>")
 		assert.NotContains(t, string(result), "Sub2API")
 	})
 
@@ -100,7 +100,7 @@ func TestInjectSiteTitle(t *testing.T) {
 		assert.Contains(t, string(result), `<meta charset="UTF-8">`)
 		assert.Contains(t, string(result), `<script src="app.js"></script>`)
 		assert.Contains(t, string(result), `<div id="app"></div>`)
-		assert.Contains(t, string(result), "<title>TestSite - 企业 AI 视频 API 调度中台</title>")
+		assert.Contains(t, string(result), "<title>TestSite - 无界互娱 API 控制台</title>")
 	})
 }
 

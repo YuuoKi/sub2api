@@ -82,6 +82,31 @@ const backendModeCacheTTL = 60 * time.Second
 const backendModeErrorTTL = 5 * time.Second
 const backendModeDBTimeout = 5 * time.Second
 
+const (
+	day0PublicSiteName     = "AI 生产控制台"
+	day0PublicSiteSubtitle = "中剧 / 短剧生产网关"
+)
+
+func normalizeDay0PublicSiteName(value string) string {
+	trimmed := strings.TrimSpace(value)
+	switch trimmed {
+	case "", "Sub2API", "企业 AI 视频 API 调度中台":
+		return day0PublicSiteName
+	default:
+		return trimmed
+	}
+}
+
+func normalizeDay0PublicSiteSubtitle(value string) string {
+	trimmed := strings.TrimSpace(value)
+	switch trimmed {
+	case "", "Subscription to API Conversion Platform", "AI 中剧 / AI 短剧生产网关":
+		return day0PublicSiteSubtitle
+	default:
+		return trimmed
+	}
+}
+
 // cachedGatewayForwardingSettings 缓存网关转发行为设置（进程内缓存，60s TTL）
 type cachedGatewayForwardingSettings struct {
 	fingerprintUnification       bool
@@ -708,9 +733,9 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		LoginAgreementDocuments:          loginAgreementDocuments,
 		TurnstileEnabled:                 settings[SettingKeyTurnstileEnabled] == "true",
 		TurnstileSiteKey:                 settings[SettingKeyTurnstileSiteKey],
-		SiteName:                         s.getStringOrDefault(settings, SettingKeySiteName, "Sub2API"),
+		SiteName:                         normalizeDay0PublicSiteName(s.getStringOrDefault(settings, SettingKeySiteName, day0PublicSiteName)),
 		SiteLogo:                         settings[SettingKeySiteLogo],
-		SiteSubtitle:                     s.getStringOrDefault(settings, SettingKeySiteSubtitle, "Subscription to API Conversion Platform"),
+		SiteSubtitle:                     normalizeDay0PublicSiteSubtitle(s.getStringOrDefault(settings, SettingKeySiteSubtitle, day0PublicSiteSubtitle)),
 		APIBaseURL:                       settings[SettingKeyAPIBaseURL],
 		ContactInfo:                      settings[SettingKeyContactInfo],
 		DocURL:                           settings[SettingKeyDocURL],
@@ -2143,9 +2168,9 @@ func (s *SettingService) IsTotpEncryptionKeyConfigured() bool {
 func (s *SettingService) GetSiteName(ctx context.Context) string {
 	value, err := s.settingRepo.GetValue(ctx, SettingKeySiteName)
 	if err != nil || value == "" {
-		return "Sub2API"
+		return day0PublicSiteName
 	}
-	return value
+	return normalizeDay0PublicSiteName(value)
 }
 
 // GetDefaultConcurrency 获取默认并发量
@@ -2324,7 +2349,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyLoginAgreementMode:                       defaultLoginAgreementMode,
 		SettingKeyLoginAgreementUpdatedAt:                  defaultLoginAgreementDate,
 		SettingKeyLoginAgreementDocuments:                  loginAgreementDocumentsJSON,
-		SettingKeySiteName:                                 "Sub2API",
+		SettingKeySiteName:                                 day0PublicSiteName,
 		SettingKeySiteLogo:                                 "",
 		SettingKeyPurchaseSubscriptionEnabled:              "false",
 		SettingKeyPurchaseSubscriptionURL:                  "",
@@ -2499,9 +2524,9 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		TurnstileEnabled:                 settings[SettingKeyTurnstileEnabled] == "true",
 		TurnstileSiteKey:                 settings[SettingKeyTurnstileSiteKey],
 		TurnstileSecretKeyConfigured:     settings[SettingKeyTurnstileSecretKey] != "",
-		SiteName:                         s.getStringOrDefault(settings, SettingKeySiteName, "Sub2API"),
+		SiteName:                         normalizeDay0PublicSiteName(s.getStringOrDefault(settings, SettingKeySiteName, day0PublicSiteName)),
 		SiteLogo:                         settings[SettingKeySiteLogo],
-		SiteSubtitle:                     s.getStringOrDefault(settings, SettingKeySiteSubtitle, "Subscription to API Conversion Platform"),
+		SiteSubtitle:                     normalizeDay0PublicSiteSubtitle(s.getStringOrDefault(settings, SettingKeySiteSubtitle, day0PublicSiteSubtitle)),
 		APIBaseURL:                       settings[SettingKeyAPIBaseURL],
 		ContactInfo:                      settings[SettingKeyContactInfo],
 		DocURL:                           settings[SettingKeyDocURL],

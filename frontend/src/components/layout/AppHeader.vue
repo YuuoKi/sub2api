@@ -266,6 +266,9 @@ const displayName = computed(() => {
 })
 
 const pageTitle = computed(() => {
+  if (isVideoGatewayDemoMode && route.path === '/keys') {
+    return '外部工具接入'
+  }
   // For custom pages, use the menu item's label instead of generic "自定义页面"
   if (route.name === 'CustomPage') {
     const id = route.params.id as string
@@ -282,6 +285,9 @@ const pageTitle = computed(() => {
 })
 
 const pageDescription = computed(() => {
+  if (isVideoGatewayDemoMode && route.path === '/keys') {
+    return '接入密钥给自动化工具或脚本使用'
+  }
   const descKey = route.meta.descriptionKey as string
   if (descKey) {
     return t(descKey)

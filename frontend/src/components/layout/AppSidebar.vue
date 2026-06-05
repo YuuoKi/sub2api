@@ -14,9 +14,10 @@
         :class="{ 'bg-slate-900 dark:bg-emerald-600': isVideoGatewayDemoMode }"
       >
         <svg v-if="isVideoGatewayDemoMode" class="h-6 w-6 text-white" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M4 8.5C4 7.12 5.12 6 6.5 6h7.75c1.38 0 2.5 1.12 2.5 2.5v7c0 1.38-1.12 2.5-2.5 2.5H6.5A2.5 2.5 0 014 15.5v-7z" stroke="currentColor" stroke-width="1.7" />
-          <path d="M16.75 10.25l3.25-1.9v7.3l-3.25-1.9v-3.5z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
-          <path d="M8.25 9.25l4.5 2.75-4.5 2.75v-5.5z" fill="currentColor" />
+          <path d="M3.5 13.5c2-4 4.2-6 6.5-6 4.4 0 4.8 8 7.5 8 1.3 0 2.3-1 3-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+          <path d="M3.5 10.5c1-2 2.2-3 3.6-3 3 0 3.4 8 7 8 2.3 0 4.5-2 6.4-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+          <circle cx="6.7" cy="13.3" r="1.25" fill="currentColor" />
+          <circle cx="17.3" cy="10.7" r="1.25" fill="currentColor" />
         </svg>
         <img v-else-if="settingsLoaded" :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
       </div>
@@ -672,9 +673,10 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
   const items: NavItem[] = []
   if (isVideoGatewayDemoMode) {
     return [
-      { path: '/admin/video/create', label: '发起调用', icon: TicketIcon },
-      { path: '/admin/video/tasks', label: '我的调用', icon: OrderListIcon },
-      { path: '/profile', label: t('nav.profile'), icon: UserIcon },
+      { path: '/admin/video/create', label: '试跑任务', icon: TicketIcon },
+      { path: '/admin/video/tasks', label: '任务记录', icon: OrderListIcon },
+      { path: '/keys', label: '外部工具接入', icon: KeyIcon },
+      { path: '/admin/video/system-check', label: '系统检查', icon: ShieldIcon },
     ]
   }
   if (withDashboard) {
@@ -733,10 +735,11 @@ const customMenuItemsForAdmin = computed(() => {
 const adminNavItems = computed((): NavItem[] => {
   const videoItems: NavItem[] = isVideoGatewayDemoMode
     ? [
-        { path: '/admin/video/dashboard', label: 'API 网关驾驶舱', icon: ChartIcon },
-        { path: '/admin/video/providers', label: 'API 通道池', icon: ServerIcon },
-        { path: '/admin/video/create', label: '发起调用', icon: TicketIcon },
-        { path: '/admin/video/tasks', label: '调用任务', icon: OrderListIcon },
+        { path: '/admin/video/dashboard', label: '总览', icon: ChartIcon },
+        { path: '/admin/video/create', label: '试跑任务', icon: TicketIcon },
+        { path: '/admin/video/tasks', label: '任务记录', icon: OrderListIcon },
+        { path: '/keys', label: '外部工具接入', icon: KeyIcon },
+        { path: '/admin/video/system-check', label: '系统检查', icon: ShieldIcon },
       ]
     : [
         { path: '/admin/video/dashboard', label: '视频总览', icon: ChartIcon },

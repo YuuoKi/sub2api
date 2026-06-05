@@ -15,6 +15,8 @@ import {
 import { getPublicSettings as fetchPublicSettingsAPI } from '@/api/auth'
 import { isVideoGatewayDemoMode, VIDEO_GATEWAY_PRODUCT_NAME } from '@/utils/productMode'
 
+const LEGACY_PRODUCT_NAME = 'Sub' + '2API'
+
 export const useAppStore = defineStore('app', () => {
   // ==================== State ====================
 
@@ -26,7 +28,7 @@ export const useAppStore = defineStore('app', () => {
   // Public settings cache state
   const publicSettingsLoaded = ref<boolean>(false)
   const publicSettingsLoading = ref<boolean>(false)
-  const siteName = ref<string>(isVideoGatewayDemoMode ? VIDEO_GATEWAY_PRODUCT_NAME : 'Sub2API')
+  const siteName = ref<string>(VIDEO_GATEWAY_PRODUCT_NAME)
   const siteLogo = ref<string>('')
   const siteVersion = ref<string>('')
   const contactInfo = ref<string>('')
@@ -293,7 +295,9 @@ export const useAppStore = defineStore('app', () => {
       window.__APP_CONFIG__ = { ...config }
     }
     cachedPublicSettings.value = config
-    siteName.value = isVideoGatewayDemoMode ? VIDEO_GATEWAY_PRODUCT_NAME : config.site_name || 'Sub2API'
+    siteName.value = isVideoGatewayDemoMode || !config.site_name || config.site_name === LEGACY_PRODUCT_NAME
+      ? VIDEO_GATEWAY_PRODUCT_NAME
+      : config.site_name
     siteLogo.value = isVideoGatewayDemoMode ? '' : config.site_logo || ''
     siteVersion.value = isVideoGatewayDemoMode ? '' : config.version || ''
     contactInfo.value = config.contact_info || ''

@@ -613,11 +613,11 @@ func videoProviderRouteAvailability(account *VideoProviderAccount) (bool, string
 		return false, "账号已停用"
 	}
 	if account.APIKeyDecryptFailed {
-		return false, "Key 解密失败"
+		return false, "凭证解密失败"
 	}
 	switch account.KeyStatus {
 	case videoKeyStatusMissing:
-		return false, "Key 未配置"
+		return false, "凭证未配置"
 	case videoKeyStatusDisabled:
 		return false, "账号已停用"
 	case videoKeyStatusAuthFailed:
@@ -631,7 +631,7 @@ func videoProviderRouteAvailability(account *VideoProviderAccount) (bool, string
 	case videoHealthStatusHealthy:
 		return true, ""
 	case videoHealthStatusNeedsKey:
-		return false, "Key 未配置"
+		return false, "凭证未配置"
 	case videoHealthStatusDisabled:
 		return false, "账号已停用"
 	case videoHealthStatusAuthFailed:
@@ -656,7 +656,7 @@ func videoProviderRouteAvailability(account *VideoProviderAccount) (bool, string
 func videoProviderDiagnosticType(keyStatus, healthStatus string) string {
 	switch keyStatus {
 	case videoKeyStatusMissing:
-		return "Key 未配置"
+		return "凭证未配置"
 	case videoKeyStatusAuthFailed:
 		return "鉴权失败"
 	case videoKeyStatusQuotaExhausted:
@@ -666,7 +666,7 @@ func videoProviderDiagnosticType(keyStatus, healthStatus string) string {
 	}
 	switch healthStatus {
 	case videoHealthStatusNeedsKey:
-		return "Key 未配置"
+		return "凭证未配置"
 	case videoHealthStatusAuthFailed:
 		return "鉴权失败"
 	case videoHealthStatusQuotaExhausted:
@@ -687,10 +687,10 @@ func videoProviderDiagnosticType(keyStatus, healthStatus string) string {
 
 func videoProviderSuggestedAction(diagnosticType, keyStatus, healthStatus string) string {
 	switch firstNonEmptyVideo(diagnosticType, videoProviderDiagnosticType(keyStatus, healthStatus)) {
-	case "Key 未配置":
-		return "请配置 API Key 后启用真实调用"
+	case "凭证未配置":
+		return "请配置真实凭证后启用真实调用"
 	case "鉴权失败":
-		return "请检查 Key 是否过期或填错"
+		return "请检查凭证是否过期或填错"
 	case "额度不足":
 		return "请确认上游账号余额或额度"
 	case "触发限流":
@@ -883,7 +883,7 @@ func validateVideoStatus(status string) error {
 func defaultVideoProviderDisplayName(provider string) string {
 	switch provider {
 	case VideoProviderMock:
-		return "Mock Provider"
+		return "演示通道"
 	case VideoProviderSeedance:
 		return "Seedance 2.0"
 	case VideoProviderKling:

@@ -38,7 +38,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/home',
     name: 'Home',
-    redirect: '/internal-pilot'
+    redirect: () => isVideoGatewayDemoMode ? '/login' : '/internal-pilot'
   },
   {
     path: '/internal-pilot',
@@ -46,7 +46,7 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/InternalPilotView.vue'),
     meta: {
       requiresAuth: false,
-      title: '企业 AI 视频 API 调度中台'
+      title: '内部使用'
     }
   },
   {
@@ -170,7 +170,7 @@ const routes: RouteRecordRaw[] = [
   // ==================== User Routes ====================
   {
     path: '/',
-    redirect: '/internal-pilot'
+    redirect: () => isVideoGatewayDemoMode ? '/login' : '/internal-pilot'
   },
   {
     path: '/dashboard',
@@ -191,7 +191,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: false,
-      title: 'API Keys',
+      title: '外部工具接入',
       titleKey: 'keys.title',
       descriptionKey: 'keys.description'
     }
@@ -456,7 +456,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: true,
-      title: isVideoGatewayDemoMode ? 'API 网关驾驶舱' : 'AI 视频网关'
+      title: isVideoGatewayDemoMode ? '总览' : 'AI 视频网关'
     }
   },
   {
@@ -466,7 +466,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: true,
-      title: isVideoGatewayDemoMode ? '通道池' : '模型通道'
+      title: isVideoGatewayDemoMode ? '生成通道' : '模型通道'
     }
   },
   {
@@ -476,7 +476,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: false,
-      title: isVideoGatewayDemoMode ? '发起调用' : '创建视频任务'
+      title: isVideoGatewayDemoMode ? '试跑任务' : '创建视频任务'
     }
   },
   {
@@ -486,7 +486,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: false,
-      title: isVideoGatewayDemoMode ? '调用任务' : '视频任务列表'
+      title: isVideoGatewayDemoMode ? '任务记录' : '视频任务列表'
     }
   },
   {
@@ -496,7 +496,17 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: false,
-      title: isVideoGatewayDemoMode ? '调用详情' : '视频任务详情'
+      title: isVideoGatewayDemoMode ? '任务详情' : '视频任务详情'
+    }
+  },
+  {
+    path: '/admin/video/system-check',
+    name: 'AdminVideoSystemCheck',
+    component: () => import('@/views/admin/video/VideoSystemCheckView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: isVideoGatewayDemoMode ? '系统检查' : '视频系统检查'
     }
   },
   {

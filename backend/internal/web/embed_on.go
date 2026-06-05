@@ -22,7 +22,7 @@ import (
 const (
 	// NonceHTMLPlaceholder is the placeholder for nonce in HTML script tags
 	NonceHTMLPlaceholder = "__CSP_NONCE_VALUE__"
-	publicAuthProductName = "企业 AI 视频 API 调度中台"
+	publicAuthProductName = "无界互娱 API 控制台"
 )
 
 //go:embed all:dist

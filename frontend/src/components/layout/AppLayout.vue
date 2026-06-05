@@ -30,6 +30,7 @@ import { useAppStore } from '@/stores'
 import { useAuthStore } from '@/stores/auth'
 import { useOnboardingTour } from '@/composables/useOnboardingTour'
 import { useOnboardingStore } from '@/stores/onboarding'
+import { isVideoGatewayDemoMode, isVideoGatewayDemoRoute } from '@/utils/productMode'
 import AppSidebar from './AppSidebar.vue'
 import AppHeader from './AppHeader.vue'
 
@@ -39,18 +40,21 @@ const route = useRoute()
 const sidebarCollapsed = computed(() => appStore.sidebarCollapsed)
 const isAdmin = computed(() => authStore.user?.role === 'admin')
 const isVideoGatewayRoute = computed(() => route.path.startsWith('/admin/video'))
+const shouldSuppressOnboarding = computed(() => (
+  isVideoGatewayDemoMode ? isVideoGatewayDemoRoute(route.path) : isVideoGatewayRoute.value
+))
 
 const { replayTour } = useOnboardingTour({
   storageKey: isAdmin.value ? 'admin_guide' : 'user_guide',
-  autoStart: !isVideoGatewayRoute.value
+  autoStart: !shouldSuppressOnboarding.value
 })
 
 const onboardingStore = useOnboardingStore()
 
 watch(
-  isVideoGatewayRoute,
-  (isVideoRoute) => {
-    if (!isVideoRoute) return
+  shouldSuppressOnboarding,
+  (suppressed) => {
+    if (!suppressed) return
     const driver = onboardingStore.getDriverInstance()
     if (driver?.isActive?.()) {
       driver.destroy()
@@ -61,7 +65,7 @@ watch(
 )
 
 onMounted(() => {
-  onboardingStore.setReplayCallback(replayTour)
+  onboardingStore.setReplayCallback(isVideoGatewayDemoMode ? null : replayTour)
 })
 
 defineExpose({ replayTour })

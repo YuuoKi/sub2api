@@ -35,7 +35,7 @@ async function bootstrap() {
   // Set document title immediately after config is loaded
   if (isVideoGatewayDemoMode) {
     document.title = VIDEO_GATEWAY_PRODUCT_NAME
-  } else if (appStore.siteName && appStore.siteName !== 'Sub2API') {
+  } else if (appStore.siteName && appStore.siteName !== PUBLIC_AUTH_PRODUCT_NAME) {
     document.title = `${appStore.siteName} - ${PUBLIC_AUTH_PRODUCT_NAME}`
   } else {
     document.title = PUBLIC_AUTH_PRODUCT_NAME

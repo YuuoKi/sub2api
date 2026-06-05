@@ -3,32 +3,32 @@
     <div class="space-y-6">
       <div class="flex flex-col gap-3 border-b border-gray-200 pb-4 dark:border-dark-700 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? '发起调用' : '创建视频任务' }}</h1>
+          <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? '试跑任务' : '创建视频任务' }}</h1>
           <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            {{ isVideoGatewayDemoMode ? '员工或内部工具只调用公司统一 API，提交 AI 中剧/短剧任务，不接触 provider 凭证。' : '提交文生视频、图生视频或参考视频任务，创建成功后自动进入任务详情。' }}
+            {{ isVideoGatewayDemoMode ? '先用一条演示任务检查系统是否能正常接收、处理和记录任务，不会调用真实生成服务。' : '提交文生视频、图生视频或参考视频任务，创建成功后自动进入任务详情。' }}
           </p>
         </div>
         <RouterLink class="btn btn-outline" to="/admin/video/tasks">
           <Icon name="document" size="sm" />
-          {{ isVideoGatewayDemoMode ? '调用任务' : '任务列表' }}
+          {{ isVideoGatewayDemoMode ? '任务记录' : '任务列表' }}
         </RouterLink>
       </div>
 
-      <section v-if="isVideoGatewayDemoMode" class="rounded-lg border border-teal-200 bg-teal-50 p-5 dark:border-teal-500/20 dark:bg-teal-500/10">
+      <section v-if="false && isVideoGatewayDemoMode" class="rounded-lg border border-teal-200 bg-teal-50 p-5 dark:border-teal-500/20 dark:bg-teal-500/10">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p class="text-sm font-medium text-teal-700 dark:text-teal-200">主路径</p>
-            <h2 class="mt-2 text-xl font-semibold text-gray-950 dark:text-white">通过公司统一 API 提交 AI 中剧/短剧任务</h2>
-            <p class="mt-2 text-sm text-teal-800 dark:text-teal-100">内部页面、脚本、n8n 和自动化工具都只是 API client；中央主机统一路由 provider、记录镜头决策和 Skill 学习事件。</p>
+            <h2 class="mt-2 text-xl font-semibold text-gray-950 dark:text-white">通过公司统一入口提交 AI 中剧 / 短剧任务</h2>
+            <p class="mt-2 text-sm text-teal-800 dark:text-teal-100">内部页面、脚本、n8n 和自动化工具都通过调用凭证提交任务；中央主机统一选择生成通道、记录镜头决策和经验事件。</p>
           </div>
           <RouterLink class="btn btn-primary" to="/admin/video/tasks">
             <Icon name="document" size="sm" />
-            查看调用任务
+            查看任务记录
           </RouterLink>
         </div>
       </section>
 
-      <section v-if="isVideoGatewayDemoMode" class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
+      <section v-if="false && isVideoGatewayDemoMode" class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
         <div class="grid gap-3 md:grid-cols-6">
           <div
             v-for="(step, index) in gatewaySubmitSteps"
@@ -47,7 +47,7 @@
           <div>
             <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? '业务提示词模板' : 'Prompt 模板候选' }}</h2>
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              {{ isVideoGatewayDemoMode ? '选择 AI 中剧/短剧生产模板，快速填入统一 API 调用参数。' : '选择业务候选，系统会自动填入提示词、任务类型、画幅、时长和分辨率。' }}
+              {{ isVideoGatewayDemoMode ? '选择 AI 中剧 / 短剧生产模板，快速填入试跑任务参数。' : '选择业务候选，系统会自动填入提示词、任务类型、画幅、时长和分辨率。' }}
             </p>
           </div>
         </div>
@@ -71,7 +71,7 @@
         <section class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
           <form class="space-y-4" @submit.prevent="submitTask">
             <div>
-              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">{{ isVideoGatewayDemoMode ? '调用类型' : '任务类型' }}</label>
+              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">任务类型</label>
               <select v-model="form.task_type" class="input">
                 <option v-for="item in taskTypeOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
               </select>
@@ -82,16 +82,16 @@
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">提示词</label>
                 <div class="flex flex-wrap gap-3">
                   <button class="text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-300" type="button" @click="applyMockSuccess">
-                    {{ isVideoGatewayDemoMode ? '填入成功调用示例' : '填入成功演示' }}
+                    {{ isVideoGatewayDemoMode ? '填入成功任务示例' : '填入成功演示' }}
                   </button>
                   <button class="text-xs font-medium text-red-600 hover:text-red-700 dark:text-red-300" type="button" @click="applyMockFailure">
-                    {{ isVideoGatewayDemoMode ? '填入失败调用示例' : '填入失败演示' }}
+                    {{ isVideoGatewayDemoMode ? '填入失败任务示例' : '填入失败演示' }}
                   </button>
                 </div>
               </div>
               <textarea v-model="form.prompt" class="input min-h-36 resize-y" maxlength="8000" required />
               <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                {{ isVideoGatewayDemoMode ? '失败调用示例会提交预设失败场景，用于查看失败原因和重新发起流程。' : '失败演示会提交一个预设失败场景，用于查看失败原因和重新创建流程。' }}
+                {{ isVideoGatewayDemoMode ? '失败任务示例会提交预设失败场景，用于查看失败原因和重新发起流程。' : '失败演示会提交一个预设失败场景，用于查看失败原因和重新创建流程。' }}
               </p>
             </div>
 
@@ -147,13 +147,13 @@
 
             <button class="btn btn-primary" type="submit" :disabled="submitting || Boolean(validationMessage)">
               <Icon name="play" size="sm" />
-              {{ isVideoGatewayDemoMode ? '通过网关提交调用' : '创建任务' }}
+              {{ isVideoGatewayDemoMode ? '试跑一条任务' : '创建任务' }}
             </button>
-            <p v-if="isVideoGatewayDemoMode" class="text-xs text-gray-500 dark:text-gray-400">系统会自动选择安全演示通道或后续授权 provider，并写入 Prompt / Shot / Engine / Skill 事件。</p>
+            <p v-if="isVideoGatewayDemoMode" class="text-xs text-gray-500 dark:text-gray-400">这次只检查系统接收、处理和记录能力，不会调用真实生成服务。</p>
           </form>
         </section>
 
-        <div class="space-y-6">
+        <div v-if="!isVideoGatewayDemoMode" class="space-y-6">
           <section v-if="isVideoGatewayDemoMode" class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
             <h2 class="text-base font-semibold text-gray-900 dark:text-white">右侧只做说明，不需要员工手动调度</h2>
             <div class="mt-4 space-y-3">
@@ -165,7 +165,7 @@
           </section>
 
           <section class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
-            <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? '供应商通道状态（系统自动参考）' : '通道状态' }}</h2>
+            <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? '生成通道状态（系统自动参考）' : '通道状态' }}</h2>
             <p v-if="isVideoGatewayDemoMode" class="mt-1 text-sm text-gray-500 dark:text-gray-400">这些状态帮助解释系统为什么能自动调度，普通员工不需要手动选择。</p>
             <div class="mt-4 space-y-3">
               <div v-for="provider in providers" :key="provider.id" class="flex items-center justify-between gap-3 rounded-lg border border-gray-200 p-3 dark:border-dark-700">
@@ -184,12 +184,12 @@
                 </div>
               </div>
               <div v-if="!enabledProviders.length" class="rounded-lg border border-dashed border-gray-200 p-4 text-sm text-gray-500 dark:border-dark-700 dark:text-gray-400">
-                {{ isVideoGatewayDemoMode ? '暂无可用供应商通道，请先到通道池启用安全演示通道。' : '暂无可用通道，请先到模型通道页面启用演示通道。' }}
+                {{ isVideoGatewayDemoMode ? '暂无可用生成通道，请先到生成通道页启用演示通道。' : '暂无可用通道，请先到模型通道页面启用演示通道。' }}
               </div>
             </div>
             <RouterLink v-if="authStore.isAdmin" class="btn btn-outline mt-5" to="/admin/video/providers">
               <Icon name="key" size="sm" />
-              {{ isVideoGatewayDemoMode ? '配置供应商通道' : '配置模型通道' }}
+              {{ isVideoGatewayDemoMode ? '配置生成通道' : '配置模型通道' }}
             </RouterLink>
           </section>
         </div>
@@ -232,16 +232,16 @@ const submitting = ref(false)
 const gatewaySubmitSteps = [
   { title: '选择剧种模板' },
   { title: '填写镜头目标' },
-  { title: '统一 API 入队' },
+  { title: '统一入口入队' },
   { title: '系统推荐引擎' },
-  { title: '记录 Skill 事件' },
+  { title: '记录经验事件' },
   { title: '回收结果反馈' },
 ]
 
 const gatewayReasons = [
-  '员工不接触 API 密钥（Key）、Cookie、token 或真实 provider 账号。',
-  '内部页面、脚本、n8n 和自动化工具都通过公司统一 API 调用。',
-  '系统记录剧种、场景、镜头目标、prompt 结构、引擎选择和结果反馈。',
+  '员工不接触底层凭证或真实生成账号。',
+  '内部页面、脚本和自动化工具都通过接入密钥提交任务。',
+  '系统记录剧种、场景、镜头目标、提示词结构、引擎选择和结果反馈。',
   '后续接 Seedance/Kling 授权通道时，员工入口不需要变化。',
 ]
 
@@ -261,7 +261,7 @@ const form = reactive<VideoTaskCreatePayload>({
 
 const enabledProviders = computed(() => providers.value.filter((provider) => provider.route_available))
 const validationMessage = computed(() => {
-  if (!enabledProviders.value.length) return isVideoGatewayDemoMode ? '没有可用供应商通道：请先前往通道池启用安全演示通道。' : '没有可用通道：请先前往模型通道页启用演示通道。'
+  if (!enabledProviders.value.length) return isVideoGatewayDemoMode ? '没有可用生成通道：请先前往生成通道页启用演示通道。' : '没有可用通道：请先前往模型通道页启用演示通道。'
   if (!form.prompt.trim()) return '提示词不能为空：请描述要生成的视频内容。'
   if ((form.duration || 0) < 1 || (form.duration || 0) > 60) return '时长必须在 1 到 60 秒之间。'
   if (form.reference_image_url && !isValidOptionalUrl(form.reference_image_url)) return '参考图 URL 格式不正确：请使用 http 或 https 链接，或留空。'
@@ -277,7 +277,7 @@ async function loadProviders() {
       form.model = modelDisplayName(first.provider, first.default_model)
     }
   } catch (err) {
-    appStore.showError(extractApiErrorMessage(err, isVideoGatewayDemoMode ? '加载 API 通道失败' : '加载模型通道失败'))
+    appStore.showError(extractApiErrorMessage(err, isVideoGatewayDemoMode ? '加载生成通道失败' : '加载模型通道失败'))
   }
 }
 
@@ -324,7 +324,7 @@ function applyMockFailure() {
   selectMockProvider()
   form.task_type = 'text_to_video'
   form.prompt = isVideoGatewayDemoMode
-    ? '生成一段用于演示 AI 短剧 API 任务失败审计的镜头：提示词会触发预设失败场景，方便查看失败原因、路由记录和 Skill 事件。[fail]'
+    ? '生成一段用于演示 AI 短剧任务失败审计的镜头：提示词会触发预设失败场景，方便查看失败原因、调度记录和经验事件。[fail]'
     : '生成一段用于演示失败处理的视频任务：提示词会触发预设失败场景，方便查看失败原因和重新创建流程。[fail]'
 }
 
@@ -346,10 +346,10 @@ async function submitTask() {
       delete payload.provider_account_id
     }
     const task = await videoTaskAPI.create(payload)
-    appStore.showSuccess(isVideoGatewayDemoMode ? '调用已提交，系统会自动选择可用 API 账号。' : '任务已进入队列，可在详情查看处理进度。')
+    appStore.showSuccess(isVideoGatewayDemoMode ? '试跑任务已提交，系统会检查接收、处理和记录流程。' : '任务已进入队列，可在详情查看处理进度。')
     router.push(`/admin/video/tasks/${task.id}`)
   } catch (err) {
-    appStore.showError(extractApiErrorMessage(err, isVideoGatewayDemoMode ? '发起视频调用失败' : '创建视频任务失败'))
+    appStore.showError(extractApiErrorMessage(err, isVideoGatewayDemoMode ? '试跑任务提交失败' : '创建视频任务失败'))
   } finally {
     submitting.value = false
   }

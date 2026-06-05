@@ -1,6 +1,66 @@
 <template>
   <AppLayout>
-    <TablePageLayout>
+    <div v-if="isVideoGatewayDemoMode" class="space-y-6">
+      <div class="flex flex-col gap-3 border-b border-gray-200 pb-4 dark:border-dark-700 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">外部工具接入</h1>
+          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            接入密钥给自动化工具或脚本使用，用来提交和查询内部试跑任务。
+          </p>
+        </div>
+        <button @click="showCreateModal = true" class="btn btn-primary">
+          <Icon name="plus" size="sm" />
+          新增接入密钥
+        </button>
+      </div>
+
+      <section class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
+        <div class="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
+          <div>
+            <h2 class="text-base font-semibold text-gray-900 dark:text-white">怎么使用</h2>
+            <p class="mt-2 text-sm leading-6 text-gray-500 dark:text-gray-400">
+              把接入密钥交给自动化工具或脚本后，员工仍从统一入口提交任务，底层账号不会暴露。
+            </p>
+          </div>
+          <div class="grid gap-3 sm:grid-cols-3">
+            <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-dark-700 dark:bg-dark-700/40">
+              <div class="text-sm font-semibold text-gray-900 dark:text-white">1. 创建密钥</div>
+              <p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">给工具单独命名，便于后续停用。</p>
+            </div>
+            <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-dark-700 dark:bg-dark-700/40">
+              <div class="text-sm font-semibold text-gray-900 dark:text-white">2. 交给工具</div>
+              <p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">只给需要接入的自动化工具或脚本。</p>
+            </div>
+            <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-dark-700 dark:bg-dark-700/40">
+              <div class="text-sm font-semibold text-gray-900 dark:text-white">3. 随时停用</div>
+              <p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">不再使用时，停用对应接入密钥即可。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-800">
+        <div class="border-b border-gray-200 px-5 py-4 dark:border-dark-700">
+          <h2 class="text-base font-semibold text-gray-900 dark:text-white">接入密钥</h2>
+        </div>
+        <div v-if="apiKeys.length" class="divide-y divide-gray-100 dark:divide-dark-700">
+          <div v-for="key in apiKeys.slice(0, 6)" :key="key.id" class="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div class="font-medium text-gray-900 dark:text-white">{{ key.name }}</div>
+              <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ maskApiKey(key.key) }}</div>
+            </div>
+            <span class="w-fit rounded-md px-2 py-1 text-xs font-medium" :class="key.status === 'active' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-gray-100 text-gray-700 dark:bg-dark-700 dark:text-gray-200'">
+              {{ key.status === 'active' ? '可用' : '已停用' }}
+            </span>
+          </div>
+        </div>
+        <div v-else class="px-5 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+          暂无接入密钥。需要外部工具接入时，先新增一条。
+        </div>
+      </section>
+    </div>
+
+    <TablePageLayout v-else>
       <template #filters>
         <div class="flex flex-col gap-3">
           <div class="flex flex-wrap items-center gap-3">
@@ -387,7 +447,7 @@
     <!-- Create/Edit Modal -->
     <BaseDialog
       :show="showCreateModal || showEditModal"
-      :title="showEditModal ? t('keys.editKey') : t('keys.createKey')"
+      :title="isVideoGatewayDemoMode ? (showEditModal ? '编辑接入密钥' : '新增接入密钥') : (showEditModal ? t('keys.editKey') : t('keys.createKey'))"
       width="normal"
       @close="closeModals"
     >
@@ -1077,6 +1137,7 @@ import {
   buildCcSwitchImportDeeplink,
   type CcSwitchClientType
 } from '@/utils/ccswitchImport'
+import { isVideoGatewayDemoMode } from '@/utils/productMode'
 
 // Helper to format date for datetime-local input
 const formatDateTimeLocal = (isoDate: string): string => {
@@ -1724,7 +1785,7 @@ const executeCcsImport = (row: ApiKey, clientType: CcSwitchClientType) => {
       };
     }
   })`
-  const providerName = (publicSettings.value?.site_name || 'sub2api').trim() || 'sub2api'
+  const providerName = (publicSettings.value?.site_name || '无界互娱 API 控制台').trim() || '无界互娱 API 控制台'
   const deeplink = buildCcSwitchImportDeeplink({
     baseUrl,
     platform,

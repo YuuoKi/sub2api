@@ -182,12 +182,12 @@ export default {
 
   // Setup Wizard
   setup: {
-    browserTitle: '首次安装向导',
-    title: '企业 AI 视频 API 调度中台',
-    description: 'AI 中剧 / AI 短剧生产网关',
-    logoAlt: '企业 AI 视频 API 调度中台标识',
-    logoCaption: 'LAN-only 内部试运行入口',
-    footerCopyright: '© 2026 企业 AI 视频 API 调度中台',
+    browserTitle: '初始化本地控制台',
+    title: '无界互娱 API 控制台',
+    description: 'AI 中剧 / 短剧生产网关',
+    logoAlt: '无界互娱 API 控制台标识',
+    logoCaption: '内部试运行入口',
+    footerCopyright: '© 2026 无界互娱 API 控制台',
     navigation: {
       back: '上一步',
       next: '下一步'
@@ -395,9 +395,9 @@ export default {
 
   // Auth
   auth: {
-    welcomeBack: '欢迎回来',
-    signInToAccount: '登录您的账户以继续',
-    signIn: '登录',
+    welcomeBack: '无界互娱 API 控制台',
+    signInToAccount: '内部试运行入口',
+    signIn: '进入控制台',
     signingIn: '登录中...',
     createAccount: '创建账户',
     signUpToStart: '注册以开始使用 {siteName}',
@@ -635,9 +635,9 @@ export default {
 
   // API Keys
   keys: {
-    title: 'API 密钥',
-    description: '管理您的 API 密钥和访问令牌',
-    searchPlaceholder: '搜索名称或Key...',
+    title: '调用凭证',
+    description: '管理内部试运行的调用凭证和访问权限',
+    searchPlaceholder: '搜索名称或凭证...',
     endpoints: {
       title: 'API 端点',
       default: '默认',
@@ -648,11 +648,11 @@ export default {
     },
     allGroups: '全部分组',
     allStatus: '全部状态',
-    createKey: '创建密钥',
-    editKey: '编辑密钥',
-    deleteKey: '删除密钥',
+    createKey: '创建调用凭证',
+    editKey: '编辑调用凭证',
+    deleteKey: '删除调用凭证',
     deleteConfirmMessage: "确定要删除 '{name}' 吗？此操作无法撤销。",
-    apiKey: 'API 密钥',
+    apiKey: '调用凭证',
     group: '分组',
     noGroup: '无分组',
     searchGroup: '搜索分组...',
@@ -664,23 +664,23 @@ export default {
     enable: '启用',
     disable: '禁用',
     nameLabel: '名称',
-    namePlaceholder: '我的 API 密钥',
+    namePlaceholder: '我的调用凭证',
     groupLabel: '分组',
     selectGroup: '选择分组',
     statusLabel: '状态',
     selectStatus: '选择状态',
     saving: '保存中...',
-    noKeysYet: '暂无 API 密钥',
-    createFirstKey: '创建您的第一个 API 密钥以开始使用 API。',
-    keyCreatedSuccess: 'API 密钥创建成功',
-    keyUpdatedSuccess: 'API 密钥更新成功',
-    keyDeletedSuccess: 'API 密钥删除成功',
-    keyEnabledSuccess: 'API 密钥已启用',
-    keyDisabledSuccess: 'API 密钥已禁用',
-    failedToLoad: '加载 API 密钥失败',
-    failedToSave: '保存 API 密钥失败',
-    failedToDelete: '删除 API 密钥失败',
-    failedToUpdateStatus: '更新 API 密钥状态失败',
+    noKeysYet: '暂无调用凭证',
+    createFirstKey: '创建第一个调用凭证后，即可让内部脚本或页面发起任务。',
+    keyCreatedSuccess: '调用凭证创建成功',
+    keyUpdatedSuccess: '调用凭证更新成功',
+    keyDeletedSuccess: '调用凭证删除成功',
+    keyEnabledSuccess: '调用凭证已启用',
+    keyDisabledSuccess: '调用凭证已禁用',
+    failedToLoad: '加载调用凭证失败',
+    failedToSave: '保存调用凭证失败',
+    failedToDelete: '删除调用凭证失败',
+    failedToUpdateStatus: '更新调用凭证状态失败',
     clickToChangeGroup: '点击更换分组',
     groupChangedSuccess: '分组更换成功',
     failedToChangeGroup: '更换分组失败',
@@ -690,16 +690,16 @@ export default {
     total: '近30天',
     quota: '额度',
     lastUsedAt: '上次使用时间',
-    useKey: '使用密钥',
+    useKey: '使用凭证',
     useKeyModal: {
-      title: '使用 API 密钥',
-      description: '将以下环境变量添加到您的终端配置文件或直接在终端中运行。',
+      title: '使用调用凭证',
+      description: '将以下配置用于内部试运行调用。',
       copy: '复制',
       copied: '已复制',
       note: '这些环境变量将在当前终端会话中生效。如需永久配置，请将其添加到 ~/.bashrc、~/.zshrc 或相应的配置文件中。',
       noGroupTitle: '请先分配分组',
       noGroupDescription:
-        '此 API 密钥尚未分配分组，请先在密钥列表中点击分组列进行分配，然后才能查看使用配置。',
+        '此调用凭证尚未分配分组，请先在凭证列表中点击分组列进行分配，然后才能查看使用配置。',
       openai: {
         description: '将以下配置文件添加到 Codex CLI 配置目录中。',
         configTomlHint: '请确保以下内容位于 config.toml 文件的开头部分',
@@ -732,15 +732,15 @@ export default {
       opencode: {
         title: 'OpenCode 配置示例',
         subtitle: 'opencode.json',
-        hint: '配置文件路径：~/.config/opencode/opencode.json（或 opencode.jsonc），不存在需手动创建。可使用默认 provider（openai/anthropic/google）或自定义 provider_id。API Key 支持直接配置或通过客户端 /connect 命令配置。示例仅供参考，模型与选项可按需调整。'
+        hint: '配置文件路径：~/.config/opencode/opencode.json（或 opencode.jsonc），不存在需手动创建。示例仅供参考，模型与选项可按需调整。'
       }
     },
-    customKeyLabel: '自定义密钥',
-    customKeyPlaceholder: '输入自定义密钥（至少16个字符）',
+    customKeyLabel: '自定义凭证',
+    customKeyPlaceholder: '输入自定义凭证（至少16个字符）',
     customKeyHint: '仅允许字母、数字、下划线和连字符，最少16个字符。',
-    customKeyTooShort: '自定义密钥至少需要16个字符',
-    customKeyInvalidChars: '自定义密钥只能包含字母、数字、下划线和连字符',
-    customKeyRequired: '请输入自定义密钥',
+    customKeyTooShort: '自定义凭证至少需要16个字符',
+    customKeyInvalidChars: '自定义凭证只能包含字母、数字、下划线和连字符',
+    customKeyRequired: '请输入自定义凭证',
     ipRestriction: 'IP 限制',
     ipWhitelist: 'IP 白名单',
     ipWhitelistPlaceholder: '192.168.1.100\n10.0.0.0/8',
@@ -750,7 +750,7 @@ export default {
     ipBlacklistHint: '每行一个 IP 或 CIDR，这些 IP 将被禁止使用此密钥',
     ipRestrictionEnabled: '已配置 IP 限制',
     ccSwitchNotInstalled:
-      'CC-Switch 未安装或协议处理程序未注册。请先安装 CC-Switch 或手动复制 API 密钥。',
+      'CC-Switch 未安装或协议处理程序未注册。请先安装 CC-Switch 或手动复制调用凭证。',
     ccsClientSelect: {
       title: '选择客户端',
       description: '请选择您要导入到 CC-Switch 的客户端类型：',
@@ -1340,6 +1340,7 @@ export default {
       standard: '标准',
       accountCost: '成本',
       todayTokens: '今日 Token',
+      newUsersToday: '今日新增用户',
       totalTokens: '总 Token',
       input: '输入',
       output: '输出',
@@ -1356,6 +1357,7 @@ export default {
       metricTokens: '按 Token',
       metricActualCost: '按实际消费',
       tokenUsageTrend: 'Token 使用趋势',
+      userUsageTrend: '用户用量趋势（Top 12）',
       noDataAvailable: '暂无数据',
       model: '模型',
       group: '分组',
@@ -2231,6 +2233,13 @@ export default {
         tooltip: '启用后，当请求包含 MCP 工具时，会在 system prompt 中注入 XML 格式调用协议提示词。关闭此选项可避免对某些客户端造成干扰。',
         enabled: '已启用',
         disabled: '已禁用'
+      },
+      claudeMaxSimulation: {
+        title: 'Claude Max 用量模拟',
+        tooltip: '启用后，对于上游无 cache-write 用量的 Claude 模型，系统会确定性地将 Token 映射为少量输入加 1 小时缓存创建，同时保持总 Token 不变。',
+        enabled: '已启用（模拟 1 小时缓存）',
+        disabled: '已禁用',
+        hint: '仅调整用量计费日志中的 Token 分类，不持久化逐请求映射状态。'
       },
       supportedScopes: {
         title: '支持的模型系列',
@@ -5388,7 +5397,7 @@ export default {
       },
       linuxdo: {
         title: 'LinuxDo Connect 登录',
-        description: '配置 LinuxDo Connect OAuth，用于 Sub2API 用户登录',
+        description: '配置 LinuxDo Connect OAuth，用于内部用户登录',
         enable: '启用 LinuxDo 登录',
         enableHint: '在登录/注册页面显示 LinuxDo 登录入口',
         clientId: 'Client ID',
@@ -5550,7 +5559,7 @@ export default {
           '禁用用户注册、公开页面和自助服务功能。仅管理员可以登录和管理平台。',
         siteName: '站点名称',
         siteNameHint: '显示在邮件和页面标题中',
-        siteNamePlaceholder: 'Sub2API',
+        siteNamePlaceholder: '无界互娱 API 控制台',
         siteSubtitle: '站点副标题',
         siteSubtitleHint: '显示在登录和注册页面',
         siteSubtitlePlaceholder: '订阅转 API 转换平台',
@@ -5833,7 +5842,7 @@ export default {
         fromEmail: '发件人邮箱',
         fromEmailPlaceholder: "noreply{'@'}example.com",
         fromName: '发件人名称',
-        fromNamePlaceholder: 'Sub2API',
+        fromNamePlaceholder: '无界互娱',
         useTls: '使用 TLS',
         useTlsHint: '为 SMTP 连接启用 TLS 加密'
       },
@@ -6438,16 +6447,16 @@ export default {
     // Admin tour steps
     admin: {
       welcome: {
-        title: '👋 欢迎使用 Sub2API',
+        title: '欢迎使用无界互娱 API 控制台',
         description:
-          '<div style="line-height: 1.8;"><p style="margin-bottom: 16px;">Sub2API 是一个强大的 AI 服务中转平台，让您轻松管理和分发 AI 服务。</p><p style="margin-bottom: 12px;"><b>🎯 核心功能：</b></p><ul style="margin-left: 20px; margin-bottom: 16px;"><li>📦 <b>分组管理</b> - 创建不同的服务套餐（VIP、免费试用等）</li><li>🔗 <b>账号池</b> - 连接多个上游 AI 服务商账号</li><li>🔑 <b>密钥分发</b> - 为用户生成独立的 API Key</li><li>💰 <b>计费管理</b> - 灵活的费率和配额控制</li></ul><p style="color: #10b981; font-weight: 600;">接下来，我们将用 3 分钟带您完成首次配置 →</p></div>',
+          '<div style="line-height: 1.8;"><p style="margin-bottom: 16px;">无界互娱 API 控制台用于内部试运行和演示任务管理。</p><p style="margin-bottom: 12px;"><b>核心内容：</b></p><ul style="margin-left: 20px; margin-bottom: 16px;"><li><b>任务记录</b> - 查看演示任务进度</li><li><b>生成通道</b> - 了解演示通道状态</li><li><b>调用凭证</b> - 管理内部调用权限</li></ul><p style="color: #10b981; font-weight: 600;">接下来完成基础配置。</p></div>',
         nextBtn: '开始配置 🚀',
         prevBtn: '跳过'
       },
       groupManage: {
         title: '📦 第一步：分组管理',
         description:
-          '<div style="line-height: 1.7;"><p style="margin-bottom: 12px;"><b>什么是分组？</b></p><p style="margin-bottom: 12px;">分组是 Sub2API 的核心概念，它就像一个"服务套餐"：</p><ul style="margin-left: 20px; margin-bottom: 12px; font-size: 13px;"><li>🎯 每个分组可以包含多个上游账号</li><li>💰 每个分组有独立的计费倍率</li><li>👥 可以设置为公开或专属分组</li></ul><p style="margin-top: 12px; padding: 8px 12px; background: #f0fdf4; border-left: 3px solid #10b981; border-radius: 4px; font-size: 13px;"><b>💡 示例：</b>您可以创建"VIP专线"（高倍率）和"免费试用"（低倍率）两个分组</p><p style="margin-top: 16px; color: #10b981; font-weight: 600;">👉 点击左侧的"分组管理"开始</p></div>'
+          '<div style="line-height: 1.7;"><p style="margin-bottom: 12px;"><b>什么是分组？</b></p><p style="margin-bottom: 12px;">分组用于区分不同内部使用范围。</p><ul style="margin-left: 20px; margin-bottom: 12px; font-size: 13px;"><li>每个分组可以绑定不同账号</li><li>每个分组有独立额度规则</li><li>可以设置为公开或专属分组</li></ul><p style="margin-top: 16px; color: #10b981; font-weight: 600;">点击左侧的"分组管理"开始</p></div>'
       },
       createGroup: {
         title: '➕ 创建新分组',
@@ -6526,17 +6535,17 @@ export default {
       accountSubmit: {
         title: '✅ 保存账号',
         description:
-          '<div style="line-height: 1.7;"><p style="margin-bottom: 12px;">确认信息无误后，点击保存按钮。</p><div style="padding: 8px 12px; background: #eff6ff; border-left: 3px solid #3b82f6; border-radius: 4px; font-size: 13px; margin-bottom: 12px;"><b>📌 OAuth 授权流程：</b><ul style="margin: 8px 0 0 16px;"><li>点击保存后会跳转到服务商页面</li><li>在服务商页面完成登录授权</li><li>授权成功后自动返回</li></ul></div><p style="padding: 8px 12px; background: #f0fdf4; border-left: 3px solid #10b981; border-radius: 4px; font-size: 13px;"><b>📌 下一步：</b>账号添加成功后，我们将创建 API 密钥</p><p style="margin-top: 12px; color: #10b981; font-weight: 600;">👉 点击"保存"按钮</p></div>'
+          '<div style="line-height: 1.7;"><p style="margin-bottom: 12px;">确认信息无误后，点击保存按钮。</p><p style="padding: 8px 12px; background: #f0fdf4; border-left: 3px solid #10b981; border-radius: 4px; font-size: 13px;"><b>下一步：</b>账号添加成功后，可创建调用凭证。</p><p style="margin-top: 12px; color: #10b981; font-weight: 600;">点击"保存"按钮</p></div>'
       },
       keyManage: {
         title: '🔑 第三步：生成密钥',
         description:
-          '<div style="line-height: 1.7;"><p style="margin-bottom: 12px;"><b>恭喜！账号配置完成 🎉</b></p><p style="margin-bottom: 12px;">最后一步，生成 API Key 来测试服务是否正常工作。</p><div style="padding: 8px 12px; background: #eff6ff; border-left: 3px solid #3b82f6; border-radius: 4px; font-size: 13px; margin-bottom: 12px;"><b>🔑 API Key 的作用：</b><ul style="margin: 8px 0 0 16px;"><li>用于调用 AI 服务的凭证</li><li>每个 Key 绑定一个分组</li><li>可以设置配额和有效期</li><li>支持独立的使用统计</li></ul></div><p style="margin-top: 16px; color: #10b981; font-weight: 600;">👉 点击左侧的"API 密钥"</p></div>'
+          '<div style="line-height: 1.7;"><p style="margin-bottom: 12px;"><b>账号配置完成。</b></p><p style="margin-bottom: 12px;">最后一步，创建调用凭证来验证内部试运行流程。</p><div style="padding: 8px 12px; background: #eff6ff; border-left: 3px solid #3b82f6; border-radius: 4px; font-size: 13px; margin-bottom: 12px;"><b>调用凭证的作用：</b><ul style="margin: 8px 0 0 16px;"><li>用于内部调用</li><li>每个凭证绑定一个分组</li><li>可以设置配额和有效期</li><li>支持独立统计</li></ul></div><p style="margin-top: 16px; color: #10b981; font-weight: 600;">点击左侧的"调用凭证"</p></div>'
       },
       createKey: {
         title: '➕ 创建密钥',
         description:
-          '<div style="line-height: 1.7;"><p style="margin-bottom: 12px;">点击按钮创建您的第一个 API Key。</p><p style="padding: 8px 12px; background: #f0fdf4; border-left: 3px solid #10b981; border-radius: 4px; font-size: 13px;"><b>💡 提示：</b>创建后请立即复制保存，密钥只显示一次</p><p style="margin-top: 12px; color: #10b981; font-weight: 600;">👉 点击"创建密钥"按钮</p></div>'
+          '<div style="line-height: 1.7;"><p style="margin-bottom: 12px;">点击按钮创建第一个调用凭证。</p><p style="padding: 8px 12px; background: #f0fdf4; border-left: 3px solid #10b981; border-radius: 4px; font-size: 13px;"><b>提示：</b>创建后请立即复制保存，凭证只显示一次。</p><p style="margin-top: 12px; color: #10b981; font-weight: 600;">点击"创建调用凭证"按钮</p></div>'
       },
       keyName: {
         title: '✏️ 1. 密钥名称',
@@ -6553,15 +6562,15 @@ export default {
       keySubmit: {
         title: '🎉 生成并复制',
         description:
-          '<div style="line-height: 1.7;"><p style="margin-bottom: 12px;">点击创建后，系统会生成完整的 API Key。</p><div style="padding: 8px 12px; background: #fee2e2; border-left: 3px solid #ef4444; border-radius: 4px; font-size: 13px; margin-bottom: 12px;"><b>⚠️ 重要提醒：</b><ul style="margin: 8px 0 0 16px;"><li>密钥只显示一次，请立即复制</li><li>丢失后需要重新生成</li><li>妥善保管，不要泄露给他人</li></ul></div><div style="padding: 8px 12px; background: #f0fdf4; border-left: 3px solid #10b981; border-radius: 4px; font-size: 13px; margin-bottom: 12px;"><b>🚀 下一步：</b><ul style="margin: 8px 0 0 16px;"><li>复制生成的 sk-xxx 密钥</li><li>在支持 OpenAI 接口的客户端中使用</li><li>开始体验 AI 服务！</li></ul></div><p style="margin-top: 12px; color: #10b981; font-weight: 600;">👉 点击"创建"按钮</p></div>'
+          '<div style="line-height: 1.7;"><p style="margin-bottom: 12px;">点击创建后，系统会生成完整调用凭证。</p><div style="padding: 8px 12px; background: #fee2e2; border-left: 3px solid #ef4444; border-radius: 4px; font-size: 13px; margin-bottom: 12px;"><b>重要提醒：</b><ul style="margin: 8px 0 0 16px;"><li>凭证只显示一次，请立即复制</li><li>丢失后需要重新生成</li><li>妥善保管，不要泄露给他人</li></ul></div><p style="margin-top: 12px; color: #10b981; font-weight: 600;">点击"创建"按钮</p></div>'
       }
     },
     // User tour steps
     user: {
       welcome: {
-        title: '👋 欢迎使用 Sub2API',
+        title: '欢迎使用无界互娱 API 控制台',
         description:
-          '<div style="line-height: 1.8;"><p style="margin-bottom: 16px;">您好！欢迎来到 Sub2API AI 服务平台。</p><p style="margin-bottom: 12px;"><b>🎯 快速开始：</b></p><ul style="margin-left: 20px; margin-bottom: 16px;"><li>🔑 创建 API 密钥</li><li>📋 复制密钥到您的应用</li><li>🚀 开始使用 AI 服务</li></ul><p style="color: #10b981; font-weight: 600;">只需 1 分钟，让我们开始吧 →</p></div>',
+          '<div style="line-height: 1.8;"><p style="margin-bottom: 16px;">您好，欢迎进入内部试运行控制台。</p><p style="margin-bottom: 12px;"><b>快速开始：</b></p><ul style="margin-left: 20px; margin-bottom: 16px;"><li>创建调用凭证</li><li>复制凭证到内部工具</li><li>查看任务记录</li></ul><p style="color: #10b981; font-weight: 600;">只需 1 分钟，让我们开始。</p></div>',
         nextBtn: '开始 🚀',
         prevBtn: '跳过'
       },

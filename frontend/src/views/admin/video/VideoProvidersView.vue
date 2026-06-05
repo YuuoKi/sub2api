@@ -3,9 +3,9 @@
     <div class="space-y-6">
       <div class="flex flex-col gap-3 border-b border-gray-200 pb-4 dark:border-dark-700 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? '通道池' : '模型通道' }}</h1>
+          <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? '生成通道' : '模型通道' }}</h1>
           <p class="mt-1 max-w-4xl text-sm text-gray-500 dark:text-gray-400">
-            {{ isVideoGatewayDemoMode ? '管理员看 Seedance / Kling / 安全演示通道的能力边界、fallback 状态和真实验证缺口。' : '管理演示通道与未来真实模型通道的启用状态和调用凭证。' }}
+            {{ isVideoGatewayDemoMode ? '管理员看 Seedance / Kling / 演示通道的能力边界、切换状态和真实验证缺口。' : '管理演示通道与未来真实模型通道的启用状态和调用凭证。' }}
           </p>
         </div>
         <button class="btn btn-outline" type="button" :disabled="loading" @click="loadProviders">
@@ -17,25 +17,25 @@
       <section v-if="isVideoGatewayDemoMode" class="grid gap-3 md:grid-cols-3">
         <div class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-800">
           <div class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">老板先看</div>
-          <div class="mt-2 text-sm font-semibold text-gray-900 dark:text-white">密钥状态是否正常</div>
-          <p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">未配置真实密钥、鉴权失败、限流都会用人话展示。</p>
+          <div class="mt-2 text-sm font-semibold text-gray-900 dark:text-white">凭证状态是否正常</div>
+          <p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">未配置真实凭证、鉴权失败、限流都会用人话展示。</p>
         </div>
         <div class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-800">
           <div class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">员工无需选择</div>
           <div class="mt-2 text-sm font-semibold text-gray-900 dark:text-white">网关自动挑可用账号</div>
-          <p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">通道池只影响系统调度，不让普通用户手动选择账号。</p>
+          <p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">生成通道只影响系统调度，不让普通用户手动选择账号。</p>
         </div>
         <div class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-800">
           <div class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">运维处理</div>
           <div class="mt-2 text-sm font-semibold text-gray-900 dark:text-white">看建议动作而不是日志</div>
-          <p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">先配置真实密钥、检查鉴权、降并发或启停账号。</p>
+          <p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">先配置真实凭证、检查鉴权、降并发或启停账号。</p>
         </div>
       </section>
 
       <section v-if="isVideoGatewayDemoMode" class="rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-800">
         <div class="border-b border-gray-200 px-5 py-4 dark:border-dark-700">
           <h2 class="text-base font-semibold text-gray-900 dark:text-white">引擎能力矩阵</h2>
-          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Seedance、Kling、官方 API、内部授权通道和安全演示通道分开管理；真实 provider 当前均需授权验证。</p>
+          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Seedance、Kling、官方接口、内部授权通道和演示通道分开管理；真实生成通道当前均需授权验证。</p>
         </div>
         <div class="overflow-x-auto">
           <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-dark-700">
@@ -72,7 +72,7 @@
               <thead class="bg-gray-50 text-left text-xs uppercase text-gray-500 dark:bg-dark-700/40 dark:text-gray-400">
                 <tr>
                   <th class="px-5 py-3 font-medium">通道名称</th>
-                  <th class="px-5 py-3 font-medium">密钥状态</th>
+                  <th class="px-5 py-3 font-medium">凭证状态</th>
                   <th class="px-5 py-3 font-medium">是否启用</th>
                   <th class="px-5 py-3 font-medium">今日调用</th>
                   <th class="px-5 py-3 font-medium">当前处理中</th>
@@ -120,7 +120,7 @@
                 </tr>
                 <tr v-if="!loading && !providers.length">
                   <td colspan="7" class="px-5 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-                    {{ isVideoGatewayDemoMode ? '暂无 API 通道，请确认初始化数据已写入。' : '暂无通道，请确认数据库迁移已执行。' }}
+                    {{ isVideoGatewayDemoMode ? '暂无生成通道，请确认初始化数据已写入。' : '暂无通道，请确认数据库迁移已执行。' }}
                   </td>
                 </tr>
               </tbody>
@@ -131,7 +131,7 @@
         <section class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
           <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? '通道详情 / 技术配置' : '通道配置' }}</h2>
           <p v-if="isVideoGatewayDemoMode" class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            左侧表格给老板看，右侧保留技术配置。API 密钥（Key）加密保存，前端只显示脱敏状态；留空表示保留当前密钥。
+            左侧表格给老板看，右侧保留技术配置。调用凭证（API Key）加密保存，前端只显示脱敏状态；留空表示保留当前凭证。
           </p>
           <form v-if="selected" class="mt-4 space-y-4" @submit.prevent="saveProvider">
             <div>
@@ -139,16 +139,16 @@
               <input v-model="form.display_name" class="input" maxlength="120" />
             </div>
             <div>
-              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">{{ isVideoGatewayDemoMode ? 'API 入口地址' : '上游地址' }}</label>
+              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">{{ isVideoGatewayDemoMode ? '接口入口地址' : '上游地址' }}</label>
               <input v-model="form.base_url" class="input" maxlength="500" />
             </div>
             <div>
-              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">{{ isVideoGatewayDemoMode ? '默认 API 模型' : '默认模型' }}</label>
+              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">{{ isVideoGatewayDemoMode ? '默认模型' : '默认模型' }}</label>
               <input v-model="form.default_model" class="input" maxlength="200" />
             </div>
             <div>
-              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">API 密钥（Key）</label>
-              <input v-model="form.api_key" class="input" type="password" autocomplete="off" placeholder="留空表示保留当前密钥" maxlength="4000" />
+              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">调用凭证（API Key）</label>
+              <input v-model="form.api_key" class="input" type="password" autocomplete="off" placeholder="留空表示保留当前凭证" maxlength="4000" />
               <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">当前：{{ providerKeyLabel(selected.api_key_configured, selected.masked_key, selected.key_status, selected.provider) }}</p>
             </div>
             <div>
@@ -157,7 +157,7 @@
             </div>
             <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
               <input v-model="form.enabled" type="checkbox" class="rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
-              {{ isVideoGatewayDemoMode ? '允许员工通过该 API 通道调用' : '启用该通道' }}
+              {{ isVideoGatewayDemoMode ? '允许员工通过该生成通道提交任务' : '启用该通道' }}
             </label>
             <div class="flex flex-wrap gap-2">
               <button class="btn btn-primary" type="submit" :disabled="saving">
@@ -170,7 +170,7 @@
               </button>
             </div>
           </form>
-          <div v-else class="mt-6 text-sm text-gray-500 dark:text-gray-400">{{ isVideoGatewayDemoMode ? '请选择一个 API 通道进行编辑或测试。' : '请选择一个通道进行编辑或测试。' }}</div>
+          <div v-else class="mt-6 text-sm text-gray-500 dark:text-gray-400">{{ isVideoGatewayDemoMode ? '请选择一个生成通道进行编辑或测试。' : '请选择一个通道进行编辑或测试。' }}</div>
 
           <div v-if="testResult" class="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm dark:border-dark-700 dark:bg-dark-700/40">
             <div class="flex items-center justify-between gap-3">
@@ -191,15 +191,15 @@
       <section class="rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-800">
         <div class="border-b border-gray-200 px-5 py-4 dark:border-dark-700">
           <h2 class="text-base font-semibold text-gray-900 dark:text-white">通道健康诊断</h2>
-          <p v-if="isVideoGatewayDemoMode" class="mt-1 text-sm text-gray-500 dark:text-gray-400">这里不是报错堆栈，而是告诉老板哪个供应商账号影响了任务，以及下一步该处理什么。</p>
+          <p v-if="isVideoGatewayDemoMode" class="mt-1 text-sm text-gray-500 dark:text-gray-400">这里不是报错堆栈，而是告诉老板哪个生成账号影响了任务，以及下一步该处理什么。</p>
         </div>
         <div class="overflow-x-auto">
           <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-dark-700">
             <thead class="bg-gray-50 text-left text-xs uppercase text-gray-500 dark:bg-dark-700/40 dark:text-gray-400">
               <tr>
-                <th class="px-5 py-3 font-medium">API 通道</th>
+                <th class="px-5 py-3 font-medium">生成通道</th>
                 <th class="px-5 py-3 font-medium">系统调度账号</th>
-                <th class="px-5 py-3 font-medium">密钥状态</th>
+                <th class="px-5 py-3 font-medium">凭证状态</th>
                 <th class="px-5 py-3 font-medium">最近测试</th>
                 <th class="px-5 py-3 font-medium">异常类型</th>
                 <th class="px-5 py-3 font-medium">影响任务数</th>
@@ -277,42 +277,42 @@ const testResultsByProvider = ref<Record<number, VideoProviderTestResult>>({})
 const engineMatrix = [
   {
     provider: 'Seedance 2.0',
-    mode: 'text / image / reference-to-video',
+    mode: '文生 / 图生 / 参考生成',
     bestFor: 'AI 中剧、AI 短剧、全局参考、多模态 reference、多镜头潜力',
-    capabilities: '全局参考、图片/视频/音频参考、native audio、运镜/表演/光影控制',
-    status: 'NEEDS_REAL_PROVIDER_VALIDATION',
+    capabilities: '全局参考、图片 / 视频 / 音频参考、运镜 / 表演 / 光影控制',
+    status: '待授权验证',
     safe: false,
   },
   {
     provider: 'Kling',
-    mode: 'text / image / motion-control / lip sync',
+    mode: '文生 / 图生 / 动作控制 / 口型同步',
     bestFor: '真人短剧、漫剧、真人转漫剧、情绪爆发、动作冲突、多角色对话',
-    capabilities: '首尾帧、motion control、lip sync、真人、漫剧、多角色、对话/声音模式',
-    status: 'NEEDS_REAL_PROVIDER_VALIDATION',
+    capabilities: '首尾帧、动作控制、口型同步、真人、漫剧、多角色、对话 / 声音模式',
+    status: '待授权验证',
     safe: false,
   },
   {
-    provider: '官方 API Provider',
-    mode: 'provider-specific',
+    provider: '官方接口通道',
+    mode: '按通道配置',
     bestFor: '后续授权真实闭环验证',
-    capabilities: '按官方 API 合同拆分 model version / mode',
-    status: 'NOT_READY',
+    capabilities: '按官方接口合同拆分模型版本与生成模式',
+    status: '未开启',
     safe: false,
   },
   {
     provider: '内部授权通道',
-    mode: 'adapter readiness',
+    mode: '接口适配准备',
     bestFor: '公司主机受控试运行',
     capabilities: '只允许后端安全配置，前端不展示凭证',
-    status: 'NOT_READY',
+    status: '未开启',
     safe: false,
   },
   {
-    provider: '安全演示通道',
-    mode: 'safe demo',
-    bestFor: '内部演示、路由 trace、Skill Learning、错误处理验证',
-    capabilities: '本地安全闭环，不代表真实生产 provider',
-    status: 'INTERNAL_SAFE_MODE_ONLY',
+    provider: '演示通道',
+    mode: '试跑任务',
+    bestFor: '内部演示、调度记录、经验沉淀、错误处理验证',
+    capabilities: '本地演示闭环，不代表真实生成通道',
+    status: '仅内部演示',
     safe: true,
   },
 ]
@@ -349,7 +349,7 @@ async function loadProviders() {
     const current = selected.value ? providers.value.find((item) => item.id === selected.value?.id) : providers.value[0]
     if (current) selectProvider(current)
   } catch (err) {
-    appStore.showError(extractApiErrorMessage(err, isVideoGatewayDemoMode ? '加载 API 通道池失败' : '加载模型通道失败'))
+    appStore.showError(extractApiErrorMessage(err, isVideoGatewayDemoMode ? '加载生成通道失败' : '加载模型通道失败'))
   } finally {
     loading.value = false
   }
@@ -368,10 +368,10 @@ async function saveProvider() {
       ...(form.api_key.trim() ? { api_key: form.api_key.trim() } : {}),
     })
     form.api_key = ''
-    appStore.showSuccess(isVideoGatewayDemoMode ? 'API 通道配置已保存' : '通道配置已保存')
+    appStore.showSuccess(isVideoGatewayDemoMode ? '生成通道配置已保存' : '通道配置已保存')
     await loadProviders()
   } catch (err) {
-    appStore.showError(extractApiErrorMessage(err, isVideoGatewayDemoMode ? '保存 API 通道配置失败' : '保存通道配置失败'))
+    appStore.showError(extractApiErrorMessage(err, isVideoGatewayDemoMode ? '保存生成通道配置失败' : '保存通道配置失败'))
   } finally {
     saving.value = false
   }
@@ -384,7 +384,7 @@ async function testProvider(id: number) {
     testResultsByProvider.value = { ...testResultsByProvider.value, [id]: result }
     testResult.value = result
   } catch (err) {
-    appStore.showError(extractApiErrorMessage(err, isVideoGatewayDemoMode ? 'API 通道测试失败' : '通道测试失败'))
+    appStore.showError(extractApiErrorMessage(err, isVideoGatewayDemoMode ? '生成通道测试失败' : '通道测试失败'))
   } finally {
     testingId.value = null
   }

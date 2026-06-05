@@ -2,15 +2,15 @@ import type { VideoProvider, VideoProviderAccount, VideoTask, VideoTaskCreatePay
 import { isVideoGatewayDemoMode, videoGatewayDisplayProvider } from '@/utils/productMode'
 
 export const providerOptions: Array<{ value: VideoProvider; label: string }> = [
-  { value: 'mock', label: isVideoGatewayDemoMode ? '安全演示通道' : '演示通道' },
+  { value: 'mock', label: isVideoGatewayDemoMode ? '试跑任务' : '演示通道' },
   { value: 'seedance', label: 'Seedance 2.0' },
   { value: 'kling', label: 'Kling' },
 ]
 
 export const statusOptions: Array<{ value: VideoTaskStatus; label: string }> = [
   { value: 'queued', label: '排队中' },
-  { value: 'submitted', label: isVideoGatewayDemoMode ? '已分发，等待生成' : '已提交' },
-  { value: 'running', label: '生成中' },
+  { value: 'submitted', label: isVideoGatewayDemoMode ? '处理中' : '已提交' },
+  { value: 'running', label: isVideoGatewayDemoMode ? '处理中' : '生成中' },
   { value: 'succeeded', label: '已完成' },
   { value: 'failed', label: '失败，需要查看原因' },
   { value: 'cancelled', label: '已取消' },
@@ -109,17 +109,17 @@ export function candidateToTaskPayload(candidate: PromptAssetCandidate): VideoTa
 }
 
 export function providerLabel(provider: string): string {
-  if (isVideoGatewayDemoMode && provider === 'mock') return '安全演示通道'
+  if (isVideoGatewayDemoMode && provider === 'mock') return '试跑任务'
   return videoGatewayDisplayProvider(provider, providerOptions.find((item) => item.value === provider)?.label)
 }
 
 export function providerDisplayName(provider: { provider: string; display_name?: string }): string {
-  if (isVideoGatewayDemoMode && provider.provider === 'mock') return provider.display_name?.trim() || '安全演示通道'
+  if (isVideoGatewayDemoMode && provider.provider === 'mock') return provider.display_name?.trim() || '试跑任务'
   return videoGatewayDisplayProvider(provider.provider, provider.display_name)
 }
 
 export function modelDisplayName(provider: string, model?: string): string {
-  if (isVideoGatewayDemoMode && provider === 'mock') return '安全演示视频 API'
+  if (isVideoGatewayDemoMode && provider === 'mock') return '本机试跑引擎'
   if (isVideoGatewayDemoMode && provider === 'seedance') return 'seedance-2-0-pro'
   if (isVideoGatewayDemoMode && provider === 'kling') return 'kling-v1'
   return model?.trim() || '-'
@@ -131,9 +131,9 @@ export function promptDisplayText(prompt?: string): string {
   if (!isVideoGatewayDemoMode) return value
   const normalized = value.toLowerCase()
   if (normalized.includes('mock') || normalized.includes('p0.5') || normalized.includes('local forced')) {
-    return '企业 AI 视频 API 网关演示调用'
+    return '无界互娱试跑任务'
   }
-  return value.replace(/\[fail\]\s*/gi, '').trim() || '企业 AI 视频 API 网关演示调用'
+  return value.replace(/\[fail\]\s*/gi, '').trim() || '无界互娱试跑任务'
 }
 
 export function taskTypeLabel(taskType: string): string {
@@ -141,6 +141,11 @@ export function taskTypeLabel(taskType: string): string {
 }
 
 export function statusLabel(status: string): string {
+  if (isVideoGatewayDemoMode) {
+    if (status === 'succeeded') return '已完成'
+    if (status === 'failed' || status === 'cancelled') return '失败'
+    return '处理中'
+  }
   return statusOptions.find((item) => item.value === status)?.label || status
 }
 
@@ -148,31 +153,31 @@ export function providerDescription(provider: string): string {
   switch (provider) {
     case 'mock':
       return isVideoGatewayDemoMode
-        ? '安全演示通道：用于验证排队、调度、状态回收和失败记录，不调用真实生产通道。'
+        ? '试跑任务：用于验证排队、调度、状态回收和失败记录，不连接真实生成通道。'
         : '演示通道用于本地闭环验证，不调用外部模型。'
     case 'seedance':
       return isVideoGatewayDemoMode
-        ? 'Seedance 2.0 预留供应商通道，待配置授权真实密钥后启用。'
-        : 'Seedance 2.0 预留通道，待配置 API 密钥（Key）后启用真实调用。'
+        ? 'Seedance 2.0 预留生成通道，待授权验证后启用。'
+        : 'Seedance 2.0 预留通道，待配置调用凭证后启用真实调用。'
     case 'kling':
       return isVideoGatewayDemoMode
-        ? 'Kling 预留供应商通道，待配置授权真实密钥后启用。'
-        : 'Kling 预留通道，待配置 API 密钥（Key）后启用真实调用。'
+        ? 'Kling 预留生成通道，待授权验证后启用。'
+        : 'Kling 预留通道，待配置调用凭证后启用真实调用。'
     default:
-      return isVideoGatewayDemoMode ? '视频供应商通道' : '视频模型通道'
+      return isVideoGatewayDemoMode ? '视频生成通道' : '视频模型通道'
   }
 }
 
 export function providerKeyLabel(configured: boolean, maskedKey?: string, keyStatus?: string, provider?: string): string {
-  if (isVideoGatewayDemoMode && provider === 'mock') return '安全演示，不需要真实密钥'
-  if (keyStatus === 'normal') return isVideoGatewayDemoMode ? '真实密钥已配置' : '已配置密钥'
-  if (keyStatus === 'missing') return isVideoGatewayDemoMode ? '未配置真实密钥' : '未配置密钥'
+  if (isVideoGatewayDemoMode && provider === 'mock') return '试跑任务，不需要真实凭证'
+  if (keyStatus === 'normal') return isVideoGatewayDemoMode ? '接入密钥已配置' : '已配置密钥'
+  if (keyStatus === 'missing') return isVideoGatewayDemoMode ? '未配置真实凭证' : '未配置密钥'
   if (keyStatus === 'disabled') return isVideoGatewayDemoMode ? '当前未启用' : '停用'
   if (keyStatus === 'auth_failed') return '鉴权失败'
   if (keyStatus === 'rate_limited') return isVideoGatewayDemoMode ? '上游限流' : '触发限流'
   if (keyStatus === 'quota_exhausted') return '额度不足'
-  if (!configured) return isVideoGatewayDemoMode ? '未配置真实密钥' : '未配置密钥'
-  if (isVideoGatewayDemoMode) return '真实密钥已配置 / 已脱敏'
+  if (!configured) return isVideoGatewayDemoMode ? '未配置真实凭证' : '未配置密钥'
+  if (isVideoGatewayDemoMode) return '接入密钥已配置 / 已脱敏'
   return maskedKey ? `已脱敏：${maskedKey}` : '已配置密钥'
 }
 
@@ -182,34 +187,35 @@ export function providerEnabledLabel(enabled: boolean): string {
 
 export function providerRuntimeStatus(provider: Pick<VideoProviderAccount, 'provider' | 'enabled' | 'api_key_configured'> & Partial<VideoProviderAccount>): string {
   if (!provider.enabled) return isVideoGatewayDemoMode ? '当前未启用' : '停用'
-  if (provider.provider === 'mock' && isVideoGatewayDemoMode) return '安全演示，不是真实生产通道'
+  if (provider.provider === 'mock' && isVideoGatewayDemoMode) return '试跑任务，不调用真实生成服务'
   if (provider.route_available === true) return '正常可用'
-  if (provider.key_status === 'missing') return isVideoGatewayDemoMode ? '未配置真实密钥' : '未配置密钥'
+  if (provider.key_status === 'missing') return isVideoGatewayDemoMode ? '未配置真实凭证' : '未配置密钥'
   if (provider.key_status === 'auth_failed') return '鉴权失败'
   if (provider.key_status === 'rate_limited') return isVideoGatewayDemoMode ? '上游限流' : '触发限流'
   if (provider.key_status === 'quota_exhausted') return '额度不足'
   if (provider.route_skip_reason) return humanIssueLabel(provider.route_skip_reason)
   if (provider.diagnostic_type) return humanIssueLabel(provider.diagnostic_type)
   if (provider.provider === 'mock') return '可演示'
-  if (!provider.api_key_configured) return isVideoGatewayDemoMode ? '未配置真实密钥' : '待配置'
-  return isVideoGatewayDemoMode ? '真实通道待验证' : '已配置'
+  if (!provider.api_key_configured) return isVideoGatewayDemoMode ? '未配置真实凭证' : '待配置'
+  return isVideoGatewayDemoMode ? '真实生成通道待验证' : '已配置'
 }
 
 export function providerRuntimeStatusClass(status: string): string {
   switch (status) {
     case '可演示':
     case '演示可用':
-    case '安全演示，不是真实生产通道':
+    case '试跑任务，不调用真实生成服务':
     case '已配置':
     case '可调用':
     case '正常可用':
       return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300'
     case '待配置':
     case '未配置密钥':
-    case '未配置真实密钥':
+    case '未配置真实凭证':
     case '触发限流':
     case '上游限流':
     case '真实通道待验证':
+    case '真实生成通道待验证':
       return 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300'
     case '停用':
     case '账号已停用':
@@ -235,6 +241,7 @@ export function keyStatusClass(keyStatus?: string): string {
 }
 
 export function routeAccountLabel(task: Pick<VideoTask, 'provider_account_id' | 'provider_account_name'>): string {
+  if (isVideoGatewayDemoMode) return '本机试跑账号'
   return task.provider_account_name?.trim() || `账号 #${task.provider_account_id}`
 }
 
@@ -246,6 +253,7 @@ export function createdByLabel(task: Partial<VideoTask>): string {
 }
 
 export function routingStrategyLabel(strategy?: string): string {
+  if (isVideoGatewayDemoMode) return '系统自动安排处理'
   if (strategy === 'least_inflight') return isVideoGatewayDemoMode ? '系统自动选择处理中最少的可用账号' : 'least_inflight（处理中最少）'
   if (strategy === 'explicit') return '指定账号'
   return strategy || '-'
@@ -324,7 +332,7 @@ function safeTraceNumber(value: unknown, fallback: number): number {
 export function humanIssueLabel(value?: string | null): string {
   const normalized = (value || '').trim().toLowerCase()
   if (!normalized) return '-'
-  if (normalized.includes('missing') || normalized.includes('not configured') || normalized.includes('未配置') || normalized.includes('待配置')) return isVideoGatewayDemoMode ? '未配置真实密钥' : '需要配置密钥'
+  if (normalized.includes('missing') || normalized.includes('not configured') || normalized.includes('未配置') || normalized.includes('待配置')) return isVideoGatewayDemoMode ? '未配置真实凭证' : '需要配置密钥'
   if (normalized.includes('disabled') || normalized.includes('停用')) return isVideoGatewayDemoMode ? '当前未启用' : '账号已停用'
   if (normalized.includes('rate') || normalized.includes('limit') || normalized.includes('限流')) return '上游限流'
   if (normalized.includes('auth') || normalized.includes('unauthorized') || normalized.includes('鉴权')) return '鉴权失败'
@@ -335,8 +343,8 @@ export function humanIssueLabel(value?: string | null): string {
 
 export function providerSuggestedAction(provider: Partial<VideoProviderAccount>): string {
   if (!provider.enabled) return isVideoGatewayDemoMode ? '确认还需要这个账号后再启用。' : '按业务需要启用通道。'
-  if (provider.key_status === 'missing' || !provider.api_key_configured) return '请配置授权真实密钥，再启用真实调用。'
-  if (provider.key_status === 'auth_failed') return '请重新粘贴有效密钥，保存后再测试。'
+  if (provider.key_status === 'missing' || !provider.api_key_configured) return '请配置授权真实凭证，再启用真实调用。'
+  if (provider.key_status === 'auth_failed') return '请重新粘贴有效凭证，保存后再测试。'
   if (provider.key_status === 'rate_limited') return '请降低并发，或临时切换到其他可用账号。'
   if (provider.key_status === 'quota_exhausted') return '请补充上游额度，或切换到可用账号。'
   if (provider.suggested_action) return actionMessageLabel(provider.suggested_action, provider.key_status)
@@ -346,9 +354,9 @@ export function providerSuggestedAction(provider: Partial<VideoProviderAccount>)
 
 export function diagnosticSuggestedAction(item: { key_status?: string; suggested_action?: string; recent_error?: string; status?: string }): string {
   if (item.status === '正常') return '无需处理，继续观察。'
-  if (item.key_status === 'missing') return '请先配置授权真实密钥。'
+  if (item.key_status === 'missing') return '请先配置授权真实凭证。'
   if (item.key_status === 'disabled') return '确认业务需要后再启用该账号。'
-  if (item.key_status === 'auth_failed') return '请检查密钥是否过期或填错，更新后重新测试。'
+  if (item.key_status === 'auth_failed') return '请检查凭证是否过期或填错，更新后重新测试。'
   if (item.key_status === 'rate_limited') return '请降低并发，或切换到其他可用账号。'
   if (item.key_status === 'quota_exhausted') return '请补充上游额度，或暂停使用该账号。'
   return actionMessageLabel(item.suggested_action || item.recent_error || '', item.key_status)
@@ -356,10 +364,10 @@ export function diagnosticSuggestedAction(item: { key_status?: string; suggested
 
 function actionMessageLabel(message?: string | null, keyStatus?: string): string {
   const issue = humanIssueLabel(keyStatus || message)
-  if (issue === '需要配置密钥' || issue === '未配置真实密钥') return '请配置授权真实密钥，再启用真实调用。'
+  if (issue === '需要配置密钥' || issue === '未配置真实凭证') return '请配置授权真实凭证，再启用真实调用。'
   if (issue === '账号已停用' || issue === '当前未启用') return '确认业务需要后再启用该账号。'
   if (issue === '上游限流') return '请降低并发，或切换到其他可用账号。'
-  if (issue === '鉴权失败') return '请检查密钥是否过期或填错，更新后重新测试。'
+  if (issue === '鉴权失败') return '请检查凭证是否过期或填错，更新后重新测试。'
   if (issue === '额度不足') return '请补充上游额度，或切换到可用账号。'
   return message || '请查看通道配置并执行一次测试。'
 }
@@ -372,7 +380,7 @@ export function eventTypeLabel(eventType: string): string {
       case 'routed':
         return '系统自动调度账号'
       case 'submitted':
-        return '已分发至供应商通道'
+        return '已分发至生成通道'
       case 'running':
         return '生成中'
       case 'succeeded':
@@ -414,8 +422,8 @@ export function eventMessageLabel(message: string, eventType: string): string {
   if (!normalized) return eventTypeLabel(eventType)
   if (isVideoGatewayDemoMode) {
     if (normalized === 'video task queued') return '任务进入网关队列'
-    if (normalized === 'video task routed') return '已自动选择供应商账号'
-    if (normalized === 'video task submitted to provider') return '已分发至供应商通道'
+    if (normalized === 'video task routed') return '已自动选择生成账号'
+    if (normalized === 'video task submitted to provider') return '已分发至生成通道'
     if (normalized === 'video task status updated') return '上游状态已回收'
     if (normalized === 'video task succeeded') return '结果已入库'
     if (normalized === 'video task failed') return '失败，需要查看原因'
@@ -438,10 +446,10 @@ export function providerTestMessage(message: string): string {
   const normalized = message.trim().toLowerCase()
   if (normalized === 'mock provider is local and ready') {
     return isVideoGatewayDemoMode
-      ? '安全演示通道可用：网关流转验证已就绪，不调用真实生产通道。'
+      ? '演示通道可用：任务流转验证已就绪，不连接真实生成通道。'
       : '演示通道可用：本地任务流转验证已就绪，不调用外部模型。'
   }
-  if (normalized.includes('api key is not configured')) return '真实通道未配置真实密钥：待授权配置后再启用。'
+  if (normalized.includes('api key is not configured')) return '真实通道未配置调用凭证：待授权配置后再启用。'
   if (normalized.includes('real network test is disabled')) return '真实通道已映射：当前演示不发起外部网络调用。'
   return message || '暂无测试结果'
 }
@@ -451,12 +459,12 @@ export function errorMessageLabel(message?: string | null): string {
   const normalized = message.trim().toLowerCase()
   if (normalized === 'mock provider forced failure for p0 validation') {
     return isVideoGatewayDemoMode
-      ? '调用失败：安全演示通道按提示词返回失败，失败原因已记录。可复制参数重新发起，或切换供应商通道。'
+      ? '试跑任务失败：系统按提示词返回失败，失败原因已记录。可复制参数重新发起。'
       : '生成失败：演示通道按提示词返回失败。可复制参数重新创建，或更换模型通道。'
   }
-  if (normalized === 'video task timed out') return isVideoGatewayDemoMode ? 'API 调用状态回收超时' : '视频任务处理超时'
+  if (normalized === 'video task timed out') return isVideoGatewayDemoMode ? '调用状态回收超时' : '视频任务处理超时'
   if (normalized.startsWith('video provider submit failed:')) {
-    return `${isVideoGatewayDemoMode ? '分发至 API 通道失败' : '提交到模型通道失败'}：${message.slice('video provider submit failed:'.length).trim()}`
+    return `${isVideoGatewayDemoMode ? '分发至生成通道失败' : '提交到模型通道失败'}：${message.slice('video provider submit failed:'.length).trim()}`
   }
   if (normalized.startsWith('video provider poll failed:')) {
     return `${isVideoGatewayDemoMode ? '状态回收失败' : '查询模型通道状态失败'}：${message.slice('video provider poll failed:'.length).trim()}`

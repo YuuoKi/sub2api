@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"sort"
 	"strings"
 	"testing"
@@ -287,6 +289,18 @@ func apiKeyVideoGatewayAuthMiddleware() middleware.APIKeyAuthMiddleware {
 	})
 }
 
+func setEnv(t *testing.T, key, value string) {
+	old := os.Getenv(key)
+	os.Setenv(key, value)
+	t.Cleanup(func() {
+		if old == "" {
+			os.Unsetenv(key)
+		} else {
+			os.Setenv(key, old)
+		}
+	})
+}
+
 func TestAPIKeyVideoGatewayRequiresAPIKey(t *testing.T) {
 	repo := newAPIKeyVideoGatewayMemoryRepo()
 	repo.seedProvider(service.VideoProviderMock, true, map[string]any{"key_status": "normal", "health_status": "healthy"})
@@ -345,7 +359,7 @@ func TestAPIKeyVideoGatewayMockCreateGetCancel(t *testing.T) {
 	require.Equal(t, 0, repo.realProviderTaskCount())
 }
 
-func TestAPIKeyVideoGatewayBlocksRealProviders(t *testing.T) {
+func TestAPIKeyVideoGatewayBlocksSeedanceWithoutTrialMode(t *testing.T) {
 	repo := newAPIKeyVideoGatewayMemoryRepo()
 	repo.seedProvider(service.VideoProviderMock, true, map[string]any{"key_status": "normal", "health_status": "healthy"})
 	repo.seedProvider(service.VideoProviderSeedance, true, map[string]any{"key_status": "normal", "health_status": "healthy"})
@@ -373,6 +387,223 @@ func TestAPIKeyVideoGatewayBlocksRealProviders(t *testing.T) {
 	require.Equal(t, 0, repo.realProviderTaskCount())
 }
 
+func TestAPIKeyVideoGatewayBlocksKling(t *testing.T) {
+	repo := newAPIKeyVideoGatewayMemoryRepo()
+	repo.seedProvider(service.VideoProviderMock, true, map[string]any{"key_status": "normal", "health_status": "healthy"})
+	repo.seedProvider(service.VideoProviderKling, true, map[string]any{"key_status": "normal", "health_status": "healthy"})
+	router := newAPIKeyVideoGatewayTestRouter(repo)
+
+	rec := apiKeyVideoGatewayRequest(
+		router,
+		http.MethodPost,
+		"/v1/video/tasks",
+		[]byte(`{"provider":"kling","task_type":"text_to_video","prompt":"must stay blocked"}`),
+	)
+
+	require.Equal(t, http.StatusForbidden, rec.Code, rec.Body.String())
+	var body struct {
+		Code     int               `json:"code"`
+		Message  string            `json:"message"`
+		Reason   string            `json:"reason"`
+		Metadata map[string]string `json:"metadata"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.Equal(t, http.StatusForbidden, body.Code)
+	require.Equal(t, "VIDEO_PROVIDER_DISABLED", body.Reason)
+	require.Equal(t, service.VideoProviderKling, body.Metadata["provider"])
+	require.Equal(t, "0", body.Metadata["real_provider_dispatch_count"])
+	require.Equal(t, 0, repo.realProviderTaskCount())
+}
+
+func TestAPIKeyVideoGatewaySeedanceTrialBlockedWithoutGate(t *testing.T) {
+	repo := newAPIKeyVideoGatewayMemoryRepo()
+	repo.seedProvider(service.VideoProviderMock, true, map[string]any{"key_status": "normal", "health_status": "healthy"})
+	repo.seedProvider(service.VideoProviderSeedance, true, map[string]any{
+		"key_status":              "normal",
+		"health_status":           "healthy",
+		"single_smoke_authorized": true,
+	})
+	router := newAPIKeyVideoGatewayTestRouter(repo)
+
+	rec := apiKeyVideoGatewayRequest(router, http.MethodPost, "/v1/video/tasks", []byte(`{
+		"provider":"seedance",
+		"trial_mode":"tiny_real",
+		"task_type":"text_to_video",
+		"prompt":"must stay blocked",
+		"duration":3
+	}`))
+
+	require.Equal(t, http.StatusForbidden, rec.Code, rec.Body.String())
+	var body struct {
+		Code     int               `json:"code"`
+		Message  string            `json:"message"`
+		Reason   string            `json:"reason"`
+		Metadata map[string]string `json:"metadata"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.Equal(t, "VIDEO_TRIAL_BLOCKED", body.Reason)
+	require.Contains(t, body.Metadata["blocked_reasons"], "SUB2API_VIDEO_REAL_SMOKE_ENABLED")
+	require.Equal(t, 0, repo.realProviderTaskCount())
+}
+
+func TestAPIKeyVideoGatewaySeedanceTrialBlockedDurationTooLong(t *testing.T) {
+	setEnv(t, "SUB2API_VIDEO_REAL_SMOKE_ENABLED", "1")
+	setEnv(t, "SUB2API_VIDEO_REDACTED_EVENT_LOG", "/tmp/redacted.log")
+	repo := newAPIKeyVideoGatewayMemoryRepo()
+	repo.seedProvider(service.VideoProviderMock, true, map[string]any{"key_status": "normal", "health_status": "healthy"})
+	repo.seedProvider(service.VideoProviderSeedance, true, map[string]any{
+		"key_status":              "normal",
+		"health_status":           "healthy",
+		"single_smoke_authorized": true,
+	})
+	router := newAPIKeyVideoGatewayTestRouter(repo)
+
+	rec := apiKeyVideoGatewayRequest(router, http.MethodPost, "/v1/video/tasks", []byte(`{
+		"provider":"seedance",
+		"trial_mode":"tiny_real",
+		"task_type":"text_to_video",
+		"prompt":"duration too long",
+		"duration":10
+	}`))
+
+	require.Equal(t, http.StatusForbidden, rec.Code, rec.Body.String())
+	var body struct {
+		Code     int               `json:"code"`
+		Message  string            `json:"message"`
+		Reason   string            `json:"reason"`
+		Metadata map[string]string `json:"metadata"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.Equal(t, "VIDEO_TRIAL_BLOCKED", body.Reason)
+	require.Contains(t, body.Metadata["blocked_reasons"], "duration")
+	require.Equal(t, 0, repo.realProviderTaskCount())
+}
+
+func TestAPIKeyVideoGatewaySeedanceTrialBlockedMissingAuthorization(t *testing.T) {
+	setEnv(t, "SUB2API_VIDEO_REAL_SMOKE_ENABLED", "1")
+	setEnv(t, "SUB2API_VIDEO_REDACTED_EVENT_LOG", "/tmp/redacted.log")
+	repo := newAPIKeyVideoGatewayMemoryRepo()
+	repo.seedProvider(service.VideoProviderMock, true, map[string]any{"key_status": "normal", "health_status": "healthy"})
+	repo.seedProvider(service.VideoProviderSeedance, true, map[string]any{
+		"key_status":    "normal",
+		"health_status": "healthy",
+	})
+	router := newAPIKeyVideoGatewayTestRouter(repo)
+
+	rec := apiKeyVideoGatewayRequest(router, http.MethodPost, "/v1/video/tasks", []byte(`{
+		"provider":"seedance",
+		"trial_mode":"tiny_real",
+		"task_type":"text_to_video",
+		"prompt":"missing auth",
+		"duration":3
+	}`))
+
+	require.Equal(t, http.StatusForbidden, rec.Code, rec.Body.String())
+	var body struct {
+		Code     int               `json:"code"`
+		Message  string            `json:"message"`
+		Reason   string            `json:"reason"`
+		Metadata map[string]string `json:"metadata"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.Equal(t, "VIDEO_TRIAL_BLOCKED", body.Reason)
+	require.Contains(t, body.Metadata["blocked_reasons"], "single smoke authorization")
+	require.Equal(t, 0, repo.realProviderTaskCount())
+}
+
+func TestAPIKeyVideoGatewaySeedanceTrialBlockedMissingEventLog(t *testing.T) {
+	setEnv(t, "SUB2API_VIDEO_REAL_SMOKE_ENABLED", "1")
+	repo := newAPIKeyVideoGatewayMemoryRepo()
+	repo.seedProvider(service.VideoProviderMock, true, map[string]any{"key_status": "normal", "health_status": "healthy"})
+	repo.seedProvider(service.VideoProviderSeedance, true, map[string]any{
+		"key_status":              "normal",
+		"health_status":           "healthy",
+		"single_smoke_authorized": true,
+	})
+	router := newAPIKeyVideoGatewayTestRouter(repo)
+
+	rec := apiKeyVideoGatewayRequest(router, http.MethodPost, "/v1/video/tasks", []byte(`{
+		"provider":"seedance",
+		"trial_mode":"tiny_real",
+		"task_type":"text_to_video",
+		"prompt":"missing event log",
+		"duration":3
+	}`))
+
+	require.Equal(t, http.StatusForbidden, rec.Code, rec.Body.String())
+	var body struct {
+		Code     int               `json:"code"`
+		Message  string            `json:"message"`
+		Reason   string            `json:"reason"`
+		Metadata map[string]string `json:"metadata"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.Equal(t, "VIDEO_TRIAL_BLOCKED", body.Reason)
+	require.Contains(t, body.Metadata["blocked_reasons"], "redacted event log path is missing")
+	require.Equal(t, 0, repo.realProviderTaskCount())
+}
+
+func TestAPIKeyVideoGatewaySeedanceTrialSuccess(t *testing.T) {
+	setEnv(t, "SUB2API_VIDEO_REAL_SMOKE_ENABLED", "1")
+	setEnv(t, "SUB2API_VIDEO_REDACTED_EVENT_LOG", "/tmp/redacted.log")
+	repo := newAPIKeyVideoGatewayMemoryRepo()
+	repo.seedProvider(service.VideoProviderMock, true, map[string]any{"key_status": "normal", "health_status": "healthy"})
+	repo.seedProvider(service.VideoProviderSeedance, true, map[string]any{
+		"key_status":              "normal",
+		"health_status":           "healthy",
+		"single_smoke_authorized": true,
+	})
+	router := newAPIKeyVideoGatewayTestRouter(repo)
+
+	rec := apiKeyVideoGatewayRequest(router, http.MethodPost, "/v1/video/tasks", []byte(`{
+		"provider":"seedance",
+		"trial_mode":"tiny_real",
+		"task_type":"text_to_video",
+		"prompt":"successful tiny real trial",
+		"duration":3
+	}`))
+
+	require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
+	var body apiKeyVideoGatewayTaskEnvelope
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.Equal(t, 0, body.Code)
+	require.Equal(t, service.VideoProviderSeedance, body.Data.Provider)
+	require.False(t, body.Data.MockOnly)
+	require.Equal(t, "api-key-video-seedance-tiny-trial", body.Data.ProviderBoundary)
+	require.Equal(t, 1, body.Data.RealProviderDispatchCount)
+	require.Equal(t, 1, repo.realProviderTaskCount())
+
+	getRec := apiKeyVideoGatewayRequest(router, http.MethodGet, fmt.Sprintf("/v1/video/tasks/%d", body.Data.ID), nil)
+	require.Equal(t, http.StatusOK, getRec.Code, getRec.Body.String())
+	require.Contains(t, getRec.Body.String(), "trial_gate")
+
+	var getBody apiKeyVideoGatewayTaskEnvelope
+	require.NoError(t, json.Unmarshal(getRec.Body.Bytes(), &getBody))
+	require.Equal(t, "tiny_real", getBody.Data.TrialMode)
+	require.Equal(t, "passed", getBody.Data.TrialGateResult)
+}
+
+func TestAPIKeyVideoGatewayProvidersReturnSeedanceReadiness(t *testing.T) {
+	repo := newAPIKeyVideoGatewayMemoryRepo()
+	repo.seedProvider(service.VideoProviderMock, true, map[string]any{"key_status": "normal", "health_status": "healthy"})
+	repo.seedProvider(service.VideoProviderSeedance, true, map[string]any{"key_status": "normal", "health_status": "healthy"})
+	router := newAPIKeyVideoGatewayTestRouter(repo)
+
+	rec := apiKeyVideoGatewayRequest(router, http.MethodGet, "/v1/video/providers", nil)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var body apiKeyVideoGatewayProvidersEnvelope
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.False(t, body.Data.MockOnly)
+	require.True(t, body.Data.TrialModeSupported)
+	providers := map[string]apiKeyVideoGatewayProvider{}
+	for _, item := range body.Data.Items {
+		providers[item.Provider] = item
+	}
+	require.True(t, providers[service.VideoProviderMock].RouteAvailable)
+	require.False(t, providers[service.VideoProviderSeedance].RouteAvailable)
+}
+
 func TestAPIKeyVideoGatewayProvidersDoNotExposeSecrets(t *testing.T) {
 	repo := newAPIKeyVideoGatewayMemoryRepo()
 	repo.seedProvider(service.VideoProviderMock, true, map[string]any{"key_status": "normal", "health_status": "healthy"})
@@ -389,8 +620,9 @@ func TestAPIKeyVideoGatewayProvidersDoNotExposeSecrets(t *testing.T) {
 	require.NotContains(t, rec.Body.String(), "sdnc***demo")
 	var body apiKeyVideoGatewayProvidersEnvelope
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
-	require.True(t, body.Data.MockOnly)
+	require.False(t, body.Data.MockOnly)
 	require.Equal(t, 0, body.Data.RealProviderDispatchCount)
+	require.True(t, body.Data.TrialModeSupported)
 	require.Len(t, body.Data.Items, 3)
 	providers := map[string]apiKeyVideoGatewayProvider{}
 	for _, item := range body.Data.Items {
@@ -434,6 +666,9 @@ type apiKeyVideoGatewayTaskEnvelope struct {
 		MockOnly                  bool   `json:"mock_only"`
 		ProviderBoundary          string `json:"provider_boundary"`
 		RealProviderDispatchCount int    `json:"real_provider_dispatch_count"`
+		TrialMode                 string `json:"trial_mode"`
+		BlockedReason             string `json:"blocked_reason"`
+		TrialGateResult           string `json:"trial_gate_result"`
 		CreatedAt                 string `json:"created_at"`
 		UpdatedAt                 string `json:"updated_at"`
 	} `json:"data"`
@@ -445,6 +680,7 @@ type apiKeyVideoGatewayProvidersEnvelope struct {
 		Items                     []apiKeyVideoGatewayProvider `json:"items"`
 		MockOnly                  bool                         `json:"mock_only"`
 		RealProviderDispatchCount int                          `json:"real_provider_dispatch_count"`
+		TrialModeSupported        bool                         `json:"trial_mode_supported"`
 	} `json:"data"`
 }
 

@@ -36,6 +36,7 @@ type videoTaskCreateRequest struct {
 
 type apiKeyVideoTaskCreateRequest struct {
 	Provider          string `json:"provider" binding:"omitempty,oneof=mock seedance kling"`
+	TrialMode         string `json:"trial_mode" binding:"omitempty,oneof=tiny_real"`
 	TaskType          string `json:"task_type" binding:"required,oneof=text_to_video image_to_video reference_to_video"`
 	Model             string `json:"model" binding:"omitempty,max=200"`
 	Prompt            string `json:"prompt" binding:"required,max=8000"`
@@ -83,6 +84,9 @@ type apiKeyVideoTaskResponse struct {
 	MockOnly                  bool   `json:"mock_only"`
 	ProviderBoundary          string `json:"provider_boundary"`
 	RealProviderDispatchCount int    `json:"real_provider_dispatch_count"`
+	TrialMode                 string `json:"trial_mode,omitempty"`
+	BlockedReason             string `json:"blocked_reason,omitempty"`
+	TrialGateResult           string `json:"trial_gate_result,omitempty"`
 }
 
 type videoProviderAccountResponse struct {
@@ -132,19 +136,24 @@ func (h *VideoHandler) ListProviders(c *gin.Context) {
 }
 
 func (h *VideoHandler) ListAPIKeyVideoProviders(c *gin.Context) {
-	items, err := h.video.ListAPIKeyMockOnlyProviders(c.Request.Context())
+	items, err := h.video.ListAPIKeyTrialProviders(c.Request.Context())
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
 	out := make([]videoProviderAccountResponse, 0, len(items))
+	mockOnly := true
 	for _, item := range items {
 		out = append(out, videoProviderAccountToResponse(item))
+		if item.Provider == service.VideoProviderSeedance && item.RouteSkipReason != "seedance provider account is not configured" {
+			mockOnly = false
+		}
 	}
 	response.Success(c, gin.H{
 		"items":                        out,
-		"mock_only":                    true,
+		"mock_only":                    mockOnly,
 		"real_provider_dispatch_count": 0,
+		"trial_mode_supported":         true,
 	})
 }
 
@@ -239,18 +248,46 @@ func (h *VideoHandler) CreateAPIKeyVideoTask(c *gin.Context) {
 		response.Unauthorized(c, "User not authenticated")
 		return
 	}
-	task, err := h.video.CreateAPIKeyMockOnlyTask(c.Request.Context(), req.Provider, service.VideoTaskCreateParams{
-		TaskType:          req.TaskType,
-		Model:             req.Model,
-		Prompt:            req.Prompt,
-		NegativePrompt:    req.NegativePrompt,
-		ReferenceImageURL: req.ReferenceImageURL,
-		ReferenceVideoURL: req.ReferenceVideoURL,
-		AspectRatio:       req.AspectRatio,
-		Duration:          req.Duration,
-		Resolution:        req.Resolution,
-		CreatedBy:         subject.UserID,
-	})
+	provider := strings.TrimSpace(req.Provider)
+	var task *service.VideoTask
+	var err error
+	if provider == "" || provider == service.VideoProviderMock {
+		task, err = h.video.CreateAPIKeyMockOnlyTask(c.Request.Context(), req.Provider, service.VideoTaskCreateParams{
+			TaskType:          req.TaskType,
+			Model:             req.Model,
+			Prompt:            req.Prompt,
+			NegativePrompt:    req.NegativePrompt,
+			ReferenceImageURL: req.ReferenceImageURL,
+			ReferenceVideoURL: req.ReferenceVideoURL,
+			AspectRatio:       req.AspectRatio,
+			Duration:          req.Duration,
+			Resolution:        req.Resolution,
+			CreatedBy:         subject.UserID,
+		})
+	} else if provider == service.VideoProviderSeedance && req.TrialMode == "tiny_real" {
+		task, err = h.video.CreateAPIKeySeedanceTinyTrialTask(c.Request.Context(), req.Provider, service.VideoTaskCreateParams{
+			TaskType:          req.TaskType,
+			Model:             req.Model,
+			Prompt:            req.Prompt,
+			NegativePrompt:    req.NegativePrompt,
+			ReferenceImageURL: req.ReferenceImageURL,
+			ReferenceVideoURL: req.ReferenceVideoURL,
+			AspectRatio:       req.AspectRatio,
+			Duration:          req.Duration,
+			Resolution:        req.Resolution,
+			CreatedBy:         subject.UserID,
+		})
+	} else {
+		response.ErrorFrom(c, infraerrors.Forbidden(
+			"VIDEO_PROVIDER_DISABLED",
+			fmt.Sprintf("provider %s is disabled in API-key mock-only video gateway; use provider=mock", provider),
+		).WithMetadata(map[string]string{
+			"provider":                     provider,
+			"mock_only":                    "true",
+			"real_provider_dispatch_count": "0",
+		}))
+		return
+	}
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -269,7 +306,7 @@ func (h *VideoHandler) GetAPIKeyVideoTask(c *gin.Context) {
 		return
 	}
 	role, _ := middleware2.GetUserRoleFromContext(c)
-	task, events, err := h.video.GetAPIKeyMockOnlyTask(c.Request.Context(), id, subject.UserID, role == "admin")
+	task, events, err := h.video.GetAPIKeyTrialTask(c.Request.Context(), id, subject.UserID, role == "admin")
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -288,7 +325,7 @@ func (h *VideoHandler) CancelAPIKeyVideoTask(c *gin.Context) {
 		return
 	}
 	role, _ := middleware2.GetUserRoleFromContext(c)
-	task, err := h.video.CancelAPIKeyMockOnlyTask(c.Request.Context(), id, subject.UserID, role == "admin")
+	task, err := h.video.CancelAPIKeyTrialTask(c.Request.Context(), id, subject.UserID, role == "admin")
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -459,11 +496,40 @@ func videoTaskToResponse(task *service.VideoTask, events []*service.VideoTaskEve
 }
 
 func apiKeyVideoTaskToResponse(task *service.VideoTask, events []*service.VideoTaskEvent) apiKeyVideoTaskResponse {
+	mockOnly := task != nil && task.Provider == service.VideoProviderMock
+	boundary := "api-key-video-mock-only"
+	realDispatchCount := 0
+	trialMode := ""
+	blockedReason := ""
+	trialGateResult := ""
+
+	if task != nil && task.Provider == service.VideoProviderSeedance {
+		boundary = "api-key-video-seedance-tiny-trial"
+		realDispatchCount = 1
+	}
+
+	for _, ev := range events {
+		if ev != nil && ev.EventType == "trial_gate" && ev.Payload != nil {
+			if v, ok := ev.Payload["trial_mode"]; ok {
+				trialMode = fmt.Sprint(v)
+			}
+			if v, ok := ev.Payload["blocked_reasons"]; ok {
+				blockedReason = fmt.Sprint(v)
+			}
+			if v, ok := ev.Payload["gate_result"]; ok {
+				trialGateResult = fmt.Sprint(v)
+			}
+		}
+	}
+
 	return apiKeyVideoTaskResponse{
 		videoTaskResponse:         videoTaskToResponse(task, events),
-		MockOnly:                  true,
-		ProviderBoundary:          "api-key-video-mock-only",
-		RealProviderDispatchCount: 0,
+		MockOnly:                  mockOnly,
+		ProviderBoundary:          boundary,
+		RealProviderDispatchCount: realDispatchCount,
+		TrialMode:                 trialMode,
+		BlockedReason:             blockedReason,
+		TrialGateResult:           trialGateResult,
 	}
 }
 

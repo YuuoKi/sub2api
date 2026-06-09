@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -265,6 +266,86 @@ func (s *VideoGatewayService) ListAPIKeyMockOnlyProviders(ctx context.Context) (
 	return out, nil
 }
 
+func (s *VideoGatewayService) ListAPIKeyTrialProviders(ctx context.Context) ([]*VideoProviderAccount, error) {
+	items, err := s.ListProviderAccounts(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	byProvider := make(map[string]*VideoProviderAccount)
+	for _, item := range items {
+		if item == nil {
+			continue
+		}
+		existing := byProvider[item.Provider]
+		if existing == nil ||
+			(item.RouteAvailable && !existing.RouteAvailable) ||
+			(item.RouteAvailable == existing.RouteAvailable && item.Priority < existing.Priority) {
+			byProvider[item.Provider] = item
+		}
+	}
+
+	out := make([]*VideoProviderAccount, 0, 3)
+
+	// Mock
+	mock := byProvider[VideoProviderMock]
+	if mock == nil {
+		mock = apiKeySyntheticVideoProvider(VideoProviderMock)
+		mock.RouteSkipReason = "mock provider account is not configured"
+	}
+	out = append(out, mock)
+
+	// Seedance
+	seedance := byProvider[VideoProviderSeedance]
+	if seedance == nil {
+		seedance = apiKeySyntheticVideoProvider(VideoProviderSeedance)
+		seedance.RouteSkipReason = "seedance provider account is not configured"
+	} else {
+		s.decorateProviderForResponse(seedance, VideoProviderRuntimeStats{})
+		reasons := []string{}
+		if strings.TrimSpace(os.Getenv("SUB2API_VIDEO_REAL_SMOKE_ENABLED")) != "1" {
+			reasons = append(reasons, "SUB2API_VIDEO_REAL_SMOKE_ENABLED is not 1")
+		}
+		if !metadataBool(seedance.Metadata, "single_smoke_authorized") && !metadataBool(seedance.Metadata, "real_smoke_authorized") {
+			reasons = append(reasons, "provider metadata does not record single smoke authorization")
+		}
+		if strings.TrimSpace(os.Getenv("SUB2API_VIDEO_REDACTED_EVENT_LOG")) == "" {
+			reasons = append(reasons, "redacted event log path is missing")
+		}
+		if len(reasons) > 0 {
+			seedance.RouteSkipReason = strings.Join(reasons, "; ")
+		} else {
+			seedance.RouteSkipReason = ""
+		}
+		seedance.RouteAvailable = false // always false for API-key trial endpoint
+		seedance.MaskedKey = ""         // do not expose masked key in API-key trial endpoint
+		if seedance.Metadata == nil {
+			seedance.Metadata = map[string]any{}
+		}
+		seedance.Metadata["tiny_real_trial_supported"] = true
+		seedance.Metadata["requires_real_smoke_gate"] = true
+		seedance.Metadata["blocked_reasons"] = reasons
+	}
+	out = append(out, seedance)
+
+	// Kling — still blocked
+	kling := byProvider[VideoProviderKling]
+	if kling == nil {
+		kling = apiKeySyntheticVideoProvider(VideoProviderKling)
+	}
+	kling.Enabled = false
+	kling.APIKeyConfigured = false
+	kling.PlainAPIKey = ""
+	kling.MaskedKey = ""
+	kling.RouteAvailable = false
+	kling.RouteSkipReason = "kling is disabled in API-key video gateway"
+	kling.KeyStatus = videoKeyStatusDisabled
+	kling.HealthStatus = videoHealthStatusDisabled
+	out = append(out, kling)
+
+	return out, nil
+}
+
 func (s *VideoGatewayService) CreateAPIKeyMockOnlyTask(ctx context.Context, provider string, p VideoTaskCreateParams) (*VideoTask, error) {
 	provider = strings.TrimSpace(provider)
 	if provider == "" {
@@ -299,6 +380,95 @@ func (s *VideoGatewayService) CreateAPIKeyMockOnlyTask(ctx context.Context, prov
 	return task, nil
 }
 
+func (s *VideoGatewayService) CreateAPIKeySeedanceTinyTrialTask(ctx context.Context, provider string, p VideoTaskCreateParams) (*VideoTask, error) {
+	provider = strings.TrimSpace(provider)
+	if provider != VideoProviderSeedance {
+		return nil, errVideoProviderBlockedMockOnly(provider)
+	}
+
+	accounts, err := s.ListProviderAccounts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var seedanceAccount *VideoProviderAccount
+	for _, acc := range accounts {
+		if acc != nil && acc.Provider == VideoProviderSeedance && acc.Enabled {
+			s.decorateProviderForResponse(acc, VideoProviderRuntimeStats{})
+			if acc.RouteAvailable || acc.APIKeyConfigured {
+				seedanceAccount = acc
+				break
+			}
+		}
+	}
+	if seedanceAccount == nil {
+		return nil, infraerrors.Forbidden("VIDEO_PROVIDER_DISABLED", "seedance provider account not available for trial").WithMetadata(map[string]string{
+			"provider":                     VideoProviderSeedance,
+			"mock_only":                    "false",
+			"real_provider_dispatch_count": "0",
+		})
+	}
+
+	model := firstNonEmptyVideo(strings.TrimSpace(p.Model), seedanceAccount.DefaultModel, defaultVideoModel(VideoProviderSeedance))
+	dummyTask := &VideoTask{
+		Provider: seedanceAccount.Provider,
+		Model:    model,
+		TaskType: p.TaskType,
+		Prompt:   strings.TrimSpace(p.Prompt),
+		Duration: defaultVideoDuration(p.Duration),
+	}
+	blockedReasons := seedanceSmokeGateBlockedReasons(seedanceAccount, dummyTask)
+	if len(blockedReasons) > 0 {
+		return nil, infraerrors.Forbidden("VIDEO_TRIAL_BLOCKED", "seedance tiny real trial blocked by gate").WithMetadata(map[string]string{
+			"provider":                     VideoProviderSeedance,
+			"blocked_reasons":              strings.Join(blockedReasons, "; "),
+			"real_provider_dispatch_count": "0",
+		})
+	}
+
+	tasks, _, err := s.repo.ListTasks(ctx, VideoTaskListParams{
+		Provider:  VideoProviderSeedance,
+		CreatedBy: p.CreatedBy,
+		Page:      1,
+		PageSize:  100,
+	})
+	if err != nil {
+		return nil, err
+	}
+	today := time.Now().In(time.Local).Truncate(24 * time.Hour)
+	seedanceTasksToday := 0
+	for _, t := range tasks {
+		if t.CreatedAt.After(today) || t.CreatedAt.Equal(today) {
+			seedanceTasksToday++
+		}
+	}
+	if seedanceTasksToday >= 1 {
+		return nil, infraerrors.Forbidden("VIDEO_TRIAL_LIMIT_EXCEEDED", "seedance tiny real trial limited to 1 call per day per user").WithMetadata(map[string]string{
+			"provider":                     VideoProviderSeedance,
+			"real_provider_dispatch_count": "0",
+		})
+	}
+
+	p.ProviderAccountID = seedanceAccount.ID
+	task, err := s.CreateTask(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+
+	_ = s.repo.AddTaskEvent(ctx, &VideoTaskEvent{
+		VideoTaskID: task.ID,
+		EventType:   "trial_gate",
+		Message:     "seedance tiny real trial gate passed",
+		Payload: map[string]any{
+			"provider":                     VideoProviderSeedance,
+			"trial_mode":                   "tiny_real",
+			"gate_result":                  "passed",
+			"real_provider_dispatch_count": 1,
+		},
+	})
+
+	return task, nil
+}
+
 func (s *VideoGatewayService) GetAPIKeyMockOnlyTask(ctx context.Context, id, userID int64, isAdmin bool) (*VideoTask, []*VideoTaskEvent, error) {
 	task, events, err := s.GetTask(ctx, id, userID, isAdmin)
 	if err != nil {
@@ -312,6 +482,31 @@ func (s *VideoGatewayService) GetAPIKeyMockOnlyTask(ctx context.Context, id, use
 
 func (s *VideoGatewayService) CancelAPIKeyMockOnlyTask(ctx context.Context, id, userID int64, isAdmin bool) (*VideoTask, error) {
 	task, _, err := s.GetAPIKeyMockOnlyTask(ctx, id, userID, isAdmin)
+	if err != nil {
+		return nil, err
+	}
+	if IsTerminalVideoStatus(task.Status) {
+		if task.Status == VideoStatusCancelled {
+			return task, nil
+		}
+		return nil, infraerrors.Conflict("VIDEO_TASK_NOT_CANCELABLE", fmt.Sprintf("video task is already %s and cannot be canceled", task.Status))
+	}
+	return s.CancelTask(ctx, id, userID, isAdmin)
+}
+
+func (s *VideoGatewayService) GetAPIKeyTrialTask(ctx context.Context, id, userID int64, isAdmin bool) (*VideoTask, []*VideoTaskEvent, error) {
+	task, events, err := s.GetTask(ctx, id, userID, isAdmin)
+	if err != nil {
+		return nil, nil, err
+	}
+	if task.Provider != VideoProviderMock && task.Provider != VideoProviderSeedance {
+		return nil, nil, errVideoProviderBlockedMockOnly(task.Provider)
+	}
+	return task, events, nil
+}
+
+func (s *VideoGatewayService) CancelAPIKeyTrialTask(ctx context.Context, id, userID int64, isAdmin bool) (*VideoTask, error) {
+	task, _, err := s.GetAPIKeyTrialTask(ctx, id, userID, isAdmin)
 	if err != nil {
 		return nil, err
 	}

@@ -112,6 +112,16 @@ func RegisterGatewayRoutes(
 			}
 			h.OpenAIGateway.Images(c)
 		})
+		video := gateway.Group("/video")
+		{
+			video.GET("/providers", h.Video.ListAPIKeyVideoProviders)
+			tasks := video.Group("/tasks")
+			{
+				tasks.POST("", h.Video.CreateAPIKeyVideoTask)
+				tasks.GET("/:id", h.Video.GetAPIKeyVideoTask)
+				tasks.POST("/:id/cancel", h.Video.CancelAPIKeyVideoTask)
+			}
+		}
 	}
 
 	// Gemini 原生 API 兼容层（Gemini SDK/CLI 直连）

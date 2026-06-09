@@ -36,6 +36,7 @@ var (
 	ErrVideoMissingPrompt    = infraerrors.BadRequest("VIDEO_MISSING_PROMPT", "prompt is required")
 	ErrVideoMissingProvider  = infraerrors.BadRequest("VIDEO_MISSING_PROVIDER", "provider_account_id is required")
 	ErrVideoKeyDecryptFailed = infraerrors.InternalServer("VIDEO_KEY_DECRYPT_FAILED", "video provider key decryption failed; please reconfigure the provider")
+	ErrVideoMockUnavailable  = infraerrors.ServiceUnavailable("VIDEO_MOCK_PROVIDER_UNAVAILABLE", "mock video provider is unavailable")
 )
 
 type VideoKeyEncryptor interface {

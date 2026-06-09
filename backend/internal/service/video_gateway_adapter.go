@@ -112,6 +112,7 @@ func (a *mockVideoAdapter) BuildCreatePayload(_ *VideoProviderAccount, task *Vid
 		"prompt":              task.Prompt,
 		"negative_prompt":     task.NegativePrompt,
 		"reference_image_url": task.ReferenceImageURL,
+		"reference_video_url": task.ReferenceVideoURL,
 		"aspect_ratio":        task.AspectRatio,
 		"duration":            task.Duration,
 		"resolution":          task.Resolution,

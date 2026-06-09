@@ -34,6 +34,19 @@ type videoTaskCreateRequest struct {
 	Resolution        string `json:"resolution" binding:"omitempty,max=20"`
 }
 
+type apiKeyVideoTaskCreateRequest struct {
+	Provider          string `json:"provider" binding:"omitempty,oneof=mock seedance kling"`
+	TaskType          string `json:"task_type" binding:"required,oneof=text_to_video image_to_video reference_to_video"`
+	Model             string `json:"model" binding:"omitempty,max=200"`
+	Prompt            string `json:"prompt" binding:"required,max=8000"`
+	NegativePrompt    string `json:"negative_prompt" binding:"omitempty,max=4000"`
+	ReferenceImageURL string `json:"reference_image_url" binding:"omitempty,max=1000"`
+	ReferenceVideoURL string `json:"reference_video_url" binding:"omitempty,max=1000"`
+	AspectRatio       string `json:"aspect_ratio" binding:"omitempty,max=20"`
+	Duration          int    `json:"duration" binding:"omitempty,min=1,max=60"`
+	Resolution        string `json:"resolution" binding:"omitempty,max=20"`
+}
+
 type videoTaskResponse struct {
 	ID                  int64                    `json:"id"`
 	ProviderAccountID   int64                    `json:"provider_account_id"`
@@ -63,6 +76,13 @@ type videoTaskResponse struct {
 	UpdatedAt           string                   `json:"updated_at"`
 	CompletedAt         *string                  `json:"completed_at"`
 	Events              []videoTaskEventResponse `json:"events,omitempty"`
+}
+
+type apiKeyVideoTaskResponse struct {
+	videoTaskResponse
+	MockOnly                  bool   `json:"mock_only"`
+	ProviderBoundary          string `json:"provider_boundary"`
+	RealProviderDispatchCount int    `json:"real_provider_dispatch_count"`
 }
 
 type videoProviderAccountResponse struct {
@@ -109,6 +129,23 @@ func (h *VideoHandler) ListProviders(c *gin.Context) {
 		out = append(out, videoProviderAccountToResponse(item))
 	}
 	response.Success(c, gin.H{"items": out})
+}
+
+func (h *VideoHandler) ListAPIKeyVideoProviders(c *gin.Context) {
+	items, err := h.video.ListAPIKeyMockOnlyProviders(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	out := make([]videoProviderAccountResponse, 0, len(items))
+	for _, item := range items {
+		out = append(out, videoProviderAccountToResponse(item))
+	}
+	response.Success(c, gin.H{
+		"items":                        out,
+		"mock_only":                    true,
+		"real_provider_dispatch_count": 0,
+	})
 }
 
 func (h *VideoHandler) ListTasks(c *gin.Context) {
@@ -189,6 +226,74 @@ func (h *VideoHandler) CancelTask(c *gin.Context) {
 		return
 	}
 	response.Success(c, videoTaskToResponse(task, nil))
+}
+
+func (h *VideoHandler) CreateAPIKeyVideoTask(c *gin.Context) {
+	var req apiKeyVideoTaskCreateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ErrorFrom(c, infraerrors.BadRequest("VALIDATION_ERROR", err.Error()))
+		return
+	}
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok || subject.UserID <= 0 {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	task, err := h.video.CreateAPIKeyMockOnlyTask(c.Request.Context(), req.Provider, service.VideoTaskCreateParams{
+		TaskType:          req.TaskType,
+		Model:             req.Model,
+		Prompt:            req.Prompt,
+		NegativePrompt:    req.NegativePrompt,
+		ReferenceImageURL: req.ReferenceImageURL,
+		ReferenceVideoURL: req.ReferenceVideoURL,
+		AspectRatio:       req.AspectRatio,
+		Duration:          req.Duration,
+		Resolution:        req.Resolution,
+		CreatedBy:         subject.UserID,
+	})
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Created(c, apiKeyVideoTaskToResponse(task, nil))
+}
+
+func (h *VideoHandler) GetAPIKeyVideoTask(c *gin.Context) {
+	id, ok := parseTaskID(c)
+	if !ok {
+		return
+	}
+	subject, authOK := middleware2.GetAuthSubjectFromContext(c)
+	if !authOK || subject.UserID <= 0 {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	role, _ := middleware2.GetUserRoleFromContext(c)
+	task, events, err := h.video.GetAPIKeyMockOnlyTask(c.Request.Context(), id, subject.UserID, role == "admin")
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, apiKeyVideoTaskToResponse(task, events))
+}
+
+func (h *VideoHandler) CancelAPIKeyVideoTask(c *gin.Context) {
+	id, ok := parseTaskID(c)
+	if !ok {
+		return
+	}
+	subject, authOK := middleware2.GetAuthSubjectFromContext(c)
+	if !authOK || subject.UserID <= 0 {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	role, _ := middleware2.GetUserRoleFromContext(c)
+	task, err := h.video.CancelAPIKeyMockOnlyTask(c.Request.Context(), id, subject.UserID, role == "admin")
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, apiKeyVideoTaskToResponse(task, nil))
 }
 
 func (h *VideoHandler) CreateDramaTask(c *gin.Context) {
@@ -350,6 +455,15 @@ func videoTaskToResponse(task *service.VideoTask, events []*service.VideoTaskEve
 		UpdatedAt:           formatTaskTime(task.UpdatedAt),
 		CompletedAt:         completed,
 		Events:              eventResponses,
+	}
+}
+
+func apiKeyVideoTaskToResponse(task *service.VideoTask, events []*service.VideoTaskEvent) apiKeyVideoTaskResponse {
+	return apiKeyVideoTaskResponse{
+		videoTaskResponse:         videoTaskToResponse(task, events),
+		MockOnly:                  true,
+		ProviderBoundary:          "api-key-video-mock-only",
+		RealProviderDispatchCount: 0,
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
 
 const (
@@ -214,6 +215,164 @@ func (s *VideoGatewayService) TestProviderAccount(ctx context.Context, id int64)
 		NormalizedStatus: adapter.NormalizeStatus("processing"),
 		PayloadPreview:   preview,
 	}, nil
+}
+
+func (s *VideoGatewayService) ListAPIKeyMockOnlyProviders(ctx context.Context) ([]*VideoProviderAccount, error) {
+	items, err := s.ListProviderAccounts(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	byProvider := make(map[string]*VideoProviderAccount)
+	for _, item := range items {
+		if item == nil {
+			continue
+		}
+		existing := byProvider[item.Provider]
+		if existing == nil ||
+			(item.RouteAvailable && !existing.RouteAvailable) ||
+			(item.RouteAvailable == existing.RouteAvailable && item.Priority < existing.Priority) {
+			byProvider[item.Provider] = item
+		}
+	}
+
+	out := make([]*VideoProviderAccount, 0, 3)
+	mock := byProvider[VideoProviderMock]
+	if mock == nil {
+		mock = apiKeySyntheticVideoProvider(VideoProviderMock)
+		mock.RouteSkipReason = "mock provider account is not configured"
+	}
+	out = append(out, mock)
+
+	for _, provider := range []string{VideoProviderSeedance, VideoProviderKling} {
+		item := byProvider[provider]
+		if item == nil {
+			item = apiKeySyntheticVideoProvider(provider)
+		}
+		item.Enabled = false
+		item.APIKeyConfigured = false
+		item.PlainAPIKey = ""
+		item.MaskedKey = ""
+		item.RouteAvailable = false
+		item.RouteSkipReason = "disabled in API-key mock-only gateway"
+		item.KeyStatus = videoKeyStatusDisabled
+		item.HealthStatus = videoHealthStatusDisabled
+		item.DiagnosticType = "mock-only"
+		item.SuggestedAction = "use provider=mock for this API-key video gateway version"
+		out = append(out, item)
+	}
+
+	return out, nil
+}
+
+func (s *VideoGatewayService) CreateAPIKeyMockOnlyTask(ctx context.Context, provider string, p VideoTaskCreateParams) (*VideoTask, error) {
+	provider = strings.TrimSpace(provider)
+	if provider == "" {
+		provider = VideoProviderMock
+	}
+	if err := validateVideoProvider(provider); err != nil {
+		return nil, err
+	}
+	if provider != VideoProviderMock {
+		return nil, errVideoProviderBlockedMockOnly(provider)
+	}
+
+	mock, err := s.resolveAPIKeyMockOnlyRoute(ctx)
+	if err != nil {
+		return nil, err
+	}
+	p.ProviderAccountID = mock.ID
+	task, err := s.CreateTask(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	_ = s.repo.AddTaskEvent(ctx, &VideoTaskEvent{
+		VideoTaskID: task.ID,
+		EventType:   "mock_only_gateway",
+		Message:     "API-key video gateway accepted mock-only task",
+		Payload: map[string]any{
+			"provider":                     VideoProviderMock,
+			"mock_only":                    true,
+			"real_provider_dispatch_count": 0,
+		},
+	})
+	return task, nil
+}
+
+func (s *VideoGatewayService) GetAPIKeyMockOnlyTask(ctx context.Context, id, userID int64, isAdmin bool) (*VideoTask, []*VideoTaskEvent, error) {
+	task, events, err := s.GetTask(ctx, id, userID, isAdmin)
+	if err != nil {
+		return nil, nil, err
+	}
+	if task.Provider != VideoProviderMock {
+		return nil, nil, errVideoProviderBlockedMockOnly(task.Provider)
+	}
+	return task, events, nil
+}
+
+func (s *VideoGatewayService) CancelAPIKeyMockOnlyTask(ctx context.Context, id, userID int64, isAdmin bool) (*VideoTask, error) {
+	task, _, err := s.GetAPIKeyMockOnlyTask(ctx, id, userID, isAdmin)
+	if err != nil {
+		return nil, err
+	}
+	if IsTerminalVideoStatus(task.Status) {
+		if task.Status == VideoStatusCancelled {
+			return task, nil
+		}
+		return nil, infraerrors.Conflict("VIDEO_TASK_NOT_CANCELABLE", fmt.Sprintf("video task is already %s and cannot be canceled", task.Status))
+	}
+	return s.CancelTask(ctx, id, userID, isAdmin)
+}
+
+func (s *VideoGatewayService) resolveAPIKeyMockOnlyRoute(ctx context.Context) (*VideoProviderAccount, error) {
+	providers, err := s.ListProviderAccounts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var selected *VideoProviderAccount
+	for _, provider := range providers {
+		if provider == nil || provider.Provider != VideoProviderMock || !provider.RouteAvailable {
+			continue
+		}
+		if selected == nil ||
+			provider.Priority < selected.Priority ||
+			(provider.Priority == selected.Priority && provider.ID < selected.ID) {
+			selected = provider
+		}
+	}
+	if selected == nil {
+		return nil, ErrVideoMockUnavailable.WithMetadata(map[string]string{
+			"provider": VideoProviderMock,
+			"boundary": "api-key-video-mock-only",
+		})
+	}
+	return selected, nil
+}
+
+func apiKeySyntheticVideoProvider(provider string) *VideoProviderAccount {
+	return &VideoProviderAccount{
+		Provider:           provider,
+		DisplayName:        defaultVideoProviderDisplayName(provider),
+		Enabled:            false,
+		DefaultModel:       defaultVideoModel(provider),
+		RateLimitPerMinute: defaultVideoRateLimit(0),
+		KeyStatus:          videoKeyStatusDisabled,
+		HealthStatus:       videoHealthStatusDisabled,
+		DiagnosticType:     "mock-only",
+		SuggestedAction:    "use provider=mock for this API-key video gateway version",
+		RouteAvailable:     false,
+	}
+}
+
+func errVideoProviderBlockedMockOnly(provider string) error {
+	return infraerrors.Forbidden(
+		"VIDEO_PROVIDER_DISABLED",
+		fmt.Sprintf("provider %s is disabled in API-key mock-only video gateway; use provider=mock", provider),
+	).WithMetadata(map[string]string{
+		"provider":                     provider,
+		"mock_only":                    "true",
+		"real_provider_dispatch_count": "0",
+	})
 }
 
 func (s *VideoGatewayService) CreateTask(ctx context.Context, p VideoTaskCreateParams) (*VideoTask, error) {

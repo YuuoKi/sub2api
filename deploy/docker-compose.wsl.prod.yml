@@ -1,0 +1,143 @@
+# =============================================================================
+# Sub2API Docker Compose - Production (WSL)
+# =============================================================================
+# Usage:
+#   1. Review and configure deploy/.env (this is the canonical env file)
+#   2. docker-compose -f docker-compose.wsl.prod.yml up -d
+#   3. Access http://<HOST>:8080 (direct) or https://<DOMAIN> (via Caddy)
+# =============================================================================
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: sub2api-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"  # HTTP/3 (QUIC)
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+      - caddy-logs:/var/log/caddy
+    environment:
+      - CADDY_DOMAIN=${CADDY_DOMAIN:-localhost}
+      - TLS_EMAIL=${TLS_EMAIL:-internal}
+      - TZ=${TZ:-Asia/Shanghai}
+    depends_on:
+      sub2api:
+        condition: service_healthy
+    networks:
+      - sub2api-network
+
+  sub2api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: sub2api-prod
+    restart: unless-stopped
+    # Port 8080 is internal-only when Caddy handles external traffic.
+    # For direct access during debugging, uncomment the ports block:
+    # ports:
+    #   - "${BIND_HOST:-0.0.0.0}:${SERVER_PORT:-8080}:8080"
+    expose:
+      - "8080"
+    volumes:
+      - app-data:/app/data
+    env_file:
+      - .env
+    environment:
+      - AUTO_SETUP=true
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=8080
+      - SERVER_MODE=${SERVER_MODE:-release}
+      - RUN_MODE=standard
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_USER=${POSTGRES_USER:-sub2api}
+      - DATABASE_PASSWORD=${POSTGRES_PASSWORD}
+      - DATABASE_DBNAME=${POSTGRES_DB:-sub2api}
+      - DATABASE_SSLMODE=disable
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_DB=0
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@sub2api.local}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET}
+      - TOTP_ENCRYPTION_KEY=${TOTP_ENCRYPTION_KEY}
+      - TZ=${TZ:-Asia/Shanghai}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_FORMAT=${LOG_FORMAT:-json}
+      - LOG_SERVICE_NAME=${LOG_SERVICE_NAME:-sub2api}
+      - LOG_ENV=${LOG_ENV:-production}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - sub2api-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-T", "5", "-O", "/dev/null", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  postgres:
+    image: postgres:18-alpine
+    container_name: sub2api-postgres-prod
+    restart: unless-stopped
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-sub2api}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-sub2api}
+      - PGDATA=/var/lib/postgresql/data
+      - TZ=${TZ:-Asia/Shanghai}
+    networks:
+      - sub2api-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sub2api} -d ${POSTGRES_DB:-sub2api}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  redis:
+    image: redis:8-alpine
+    container_name: sub2api-redis-prod
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    command: >
+        sh -c '
+          redis-server --requirepass $${REDIS_PASSWORD}
+          --save 60 1
+          --appendonly yes
+          --appendfsync everysec'
+    env_file:
+      - .env
+    environment:
+      - TZ=${TZ:-Asia/Shanghai}
+    networks:
+      - sub2api-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+networks:
+  sub2api-network:
+
+volumes:
+  pg-data:
+  redis-data:
+  app-data:
+  caddy-data:
+  caddy-config:
+  caddy-logs:

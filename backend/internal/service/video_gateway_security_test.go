@@ -39,6 +39,83 @@ func TestRedactVideoUpstreamSecrets(t *testing.T) {
 	}
 }
 
+// --- B1a': opaque delimiter-less token redaction (latent gap) ----------------
+
+// TestRedactVideoUpstreamSecretsOpaqueToken closes the adversarial finding
+// redact-gap-opaque-token: an opaque, mixed-case, non-hex, delimiter-less token
+// of ~20-47 chars with NO recognized prefix slips past every shared pattern
+// (idx5 is hex-only; idx6/idx7 require >=48; the field-name idx1 anchor breaks on
+// the quote in {"api_key":"..."}) and past the AKLT rule. The VIDEO-LOCAL
+// opaque-token pass must strip it in every echo shape — bare, as a JSON value
+// under an innocuous key, under a sensitive key, and buried in an error.message
+// — WITHOUT over-redacting ordinary words, short ids, numeric ids, or the result
+// video_url path segments that must stay inspectable for debugging.
+func TestRedactVideoUpstreamSecretsOpaqueToken(t *testing.T) {
+	// A 47-char delimiter-less, non-hex, mixed-case, digit-bearing token; the
+	// shorter lengths are prefixes of it so every case shares one shape.
+	const master = "Ab3Cd6Ef9Gh2Jk5Lm8Np1Qr4St7Uv0Wx3Yz6Ab9Cd2Ef5Gh"
+	tok20 := master[:20]
+	tok32 := master[:32]
+	tok40 := master[:40]
+	tok47 := master[:47]
+	for _, n := range []struct {
+		name string
+		tok  string
+		want int
+	}{{"20", tok20, 20}, {"32", tok32, 32}, {"40", tok40, 40}, {"47", tok47, 47}} {
+		if len(n.tok) != n.want {
+			t.Fatalf("token %s has length %d, want %d (fix the master string)", n.name, len(n.tok), n.want)
+		}
+	}
+
+	type tc struct {
+		name string
+		in   string
+		// gone: a substring that MUST NOT survive (a leaked secret). "" => none.
+		gone string
+		// keep: a substring that MUST survive (inspectable). "" => none.
+		keep string
+		// marker: whether the redaction marker is expected in the output.
+		marker bool
+	}
+	cases := []tc{
+		// --- positives: the opaque token must be stripped --------------------
+		{"bare token 20", tok20, tok20, "", true},
+		{"bare token 32", tok32, tok32, "", true},
+		{"bare token 40", tok40, tok40, "", true},
+		{"bare token 47", tok47, tok47, "", true},
+		{"json innocuous key", `{"k":"` + tok32 + `"}`, tok32, `"k":`, true},
+		{"json api_key value (idx1 anchor gap)", `{"api_key":"` + tok40 + `"}`, tok40, `"api_key":`, true},
+		{"nested error.message", `{"error":{"message":"upstream rejected credential ` + tok47 + ` please retry"}}`, tok47, "please retry", true},
+
+		// --- negatives: nothing of value may be redacted ---------------------
+		{"ordinary words", "the quick brown fox jumps over the lazy dog several times today", "", "quick brown fox", false},
+		{"long dictionary word (no digit)", "antidisestablishmentarianism", "", "antidisestablishmentarianism", false},
+		{"short ids and statuses", `{"id":"cgt-1234","status":"queued"}`, "", `"status":"queued"`, false},
+		{"delimited task id stays readable", "cgt-20250615-7a8b9c", "", "cgt-20250615-7a8b9c", false},
+		{"long pure-digit run (no letter)", "1234567890123456789012", "", "1234567890123456789012", false},
+		{"video_url path segments inspectable", `{"video_url":"ark-content.cn-beijing.volces.com/v/tasks/cgt-20250615/ok.mp4"}`, "", "/v/tasks/cgt-20250615/ok.mp4", false},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			out := redactVideoUpstreamSecrets(c.in)
+			if c.gone != "" && strings.Contains(out, c.gone) {
+				t.Fatalf("secret survived redaction: in=%q out=%q", c.in, out)
+			}
+			if c.keep != "" && !strings.Contains(out, c.keep) {
+				t.Fatalf("inspectable substring %q was over-redacted: in=%q out=%q", c.keep, c.in, out)
+			}
+			if c.marker && !strings.Contains(out, "已脱敏") {
+				t.Fatalf("expected redaction marker, in=%q out=%q", c.in, out)
+			}
+			if !c.marker && strings.Contains(out, "已脱敏") {
+				t.Fatalf("unexpected over-redaction (marker present), in=%q out=%q", c.in, out)
+			}
+		})
+	}
+}
+
 // --- B1b: redacted event log writer -----------------------------------------
 
 func TestAppendRedactedVideoEvent(t *testing.T) {

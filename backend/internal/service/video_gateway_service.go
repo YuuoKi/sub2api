@@ -312,6 +312,9 @@ func (s *VideoGatewayService) ListAPIKeyTrialProviders(ctx context.Context) ([]*
 		if strings.TrimSpace(os.Getenv("SUB2API_VIDEO_REDACTED_EVENT_LOG")) == "" {
 			reasons = append(reasons, "redacted event log path is missing")
 		}
+		if strings.TrimSpace(os.Getenv("SUB2API_VIDEO_URL_ALLOWLIST")) == "" {
+			reasons = append(reasons, "media url allowlist (SUB2API_VIDEO_URL_ALLOWLIST) is missing")
+		}
 		if len(reasons) > 0 {
 			seedance.RouteSkipReason = strings.Join(reasons, "; ")
 		} else {

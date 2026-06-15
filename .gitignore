@@ -112,6 +112,11 @@ backend/config.yaml
 deploy/config.yaml
 backend/.installed
 
+# 视频网关脱敏事件日志（SUB2API_VIDEO_REDACTED_EVENT_LOG 指向的审计文件）。
+# 即便已脱敏也绝不入库；务必指向 *.log 或 backend/data/ 下的受限文件。
+backend/video-redacted-events.log
+*.redacted-events.log
+
 # ===================
 # 其他
 # ===================

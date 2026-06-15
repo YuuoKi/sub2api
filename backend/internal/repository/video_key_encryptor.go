@@ -3,7 +3,6 @@ package repository
 import (
 	"encoding/hex"
 	"fmt"
-	"log/slog"
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -11,12 +10,17 @@ import (
 )
 
 // NewVideoKeyEncryptor creates the dedicated reversible encryptor for video
-// upstream API keys. Production deployments should set video_gateway.encryption_key.
+// upstream API keys. video_gateway.encryption_key is REQUIRED.
+//
+// Previously an empty key silently fell back to totp.encryption_key with only a
+// Warn. That is a key-domain-confusion risk: a production deployment that forgot
+// to configure the dedicated key would encrypt real Seedance credentials under
+// the TOTP key, and the Warn is easy to miss. We now hard-fail instead, so the
+// misconfiguration cannot reach production.
 func NewVideoKeyEncryptor(cfg *config.Config) (service.VideoKeyEncryptor, error) {
 	keyHex := strings.TrimSpace(cfg.VideoGateway.EncryptionKey)
 	if keyHex == "" {
-		keyHex = strings.TrimSpace(cfg.Totp.EncryptionKey)
-		slog.Warn("video_gateway.encryption_key is empty; using dev-only fallback from totp.encryption_key")
+		return nil, fmt.Errorf("video_gateway.encryption_key is required: refusing to fall back to totp.encryption_key (key-domain confusion); configure a dedicated 32-byte (64 hex char) key")
 	}
 	key, err := hex.DecodeString(keyHex)
 	if err != nil {

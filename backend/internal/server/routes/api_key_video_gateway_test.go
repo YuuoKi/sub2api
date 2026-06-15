@@ -546,6 +546,9 @@ func TestAPIKeyVideoGatewaySeedanceTrialBlockedMissingEventLog(t *testing.T) {
 func TestAPIKeyVideoGatewaySeedanceTrialSuccess(t *testing.T) {
 	setEnv(t, "SUB2API_VIDEO_REAL_SMOKE_ENABLED", "1")
 	setEnv(t, "SUB2API_VIDEO_REDACTED_EVENT_LOG", "/tmp/redacted.log")
+	// Fail-closed SSRF posture now requires the media URL allowlist before the
+	// real trial path is permitted (see seedanceSmokeGateBlockedReasons).
+	setEnv(t, "SUB2API_VIDEO_URL_ALLOWLIST", "volces.com")
 	repo := newAPIKeyVideoGatewayMemoryRepo()
 	repo.seedProvider(service.VideoProviderMock, true, map[string]any{"key_status": "normal", "health_status": "healthy"})
 	repo.seedProvider(service.VideoProviderSeedance, true, map[string]any{

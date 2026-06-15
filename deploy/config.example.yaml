@@ -858,10 +858,11 @@ totp:
 # 视频网关 P0 配置
 # =============================================================================
 video_gateway:
-  # Production must set a fixed 32-byte hex key for upstream video provider keys.
-  # 生产环境必须配置固定的 32 字节 hex 密钥，用于加密视频上游 API Key。
-  # If left empty in development, the service falls back to totp.encryption_key
-  # and logs a dev-only warning.
+  # REQUIRED: a dedicated 32-byte hex key for encrypting upstream video provider
+  # API keys. 必填：用于加密视频上游 API Key 的专用 32 字节 hex 密钥。
+  # 若留空，服务【启动即失败】（不再回退到 totp.encryption_key，以避免密钥域混淆）。
+  # If left empty the service FAILS TO BOOT (no more totp.encryption_key fallback,
+  # which would cause key-domain confusion). Must differ from totp.encryption_key.
   # Generate with / 生成命令: openssl rand -hex 32
   encryption_key: ""
   worker_enabled: true

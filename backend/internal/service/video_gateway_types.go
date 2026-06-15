@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
 	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -50,7 +52,7 @@ type VideoProviderAccount struct {
 	DisplayName         string
 	Enabled             bool
 	EncryptedAPIKey     string
-	PlainAPIKey         string
+	PlainAPIKey         string `json:"-"` // decrypted transient credential; never serialize
 	APIKeyConfigured    bool
 	APIKeyDecryptFailed bool
 	MaskedKey           string
@@ -72,6 +74,34 @@ type VideoProviderAccount struct {
 	RouteSkipReason     string
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
+}
+
+// String implements fmt.Stringer so that the transient plaintext API key is
+// never rendered by %v/%+v/%s formatting (defensive bottom: PlainAPIKey is the
+// decrypted upstream credential and must not land in logs, panics or dumps).
+func (a VideoProviderAccount) String() string {
+	return fmt.Sprintf("VideoProviderAccount{ID:%d, Provider:%q, DisplayName:%q, Enabled:%t, APIKeyConfigured:%t, MaskedKey:%q, PlainAPIKey:[REDACTED]}",
+		a.ID, a.Provider, a.DisplayName, a.Enabled, a.APIKeyConfigured, a.MaskedKey)
+}
+
+// GoString implements fmt.GoStringer so the %#v verb (Go-syntax dump) also masks
+// the plaintext key instead of printing every struct field verbatim.
+func (a VideoProviderAccount) GoString() string {
+	return a.String()
+}
+
+// LogValue implements slog.LogValuer so that structured logging of the account
+// (e.g. slog.Any("account", acc)) never exposes the plaintext API key.
+func (a VideoProviderAccount) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.Int64("id", a.ID),
+		slog.String("provider", a.Provider),
+		slog.String("display_name", a.DisplayName),
+		slog.Bool("enabled", a.Enabled),
+		slog.Bool("api_key_configured", a.APIKeyConfigured),
+		slog.String("masked_key", a.MaskedKey),
+		slog.String("plain_api_key", "[REDACTED]"),
+	)
 }
 
 type VideoTask struct {

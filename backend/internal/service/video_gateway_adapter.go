@@ -157,6 +157,10 @@ func (a *seedanceVideoAdapter) CreateTask(_ context.Context, account *VideoProvi
 
 	content := []map[string]any{{"type": "text", "text": task.Prompt}}
 	if task.ReferenceImageURL != "" {
+		if err := validateExternalVideoURL(task.ReferenceImageURL); err != nil {
+			return nil, infraerrors.BadRequest("VIDEO_UNSAFE_REFERENCE_URL",
+				"reference_image_url failed SSRF/allowlist validation: "+err.Error())
+		}
 		content = append(content, map[string]any{"type": "image_url", "image_url": map[string]string{"url": task.ReferenceImageURL}})
 	}
 
@@ -166,6 +170,22 @@ func (a *seedanceVideoAdapter) CreateTask(_ context.Context, account *VideoProvi
 	}
 	if task.NegativePrompt != "" {
 		payload["negative_prompt"] = task.NegativePrompt
+	}
+	// Explicitly send generation parameters so the smoke-gate duration cap
+	// (1-5s, enforced in seedanceSmokeGateBlockedReasons) is actually applied
+	// upstream instead of silently relying on Ark's default duration — which
+	// would decouple the real billed time from the §3 cost model.
+	// NOTE: the exact Ark field names (duration/resolution/aspect_ratio) are
+	// UNVERIFIED and MUST be confirmed against the first real smoke response
+	// before being relied upon (see blocker review B2 / smoke step 1).
+	if task.Duration > 0 {
+		payload["duration"] = task.Duration
+	}
+	if task.Resolution != "" {
+		payload["resolution"] = task.Resolution
+	}
+	if task.AspectRatio != "" {
+		payload["aspect_ratio"] = task.AspectRatio
 	}
 
 	body, err := json.Marshal(payload)
@@ -193,9 +213,18 @@ func (a *seedanceVideoAdapter) CreateTask(_ context.Context, account *VideoProvi
 		return nil, fmt.Errorf("seedance: read create response: %w", err)
 	}
 
+	// Audit the real upstream response (secrets stripped) to the redacted event
+	// log that the smoke gate requires. Fail-closed: no audit => abort.
+	if auditErr := appendRedactedVideoEvent("create", resp.StatusCode, string(respBody)); auditErr != nil {
+		return nil, infraerrorsUnavailable("SEEDANCE_AUDIT_LOG_FAILED", "Seedance create: redacted audit log unavailable: "+auditErr.Error())
+	}
+
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		// Redact the upstream body before it flows into task.ErrorMessage (DB),
+		// video_task_events.Message (DB) and the API response: a 401/403 body
+		// can echo the Authorization header or an API-key prefix.
 		return nil, infraerrorsUnavailable("SEEDANCE_CREATE_UPSTREAM_ERROR",
-			fmt.Sprintf("Seedance create task returned %d (%s): %s", resp.StatusCode, seedanceHTTPErrorType(resp.StatusCode, string(respBody)), truncate(string(respBody), 500)))
+			fmt.Sprintf("Seedance create task returned %d (%s): %s", resp.StatusCode, seedanceHTTPErrorType(resp.StatusCode, string(respBody)), truncate(redactVideoUpstreamSecrets(string(respBody)), 500)))
 	}
 
 	var parsed struct {
@@ -210,7 +239,9 @@ func (a *seedanceVideoAdapter) CreateTask(_ context.Context, account *VideoProvi
 	}
 
 	if parsed.Error.Message != "" {
-		return nil, infraerrorsUnavailable("SEEDANCE_CREATE_BUSINESS_ERROR", "Seedance: "+parsed.Error.Message)
+		// A 200-OK body can still carry an error.message that echoes the request
+		// or a credential prefix; redact before it reaches DB/events/API response.
+		return nil, infraerrorsUnavailable("SEEDANCE_CREATE_BUSINESS_ERROR", "Seedance: "+redactVideoUpstreamSecrets(parsed.Error.Message))
 	}
 
 	return &VideoAdapterResult{
@@ -267,9 +298,17 @@ func (a *seedanceVideoAdapter) PollTask(_ context.Context, account *VideoProvide
 		return nil, fmt.Errorf("seedance: read poll response: %w", err)
 	}
 
+	// Audit the real upstream response (secrets stripped) to the redacted event
+	// log that the smoke gate requires. Fail-closed: no audit => abort.
+	if auditErr := appendRedactedVideoEvent("poll", resp.StatusCode, string(respBody)); auditErr != nil {
+		return nil, infraerrorsUnavailable("SEEDANCE_AUDIT_LOG_FAILED", "Seedance poll: redacted audit log unavailable: "+auditErr.Error())
+	}
+
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		// Redact the upstream body before it flows into task.ErrorMessage (DB),
+		// video_task_events.Message (DB) and the API response.
 		return nil, infraerrorsUnavailable("SEEDANCE_POLL_UPSTREAM_ERROR",
-			fmt.Sprintf("Seedance poll task returned %d (%s): %s", resp.StatusCode, seedanceHTTPErrorType(resp.StatusCode, string(respBody)), truncate(string(respBody), 500)))
+			fmt.Sprintf("Seedance poll task returned %d (%s): %s", resp.StatusCode, seedanceHTTPErrorType(resp.StatusCode, string(respBody)), truncate(redactVideoUpstreamSecrets(string(respBody)), 500)))
 	}
 
 	var parsed struct {
@@ -289,7 +328,6 @@ func (a *seedanceVideoAdapter) PollTask(_ context.Context, account *VideoProvide
 	result := &VideoAdapterResult{
 		UpstreamTaskID: parsed.ID,
 		Status:         a.NormalizeStatus(parsed.Status),
-		ResultURL:      parsed.Content.VideoURL,
 		Payload: map[string]any{
 			"provider":          "seedance",
 			"normalized_status": a.NormalizeStatus(parsed.Status),
@@ -299,8 +337,23 @@ func (a *seedanceVideoAdapter) PollTask(_ context.Context, account *VideoProvide
 		},
 	}
 
+	// Do not trust the upstream-returned result_url blindly: validate scheme and
+	// host (SSRF / domain allowlist) before storing it for the frontend to play
+	// and write to Day0. A rejected URL fails the task instead of propagating.
+	if parsed.Content.VideoURL != "" {
+		if err := validateExternalVideoURL(parsed.Content.VideoURL); err != nil {
+			result.Status = VideoStatusFailed
+			result.ErrorMessage = "upstream result_url failed validation: " + err.Error()
+			result.Payload["result_url_rejected"] = true
+			return result, nil
+		}
+		result.ResultURL = parsed.Content.VideoURL
+	}
+
 	if parsed.Error.Message != "" {
-		result.ErrorMessage = parsed.Error.Message
+		// Same leak channel as create: a 200-OK error.message lands in
+		// task.ErrorMessage (DB), the failed event, and the poll API response.
+		result.ErrorMessage = redactVideoUpstreamSecrets(parsed.Error.Message)
 		result.Status = VideoStatusFailed
 	}
 
@@ -365,6 +418,12 @@ func seedanceSmokeGateBlockedReasons(account *VideoProviderAccount, task *VideoT
 	}
 	if strings.TrimSpace(os.Getenv("SUB2API_VIDEO_REDACTED_EVENT_LOG")) == "" {
 		reasons = append(reasons, "redacted event log path is missing")
+	}
+	if strings.TrimSpace(os.Getenv("SUB2API_VIDEO_URL_ALLOWLIST")) == "" {
+		// Fail-closed SSRF posture: the real path must not run with the loose
+		// (no-allowlist) URL validation branch. Operators must pin the trusted
+		// media domains (Ark result CDN + permitted reference-image hosts).
+		reasons = append(reasons, "media url allowlist (SUB2API_VIDEO_URL_ALLOWLIST) is missing")
 	}
 	if strings.TrimSpace(task.Model) == "" || !strings.Contains(strings.ToLower(task.Model), "seedance") {
 		reasons = append(reasons, "seedance model is not explicit")

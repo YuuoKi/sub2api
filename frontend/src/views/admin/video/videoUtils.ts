@@ -142,9 +142,12 @@ export function taskTypeLabel(taskType: string): string {
 
 export function statusLabel(status: string): string {
   if (isVideoGatewayDemoMode) {
+    if (status === 'queued') return '排队中'
+    if (status === 'submitted') return '已提交'
+    if (status === 'running') return '生成中'
     if (status === 'succeeded') return '已完成'
-    if (status === 'failed' || status === 'cancelled') return '失败'
-    return '处理中'
+    if (status === 'failed') return '失败，需要查看原因'
+    if (status === 'cancelled') return '已取消'
   }
   return statusOptions.find((item) => item.value === status)?.label || status
 }

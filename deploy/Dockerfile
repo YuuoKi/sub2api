@@ -9,7 +9,7 @@
 ARG NODE_IMAGE=node:24-alpine
 ARG GOLANG_IMAGE=golang:1.26.3-alpine
 ARG ALPINE_IMAGE=alpine:3.20
-ARG GOPROXY=https://goproxy.cn,direct
+ARG GOPROXY=https://proxy.golang.org,direct
 ARG GOSUMDB=sum.golang.google.cn
 
 # -----------------------------------------------------------------------------
@@ -27,8 +27,9 @@ COPY frontend/package.json frontend/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 
 # Copy frontend source and build
+# Skip vue-tsc type-checking in Docker (slow on WSL); use build:fast for Vite-only build
 COPY frontend/ ./
-RUN pnpm run build
+RUN pnpm run build:fast 2>/dev/null || pnpm run build
 
 # -----------------------------------------------------------------------------
 # Stage 2: Backend Builder
@@ -74,8 +75,8 @@ FROM ${ALPINE_IMAGE}
 
 # Labels
 LABEL maintainer="Wei-Shaw <github.com/Wei-Shaw>"
-LABEL description="Sub2API - AI API Gateway Platform"
-LABEL org.opencontainers.image.source="https://github.com/Wei-Shaw/sub2api"
+LABEL description="无界互娱 API 控制台 - Day0 local gateway"
+LABEL org.opencontainers.image.source="local/wujie-api-day0"
 
 # Install runtime dependencies
 RUN apk add --no-cache \

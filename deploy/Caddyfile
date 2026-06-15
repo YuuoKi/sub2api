@@ -1,8 +1,10 @@
 # =============================================================================
 # Caddyfile — TLS reverse proxy for Sub2API
 # =============================================================================
-# Domain is injected via $CADDY_DOMAIN env var (set in .env).
-# Falls back to :80 if no domain is set (HTTP-only mode).
+# Domain is injected via $CADDY_DOMAIN env var (set in .env);
+# defaults to "localhost", served over HTTPS with Caddy's internal CA.
+# For a public domain, set $TLS_EMAIL to a real address (ACME); if left
+# unset it defaults to "internal" (self-signed CA, untrusted by browsers).
 # =============================================================================
 
 {$CADDY_DOMAIN:localhost} {
@@ -21,7 +23,7 @@
 	}
 
 	# =========================================================================
-	# TLS 安全配置 (skip if plain HTTP fallback)
+	# TLS 安全配置（localhost 用内置 CA；公网域名需配 $TLS_EMAIL 走 ACME）
 	# =========================================================================
 	tls {$TLS_EMAIL:internal} {
 		protocols tls1.2 tls1.3

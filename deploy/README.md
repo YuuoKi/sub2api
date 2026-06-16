@@ -484,6 +484,54 @@ The main config file is at `/etc/sub2api/config.yaml` (created by Setup Wizard).
 
 ---
 
+## Video Gateway 运行约束（阶段2 形态 A）
+
+视频网关（video_gateway）进入阶段2 真实付费前，**形态 A** 部署必须遵守以下硬约束。这些约束规避当前实现中尚未补的并发安全与就地升级缺口，是真实开枪前的安全垫。
+
+### 1. 仅允许单实例运行（强约束）
+
+阶段2 形态 A **只允许后端单实例运行**，禁止水平扩容 / 多副本。
+
+- worker 是单 goroutine 全局 ticker（`backend/internal/service/video_gateway_worker.go`），无并发度开关、无 leader 选举。
+- 取任务的查询 `ListRunnableTasks`（`backend/internal/repository/video_gateway_repo.go`）目前**无行锁**（无 `FOR UPDATE SKIP LOCKED`）。两个实例并行会**双取同一任务 → 双调 provider → 双扣费**。
+- 当前各 `deploy/docker-compose*.yml` 均为单 named container、无 `replicas`/`scale`，默认即单实例；**请勿**用 `docker compose up --scale` 或编排器把后端拉到多副本。
+- 多实例支持（行锁 `FOR UPDATE SKIP LOCKED` + 对账）为**后续项**，未实现前不得多实例部署。
+
+### 2. 就地升级前必须确认 `video_tasks.poll_count` 列存在
+
+迁移仅在首次 setup / `AUTO_SETUP=true` 时运行；**既有部署（`.installed` 锁已存在）就地升级不会自动跑迁移**。视频网关 worker 依赖 `video_tasks.poll_count` 列（VA2 轮询上限计数），该列由迁移 `139_video_task_poll_count.sql` 添加（`ADD COLUMN IF NOT EXISTS`，幂等）。
+
+**升级到含视频网关的版本前，先用只读 SQL 确认该列存在**：
+
+```sql
+-- 直接看列是否存在
+SELECT EXISTS (
+  SELECT 1 FROM information_schema.columns
+  WHERE table_name = 'video_tasks' AND column_name = 'poll_count'
+);
+
+-- 或确认迁移记录已落库
+SELECT 1 FROM schema_migrations WHERE filename = '139_video_task_poll_count.sql';
+```
+
+若列**不存在**，由授权人按迁移文件手动应用（迁移本身幂等，可安全重复执行）：
+
+```sql
+ALTER TABLE video_tasks
+    ADD COLUMN IF NOT EXISTS poll_count INTEGER NOT NULL DEFAULT 0;
+```
+
+> 新建栈（Day0/WSL，`AUTO_SETUP=true`）首次安装会跑迁移、自动建列；只有**旧栈就地升级**需要上面这步确认。
+
+### 3. 轮询窗口当前值（薄余量，B 段据实调）
+
+视频网关默认轮询窗口 = `poll_interval_seconds × max_poll_attempts` = **5s × 72 = 360s**（`video_gateway` 配置；服务启动会校验窗口 ≥360s 否则拒启）。
+
+- 该窗口对照已观测的单条 Seedance ~170s 生成时间，余量约 **2.12×**（满足设计要求的 ≥2×，但**偏薄**）。
+- 170s 为**单样本、不可靠**。**B 段真实多条实测后**，据实调整 `max_poll_attempts`（必要时同步抬高 `task_timeout_minutes` 这个外层兜底，使其始终 ≥ 轮询窗口）。本阶段不据单样本硬调。
+
+---
+
 ## Troubleshooting
 
 ### Docker

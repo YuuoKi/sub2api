@@ -20,8 +20,8 @@
 // Form B calls the seedanceVideoAdapter STRUCT directly — it does NOT go through
 // VideoGatewayService / the worker / the Hono gateway. Consequences (by design):
 //   - no DB write, no daily-limit accounting, no team-credit deduction (CB3);
-//   - the poll loop is driven HERE with a hard ceiling instead of the worker's
-//     uncapped reschedule loop (VA2);
+//   - the poll loop is driven HERE with its own hard ceiling; the production
+//     worker has its own per-task poll cap (VA2: video_gateway.max_poll_attempts);
 //   - exactly ONE Create is issued; Poll count is bounded by a hard ceiling.
 //
 // The plaintext API key is read from the environment at runtime and is NEVER
@@ -39,9 +39,12 @@ import (
 )
 
 // realSmokePollHardCeiling is the absolute upper bound on poll iterations,
-// independent of any env override. VA2 guard: the production worker has no
-// per-task poll cap; this manual loop does, and it cannot be raised from env.
-const realSmokePollHardCeiling = 30
+// independent of any env override. VA2: at the default 5s interval this is a
+// 72×5s=360s poll window — ≥2× the observed ~170s Seedance generation time, so a
+// real clip finishes before the cap (the prior 30×5s=150s gave up too early). The
+// production worker now enforces its own per-task cap (video_gateway.max_poll_attempts);
+// this manual loop keeps an independent hard ceiling that env can only lower.
+const realSmokePollHardCeiling = 72
 
 func TestSeedanceSingleRealSmokeFormB(t *testing.T) {
 	// --- Safety layer 2: explicit human run flag (layer 1 is the build tag). ---

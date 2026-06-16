@@ -123,6 +123,7 @@ type VideoTask struct {
 	ResultURL           string
 	ErrorMessage        string
 	CostEstimate        float64
+	PollCount           int
 	CreatedBy           int64
 	CreatedByEmail      string
 	CreatedByName       string

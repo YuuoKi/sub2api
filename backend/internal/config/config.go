@@ -180,6 +180,16 @@ type VideoGatewayConfig struct {
 	PollIntervalSeconds int    `mapstructure:"poll_interval_seconds"`
 	TaskTimeoutMinutes  int    `mapstructure:"task_timeout_minutes"`
 	WorkerBatchSize     int    `mapstructure:"worker_batch_size"`
+	// MaxPollAttempts bounds how many times the worker polls a single task before
+	// it is failed deterministically (VA2 guard). poll_interval_seconds × this is
+	// the poll window and MUST be ≥ 2× the provider generation time (~170s for
+	// Seedance), i.e. ≥360s. Default 72 × 5s = 360s. task_timeout_minutes must
+	// stay ≥ poll window + margin so the wall-clock timeout is the outer backstop.
+	MaxPollAttempts int `mapstructure:"max_poll_attempts"`
+	// CostPerSecond is the per-second price used by the VA1 budget gate / billing
+	// to estimate a video's cost (provider returns none). Default 0 keeps the gate
+	// a no-op until a real rate is set in phase 2; never negative.
+	CostPerSecond float64 `mapstructure:"cost_per_second"`
 }
 
 type LinuxDoConnectConfig struct {
@@ -1597,9 +1607,15 @@ func setDefaults() {
 	// Video gateway
 	viper.SetDefault("video_gateway.encryption_key", "")
 	viper.SetDefault("video_gateway.worker_enabled", true)
-	viper.SetDefault("video_gateway.poll_interval_seconds", 2)
+	viper.SetDefault("video_gateway.poll_interval_seconds", 5)
 	viper.SetDefault("video_gateway.task_timeout_minutes", 15)
 	viper.SetDefault("video_gateway.worker_batch_size", 20)
+	// VA2: 72 polls × 5s = 360s poll window ≥ 2× ~170s Seedance generation time;
+	// task_timeout_minutes (15) is the outer wall-clock backstop ≥ window + margin.
+	viper.SetDefault("video_gateway.max_poll_attempts", 72)
+	// VA1: per-second price for video cost estimation; 0 keeps the gate inert until
+	// a real rate is configured (phase 2 real billing).
+	viper.SetDefault("video_gateway.cost_per_second", 0)
 
 	// Default
 	// Admin credentials are created via the setup flow (web wizard / CLI / AUTO_SETUP).
@@ -1909,6 +1925,21 @@ func (c *Config) Validate() error {
 	}
 	if c.VideoGateway.WorkerBatchSize <= 0 {
 		return fmt.Errorf("video_gateway.worker_batch_size must be positive")
+	}
+	if c.VideoGateway.MaxPollAttempts <= 0 {
+		return fmt.Errorf("video_gateway.max_poll_attempts must be positive")
+	}
+	// VA2 fail-safe: refuse to boot with a poll window shorter than 360s, the
+	// lesson from the 30×5s=150s smoke that gave up before the ~170s clip finished.
+	if pollWindow := c.VideoGateway.PollIntervalSeconds * c.VideoGateway.MaxPollAttempts; pollWindow < 360 {
+		return fmt.Errorf("video_gateway poll window (poll_interval_seconds × max_poll_attempts = %ds) must be at least 360s", pollWindow)
+	}
+	// The wall-clock task timeout must remain the outer backstop, i.e. ≥ poll window.
+	if timeoutSeconds := c.VideoGateway.TaskTimeoutMinutes * 60; timeoutSeconds < c.VideoGateway.PollIntervalSeconds*c.VideoGateway.MaxPollAttempts {
+		return fmt.Errorf("video_gateway.task_timeout_minutes (%ds) must be ≥ the poll window (%ds)", timeoutSeconds, c.VideoGateway.PollIntervalSeconds*c.VideoGateway.MaxPollAttempts)
+	}
+	if c.VideoGateway.CostPerSecond < 0 {
+		return fmt.Errorf("video_gateway.cost_per_second must not be negative")
 	}
 
 	geminiClientID := strings.TrimSpace(c.Gemini.OAuth.ClientID)

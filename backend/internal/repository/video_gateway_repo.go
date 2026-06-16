@@ -22,7 +22,7 @@ func NewVideoGatewayRepository(db *sql.DB) service.VideoGatewayRepository {
 const videoTaskSelectColumns = `
 		vt.id, vt.provider_account_id, vt.provider, vt.model, vt.task_type, vt.prompt, vt.negative_prompt,
 		vt.reference_image_url, vt.reference_video_url, vt.aspect_ratio, vt.duration, vt.resolution,
-		vt.status, vt.upstream_task_id, vt.result_url, vt.error_message, vt.cost_estimate,
+		vt.status, vt.upstream_task_id, vt.result_url, vt.error_message, vt.cost_estimate, vt.poll_count,
 		vt.created_by, vt.created_at, vt.updated_at, vt.completed_at,
 		COALESCE(vpa.display_name, ''), COALESCE(u.email, ''), COALESCE(u.username, '')
 `
@@ -243,6 +243,7 @@ func (r *videoGatewayRepository) UpdateTask(ctx context.Context, task *service.V
 		    result_url = $4,
 		    error_message = $5,
 		    cost_estimate = $6,
+		    poll_count = $8,
 		    updated_at = NOW(),
 		    completed_at = $7
 		WHERE id = $1
@@ -260,6 +261,7 @@ func (r *videoGatewayRepository) UpdateTask(ctx context.Context, task *service.V
 		task.ErrorMessage,
 		task.CostEstimate,
 		completedAt,
+		task.PollCount,
 	).Scan(&task.UpdatedAt); err != nil {
 		return translatePersistenceError(err, service.ErrVideoTaskNotFound, nil)
 	}
@@ -537,6 +539,7 @@ func scanVideoTask(row scanner) (*service.VideoTask, error) {
 		&task.ResultURL,
 		&task.ErrorMessage,
 		&task.CostEstimate,
+		&task.PollCount,
 		&task.CreatedBy,
 		&task.CreatedAt,
 		&task.UpdatedAt,

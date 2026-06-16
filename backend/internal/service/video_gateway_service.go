@@ -46,6 +46,9 @@ type VideoGatewayService struct {
 	encryptor VideoKeyEncryptor
 	adapters  map[string]VideoAdapter
 	cfg       *config.Config
+	// budget is the optional VA1 budget gate / billing hook. nil => no gate (current
+	// production default until phase-2 real billing wires a concrete guard).
+	budget VideoBudgetGuard
 }
 
 type videoRouteDecision struct {
@@ -603,6 +606,14 @@ func (s *VideoGatewayService) CreateTask(ctx context.Context, p VideoTaskCreateP
 		Resolution:          firstNonEmptyVideo(strings.TrimSpace(p.Resolution), "720p"),
 		Status:              VideoStatusQueued,
 		CreatedBy:           p.CreatedBy,
+	}
+	// VA1 per-call budget gate: check affordability BEFORE persisting/dispatching.
+	// Fail-closed — any error (insufficient budget or inability to determine it)
+	// rejects the create with no task row and no provider call.
+	if s.budget != nil {
+		if err := s.budget.CheckBudget(ctx, task.CreatedBy, s.estimateVideoCost(task)); err != nil {
+			return nil, err
+		}
 	}
 	if err := s.repo.CreateTask(ctx, task); err != nil {
 		return nil, fmt.Errorf("create video task: %w", err)

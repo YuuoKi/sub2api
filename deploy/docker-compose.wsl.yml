@@ -1,0 +1,107 @@
+services:
+  app:
+    image: wujie-api:day0-local
+    build:
+      context: ..
+    container_name: wujie-api-day0
+    restart: unless-stopped
+    # Bind to loopback by default (dry-run / single-host safe). For LAN access set
+    # BIND_HOST=0.0.0.0 in deploy/.env AND run deploy/day0/windows_enable_lan_access.ps1.
+    ports:
+      - "${BIND_HOST:-127.0.0.1}:8080:8080"
+    volumes:
+      - wujie-api-data:/app/data
+    # Secrets (POSTGRES_PASSWORD / REDIS_PASSWORD / ADMIN_PASSWORD) come from
+    # deploy/.env — copy deploy/.env.wsl.example to deploy/.env and fill them in.
+    # They use the ${VAR:?...} fail-fast form so a missing secret aborts loudly
+    # instead of silently booting with a blank password. Non-secret Day0 defaults
+    # are kept inline via ${VAR:-default}.
+    environment:
+      - AUTO_SETUP=true
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=8080
+      - SERVER_MODE=${SERVER_MODE:-release}
+      - RUN_MODE=standard
+      - DATABASE_HOST=db
+      - DATABASE_PORT=5432
+      - DATABASE_USER=${POSTGRES_USER:-wujie}
+      - DATABASE_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      - DATABASE_DBNAME=${POSTGRES_DB:-wujie_api}
+      - DATABASE_SSLMODE=disable
+      - REDIS_HOST=cache
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      - REDIS_DB=0
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@wujie.local}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required}
+      - TZ=${TZ:-Asia/Shanghai}
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    networks:
+      - wujie-api-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-T", "5", "-O", "/dev/null", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  db:
+    image: postgres:18-alpine
+    container_name: wujie-api-db
+    restart: unless-stopped
+    volumes:
+      - wujie-api-db-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-wujie}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      - POSTGRES_DB=${POSTGRES_DB:-wujie_api}
+      - PGDATA=/var/lib/postgresql/data
+      - TZ=${TZ:-Asia/Shanghai}
+    networks:
+      - wujie-api-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-wujie} -d ${POSTGRES_DB:-wujie_api}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  cache:
+    image: redis:8-alpine
+    container_name: wujie-api-cache
+    restart: unless-stopped
+    volumes:
+      - wujie-api-cache-data:/data
+    command: >
+        sh -c '
+          redis-server --requirepass $${REDIS_PASSWORD}
+          --save 60 1
+          --appendonly yes
+          --appendfsync everysec'
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      - TZ=${TZ:-Asia/Shanghai}
+    networks:
+      - wujie-api-network
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+networks:
+  wujie-api-network:
+    name: wujie-api-network
+
+volumes:
+  wujie-api-db-data:
+    name: wujie-api-db-data
+  wujie-api-cache-data:
+    name: wujie-api-cache-data
+  wujie-api-data:
+    name: wujie-api-data

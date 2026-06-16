@@ -866,9 +866,17 @@ video_gateway:
   # Generate with / 生成命令: openssl rand -hex 32
   encryption_key: ""
   worker_enabled: true
-  poll_interval_seconds: 2
+  poll_interval_seconds: 5
   task_timeout_minutes: 15
   worker_batch_size: 20
+  # VA2 poll cap: poll_interval_seconds × max_poll_attempts is the poll window and
+  # MUST be ≥360s (5×72=360s ≥ 2× the observed ~170s Seedance generation time) — the
+  # service refuses to boot otherwise. task_timeout_minutes is the outer backstop and
+  # must stay ≥ the poll window.
+  max_poll_attempts: 72
+  # VA1 per-second price used to estimate a video's cost for the budget gate; 0 keeps
+  # the gate inert until a real rate is set (phase-2 real billing).
+  cost_per_second: 0
 
 # =============================================================================
 # LinuxDo Connect OAuth Login (SSO)

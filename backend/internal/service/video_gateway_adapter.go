@@ -130,7 +130,7 @@ type seedanceVideoAdapter struct{}
 
 func (a *seedanceVideoAdapter) Provider() string { return VideoProviderSeedance }
 
-func (a *seedanceVideoAdapter) CreateTask(_ context.Context, account *VideoProviderAccount, task *VideoTask) (*VideoAdapterResult, error) {
+func (a *seedanceVideoAdapter) CreateTask(ctx context.Context, account *VideoProviderAccount, task *VideoTask) (*VideoAdapterResult, error) {
 	if !account.APIKeyConfigured || strings.TrimSpace(account.PlainAPIKey) == "" {
 		return nil, ErrVideoProviderDisabled.WithMetadata(map[string]string{
 			"provider": "seedance",
@@ -194,7 +194,7 @@ func (a *seedanceVideoAdapter) CreateTask(_ context.Context, account *VideoProvi
 	}
 
 	url := strings.TrimRight(baseURL, "/") + "/contents/generations/tasks"
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("seedance: build create request: %w", err)
 	}
@@ -259,7 +259,7 @@ func (a *seedanceVideoAdapter) CreateTask(_ context.Context, account *VideoProvi
 	}, nil
 }
 
-func (a *seedanceVideoAdapter) PollTask(_ context.Context, account *VideoProviderAccount, task *VideoTask) (*VideoAdapterResult, error) {
+func (a *seedanceVideoAdapter) PollTask(ctx context.Context, account *VideoProviderAccount, task *VideoTask) (*VideoAdapterResult, error) {
 	if !account.APIKeyConfigured || strings.TrimSpace(account.PlainAPIKey) == "" {
 		return nil, ErrVideoProviderDisabled.WithMetadata(map[string]string{
 			"provider": "seedance",
@@ -280,7 +280,7 @@ func (a *seedanceVideoAdapter) PollTask(_ context.Context, account *VideoProvide
 	}
 
 	url := strings.TrimRight(baseURL, "/") + "/contents/generations/tasks/" + task.UpstreamTaskID
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("seedance: build poll request: %w", err)
 	}
@@ -314,8 +314,10 @@ func (a *seedanceVideoAdapter) PollTask(_ context.Context, account *VideoProvide
 	var parsed struct {
 		ID      string `json:"id"`
 		Status  string `json:"status"`
+		Ratio   string `json:"ratio"` // Module C: Ark returns the aspect ratio as "ratio" (e.g. "16:9"), NOT "aspect_ratio"
 		Content struct {
 			VideoURL string `json:"video_url"`
+			Ratio    string `json:"ratio"` // tolerate the nested shape too — exact nesting is unconfirmed by a gold sample
 		} `json:"content"`
 		Error struct {
 			Message string `json:"message"`
@@ -335,6 +337,17 @@ func (a *seedanceVideoAdapter) PollTask(_ context.Context, account *VideoProvide
 			"redacted_event":    true,
 			"polled_at":         time.Now().UTC().Format(time.RFC3339),
 		},
+	}
+
+	// Module C — response field alignment: Volcengine Ark returns the aspect ratio
+	// as "ratio" (e.g. "16:9"), which the adapter previously dropped. Surface it into
+	// the result payload. The exact nesting (top-level vs content.ratio) is not pinned
+	// by a captured gold sample, so accept either and prefer the non-empty one. This
+	// is response-parse only; request-side aspect_ratio params stay phase-2 scope.
+	// Gate on a strict "W:H" shape so an unexpected/oversized upstream value cannot
+	// smuggle un-redacted content into the persisted event payload / API response.
+	if ratio := firstNonEmptyVideo(parsed.Ratio, parsed.Content.Ratio); looksLikeAspectRatio(ratio) {
+		result.Payload["ratio"] = ratio
 	}
 
 	// Do not trust the upstream-returned result_url blindly: validate scheme and
@@ -577,6 +590,31 @@ func normalizeVideoStatus(status string) string {
 	default:
 		return VideoStatusRunning
 	}
+}
+
+// looksLikeAspectRatio reports whether s is a plausible "W:H" aspect ratio such as
+// "16:9". It gates what the poll parser surfaces from the upstream "ratio" field so
+// an unexpected or oversized value cannot smuggle un-redacted content into the
+// persisted event payload / API response.
+func looksLikeAspectRatio(s string) bool {
+	if len(s) == 0 || len(s) > 9 {
+		return false
+	}
+	parts := strings.Split(s, ":")
+	if len(parts) != 2 {
+		return false
+	}
+	for _, part := range parts {
+		if len(part) == 0 || len(part) > 4 {
+			return false
+		}
+		for _, r := range part {
+			if r < '0' || r > '9' {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func infraerrorsUnavailable(reason, message string) error {

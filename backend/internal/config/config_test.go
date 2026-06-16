@@ -1027,6 +1027,33 @@ func TestValidateConfigErrors(t *testing.T) {
 			wantErr: "jwt.secret is required",
 		},
 		{
+			name:    "video_gateway max_poll_attempts positive",
+			mutate:  func(c *Config) { c.VideoGateway.MaxPollAttempts = 0 },
+			wantErr: "video_gateway.max_poll_attempts must be positive",
+		},
+		{
+			name: "video_gateway poll window below 360s (the 150s lesson)",
+			mutate: func(c *Config) {
+				c.VideoGateway.PollIntervalSeconds = 5
+				c.VideoGateway.MaxPollAttempts = 30 // 5×30 = 150s < 360s
+			},
+			wantErr: "must be at least 360s",
+		},
+		{
+			name: "video_gateway task_timeout below poll window",
+			mutate: func(c *Config) {
+				c.VideoGateway.PollIntervalSeconds = 5
+				c.VideoGateway.MaxPollAttempts = 72 // window = 360s
+				c.VideoGateway.TaskTimeoutMinutes = 5 // 300s < 360s
+			},
+			wantErr: "task_timeout_minutes (300s)",
+		},
+		{
+			name:    "video_gateway cost_per_second non-negative",
+			mutate:  func(c *Config) { c.VideoGateway.CostPerSecond = -1 },
+			wantErr: "video_gateway.cost_per_second must not be negative",
+		},
+		{
 			name:    "jwt secret min bytes",
 			mutate:  func(c *Config) { c.JWT.Secret = strings.Repeat("a", 31) },
 			wantErr: "jwt.secret must be at least 32 bytes",

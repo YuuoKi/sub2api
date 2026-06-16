@@ -520,9 +520,23 @@ var ProviderSet = wire.NewSet(
 	ProvideChannelMonitorService,
 	ProvideChannelMonitorRunner,
 	NewChannelMonitorRequestTemplateService,
-	NewVideoGatewayService,
+	ProvideVideoGatewayService,
 	ProvideVideoGatewayWorker,
 )
+
+// ProvideVideoGatewayService builds the video gateway service and, when a positive
+// per-call budget cap is configured (video_gateway.per_call_budget > 0), ARMS the
+// VA1 StaticBudgetGuard brake by injecting it. A non-positive cap (the default)
+// leaves the gate UNARMED — budget stays nil, so production behaviour is unchanged
+// until phase-2B explicitly sets a cap. This is the single production wiring point
+// that turns the phase-2A interception primitive into a live brake.
+func ProvideVideoGatewayService(repo VideoGatewayRepository, encryptor VideoKeyEncryptor, cfg *config.Config) *VideoGatewayService {
+	svc := NewVideoGatewayService(repo, encryptor, cfg)
+	if cfg != nil && cfg.VideoGateway.PerCallBudget > 0 {
+		svc.SetBudgetGuard(NewStaticBudgetGuard(cfg.VideoGateway.PerCallBudget))
+	}
+	return svc
+}
 
 // ProvidePaymentConfigService wraps NewPaymentConfigService to accept the named
 // payment.EncryptionKey type instead of raw []byte, avoiding Wire ambiguity.

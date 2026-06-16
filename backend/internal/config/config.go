@@ -190,6 +190,13 @@ type VideoGatewayConfig struct {
 	// to estimate a video's cost (provider returns none). Default 0 keeps the gate
 	// a no-op until a real rate is set in phase 2; never negative.
 	CostPerSecond float64 `mapstructure:"cost_per_second"`
+	// PerCallBudget is the VA1 per-call cost cap that ARMS the StaticBudgetGuard
+	// brake. 0 (default) leaves the gate UNARMED: no guard is injected, so the
+	// gateway behaves exactly as before (no brake). A positive value injects the
+	// guard so a single create whose estimated cost (cost_per_second × duration)
+	// exceeds the cap is rejected before any DB write or provider dispatch
+	// (fail-closed). Never negative. Phase-2B activates this.
+	PerCallBudget float64 `mapstructure:"per_call_budget"`
 }
 
 type LinuxDoConnectConfig struct {
@@ -1616,6 +1623,9 @@ func setDefaults() {
 	// VA1: per-second price for video cost estimation; 0 keeps the gate inert until
 	// a real rate is configured (phase 2 real billing).
 	viper.SetDefault("video_gateway.cost_per_second", 0)
+	// VA1: per-call cost cap (currency units) that arms the StaticBudgetGuard brake;
+	// 0 leaves the gate unarmed (no guard injected) — phase-2B sets a real cap.
+	viper.SetDefault("video_gateway.per_call_budget", 0)
 
 	// Default
 	// Admin credentials are created via the setup flow (web wizard / CLI / AUTO_SETUP).
@@ -1940,6 +1950,9 @@ func (c *Config) Validate() error {
 	}
 	if c.VideoGateway.CostPerSecond < 0 {
 		return fmt.Errorf("video_gateway.cost_per_second must not be negative")
+	}
+	if c.VideoGateway.PerCallBudget < 0 {
+		return fmt.Errorf("video_gateway.per_call_budget must not be negative")
 	}
 
 	geminiClientID := strings.TrimSpace(c.Gemini.OAuth.ClientID)

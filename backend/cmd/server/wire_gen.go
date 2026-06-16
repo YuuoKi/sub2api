@@ -241,7 +241,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	if err != nil {
 		return nil, err
 	}
-	videoGatewayService := service.NewVideoGatewayService(videoGatewayRepository, videoKeyEncryptor, configConfig)
+	videoGatewayService := service.ProvideVideoGatewayService(videoGatewayRepository, videoKeyEncryptor, configConfig)
 	videoHandler := admin.NewVideoHandler(videoGatewayService)
 	adminHandlers := handler.ProvideAdminHandlers(dashboardHandler, adminUserHandler, groupHandler, accountHandler, adminAnnouncementHandler, dataManagementHandler, backupHandler, oAuthHandler, openAIOAuthHandler, geminiOAuthHandler, antigravityOAuthHandler, proxyHandler, adminRedeemHandler, promoHandler, settingHandler, opsHandler, systemHandler, adminSubscriptionHandler, adminUsageHandler, userAttributeHandler, errorPassthroughHandler, tlsFingerprintProfileHandler, adminAPIKeyHandler, scheduledTestHandler, channelHandler, channelMonitorHandler, channelMonitorRequestTemplateHandler, contentModerationHandler, paymentHandler, affiliateHandler, videoHandler)
 	usageRecordWorkerPool := service.NewUsageRecordWorkerPool(configConfig)

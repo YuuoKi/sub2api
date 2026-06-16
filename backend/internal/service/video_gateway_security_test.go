@@ -122,10 +122,10 @@ func TestAppendRedactedVideoEvent(t *testing.T) {
 	logPath := t.TempDir() + "/redacted-events.log"
 	t.Setenv("SUB2API_VIDEO_REDACTED_EVENT_LOG", logPath)
 
-	if err := appendRedactedVideoEvent("create", 401, `{"msg":"Bearer `+fakeSecret+`"}`); err != nil {
+	if err := appendRedactedVideoEvent("", "create", 401, `{"msg":"Bearer `+fakeSecret+`"}`); err != nil {
 		t.Fatalf("append create: %v", err)
 	}
-	if err := appendRedactedVideoEvent("poll", 200, `{"status":"running"}`); err != nil {
+	if err := appendRedactedVideoEvent("", "poll", 200, `{"status":"running"}`); err != nil {
 		t.Fatalf("append poll: %v", err)
 	}
 
@@ -158,7 +158,7 @@ func TestAppendRedactedVideoEvent(t *testing.T) {
 
 	// Empty env => no-op (must not panic, must not create a file).
 	t.Setenv("SUB2API_VIDEO_REDACTED_EVENT_LOG", "")
-	appendRedactedVideoEvent("create", 200, "ignored")
+	appendRedactedVideoEvent("", "create", 200, "ignored")
 }
 
 // --- B3a: SSRF / allowlist URL validation -----------------------------------
@@ -409,6 +409,36 @@ func TestSeedanceCreateRedactsBusinessErrorMessage(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "已脱敏") {
 		t.Fatalf("expected redaction marker in business error, got %v", err)
+	}
+}
+
+// The result_url SSRF-validation error must itself be redacted before it lands in
+// task.ErrorMessage (DB) and the poll API response — closing the redaction-contract gap
+// where the rejected upstream URL was echoed un-redacted. The unsafe host is shaped like a
+// Volcengine AKLT access key so the "host is not allowed: <host>" echo carries a
+// credential-shaped token that the key-aware redactor must strip.
+func TestSeedancePollRedactsRejectedResultURLError(t *testing.T) {
+	adapter, acc := newSmokeGatedSeedanceFixture(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"id":"t1","status":"succeeded","content":{"video_url":"https://akltsecret1234567890abcdef.evil.example.com/v.mp4"}}`))
+	})
+	task := &VideoTask{Model: "doubao-seedance-2-0-260128", Prompt: "x", Duration: 3, UpstreamTaskID: "t1"}
+
+	res, err := adapter.PollTask(context.Background(), acc, task)
+	if err != nil {
+		t.Fatalf("PollTask: %v", err)
+	}
+	if res.Status != VideoStatusFailed {
+		t.Fatalf("an unsafe result_url must fail the task, got %s", res.Status)
+	}
+	if res.ResultURL != "" {
+		t.Fatalf("an unsafe result_url must not be stored, got %q", res.ResultURL)
+	}
+	if strings.Contains(res.ErrorMessage, "akltsecret1234567890abcdef") {
+		t.Fatalf("rejected result_url error leaked the credential-shaped host token: %q", res.ErrorMessage)
+	}
+	if !strings.Contains(res.ErrorMessage, "已脱敏") {
+		t.Fatalf("expected the rejected-url error to be redacted, got %q", res.ErrorMessage)
 	}
 }
 

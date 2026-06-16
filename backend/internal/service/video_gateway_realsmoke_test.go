@@ -60,23 +60,26 @@ func TestSeedanceSingleRealSmokeFormB(t *testing.T) {
 	}
 
 	// Pre-arm, fail-closed self-check (closes adversarial finding redact-gap-opaque-token).
-	// redactVideoUpstreamSecrets has a known gap: an opaque, delimiter-less, sub-48-char
-	// mixed-case token with no recognized prefix passes through UNREDACTED. The Ark key
-	// shape is UNVERIFIED. If a 401/403 body or a 200-OK error.message echoes the bare key,
-	// it flows through the redactor into the audit log AND this test's output (the dump and
-	// the LAST ERROR MESSAGE line). So prove, BEFORE opening any socket, that the redactor
-	// actually strips THIS key in every shape an upstream echo could take; otherwise abort.
-	// The key value is NEVER printed here — only a generic abort message.
+	// The pattern passes have a known gap: an opaque, delimiter-less, sub-48-char mixed-case
+	// token, or a 12-19 char / pure-letter / pure-digit key, passes through UNREDACTED. The
+	// Ark key shape is UNVERIFIED. If a 401/403 body or a 200-OK error.message echoes the bare
+	// key, it flows through the redactor into the audit log AND this test's output (the dump
+	// and the LAST ERROR MESSAGE line). So prove, BEFORE opening any socket, that the KEY-AWARE
+	// redactor (redactVideoUpstreamSecretsForKey — the same path the adapter now uses, which
+	// strips the exact configured key shape-agnostically) actually removes THIS key in every
+	// shape an upstream echo could take; otherwise abort. The adapter re-runs this same check
+	// internally (seedancePreArmRedactionSelfCheck) as the authoritative fail-closed gate; this
+	// is the earliest, loudest copy. The key value is NEVER printed here — only a generic abort.
 	for _, probe := range []string{
 		apiKey,
 		"Bearer " + apiKey,
 		`{"message":"` + apiKey + `"}`,
 		`{"error":{"message":"rejected token ` + apiKey + `"}}`,
 	} {
-		if strings.Contains(redactVideoUpstreamSecrets(probe), apiKey) {
-			t.Fatal("ABORT before any network call: redactVideoUpstreamSecrets does NOT strip the configured " +
-				"key shape, so an upstream echo could leak the real key into the audit log / test output. " +
-				"Harden the redactor for this key shape (or use a key whose shape is covered) before arming. " +
+		if strings.Contains(redactVideoUpstreamSecretsForKey(probe, apiKey), apiKey) {
+			t.Fatal("ABORT before any network call: the key-aware redactor does NOT strip the configured " +
+				"key, so an upstream echo could leak the real key into the audit log / test output. " +
+				"Use a key of length >= videoKnownSecretMinLen (or harden the redactor) before arming. " +
 				"(key value intentionally not printed)")
 		}
 	}

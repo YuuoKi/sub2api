@@ -232,7 +232,17 @@ func (s *VideoGatewayService) submitTask(ctx context.Context, adapter VideoAdapt
 	if err != nil {
 		return err
 	}
-	task.Status = firstNonEmptyVideo(result.Status, VideoStatusSubmitted)
+	status := firstNonEmptyVideo(result.Status, VideoStatusSubmitted)
+	// A SUCCESSFUL create means the task now lives upstream and must NEVER be re-created:
+	// the only next action is to POLL it. Some providers (e.g. Ark — exact create-response
+	// status token UNVERIFIED) return a create status that normalizes back to "queued"; if
+	// we persisted that, processTask's `case VideoStatusQueued` would re-enter submitTask on
+	// the next tick and issue a SECOND billed create. Advance any post-create "queued" to
+	// "submitted" so the next tick polls instead. (No double-submit regardless of the token.)
+	if status == VideoStatusQueued {
+		status = VideoStatusSubmitted
+	}
+	task.Status = status
 	task.UpstreamTaskID = firstNonEmptyVideo(result.UpstreamTaskID, task.UpstreamTaskID)
 	if err := s.repo.UpdateTask(ctx, task); err != nil {
 		return err

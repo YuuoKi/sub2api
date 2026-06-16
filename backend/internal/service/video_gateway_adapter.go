@@ -144,6 +144,14 @@ func (a *seedanceVideoAdapter) CreateTask(ctx context.Context, account *VideoPro
 			"real_call_executed": "false",
 		})
 	}
+	// PRE-ARM redaction self-check (fail-closed). Runs at the adapter chokepoint so it
+	// guards EVERY real call — the Form A worker path AND the direct Form B path — before
+	// any socket is opened. Aborts with no network call if the configured key would
+	// survive into any echo channel. (Closes B-0 gap-4: the worker path previously had
+	// no pre-arm self-check; only the Form B test did.)
+	if err := seedancePreArmRedactionSelfCheck(account); err != nil {
+		return nil, err
+	}
 
 	baseURL := account.BaseURL
 	if baseURL == "" {
@@ -158,8 +166,10 @@ func (a *seedanceVideoAdapter) CreateTask(ctx context.Context, account *VideoPro
 	content := []map[string]any{{"type": "text", "text": task.Prompt}}
 	if task.ReferenceImageURL != "" {
 		if err := validateExternalVideoURL(task.ReferenceImageURL); err != nil {
+			// The validator error echoes the rejected URL; redact (key-aware) before it
+			// reaches the API response / routed event so no credential-bearing URL leaks.
 			return nil, infraerrors.BadRequest("VIDEO_UNSAFE_REFERENCE_URL",
-				"reference_image_url failed SSRF/allowlist validation: "+err.Error())
+				"reference_image_url failed SSRF/allowlist validation: "+seedanceRedactBody(account, err.Error()))
 		}
 		content = append(content, map[string]any{"type": "image_url", "image_url": map[string]string{"url": task.ReferenceImageURL}})
 	}
@@ -214,9 +224,19 @@ func (a *seedanceVideoAdapter) CreateTask(ctx context.Context, account *VideoPro
 	}
 
 	// Audit the real upstream response (secrets stripped) to the redacted event
-	// log that the smoke gate requires. Fail-closed: no audit => abort.
-	if auditErr := appendRedactedVideoEvent("create", resp.StatusCode, string(respBody)); auditErr != nil {
+	// log that the smoke gate requires. Fail-closed: no audit => abort. Key-aware so
+	// the configured key is stripped from the audited body regardless of its shape.
+	if auditErr := appendRedactedVideoEvent(account.PlainAPIKey, "create", resp.StatusCode, string(respBody)); auditErr != nil {
 		return nil, infraerrorsUnavailable("SEEDANCE_AUDIT_LOG_FAILED", "Seedance create: redacted audit log unavailable: "+auditErr.Error())
+	}
+
+	// Fail-closed if the upstream echoed our configured key ANYWHERE in the body — including a
+	// STRUCTURAL field (e.g. {"id":"<key>"}) that would otherwise be stored raw as
+	// upstream_task_id / event payload, bypassing the body redactor. Audited (redacted) above
+	// first, so evidence is kept; the returned error carries no key.
+	if seedanceUpstreamEchoedKey(account, string(respBody)) {
+		return nil, infraerrorsUnavailable("SEEDANCE_UPSTREAM_ECHOED_CREDENTIAL",
+			"Seedance create aborted: upstream response echoed the configured credential in a stored field; refusing to persist it (key value intentionally not included)")
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -224,7 +244,7 @@ func (a *seedanceVideoAdapter) CreateTask(ctx context.Context, account *VideoPro
 		// video_task_events.Message (DB) and the API response: a 401/403 body
 		// can echo the Authorization header or an API-key prefix.
 		return nil, infraerrorsUnavailable("SEEDANCE_CREATE_UPSTREAM_ERROR",
-			fmt.Sprintf("Seedance create task returned %d (%s): %s", resp.StatusCode, seedanceHTTPErrorType(resp.StatusCode, string(respBody)), truncate(redactVideoUpstreamSecrets(string(respBody)), 500)))
+			fmt.Sprintf("Seedance create task returned %d (%s): %s", resp.StatusCode, seedanceHTTPErrorType(resp.StatusCode, string(respBody)), truncate(seedanceRedactBody(account, string(respBody)), 500)))
 	}
 
 	var parsed struct {
@@ -237,11 +257,18 @@ func (a *seedanceVideoAdapter) CreateTask(ctx context.Context, account *VideoPro
 	if err := json.Unmarshal(respBody, &parsed); err != nil {
 		return nil, fmt.Errorf("seedance: parse create response: %w", err)
 	}
+	// Escape-proof structural-field guard: a JSON-escaped key (e.g. "A...") slips past the
+	// raw-body check above but decodes back to the key in parsed.ID, which is stored raw as
+	// upstream_task_id and the payload `upstream_id`. Check the DECODED field and refuse it.
+	if seedanceUpstreamEchoedKey(account, parsed.ID) {
+		return nil, infraerrorsUnavailable("SEEDANCE_UPSTREAM_ECHOED_CREDENTIAL",
+			"Seedance create aborted: upstream id field echoed the configured credential; refusing to persist it (key value intentionally not included)")
+	}
 
 	if parsed.Error.Message != "" {
 		// A 200-OK body can still carry an error.message that echoes the request
 		// or a credential prefix; redact before it reaches DB/events/API response.
-		return nil, infraerrorsUnavailable("SEEDANCE_CREATE_BUSINESS_ERROR", "Seedance: "+redactVideoUpstreamSecrets(parsed.Error.Message))
+		return nil, infraerrorsUnavailable("SEEDANCE_CREATE_BUSINESS_ERROR", "Seedance: "+seedanceRedactBody(account, parsed.Error.Message))
 	}
 
 	return &VideoAdapterResult{
@@ -273,6 +300,11 @@ func (a *seedanceVideoAdapter) PollTask(ctx context.Context, account *VideoProvi
 			"real_call_executed": "false",
 		})
 	}
+	// PRE-ARM redaction self-check (fail-closed) — poll also sends Authorization:
+	// Bearer <key> and a 401/403 poll body can echo it, so the same guard applies here.
+	if err := seedancePreArmRedactionSelfCheck(account); err != nil {
+		return nil, err
+	}
 
 	baseURL := account.BaseURL
 	if baseURL == "" {
@@ -299,16 +331,25 @@ func (a *seedanceVideoAdapter) PollTask(ctx context.Context, account *VideoProvi
 	}
 
 	// Audit the real upstream response (secrets stripped) to the redacted event
-	// log that the smoke gate requires. Fail-closed: no audit => abort.
-	if auditErr := appendRedactedVideoEvent("poll", resp.StatusCode, string(respBody)); auditErr != nil {
+	// log that the smoke gate requires. Fail-closed: no audit => abort. Key-aware so
+	// the configured key is stripped from the audited body regardless of its shape.
+	if auditErr := appendRedactedVideoEvent(account.PlainAPIKey, "poll", resp.StatusCode, string(respBody)); auditErr != nil {
 		return nil, infraerrorsUnavailable("SEEDANCE_AUDIT_LOG_FAILED", "Seedance poll: redacted audit log unavailable: "+auditErr.Error())
+	}
+
+	// Fail-closed if the upstream echoed our configured key anywhere in the poll body —
+	// including the structural `id` (→ upstream_task_id) or a result-url path segment (→
+	// result_url) that would be stored raw, bypassing the body redactor.
+	if seedanceUpstreamEchoedKey(account, string(respBody)) {
+		return nil, infraerrorsUnavailable("SEEDANCE_UPSTREAM_ECHOED_CREDENTIAL",
+			"Seedance poll aborted: upstream response echoed the configured credential in a stored field; refusing to persist it (key value intentionally not included)")
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		// Redact the upstream body before it flows into task.ErrorMessage (DB),
 		// video_task_events.Message (DB) and the API response.
 		return nil, infraerrorsUnavailable("SEEDANCE_POLL_UPSTREAM_ERROR",
-			fmt.Sprintf("Seedance poll task returned %d (%s): %s", resp.StatusCode, seedanceHTTPErrorType(resp.StatusCode, string(respBody)), truncate(redactVideoUpstreamSecrets(string(respBody)), 500)))
+			fmt.Sprintf("Seedance poll task returned %d (%s): %s", resp.StatusCode, seedanceHTTPErrorType(resp.StatusCode, string(respBody)), truncate(seedanceRedactBody(account, string(respBody)), 500)))
 	}
 
 	var parsed struct {
@@ -325,6 +366,13 @@ func (a *seedanceVideoAdapter) PollTask(ctx context.Context, account *VideoProvi
 	}
 	if err := json.Unmarshal(respBody, &parsed); err != nil {
 		return nil, fmt.Errorf("seedance: parse poll response: %w", err)
+	}
+	// Escape-proof structural-field guard: parsed.ID is stored raw as upstream_task_id and
+	// parsed.Content.VideoURL as result_url. A JSON-escaped key in either decodes back to the
+	// key past the raw-body check; check the DECODED fields and refuse them.
+	if seedanceUpstreamEchoedKey(account, parsed.ID) || seedanceUpstreamEchoedKey(account, parsed.Content.VideoURL) {
+		return nil, infraerrorsUnavailable("SEEDANCE_UPSTREAM_ECHOED_CREDENTIAL",
+			"Seedance poll aborted: upstream id/result_url echoed the configured credential; refusing to persist it (key value intentionally not included)")
 	}
 
 	result := &VideoAdapterResult{
@@ -356,7 +404,10 @@ func (a *seedanceVideoAdapter) PollTask(ctx context.Context, account *VideoProvi
 	if parsed.Content.VideoURL != "" {
 		if err := validateExternalVideoURL(parsed.Content.VideoURL); err != nil {
 			result.Status = VideoStatusFailed
-			result.ErrorMessage = "upstream result_url failed validation: " + err.Error()
+			// The validator error echoes the rejected upstream URL (which can carry a
+			// presigned signature/token in its query string); redact (key-aware) before it
+			// lands in task.ErrorMessage (DB), the failed event and the poll API response.
+			result.ErrorMessage = "upstream result_url failed validation: " + seedanceRedactBody(account, err.Error())
 			result.Payload["result_url_rejected"] = true
 			return result, nil
 		}
@@ -366,7 +417,7 @@ func (a *seedanceVideoAdapter) PollTask(ctx context.Context, account *VideoProvi
 	if parsed.Error.Message != "" {
 		// Same leak channel as create: a 200-OK error.message lands in
 		// task.ErrorMessage (DB), the failed event, and the poll API response.
-		result.ErrorMessage = redactVideoUpstreamSecrets(parsed.Error.Message)
+		result.ErrorMessage = seedanceRedactBody(account, parsed.Error.Message)
 		result.Status = VideoStatusFailed
 	}
 
@@ -419,6 +470,78 @@ func (a *seedanceVideoAdapter) BuildCreatePayload(account *VideoProviderAccount,
 		"redacted_event_log_required": true,
 		"source_docs":                 "https://www.volcengine.com/docs/82379/1520757?lang=zh",
 	}
+}
+
+// seedanceRedactBody is the real-call redaction chokepoint. It strips the account's
+// configured key (shape-agnostic, via stripKnownVideoSecret) and then the shared/
+// pattern secrets, so the configured key can never survive into the DB, an API error,
+// or the audit log — regardless of whether its shape falls in a pattern blind spot
+// (12-19 chars / pure-letter / pure-digit). Every adapter path that turns an upstream
+// body or message into stored/returned text goes through here.
+func seedanceRedactBody(account *VideoProviderAccount, s string) string {
+	key := ""
+	if account != nil {
+		key = account.PlainAPIKey
+	}
+	return redactVideoUpstreamSecretsForKey(s, key)
+}
+
+// seedanceUpstreamEchoedKey reports whether the raw upstream body contains the configured
+// key verbatim. A legitimate provider response NEVER echoes your own API key; its presence
+// — whether in a free-text message OR in a STRUCTURAL field the adapter stores raw (the task
+// `id` → upstream_task_id and the create/poll payload `upstream_id`, a result-url path
+// segment, etc.) — signals a hostile or broken upstream. The body/message redactor only
+// covers error STRINGS, not parsed structural fields, so this is the fail-closed backstop
+// that stops the key from ever being PERSISTED via a structural field. (A key shorter than
+// the floor cannot reach here: the pre-arm self-check already aborted such a key.)
+func seedanceUpstreamEchoedKey(account *VideoProviderAccount, rawBody string) bool {
+	if account == nil {
+		return false
+	}
+	key := strings.TrimSpace(account.PlainAPIKey)
+	if len(key) < videoKnownSecretMinLen {
+		return false
+	}
+	return strings.Contains(rawBody, key)
+}
+
+// seedancePreArmRedactionSelfCheck is the FORM-A-path equivalent of the Form B real-
+// smoke test's pre-arm self-check, lifted to the adapter chokepoint so it guards EVERY
+// real call (the worker path AND the direct Form B path) BEFORE any socket is opened.
+// It proves the configured key is stripped in every shape an upstream echo could take
+// (bare, Authorization-prefixed, and embedded in JSON error envelopes) by the SAME
+// redaction path the adapter uses on the real response. If any shape would leak the
+// key it returns an error and the caller aborts with NO network call (fail-closed).
+// The key value is NEVER included in the error or any log.
+//
+// With key-aware redaction (seedanceRedactBody) this passes for any credible key
+// (length >= videoKnownSecretMinLen, any charset). It still fails-closed for the one
+// genuinely dangerous case the pattern passes alone cannot cover — a sub-floor key
+// that also lands in a pattern blind spot — rather than billing a call whose echo
+// could leak it.
+func seedancePreArmRedactionSelfCheck(account *VideoProviderAccount) error {
+	if account == nil {
+		return nil
+	}
+	key := strings.TrimSpace(account.PlainAPIKey)
+	if key == "" {
+		// An empty/whitespace key is rejected earlier by the api-key-configured guard;
+		// there is nothing to leak here.
+		return nil
+	}
+	for _, probe := range []string{
+		key,
+		"Bearer " + key,
+		`{"message":"` + key + `"}`,
+		`{"error":{"message":"rejected token ` + key + `"}}`,
+	} {
+		if strings.Contains(seedanceRedactBody(account, probe), key) {
+			return infraerrorsUnavailable("SEEDANCE_REDACTION_SELF_CHECK_FAILED",
+				"pre-arm redaction self-check failed: the configured key is not stripped in every upstream echo shape; "+
+					"aborting before any billed call (key value intentionally not included)")
+		}
+	}
+	return nil
 }
 
 func seedanceSmokeGateBlockedReasons(account *VideoProviderAccount, task *VideoTask) []string {

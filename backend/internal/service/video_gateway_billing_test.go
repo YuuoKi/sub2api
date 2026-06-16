@@ -246,3 +246,98 @@ func TestVideoBudgetGateAllowsWithinBudget(t *testing.T) {
 		t.Fatalf("expected one task persisted, got %d", len(repo.tasks))
 	}
 }
+
+// cfgWithVideoBudget builds a config with BOTH the VA1 per-second rate and the per-call
+// budget cap set, to exercise the production DI wiring (ProvideVideoGatewayService).
+func cfgWithVideoBudget(rate, perCallBudget float64) *config.Config {
+	return &config.Config{VideoGateway: config.VideoGatewayConfig{CostPerSecond: rate, PerCallBudget: perCallBudget}}
+}
+
+// TestProvideVideoGatewayServiceArmsGuardFromConfig proves the PRODUCTION wiring path:
+// ProvideVideoGatewayService (the single DI seam, also called by wire_gen.go) reads
+// video_gateway.per_call_budget and injects a StaticBudgetGuard armed at that cap. With
+// cost_per_second=1.5 and per_call_budget=2 a 5s create estimates 7.5 > 2 and is rejected
+// at CreateTask — no task persisted, no provider/key/DB touched. This is the unit-level
+// mirror of the B-1 "empty-brake" (空踩刹车) check against the real DI wrapper.
+func TestProvideVideoGatewayServiceArmsGuardFromConfig(t *testing.T) {
+	ctx := context.Background()
+	repo := newMemoryVideoGatewayRepo()
+	providerID := repo.seedMockProvider()
+	svc := ProvideVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfgWithVideoBudget(1.5, 2.0))
+
+	task, err := svc.CreateTask(ctx, VideoTaskCreateParams{
+		ProviderAccountID: providerID,
+		TaskType:          VideoTaskTypeTextToVideo,
+		Prompt:            "empty-brake render",
+		CreatedBy:         7,
+		Duration:          5, // cost = 1.5 × 5 = 7.5 > cap 2.0 => intercepted
+	})
+	if err == nil {
+		t.Fatal("expected ProvideVideoGatewayService to arm the guard and intercept, got nil error")
+	}
+	if !strings.Contains(err.Error(), "exceeds per-call cap") {
+		t.Fatalf("expected an over-cap interception error, got %v", err)
+	}
+	if task != nil {
+		t.Fatalf("expected no task on interception, got %#v", task)
+	}
+	if len(repo.tasks) != 0 {
+		t.Fatalf("armed guard must NOT persist an over-cap task; got %d persisted", len(repo.tasks))
+	}
+}
+
+// TestProvideVideoGatewayServiceUnarmedWhenBudgetZero proves the default is inert: with
+// per_call_budget=0 the wiring injects NO guard, so the gateway behaves exactly as before
+// (the create proceeds and is persisted). This guarantees installing the field changes no
+// production behaviour until a real cap is set.
+func TestProvideVideoGatewayServiceUnarmedWhenBudgetZero(t *testing.T) {
+	ctx := context.Background()
+	repo := newMemoryVideoGatewayRepo()
+	providerID := repo.seedMockProvider()
+	svc := ProvideVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfgWithVideoBudget(1.5, 0))
+
+	task, err := svc.CreateTask(ctx, VideoTaskCreateParams{
+		ProviderAccountID: providerID,
+		TaskType:          VideoTaskTypeTextToVideo,
+		Prompt:            "unarmed render",
+		CreatedBy:         7,
+		Duration:          5,
+	})
+	if err != nil {
+		t.Fatalf("expected unarmed gate to allow create, got %v", err)
+	}
+	if task == nil || task.ID == 0 {
+		t.Fatal("expected a persisted task when the gate is unarmed")
+	}
+	if len(repo.tasks) != 1 {
+		t.Fatalf("expected one task persisted, got %d", len(repo.tasks))
+	}
+}
+
+// TestProvideVideoGatewayServiceAdmitsNormalClipAtRealCap proves the B-2 production config
+// (cost_per_second=1.5, per_call_budget=30) admits a normal single 5s clip: estimate 7.5 <=
+// cap 30 => allowed and persisted. The brake stops over-budget bursts, not the intended
+// single smoke.
+func TestProvideVideoGatewayServiceAdmitsNormalClipAtRealCap(t *testing.T) {
+	ctx := context.Background()
+	repo := newMemoryVideoGatewayRepo()
+	providerID := repo.seedMockProvider()
+	svc := ProvideVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfgWithVideoBudget(1.5, 30.0))
+
+	task, err := svc.CreateTask(ctx, VideoTaskCreateParams{
+		ProviderAccountID: providerID,
+		TaskType:          VideoTaskTypeTextToVideo,
+		Prompt:            "real-cap single clip",
+		CreatedBy:         7,
+		Duration:          5, // cost = 1.5 × 5 = 7.5 <= cap 30 => allowed
+	})
+	if err != nil {
+		t.Fatalf("expected the real cap (30) to admit a normal 5s clip, got %v", err)
+	}
+	if task == nil || task.ID == 0 {
+		t.Fatal("expected a persisted task within the real cap")
+	}
+	if len(repo.tasks) != 1 {
+		t.Fatalf("expected one task persisted, got %d", len(repo.tasks))
+	}
+}

@@ -75,6 +75,53 @@ func looksLikeOpaqueVideoSecret(tok string) bool {
 	return false
 }
 
+// videoRedactionMarker is the single replacement token used by every video-gateway
+// redaction pass. It matches the shared content-moderation redactor's marker so a
+// mixed body reads consistently after redaction.
+const videoRedactionMarker = "[已脱敏]"
+
+// videoKnownSecretMinLen is the floor below which a configured key is too short to
+// strip as an exact substring without risking collateral redaction of ordinary text
+// (a 3-char value would blank every occurrence of those 3 chars anywhere in the body).
+// A real upstream credential is far longer than this; a value shorter than the floor
+// is not a credible secret and is left to the pattern passes + the fail-closed
+// pre-arm self-check. 8 stays well under the 12-char low end of the documented
+// opaque-token blind spot, so a 12-19 char key — the very band the pattern passes
+// miss — is still stripped here by exact match.
+const videoKnownSecretMinLen = 8
+
+// stripKnownVideoSecret removes EVERY occurrence of the exact configured upstream key
+// (after trimming) from s, replacing it with the redaction marker. Unlike the
+// pattern-based passes it is SHAPE-AGNOSTIC: because the key's exact bytes are known,
+// it strips a credential of ANY shape — INCLUDING the documented pattern blind spots
+// (12-19 chars, all-letters, all-digits) — WITHOUT the over-redaction those shapes
+// would cause if caught by a blind length/charset rule. It only ever touches the one
+// known value, so ordinary words, ids, timestamps and result-url path segments stay
+// inspectable (the existing TestRedactVideoUpstreamSecretsOpaqueToken negative cases
+// hold). This is the PRIMARY plug for the configured key leaking; the pattern passes
+// remain layered on top to catch OTHER secrets an upstream body may echo.
+func stripKnownVideoSecret(s, key string) string {
+	key = strings.TrimSpace(key)
+	if len(key) < videoKnownSecretMinLen {
+		return s
+	}
+	if !strings.Contains(s, key) {
+		return s
+	}
+	return strings.ReplaceAll(s, key, videoRedactionMarker)
+}
+
+// redactVideoUpstreamSecretsForKey is the KEY-AWARE redaction entry point for the real
+// provider path. It FIRST strips the exact configured key (shape-agnostic — closes the
+// pattern blind spots for the one value that matters) and THEN runs the full pattern
+// redactor over what remains (catches other echoed secrets). Strip-first guarantees the
+// exact key bytes are gone before any pattern pass can mutate the surrounding string.
+// Use this — not the bare redactVideoUpstreamSecrets — wherever an upstream body or
+// message can reach the DB, an API response, an error string, or the audit log.
+func redactVideoUpstreamSecretsForKey(s, key string) string {
+	return redactVideoUpstreamSecrets(stripKnownVideoSecret(s, key))
+}
+
 // redactVideoUpstreamSecrets strips credentials (Bearer tokens, Authorization
 // headers, API keys, JWTs, presigned URLs, long hex/base64 blobs, Volcengine
 // AKLT access keys) from upstream video-provider response bodies before they
@@ -124,7 +171,13 @@ func redactVideoUpstreamSecrets(s string) string {
 // a security precondition for real calls, so any failure to record it returns an
 // error (the caller aborts the real create/poll) rather than silently proceeding
 // with no audit evidence.
-func appendRedactedVideoEvent(phase string, statusCode int, rawBody string) error {
+//
+// key is the configured upstream key for the call being audited; it is used ONLY to
+// strip that exact value (shape-agnostic) from the body before writing, and is never
+// itself written or logged. Pass "" when no key is in scope (the pattern passes still
+// run). This closes the leak path where a blind-spot-shaped key echoed in a 401/200
+// error body would otherwise survive into the audit file.
+func appendRedactedVideoEvent(key, phase string, statusCode int, rawBody string) error {
 	path := strings.TrimSpace(os.Getenv("SUB2API_VIDEO_REDACTED_EVENT_LOG"))
 	if path == "" {
 		return nil
@@ -135,7 +188,7 @@ func appendRedactedVideoEvent(phase string, statusCode int, rawBody string) erro
 		"provider":    VideoProviderSeedance,
 		"phase":       phase,
 		"status_code": statusCode,
-		"body":        truncate(redactVideoUpstreamSecrets(rawBody), 1000),
+		"body":        truncate(redactVideoUpstreamSecretsForKey(rawBody, key), 1000),
 	}
 	line, err := json.Marshal(record)
 	if err != nil {

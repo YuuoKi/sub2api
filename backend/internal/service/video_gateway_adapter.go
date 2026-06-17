@@ -173,6 +173,19 @@ func (a *seedanceVideoAdapter) CreateTask(ctx context.Context, account *VideoPro
 		}
 		content = append(content, map[string]any{"type": "image_url", "image_url": map[string]string{"url": task.ReferenceImageURL}})
 	}
+	if task.ReferenceVideoURL != "" {
+		if err := validateExternalVideoURL(task.ReferenceVideoURL); err != nil {
+			return nil, infraerrors.BadRequest("VIDEO_UNSAFE_REFERENCE_URL",
+				"reference_video_url failed SSRF/allowlist validation: "+seedanceRedactBody(account, err.Error()))
+		}
+		// B3 (video-to-video / 换皮): attach the reference video to the content array,
+		// mirroring the image_url shape + the same SSRF/allowlist gate. NOTE: the exact
+		// Ark content field name for a VIDEO reference is UNVERIFIED — `video_url` is
+		// inferred from the proven image_url pattern and MUST be confirmed against Ark
+		// docs / a real v2v call before being relied upon (tracked on the 待授权 list).
+		// Construction is asserted by a contract test; no real call is made here.
+		content = append(content, map[string]any{"type": "video_url", "video_url": map[string]string{"url": task.ReferenceVideoURL}})
+	}
 
 	payload := map[string]any{
 		"model":   model,
@@ -185,17 +198,21 @@ func (a *seedanceVideoAdapter) CreateTask(ctx context.Context, account *VideoPro
 	// (1-5s, enforced in seedanceSmokeGateBlockedReasons) is actually applied
 	// upstream instead of silently relying on Ark's default duration — which
 	// would decouple the real billed time from the §3 cost model.
-	// NOTE: the exact Ark field names (duration/resolution/aspect_ratio) are
-	// UNVERIFIED and MUST be confirmed against the first real smoke response
-	// before being relied upon (see blocker review B2 / smoke step 1).
+	// NOTE: duration/resolution request field NAMES remain UNVERIFIED against a real
+	// create (only echoed back in the real smoke RESPONSE); confirm before relying on
+	// them. The aspect field IS resolved (B1): Ark's create field is `ratio` (the real
+	// smoke response echoes `ratio`, never `aspect_ratio`). Sending `aspect_ratio` was
+	// silently ignored by Ark → it defaulted to 16:9, so portrait (9:16) could never be
+	// produced — the root cause of "竖屏做不出". Whether `ratio:9:16` actually yields a
+	// portrait clip still needs one real paid confirmation (tracked on the 待授权 list).
 	if task.Duration > 0 {
 		payload["duration"] = task.Duration
 	}
 	if task.Resolution != "" {
 		payload["resolution"] = task.Resolution
 	}
-	if task.AspectRatio != "" {
-		payload["aspect_ratio"] = task.AspectRatio
+	if ratio := normalizeSeedanceRatio(task.AspectRatio); ratio != "" {
+		payload["ratio"] = ratio
 	}
 
 	body, err := json.Marshal(payload)
@@ -391,7 +408,7 @@ func (a *seedanceVideoAdapter) PollTask(ctx context.Context, account *VideoProvi
 	// as "ratio" (e.g. "16:9"), which the adapter previously dropped. Surface it into
 	// the result payload. The exact nesting (top-level vs content.ratio) is not pinned
 	// by a captured gold sample, so accept either and prefer the non-empty one. This
-	// is response-parse only; request-side aspect_ratio params stay phase-2 scope.
+	// is response-parse alignment; the request side now also sends `ratio` (B1).
 	// Gate on a strict "W:H" shape so an unexpected/oversized upstream value cannot
 	// smuggle un-redacted content into the persisted event payload / API response.
 	if ratio := firstNonEmptyVideo(parsed.Ratio, parsed.Content.Ratio); looksLikeAspectRatio(ratio) {
@@ -454,12 +471,16 @@ func (a *seedanceVideoAdapter) BuildCreatePayload(account *VideoProviderAccount,
 	if task.ReferenceImageURL != "" {
 		content = append(content, map[string]any{"type": "image_url", "image_url": task.ReferenceImageURL})
 	}
+	if task.ReferenceVideoURL != "" {
+		content = append(content, map[string]any{"type": "video_url", "video_url": task.ReferenceVideoURL})
+	}
 	return map[string]any{
 		"base_url":                    account.BaseURL,
 		"model":                       task.Model,
 		"content":                     content,
 		"negative_prompt":             task.NegativePrompt,
-		"aspect_ratio":                task.AspectRatio,
+		// B1: Ark's create field is `ratio` (16:9 / 9:16 / 1:1), NOT `aspect_ratio`.
+		"ratio":                       normalizeSeedanceRatio(task.AspectRatio),
 		"duration":                    task.Duration,
 		"resolution":                  task.Resolution,
 		"smoke_gate_required":         true,
@@ -712,6 +733,27 @@ func normalizeVideoStatus(status string) string {
 		return VideoStatusCancelled
 	default:
 		return VideoStatusRunning
+	}
+}
+
+// normalizeSeedanceRatio maps a requested aspect/orientation to Ark's create-side
+// `ratio` field value (16:9 / 9:16 / 1:1). It accepts logical orientation keywords
+// (portrait/landscape/square and 中文 竖屏/横屏/方形) AND already-valid "W:H" ratios
+// (passed through verbatim so non-mapped-but-valid ratios still reach Ark unchanged).
+// Empty input yields "" so the caller omits the field. This is the B1 fix: the field
+// name is `ratio` (not `aspect_ratio`) and portrait now resolves to 9:16.
+func normalizeSeedanceRatio(input string) string {
+	switch strings.ToLower(strings.TrimSpace(input)) {
+	case "":
+		return ""
+	case "9:16", "portrait", "vertical", "竖屏", "竖版", "竖":
+		return "9:16"
+	case "16:9", "landscape", "horizontal", "横屏", "横版", "横":
+		return "16:9"
+	case "1:1", "square", "方形", "正方形":
+		return "1:1"
+	default:
+		return strings.TrimSpace(input)
 	}
 }
 

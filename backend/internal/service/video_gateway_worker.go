@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,10 +22,28 @@ const (
 	// context and the result (even a 'succeeded') is silently dropped. (VA2.)
 	videoTaskProcessBudget = videoProviderCallTimeout + 10*time.Second
 	// videoDefaultMaxPollAttempts is the per-task poll cap when config is absent.
-	// 72 × 5s poll interval = 360s window ≥ 2× the ~170s Seedance generation time.
+	// 72 × 5s poll interval = 360s window ≥ 2× the ~170s Seedance 720p generation time.
+	// It is the 720p tier default (see videoPollAttempts720p).
 	videoDefaultMaxPollAttempts = 72
 	// videoDefaultPollInterval is the worker tick / poll cadence when config is absent.
 	videoDefaultPollInterval = 5 * time.Second
+
+	// Per-task poll budgets scale with resolution (B2): higher resolutions generate
+	// far slower — 1080p/5s observed ~19min real vs ~170s for 720p — so they need a
+	// longer poll window, while low resolutions finish fast and should fail faster.
+	// These are the DEFAULT caps used when max_poll_attempts is NOT pinned in config;
+	// a configured max_poll_attempts overrides all tiers. At the 5s default interval:
+	//   480p →  48 × 5s =  4min,  720p → 72 × 5s = 6min,  1080p → 300 × 5s = 25min.
+	videoPollAttempts480p  = 48
+	videoPollAttempts720p  = videoDefaultMaxPollAttempts // 72; unchanged default tier
+	videoPollAttempts1080p = 300
+	// videoTaskTimeoutMargin keeps the wall-clock backstop strictly OUTSIDE the
+	// resolution-scaled poll window: the poll-count cap is the primary bound and the
+	// wall-clock timeout is the outer net. effectiveTaskTimeout = max(configured
+	// task_timeout_minutes, pollWindow + this margin), so raising 1080p's poll window
+	// also raises its wall-clock backstop instead of letting a stale 15min timeout
+	// kill a 25min 1080p render. (Enforces the config-comment invariant automatically.)
+	videoTaskTimeoutMargin = 5 * time.Minute
 )
 
 type VideoGatewayWorker struct {
@@ -140,13 +159,68 @@ func (s *VideoGatewayService) ProcessRunnableTasks(ctx context.Context, batch in
 	return nil
 }
 
-// maxPollAttempts is the per-task VA2 poll cap, sourced from config with a safe
-// default when config is absent (e.g. unit tests passing a nil cfg).
-func (s *VideoGatewayService) maxPollAttempts() int {
+// normalizeResolutionTier folds a free-text resolution into one of the three poll
+// budget tiers. Unknown / empty resolutions fall back to the safe 720p middle tier.
+// Anything ≥1080p (incl. 2K/4K) maps to the long tier so it is never under-polled.
+func normalizeResolutionTier(resolution string) string {
+	r := strings.ToLower(strings.TrimSpace(resolution))
+	switch {
+	case strings.Contains(r, "2160"), strings.Contains(r, "4k"), strings.Contains(r, "1440"), strings.Contains(r, "2k"), strings.Contains(r, "1080"):
+		return "1080p"
+	case strings.Contains(r, "480"), strings.Contains(r, "360"), strings.Contains(r, "240"):
+		return "480p"
+	default:
+		return "720p"
+	}
+}
+
+// videoPollAttemptsForResolution returns the DEFAULT per-task poll cap for a
+// resolution tier (B2). Low-res short, 1080p long; see the const block.
+func videoPollAttemptsForResolution(resolution string) int {
+	switch normalizeResolutionTier(resolution) {
+	case "480p":
+		return videoPollAttempts480p
+	case "1080p":
+		return videoPollAttempts1080p
+	default:
+		return videoPollAttempts720p
+	}
+}
+
+// maxPollAttemptsForTask is the per-task VA2 poll cap. An explicit config
+// max_poll_attempts pins the cap for ALL resolutions (back-compat: a configured
+// value behaves exactly as before). When unset, the cap scales with the task's
+// resolution so 1080p gets a long enough window and low-res fails fast (B2).
+func (s *VideoGatewayService) maxPollAttemptsForTask(task *VideoTask) int {
 	if s.cfg != nil && s.cfg.VideoGateway.MaxPollAttempts > 0 {
 		return s.cfg.VideoGateway.MaxPollAttempts
 	}
-	return videoDefaultMaxPollAttempts
+	resolution := ""
+	if task != nil {
+		resolution = task.Resolution
+	}
+	return videoPollAttemptsForResolution(resolution)
+}
+
+// pollInterval is the configured worker tick / poll cadence (default 5s), used to
+// size the poll window for the wall-clock backstop.
+func (s *VideoGatewayService) pollInterval() time.Duration {
+	if s.cfg != nil && s.cfg.VideoGateway.PollIntervalSeconds > 0 {
+		return time.Duration(s.cfg.VideoGateway.PollIntervalSeconds) * time.Second
+	}
+	return videoDefaultPollInterval
+}
+
+// effectiveTaskTimeout is the per-task wall-clock backstop. It keeps the configured
+// task_timeout_minutes as a floor but guarantees the wall-clock sits strictly OUTSIDE
+// the resolution-scaled poll window (pollWindow + margin), so raising 1080p's poll
+// budget does not let a stale 15min timeout kill a 25min 1080p render (B2).
+func (s *VideoGatewayService) effectiveTaskTimeout(task *VideoTask, base time.Duration) time.Duration {
+	needed := time.Duration(s.maxPollAttemptsForTask(task))*s.pollInterval() + videoTaskTimeoutMargin
+	if base >= needed {
+		return base
+	}
+	return needed
 }
 
 func (s *VideoGatewayService) processTask(ctx context.Context, task *VideoTask, timeout time.Duration) error {
@@ -165,9 +239,13 @@ func (s *VideoGatewayService) processTask(ctx context.Context, task *VideoTask, 
 	taskCtx, cancel := context.WithTimeout(ctx, videoTaskProcessBudget)
 	defer cancel()
 
-	if timeout > 0 && time.Since(task.CreatedAt) > timeout {
+	// B2: the wall-clock backstop scales with resolution so a slow 1080p render is not
+	// killed before its (longer) poll window completes. effectiveTaskTimeout keeps the
+	// configured timeout as a floor and lifts it above pollWindow+margin when needed.
+	effectiveTimeout := s.effectiveTaskTimeout(task, timeout)
+	if effectiveTimeout > 0 && time.Since(task.CreatedAt) > effectiveTimeout {
 		return s.terminateVideoTask(taskCtx, task, "video task timed out", map[string]any{
-			"timeout_minutes": int(timeout.Minutes()),
+			"timeout_minutes": int(effectiveTimeout.Minutes()),
 		})
 	}
 	account, err := s.repo.GetProviderAccount(taskCtx, task.ProviderAccountID)
@@ -190,7 +268,8 @@ func (s *VideoGatewayService) processTask(ctx context.Context, task *VideoTask, 
 	case VideoStatusSubmitted, VideoStatusRunning:
 		// VA2 poll cap: once a task has used its poll budget without reaching a
 		// terminal status, fail it deterministically instead of polling forever.
-		maxPolls := s.maxPollAttempts()
+		// B2: the budget scales with the task's resolution.
+		maxPolls := s.maxPollAttemptsForTask(task)
 		if task.PollCount >= maxPolls {
 			return s.terminateVideoTask(taskCtx, task, fmt.Sprintf("video task exceeded max poll attempts (%d)", maxPolls), map[string]any{
 				"max_poll_attempts": maxPolls,

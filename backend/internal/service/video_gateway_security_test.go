@@ -310,12 +310,19 @@ func TestSeedanceCreateSendsDurationAndAuditsRedacted(t *testing.T) {
 	if res.UpstreamTaskID != "task-xyz" {
 		t.Fatalf("UpstreamTaskID = %q, want task-xyz", res.UpstreamTaskID)
 	}
-	// B2: duration (and resolution/aspect_ratio) must be on the wire.
+	// B2: duration + resolution must be on the wire.
 	if captured["duration"] != float64(5) {
 		t.Fatalf("payload duration = %v, want 5; full payload=%+v", captured["duration"], captured)
 	}
-	if captured["resolution"] != "720p" || captured["aspect_ratio"] != "16:9" {
-		t.Fatalf("payload missing resolution/aspect_ratio: %+v", captured)
+	if captured["resolution"] != "720p" {
+		t.Fatalf("payload missing resolution: %+v", captured)
+	}
+	// B1: the aspect field is sent as Ark's `ratio` (NOT `aspect_ratio`).
+	if captured["ratio"] != "16:9" {
+		t.Fatalf("payload aspect must be sent as ratio=16:9, got ratio=%v; full payload=%+v", captured["ratio"], captured)
+	}
+	if _, leaked := captured["aspect_ratio"]; leaked {
+		t.Fatalf("request must NOT send the legacy aspect_ratio field (Ark ignores it): %+v", captured)
 	}
 
 	// B1b: redacted event log was actually written.

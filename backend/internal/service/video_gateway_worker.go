@@ -174,32 +174,54 @@ func normalizeResolutionTier(resolution string) string {
 	}
 }
 
-// videoPollAttemptsForResolution returns the DEFAULT per-task poll cap for a
-// resolution tier (B2). Low-res short, 1080p long; see the const block.
-func videoPollAttemptsForResolution(resolution string) int {
+// scaleBudget returns ceil(baseline × num / den), clamped to ≥1, so a scaled poll
+// budget never rounds down to 0 and a higher tier always gets at least 1 poll.
+func scaleBudget(baseline, num, den int) int {
+	if den <= 0 {
+		return baseline
+	}
+	scaled := (baseline*num + den - 1) / den // ceil division
+	if scaled < 1 {
+		return 1
+	}
+	return scaled
+}
+
+// scalePollBudgetForResolution scales a 720p BASELINE poll budget to the task's
+// resolution tier, preserving the 480p:720p:1080p = 48:72:300 ratio (B2). It ALWAYS
+// runs — max_poll_attempts is the 720p baseline, never a flat per-resolution cap — so
+// a 1080p task gets its long window even under the pinned production default (72),
+// which is the bug a config-pinned early-return would re-introduce.
+func scalePollBudgetForResolution(baseline720p int, resolution string) int {
+	if baseline720p <= 0 {
+		baseline720p = videoPollAttempts720p
+	}
 	switch normalizeResolutionTier(resolution) {
 	case "480p":
-		return videoPollAttempts480p
+		return scaleBudget(baseline720p, videoPollAttempts480p, videoPollAttempts720p)
 	case "1080p":
-		return videoPollAttempts1080p
+		return scaleBudget(baseline720p, videoPollAttempts1080p, videoPollAttempts720p)
 	default:
-		return videoPollAttempts720p
+		return baseline720p
 	}
 }
 
-// maxPollAttemptsForTask is the per-task VA2 poll cap. An explicit config
-// max_poll_attempts pins the cap for ALL resolutions (back-compat: a configured
-// value behaves exactly as before). When unset, the cap scales with the task's
-// resolution so 1080p gets a long enough window and low-res fails fast (B2).
+// maxPollAttemptsForTask is the per-task VA2 poll cap, ALWAYS scaled by the task's
+// resolution (B2). The configured max_poll_attempts is the 720p BASELINE budget
+// (production default 72, viper-set + validated >0); 480p scales down and 1080p
+// scales up from it. Scaling runs even when config pins the baseline, so a 1080p
+// render (~19min real) actually gets its longer window in production rather than the
+// flat ~6min the baseline alone would yield — the defect a config early-return hid.
 func (s *VideoGatewayService) maxPollAttemptsForTask(task *VideoTask) int {
+	baseline := videoPollAttempts720p
 	if s.cfg != nil && s.cfg.VideoGateway.MaxPollAttempts > 0 {
-		return s.cfg.VideoGateway.MaxPollAttempts
+		baseline = s.cfg.VideoGateway.MaxPollAttempts
 	}
 	resolution := ""
 	if task != nil {
 		resolution = task.Resolution
 	}
-	return videoPollAttemptsForResolution(resolution)
+	return scalePollBudgetForResolution(baseline, resolution)
 }
 
 // pollInterval is the configured worker tick / poll cadence (default 5s), used to

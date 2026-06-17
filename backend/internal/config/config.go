@@ -180,11 +180,13 @@ type VideoGatewayConfig struct {
 	PollIntervalSeconds int    `mapstructure:"poll_interval_seconds"`
 	TaskTimeoutMinutes  int    `mapstructure:"task_timeout_minutes"`
 	WorkerBatchSize     int    `mapstructure:"worker_batch_size"`
-	// MaxPollAttempts bounds how many times the worker polls a single task before
-	// it is failed deterministically (VA2 guard). poll_interval_seconds × this is
-	// the poll window and MUST be ≥ 2× the provider generation time (~170s for
-	// Seedance), i.e. ≥360s. Default 72 × 5s = 360s. task_timeout_minutes must
-	// stay ≥ poll window + margin so the wall-clock timeout is the outer backstop.
+	// MaxPollAttempts is the 720p BASELINE per-task poll budget (VA2 guard). The worker
+	// scales it by resolution at runtime (480p:720p:1080p = 48:72:300 ratio), so a 1080p
+	// render gets a proportionally longer window than this baseline. poll_interval_seconds
+	// × this is the 720p poll window and MUST be ≥ 2× the provider generation time (~170s
+	// for Seedance), i.e. ≥360s. Default 72 × 5s = 360s. The validation below checks this
+	// 720p baseline; the runtime wall-clock backstop (effectiveTaskTimeout) is lifted above
+	// the resolution-scaled window automatically, so a longer 1080p window is still bounded.
 	MaxPollAttempts int `mapstructure:"max_poll_attempts"`
 	// CostPerSecond is the per-second price used by the VA1 budget gate / billing
 	// to estimate a video's cost (provider returns none). Default 0 keeps the gate

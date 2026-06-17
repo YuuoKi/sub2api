@@ -118,6 +118,33 @@ go test ./internal/service/ -run 'Ratio|Seedance|VideoPoll|MaxPollAttempts|Effec
   2. **B3 字段名坐实**：Ark 视频参考 content 的确切字段名（`video_url`？）——需查 Ark 官方 v2v 文档或 1 次真实 v2v 调用。
   3. **请求侧 duration/resolution 字段名**：仍为响应回显推断，未经真实 create 请求坐实（低风险，可随 B1 同枪验证）。
 
+## 9. 复审闭环（Claude 跨上下文对抗自审 → 修复，第二个 commit）
+
+首个 B commit `1be53de3` 后，跑了 3-lens 对抗复审（独立新上下文 skeptics）。**抓到 1 个 MAJOR + 2 个 minor，已全部修复（commit 2）：**
+
+### MAJOR（2/3 lens 共识）：B2 分辨率分层在生产中是死代码
+- **现象**：`maxPollAttemptsForTask` 原逻辑「config `max_poll_attempts>0` → 钉死所有分辨率」。但生产 config **恒>0**：`config.go:1622` viper 默认 72、`Validate()`（:1939）拒绝 ≤0、`config.example.yaml:876` 也写 72。→ 分辨率分层**永不执行**，1080p 仍被钉在 72×5s=6min，**正是 B2 要修的 bug**。原 nil-cfg 测试给了假绿。
+- **修复**：分辨率分层**永远执行**——`max_poll_attempts` 重定义为 **720p 基线**，按 480p:720p:1080p=48:72:300 比例缩放（`scalePollBudgetForResolution`/`scaleBudget`，ceil 除法 ≥1）。生产默认 72 → 1080p=300（25min 窗），480p=48，720p=72。config 校验（:1944/:1948）仍校验 720p 基线不变式；运行时 `effectiveTaskTimeout` 自动把 wall-clock 抬到 1080p 窗之外。
+- **回归测试**：新增 `TestMaxPollAttemptsScalesUnderProductionConfig`（`cfgWithMaxPolls(72)` → 1080p **必须** =300）——**旧代码会 fail，新代码 pass**，把死代码路径钉进测试。`config.go` MaxPollAttempts 注释同步改为「720p 基线」。
+
+### minor：B1 直通未校验（请求侧与响应侧 `looksLikeAspectRatio` 不一致）
+- **现象**：`normalizeSeedanceRatio` default 分支直通任意字符串（"banana" 也发给 Ark），与响应侧严格 `looksLikeAspectRatio` 不对称。
+- **修复**：default 分支改为「仅 `looksLikeAspectRatio` 合法的 W:H 直通，否则返回 ""（省略字段→Ark 默认）」。`TestNormalizeSeedanceRatio` 加 `banana→""`/`16x9→""`/`21:9→21:9`。请求/响应两侧现用同一套合法定义。
+
+### minor（已知/有意）：`effectiveTaskTimeout` 抬高小 task_timeout
+- 这是 B2 的**有意设计**（1080p 需 30min，否则被 15min 杀），非 bug；终止事件已记录有效 `timeout_minutes`。保留 + 注释钉死意图。
+
+### 复审确认无问题项
+- B1 出站改名完整、无残留 `aspect_ratio` 发往 Ark（mock/kling 的 `aspect_ratio` 正确留存，属各自契约）。
+- B3 v2v 经同一 `validateExternalVideoURL` SSRF 门、发请求前拒绝；`video_url` 字段名 UNVERIFIED 已标注；测试只断本侧构造。
+- 无密钥泄漏新路径、无 scope creep（未碰 handler DTO/DB 列/drama）。
+
+复审后再跑：`go build ./...` ✅ / `go vet ./...` ✅ / `go test ./internal/service/` ✅(43.8s) / `go test ./internal/config/` ✅。
+
 ## 8. 提交记录
 
-分支 `night-run/20260618-B-contract`；`git add` 仅 4 个 backend 文件 + 本审查包（显式逐一，绝不 `git add .`）。**未 push。** 确切 hash 见 `git log` 与 `00_黎明总结.md`。
+分支 `night-run/20260618-B-contract`，两个 commit：
+1. `1be53de3` —— B1/B2/B3 首版（4 backend 文件 + B 审查包）。
+2. 复审闭环 —— B2 生产生效修复 + B1 直通收紧 + config 注释 + 回归测试（worker.go/adapter.go/config.go/b1b2b3_test.go/本审查包）。
+
+`git add` 均显式逐一，绝不 `git add .`。**未 push。** 确切 hash 见 `git log` 与 `00_黎明总结.md`。

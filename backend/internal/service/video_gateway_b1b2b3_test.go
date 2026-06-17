@@ -24,8 +24,11 @@ func TestNormalizeSeedanceRatio(t *testing.T) {
 		"portrait":  "9:16",
 		"Landscape": "16:9",
 		"SQUARE":    "1:1",
-		" 9:16 ":    "9:16", // trimmed
-		"4:3":       "4:3",  // valid-but-unmapped → passthrough verbatim
+		" 9:16 ":    "9:16",  // trimmed
+		"4:3":       "4:3",   // valid-but-unmapped → passthrough verbatim
+		"21:9":      "21:9",  // shape-valid passthrough
+		"banana":    "",      // arbitrary text → dropped (field omitted)
+		"16x9":      "",      // not a W:H shape → dropped
 	}
 	for in, want := range cases {
 		if got := normalizeSeedanceRatio(in); got != want {
@@ -84,24 +87,32 @@ func TestSeedanceCreateSendsRatioWithOrientationMapping(t *testing.T) {
 // that 1080p covers the observed ~19min real generation, while 720p stays at the
 // legacy default and unknown resolutions fall back to the safe middle tier.
 func TestVideoPollBudgetScalesWithResolution(t *testing.T) {
-	p480 := videoPollAttemptsForResolution("480p")
-	p720 := videoPollAttemptsForResolution("720p")
-	p1080 := videoPollAttemptsForResolution("1080p")
+	base := videoPollAttempts720p
+	p480 := scalePollBudgetForResolution(base, "480p")
+	p720 := scalePollBudgetForResolution(base, "720p")
+	p1080 := scalePollBudgetForResolution(base, "1080p")
 	if !(p480 < p720 && p720 < p1080) {
 		t.Fatalf("poll budgets must scale 480p<720p<1080p, got %d/%d/%d", p480, p720, p1080)
+	}
+	// at the default 72 baseline the tiers equal the tier constants.
+	if p480 != videoPollAttempts480p || p720 != videoPollAttempts720p || p1080 != videoPollAttempts1080p {
+		t.Fatalf("default-baseline tiers = %d/%d/%d, want %d/%d/%d", p480, p720, p1080, videoPollAttempts480p, videoPollAttempts720p, videoPollAttempts1080p)
 	}
 	if p720 != videoDefaultMaxPollAttempts {
 		t.Fatalf("720p tier must equal the legacy default %d (back-compat), got %d", videoDefaultMaxPollAttempts, p720)
 	}
-	if videoPollAttemptsForResolution("") != p720 || videoPollAttemptsForResolution("weird") != p720 {
-		t.Fatalf("unknown/empty resolution must fall back to the 720p tier")
+	if scalePollBudgetForResolution(base, "") != p720 || scalePollBudgetForResolution(base, "weird") != p720 {
+		t.Fatalf("unknown/empty resolution must fall back to the 720p baseline")
 	}
-	if videoPollAttemptsForResolution("4k") != p1080 || videoPollAttemptsForResolution("1080P") != p1080 {
+	if scalePollBudgetForResolution(base, "4k") != p1080 || scalePollBudgetForResolution(base, "1080P") != p1080 {
 		t.Fatalf("≥1080p (incl. 4k, case-insensitive) must map to the long tier")
 	}
-	window1080 := time.Duration(p1080) * videoDefaultPollInterval
-	if window1080 < 19*time.Minute {
-		t.Fatalf("1080p poll window %s must cover the observed ~19min 1080p generation", window1080)
+	if window := time.Duration(p1080) * videoDefaultPollInterval; window < 19*time.Minute {
+		t.Fatalf("1080p poll window %s must cover the observed ~19min 1080p generation", window)
+	}
+	// scaling is baseline-relative: a doubled baseline doubles each tier.
+	if got := scalePollBudgetForResolution(2*base, "1080p"); got != 2*p1080 {
+		t.Fatalf("doubling the baseline must double the 1080p budget: got %d want %d", got, 2*p1080)
 	}
 }
 
@@ -120,11 +131,38 @@ func TestMaxPollAttemptsForTaskResolutionAndOverride(t *testing.T) {
 	if got := svc.maxPollAttemptsForTask(&VideoTask{}); got != videoPollAttempts720p {
 		t.Fatalf("no-resolution task cap = %d, want 720p default %d", got, videoPollAttempts720p)
 	}
-	pinned := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfgWithMaxPolls(7))
+	// a configured max_poll_attempts is the 720p BASELINE and STILL scales by resolution
+	// (it does NOT flat-pin every resolution — that was the dead-code defect).
+	baselined := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfgWithMaxPolls(7))
 	for _, res := range []string{"480p", "720p", "1080p", ""} {
-		if got := pinned.maxPollAttemptsForTask(&VideoTask{Resolution: res}); got != 7 {
-			t.Fatalf("configured max_poll_attempts must pin %q to 7, got %d", res, got)
+		want := scalePollBudgetForResolution(7, res)
+		if got := baselined.maxPollAttemptsForTask(&VideoTask{Resolution: res}); got != want {
+			t.Fatalf("configured baseline 7 at %q: got %d want %d (must scale, not pin)", res, got, want)
 		}
+	}
+	if got := baselined.maxPollAttemptsForTask(&VideoTask{Resolution: "720p"}); got != 7 {
+		t.Fatalf("720p must equal the configured baseline 7, got %d", got)
+	}
+	if got := baselined.maxPollAttemptsForTask(&VideoTask{Resolution: "1080p"}); got <= 7 {
+		t.Fatalf("1080p must scale ABOVE the baseline 7 (not flat-pinned), got %d", got)
+	}
+}
+
+// TestMaxPollAttemptsScalesUnderProductionConfig mirrors the SHIPPED config
+// (max_poll_attempts=72 — the viper default that validation forces > 0), the exact
+// path the adversarial review flagged as making resolution scaling dead code. It
+// proves 1080p STILL gets its long window in production, not the flat 72/6min.
+func TestMaxPollAttemptsScalesUnderProductionConfig(t *testing.T) {
+	repo := newMemoryVideoGatewayRepo()
+	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfgWithMaxPolls(72)) // production default
+	if got := svc.maxPollAttemptsForTask(&VideoTask{Resolution: "1080p"}); got != videoPollAttempts1080p {
+		t.Fatalf("under shipped config (max_poll_attempts=72), 1080p must STILL scale to %d, got %d (resolution scaling is dead!)", videoPollAttempts1080p, got)
+	}
+	if got := svc.maxPollAttemptsForTask(&VideoTask{Resolution: "480p"}); got != videoPollAttempts480p {
+		t.Fatalf("under shipped config, 480p must scale to %d, got %d", videoPollAttempts480p, got)
+	}
+	if got := svc.maxPollAttemptsForTask(&VideoTask{Resolution: "720p"}); got != videoPollAttempts720p {
+		t.Fatalf("under shipped config, 720p must equal the 72 baseline, got %d", got)
 	}
 }
 

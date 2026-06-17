@@ -753,7 +753,14 @@ func normalizeSeedanceRatio(input string) string {
 	case "1:1", "square", "方形", "正方形":
 		return "1:1"
 	default:
-		return strings.TrimSpace(input)
+		// Pass through only shape-valid "W:H" ratios (same gate as the response-side
+		// looksLikeAspectRatio), so a non-canonical-but-valid ratio (e.g. "4:3") still
+		// reaches Ark while arbitrary text ("banana", "16x9") is dropped → field omitted
+		// → Ark default. Keeps the request side from forwarding unvalidated input.
+		if v := strings.TrimSpace(input); looksLikeAspectRatio(v) {
+			return v
+		}
+		return ""
 	}
 }
 

@@ -13,9 +13,10 @@ const generationRedactionVersion = 1
 var (
 	// rePIIEmail 匹配常见 email。
 	rePIIEmail = regexp.MustCompile(`[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}`)
-	// rePIIPhone 保守匹配电话号码：以数字开头/结尾，中间为数字/分隔符（不含换行，避免跨行吞并）。
-	// 过度脱敏（误伤长数字 ID）是可接受的取舍——采集用于分析而非保真。
-	rePIIPhone = regexp.MustCompile(`\+?\d[\d().\-\t ]{7,}\d`)
+	// rePIIPhone 匹配常见电话格式，同时避免误伤标准 UUID / 长纯数字 request-id（B.1 Codex 复核标黄）。
+	// 三个分支：国际格式（带 +）｜分隔分组（空格/短横线/点，且分隔符非数字，强制至少 3 组）｜中国手机（1[3-9] 起 11 位）。
+	// 均不含换行（避免跨行吞并）；长度锚 + \b 使 12 位 UUID 末段、16 位纯数字 id、模型名（claude-opus-4-8）均不命中。
+	rePIIPhone = regexp.MustCompile(`\+\d[\d().\-\t ]{6,16}\d|\b\d{2,4}[.\-\t ]\d{3,4}[.\-\t ]\d{3,4}\b|\b1[3-9]\d{9}\b`)
 )
 
 // redactGenerationPII 在结构化/密钥脱敏之后，补一层自由文本 PII（email/电话）脱敏。

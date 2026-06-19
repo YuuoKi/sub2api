@@ -4346,11 +4346,17 @@ func (s *GatewayService) shouldInjectAnthropicCacheTTL1h(ctx context.Context, ac
 }
 
 // Forward 转发请求到Claude API
-func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *Account, parsed *ParsedRequest) (*ForwardResult, error) {
+func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *Account, parsed *ParsedRequest) (result *ForwardResult, err error) {
 	startTime := time.Now()
 	if parsed == nil {
 		return nil, fmt.Errorf("parse request: empty request")
 	}
+
+	// M1 采集口（response）：开关打开时把 c.Writer 包一层旁路写出器，转发结束后把客户端可见的响应抽样
+	// 回填进 ForwardResult。关闭时不分配/不包装（热路径零开销）。客户端收到的字节不受影响（判断基准0）。
+	respSink, restoreWriter := s.beginResponseCapture(c)
+	defer restoreWriter()
+	defer func() { fillResponseSample(result, respSink) }()
 
 	// Web Search 模拟：纯 web_search 请求时，直接调用搜索 API 构造响应
 	if account != nil && s.shouldEmulateWebSearch(ctx, account, parsed.GroupID, parsed.Body) {

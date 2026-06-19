@@ -183,6 +183,11 @@ func (s *GatewayService) ForwardAsChatCompletions(
 
 	// 14. Handle normal response
 	// Read Anthropic SSE → convert to Responses events → convert to CC format
+	// M1 采集口（response）：CC 转换路径在写客户端前包一层旁路写出器，结束后把抽样回填进 ForwardResult。
+	// 错误分支已在上文 return nil，这里只覆盖正常响应；关闭采集时为零开销 no-op。客户端字节不受影响。
+	respSink, restoreWriter := s.beginResponseCapture(c)
+	defer restoreWriter()
+
 	var result *ForwardResult
 	var handleErr error
 	if clientStream {
@@ -191,6 +196,7 @@ func (s *GatewayService) ForwardAsChatCompletions(
 		result, handleErr = s.handleCCBufferedFromAnthropic(resp, c, originalModel, mappedModel, reasoningEffort, startTime)
 	}
 
+	fillResponseSample(result, respSink)
 	return result, handleErr
 }
 

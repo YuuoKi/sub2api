@@ -637,6 +637,16 @@ const (
 )
 
 // GatewayConfig API网关相关配置
+// ContentCaptureConfig 控制 M1 采集口（采集 prompt+response 内容到 ai_generation_content）。
+type ContentCaptureConfig struct {
+	// Enabled: 总开关，默认 false（不采集、热路径零开销）。
+	Enabled bool `mapstructure:"enabled"`
+	// ResponseMaxBytes: response 抽样上限（字节），0 使用代码默认 64KiB（由 M1-B.2 的限容 tee 使用）。
+	ResponseMaxBytes int `mapstructure:"response_max_bytes"`
+	// PromptMaxBytes: prompt 采集上限（字节），0 使用代码默认 256KiB。
+	PromptMaxBytes int `mapstructure:"prompt_max_bytes"`
+}
+
 type GatewayConfig struct {
 	// 等待上游响应头的超时时间（秒），0表示无超时
 	// 注意：这不影响流式数据传输，只控制等待响应头的时间
@@ -707,6 +717,10 @@ type GatewayConfig struct {
 	ImageStreamKeepaliveInterval int `mapstructure:"image_stream_keepalive_interval"`
 	// MaxLineSize: 上游 SSE 单行最大字节数（0使用默认值）
 	MaxLineSize int `mapstructure:"max_line_size"`
+
+	// ContentCapture: M1 采集口——把 prompt+response 脱敏后采集到 ai_generation_content 旁路表。
+	// 默认关闭（Enabled=false）→ 热路径零开销、不采集；启用后采集 fail-open，绝不影响主调用。
+	ContentCapture ContentCaptureConfig `mapstructure:"content_capture"`
 
 	// 是否记录上游错误响应体摘要（避免输出请求内容）
 	LogUpstreamErrorBody bool `mapstructure:"log_upstream_error_body"`

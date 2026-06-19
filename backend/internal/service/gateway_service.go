@@ -503,6 +503,12 @@ type ForwardResult struct {
 	// 图片生成计费字段（图片生成模型使用）
 	ImageCount int    // 生成的图片数量
 	ImageSize  string // 图片尺寸 "1K", "2K", "4K"
+
+	// 内容采集（M1 采集口）：response 抽样，容量受限，仅在采集开关开启时由限容 tee 填充（M1-B.2）。
+	// M1-B.1 阶段这些字段保持零值（response 暂不采集，仅采 prompt）。
+	ResponseSample    []byte // 截断到 N 字节的客户端可见响应
+	ResponseTruncated bool   // 是否因超过 N 字节被截断
+	ResponseBytes     int    // 实际写给客户端的响应总字节数
 }
 
 // UpstreamFailoverError indicates an upstream error that should trigger account failover.
@@ -570,6 +576,9 @@ type GatewayService struct {
 	debugGatewayBodyFile  atomic.Pointer[os.File] // non-nil when SUB2API_DEBUG_GATEWAY_BODY is set
 	tlsFPProfileService   *TLSFingerprintProfileService
 	balanceNotifyService  *BalanceNotifyService
+	// generationCollector 是可选的 M1 采集口内容采集器（prompt+response）。
+	// nil = 未注入（默认）→ 所有采集为 no-op。经 SetGenerationContentCollector 注入。
+	generationCollector *GenerationContentCollector
 }
 
 // NewGatewayService creates a new GatewayService

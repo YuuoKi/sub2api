@@ -278,6 +278,18 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 					zap.Error(err),
 				)
 			}
+			// M1 采集口：与 RecordUsage 并列、与计费隔离的内容采集（fail-open，默认关闭）。
+			h.gatewayService.CollectGenerationContent(ctx, service.GenerationContentCaptureArgs{
+				RequestID:          result.RequestID,
+				UserID:             apiKey.UserID,
+				APIKeyID:           apiKey.ID,
+				GroupID:            apiKey.GroupID,
+				AccountID:          account.ID,
+				Model:              reqModel,
+				RequestPayloadHash: requestPayloadHash,
+				PromptBody:         body,
+				Result:             result,
+			})
 		})
 		return
 	}

@@ -531,6 +531,18 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 						zap.Int64("account_id", account.ID),
 					).Error("gateway.record_usage_failed", zap.Error(err))
 				}
+				// M1 采集口：与 RecordUsage 并列、与计费隔离的内容采集（fail-open，默认关闭）。
+				h.gatewayService.CollectGenerationContent(ctx, service.GenerationContentCaptureArgs{
+					RequestID:          result.RequestID,
+					UserID:             subject.UserID,
+					APIKeyID:           apiKey.ID,
+					GroupID:            apiKey.GroupID,
+					AccountID:          account.ID,
+					Model:              reqModel,
+					RequestPayloadHash: requestPayloadHash,
+					PromptBody:         parsedReq.Body,
+					Result:             result,
+				})
 			})
 			return
 		}

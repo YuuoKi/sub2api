@@ -22,6 +22,15 @@ func (f *fakeGenContentRepo) Create(_ context.Context, c *GenerationContent) err
 	return nil
 }
 
+// 只读看板方法在采集器写入测试中用不到，提供满足接口的空实现即可。
+func (f *fakeGenContentRepo) GetCaptureStats(context.Context) (*GenerationContentStats, error) {
+	return &GenerationContentStats{}, nil
+}
+
+func (f *fakeGenContentRepo) GetRecent(context.Context, int) ([]GenerationContentSample, error) {
+	return nil, nil
+}
+
 func enabledContentCaptureCfg() *config.Config {
 	return &config.Config{Gateway: config.GatewayConfig{ContentCapture: config.ContentCaptureConfig{Enabled: true}}}
 }

@@ -35,9 +35,45 @@ type GenerationContent struct {
 	CreatedAt          time.Time
 }
 
-// GenerationContentRepository 写入采集内容（append-only 旁路表）。
+// GenerationContentRepository 写入采集内容（append-only 旁路表），并为只读看板提供聚合/样本读取。
 type GenerationContentRepository interface {
 	Create(ctx context.Context, content *GenerationContent) error
+	// GetCaptureStats 返回采集内容的聚合快照（计数/去重/体量 + 近 7 日序列），用于护城河看板。
+	GetCaptureStats(ctx context.Context) (*GenerationContentStats, error)
+	// GetRecent 返回最近 limit 条采集样本（已 LEFT JOIN 归因名），按 created_at 倒序。
+	GetRecent(ctx context.Context, limit int) ([]GenerationContentSample, error)
+}
+
+// GenerationContentDailyPoint 是近 7 日序列中某一天（UTC）的采集计数。
+type GenerationContentDailyPoint struct {
+	Date  string // "YYYY-MM-DD"（UTC）
+	Count int64
+}
+
+// GenerationContentStats 是 ai_generation_content 表的聚合快照（只读看板用）。
+type GenerationContentStats struct {
+	Total             int64 // COUNT(*)
+	CapturedToday     int64 // created_at >= 今日 00:00 UTC
+	CapturedWeek      int64 // created_at >= now-7d
+	DistinctEmployees int64 // COUNT(DISTINCT user_id)
+	DistinctTeams     int64 // COUNT(DISTINCT group_id)
+	DistinctModels    int64 // COUNT(DISTINCT NULLIF(model,''))
+	TotalBytes        int64 // SUM(prompt_bytes + response_bytes)
+	DailySeries       []GenerationContentDailyPoint
+}
+
+// GenerationContentSample 是一条最近采集样本，附带用户/团队展示名（脱敏文本未截断，截断交给 handler）。
+type GenerationContentSample struct {
+	Model             string
+	CreatedAt         time.Time
+	PromptRedacted    string
+	ResponseRedacted  string
+	PromptBytes       int64
+	ResponseBytes     int64
+	ResponseTruncated bool
+	Username          string // COALESCE(users.username,'')
+	Email             string // COALESCE(users.email,'')
+	GroupName         string // COALESCE(groups.name,'')
 }
 
 // GenerationContentCaptureArgs 是 gateway handler 在一次中继完成后交给采集器的原料。

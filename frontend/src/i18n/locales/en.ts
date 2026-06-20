@@ -372,6 +372,7 @@ export default {
     totalApiKeys: 'Total API Keys',
     activeApiKeys: 'Active API Keys',
     usage: 'Usage',
+    generationContent: 'Generation Content',
     redeem: 'Redeem',
     affiliate: 'Affiliate Rebates',
     affiliateManagement: 'Affiliate Rebates',
@@ -4314,6 +4315,27 @@ export default {
       failedToUpdate: 'Failed to update promo code',
       failedToDelete: 'Failed to delete promo code',
       failedToLoadUsages: 'Failed to load usage records'
+    },
+
+    // Generation Content (capture 看板：护城河快照 + 样本墙)
+    generationContent: {
+      title: 'Generation Content',
+      description: 'Moat snapshot and sample wall of captured generations',
+      live: '● Live data',
+      exampleOff: '○ Example (capture off)',
+      capturedToday: 'Captured today',
+      capturedWeek: 'Captured this week',
+      distinctEmployees: 'Distinct employees',
+      distinctTeams: 'Distinct teams',
+      distinctModels: 'Distinct models',
+      totalBytes: 'Content volume',
+      perDay: 'day',
+      trendCaption: 'Last 7 days',
+      promptLabel: 'Prompt',
+      responseLabel: 'Response',
+      truncated: 'truncated',
+      exampleBannerTitle: 'Example — capture not enabled',
+      exampleBannerDesc: 'Real redacted samples appear here once content capture is turned on.'
     },
 
     // Usage Records

@@ -630,6 +630,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/generation-content',
+    name: 'AdminGenerationContent',
+    component: () => import('@/views/admin/GenerationContentView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Generation Content',
+      titleKey: 'admin.generationContent.title',
+      descriptionKey: 'admin.generationContent.description'
+    }
+  },
+  {
     path: '/admin/affiliates',
     redirect: '/admin/affiliates/invites'
   },

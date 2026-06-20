@@ -353,6 +353,7 @@ export default {
     announcements: '公告',
     apiKeys: 'API 密钥',
     usage: '使用记录',
+    generationContent: '生成内容',
     redeem: '兑换',
     affiliate: '邀请返利',
     affiliateManagement: '邀请返利',
@@ -4394,6 +4395,27 @@ export default {
       failedToUpdate: '更新优惠码失败',
       failedToDelete: '删除优惠码失败',
       failedToLoadUsages: '加载使用记录失败'
+    },
+
+    // Generation Content (采集看板：护城河快照 + 样本墙)
+    generationContent: {
+      title: '生成内容',
+      description: '采集口已沉淀的真实生产内容:护城河快照 + 样本墙',
+      live: '● 实时数据',
+      exampleOff: '○ 示例(未开启采集)',
+      capturedToday: '今日采集',
+      capturedWeek: '本周采集',
+      distinctEmployees: '去重员工',
+      distinctTeams: '去重团队',
+      distinctModels: '去重模型',
+      totalBytes: '已沉淀内容体量',
+      perDay: '天',
+      trendCaption: '近 7 日',
+      promptLabel: '提示词',
+      responseLabel: '回复',
+      truncated: '已截断',
+      exampleBannerTitle: '示例 — 未开启采集',
+      exampleBannerDesc: '开启内容采集后,真实脱敏样本会展示在这里。'
     },
 
     // Usage Records

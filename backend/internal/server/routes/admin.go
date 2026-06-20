@@ -20,6 +20,9 @@ func RegisterAdminRoutes(
 		// 仪表盘
 		registerDashboardRoutes(admin, h)
 
+		// AI 生产内容采集（只读看板：护城河快照 + 样本墙）
+		registerGenerationContentRoutes(admin, h)
+
 		// 用户管理
 		registerUserManagementRoutes(admin, h)
 
@@ -244,6 +247,16 @@ func registerDashboardRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		dashboard.POST("/api-keys-usage", h.Admin.Dashboard.GetBatchAPIKeysUsage)
 		dashboard.GET("/user-breakdown", h.Admin.Dashboard.GetUserBreakdown)
 		dashboard.POST("/aggregation/backfill", h.Admin.Dashboard.BackfillAggregation)
+	}
+}
+
+// registerGenerationContentRoutes 注册采集内容只读看板端点。
+// 鉴权由父 admin 组的 admin.Use(adminAuth) 统一覆盖，仅 admin 可见。
+func registerGenerationContentRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	gc := admin.Group("/generation-content")
+	{
+		gc.GET("/stats", h.Admin.GenerationContent.GetStats)
+		gc.GET("/samples", h.Admin.GenerationContent.GetSamples)
 	}
 }
 

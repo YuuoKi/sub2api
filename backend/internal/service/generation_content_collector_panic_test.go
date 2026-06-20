@@ -13,6 +13,15 @@ func (panicGenContentRepo) Create(context.Context, *GenerationContent) error {
 	panic("boom in repo.Create")
 }
 
+// 只读看板方法在采集器 fail-open 测试中用不到，提供满足接口的空实现即可。
+func (panicGenContentRepo) GetCaptureStats(context.Context) (*GenerationContentStats, error) {
+	return &GenerationContentStats{}, nil
+}
+
+func (panicGenContentRepo) GetRecent(context.Context, int) ([]GenerationContentSample, error) {
+	return nil, nil
+}
+
 func TestCollectorRecoversRepoPanic(t *testing.T) {
 	collector := NewGenerationContentCollector(panicGenContentRepo{}, enabledContentCaptureCfg())
 	// 若 panic 未被 recover，测试会直接 crash；能执行到下一行即证明已兜底。

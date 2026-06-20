@@ -59,3 +59,117 @@ RETURNING id, created_at`,
 	}
 	return nil
 }
+
+// GetCaptureStats 聚合 ai_generation_content：计数/去重/体量 + 近 7 日每日序列。
+// 全程只读；空表返回零值快照（非错误）。镜像 usage_log_repo 的 COUNT/SUM/COALESCE/TO_CHAR 套路。
+func (r *generationContentRepository) GetCaptureStats(ctx context.Context) (*service.GenerationContentStats, error) {
+	if r == nil || r.db == nil {
+		return &service.GenerationContentStats{}, nil
+	}
+	stats := &service.GenerationContentStats{}
+
+	const aggQuery = `
+SELECT
+    COUNT(*)                                                                          AS total,
+    COUNT(*) FILTER (WHERE created_at >= date_trunc('day', NOW() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC') AS captured_today,
+    COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days')                   AS captured_week,
+    COUNT(DISTINCT user_id)                                                           AS distinct_employees,
+    COUNT(DISTINCT group_id)                                                          AS distinct_teams,
+    COUNT(DISTINCT NULLIF(model, ''))                                                 AS distinct_models,
+    COALESCE(SUM(prompt_bytes + response_bytes), 0)                                   AS total_bytes
+FROM ai_generation_content`
+	if err := scanSingleRow(ctx, r.db, aggQuery, nil,
+		&stats.Total,
+		&stats.CapturedToday,
+		&stats.CapturedWeek,
+		&stats.DistinctEmployees,
+		&stats.DistinctTeams,
+		&stats.DistinctModels,
+		&stats.TotalBytes,
+	); err != nil {
+		return nil, fmt.Errorf("generation content stats agg: %w", err)
+	}
+
+	const seriesQuery = `
+SELECT
+    TO_CHAR(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS d,
+    COUNT(*)                                             AS c
+FROM ai_generation_content
+WHERE created_at >= (date_trunc('day', NOW() AT TIME ZONE 'UTC') - INTERVAL '6 days') AT TIME ZONE 'UTC'
+GROUP BY d
+ORDER BY d ASC`
+	rows, err := r.db.QueryContext(ctx, seriesQuery)
+	if err != nil {
+		return nil, fmt.Errorf("generation content daily series: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var p service.GenerationContentDailyPoint
+		if err := rows.Scan(&p.Date, &p.Count); err != nil {
+			return nil, fmt.Errorf("scan generation content daily: %w", err)
+		}
+		stats.DailySeries = append(stats.DailySeries, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate generation content daily: %w", err)
+	}
+	return stats, nil
+}
+
+// GetRecent 返回最近 limit 条采集样本，LEFT JOIN users/groups 取归因展示名（脱敏文本原样返回，截断由 handler 做）。
+func (r *generationContentRepository) GetRecent(ctx context.Context, limit int) ([]service.GenerationContentSample, error) {
+	if r == nil || r.db == nil {
+		return nil, nil
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	const query = `
+SELECT
+    c.model,
+    c.created_at,
+    c.prompt_redacted,
+    c.response_redacted,
+    c.prompt_bytes,
+    c.response_bytes,
+    c.response_truncated,
+    COALESCE(u.username, ''),
+    COALESCE(u.email, ''),
+    COALESCE(g.name, '')
+FROM ai_generation_content c
+LEFT JOIN users  u ON u.id = c.user_id
+LEFT JOIN groups g ON g.id = c.group_id
+ORDER BY c.created_at DESC
+LIMIT $1`
+	rows, err := r.db.QueryContext(ctx, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("generation content recent: %w", err)
+	}
+	defer rows.Close()
+	var out []service.GenerationContentSample
+	for rows.Next() {
+		var s service.GenerationContentSample
+		if err := rows.Scan(
+			&s.Model,
+			&s.CreatedAt,
+			&s.PromptRedacted,
+			&s.ResponseRedacted,
+			&s.PromptBytes,
+			&s.ResponseBytes,
+			&s.ResponseTruncated,
+			&s.Username,
+			&s.Email,
+			&s.GroupName,
+		); err != nil {
+			return nil, fmt.Errorf("scan generation content recent: %w", err)
+		}
+		out = append(out, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate generation content recent: %w", err)
+	}
+	return out, nil
+}

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"testing"
+	"time"
 )
 
 // panicGenContentRepo 的 Create 会 panic，用于验证采集器 fail-open：即便脱敏后写库 panic，
@@ -20,6 +21,10 @@ func (panicGenContentRepo) GetCaptureStats(context.Context) (*GenerationContentS
 
 func (panicGenContentRepo) GetRecent(context.Context, int) ([]GenerationContentSample, error) {
 	return nil, nil
+}
+
+func (panicGenContentRepo) PurgeExpiredContent(context.Context, time.Time, int, bool) (int64, error) {
+	return 0, nil
 }
 
 func TestCollectorRecoversRepoPanic(t *testing.T) {

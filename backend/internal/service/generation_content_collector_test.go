@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 )
@@ -29,6 +30,31 @@ func (f *fakeGenContentRepo) GetCaptureStats(context.Context) (*GenerationConten
 
 func (f *fakeGenContentRepo) GetRecent(context.Context, int) ([]GenerationContentSample, error) {
 	return nil, nil
+}
+
+// PurgeExpiredContent 内存实现：按 created_at < cutoff 且仍有内容过滤，单批封顶 batch；
+// dryRun 只计数不改。供保留期清理服务测试真证谓词与批处理排空。
+func (f *fakeGenContentRepo) PurgeExpiredContent(_ context.Context, cutoff time.Time, batch int, dryRun bool) (int64, error) {
+	if f.err != nil {
+		return 0, f.err
+	}
+	if batch <= 0 {
+		batch = 500
+	}
+	var n int64
+	for _, r := range f.rows {
+		if n >= int64(batch) {
+			break
+		}
+		if r.CreatedAt.Before(cutoff) && (r.PromptRedacted != "" || r.ResponseRedacted != "") {
+			n++
+			if !dryRun {
+				r.PromptRedacted = ""
+				r.ResponseRedacted = ""
+			}
+		}
+	}
+	return n, nil
 }
 
 func enabledContentCaptureCfg() *config.Config {

@@ -647,6 +647,23 @@ type ContentCaptureConfig struct {
 	PromptMaxBytes int `mapstructure:"prompt_max_bytes"`
 }
 
+// ContentRetentionConfig 控制 ai_generation_content 的保留期清理（D3-b，与计费/usage 保留解耦）。
+// 与 ContentCapture 一样 dark by default：无 viper.SetDefault、无 Validate() reject 子句，
+// 全部走 service 内代码兜底（避免强制配置、不破坏裸 &config.Config{} 测试）。
+// 策略 = NULL-OUT：清空内容字段、保留计数行（看板全时段指标持续累计）。
+type ContentRetentionConfig struct {
+	// Enabled: 后台清理守护开关，默认 false（不启动 daemon）。RunOnce 不受此开关限制，可独立调用。
+	Enabled bool `mapstructure:"enabled"`
+	// RetentionDays: 保留天数，cutoff = now - RetentionDays。0 使用代码默认 90；<7 夹紧到 7（护住看板 7 日窗口）。
+	RetentionDays int `mapstructure:"retention_days"`
+	// BatchSize: 每批清理上限，0 使用代码默认 500。
+	BatchSize int `mapstructure:"batch_size"`
+	// IntervalSeconds: daemon 清理周期（秒），0 使用代码默认 3600。
+	IntervalSeconds int `mapstructure:"interval_seconds"`
+	// DryRun: true 时 daemon 只统计不清空（灰度/演练）。
+	DryRun bool `mapstructure:"dry_run"`
+}
+
 type GatewayConfig struct {
 	// 等待上游响应头的超时时间（秒），0表示无超时
 	// 注意：这不影响流式数据传输，只控制等待响应头的时间
@@ -721,6 +738,10 @@ type GatewayConfig struct {
 	// ContentCapture: M1 采集口——把 prompt+response 脱敏后采集到 ai_generation_content 旁路表。
 	// 默认关闭（Enabled=false）→ 热路径零开销、不采集；启用后采集 fail-open，绝不影响主调用。
 	ContentCapture ContentCaptureConfig `mapstructure:"content_capture"`
+
+	// ContentRetention: ai_generation_content 保留期清理（D3-b，NULL-OUT 策略）。
+	// 默认关闭（Enabled=false）→ 不启动后台 daemon；RunOnce 可独立调用 + dry-run。
+	ContentRetention ContentRetentionConfig `mapstructure:"content_retention"`
 
 	// 是否记录上游错误响应体摘要（避免输出请求内容）
 	LogUpstreamErrorBody bool `mapstructure:"log_upstream_error_body"`

@@ -42,6 +42,10 @@ type GenerationContentRepository interface {
 	GetCaptureStats(ctx context.Context) (*GenerationContentStats, error)
 	// GetRecent 返回最近 limit 条采集样本（已 LEFT JOIN 归因名），按 created_at 倒序。
 	GetRecent(ctx context.Context, limit int) ([]GenerationContentSample, error)
+	// PurgeExpiredContent 把 created_at < cutoff 且仍有内容的行的 prompt_redacted/response_redacted 置空
+	// （NULL-OUT：保留行与计数，仅抹内容）。单批最多 batch 行，返回本批受影响行数。
+	// dryRun=true 只 COUNT 不改（返回将命中行数），零副作用。
+	PurgeExpiredContent(ctx context.Context, cutoff time.Time, batch int, dryRun bool) (int64, error)
 }
 
 // GenerationContentDailyPoint 是近 7 日序列中某一天（UTC）的采集计数。

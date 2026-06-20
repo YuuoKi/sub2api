@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
@@ -114,6 +115,54 @@ ORDER BY d ASC`
 		return nil, fmt.Errorf("iterate generation content daily: %w", err)
 	}
 	return stats, nil
+}
+
+// PurgeExpiredContent 保留期清理（NULL-OUT）：把 created_at < cutoff 且仍有内容的行的
+// prompt_redacted/response_redacted 置空——保留行与计数（看板全时段指标持续累计），仅抹内容。
+// 谓词含 (prompt_redacted <> '' OR response_redacted <> '') 命中 partial index
+// idx_ai_generation_content_unpurged_created_at，使已清空行不被重复扫描。
+// 单批最多 batch 行；dryRun=true 只 COUNT（封顶 batch，与真实清理语义一致），零副作用。
+// 镜像 idempotency_repo.go::DeleteExpired 的 CTE 批处理形，但用 UPDATE 而非 DELETE。
+func (r *generationContentRepository) PurgeExpiredContent(ctx context.Context, cutoff time.Time, batch int, dryRun bool) (int64, error) {
+	if r == nil || r.db == nil {
+		return 0, nil
+	}
+	if batch <= 0 {
+		batch = 500
+	}
+
+	if dryRun {
+		const countQuery = `
+SELECT COUNT(*) FROM (
+    SELECT 1
+    FROM ai_generation_content
+    WHERE created_at < $1 AND (prompt_redacted <> '' OR response_redacted <> '')
+    ORDER BY created_at ASC
+    LIMIT $2
+) victims`
+		var n int64
+		if err := r.db.QueryRowContext(ctx, countQuery, cutoff, batch).Scan(&n); err != nil {
+			return 0, fmt.Errorf("count ai generation content older than cutoff: %w", err)
+		}
+		return n, nil
+	}
+
+	const updateQuery = `
+WITH victims AS (
+    SELECT id
+    FROM ai_generation_content
+    WHERE created_at < $1 AND (prompt_redacted <> '' OR response_redacted <> '')
+    ORDER BY created_at ASC
+    LIMIT $2
+)
+UPDATE ai_generation_content
+SET prompt_redacted = '', response_redacted = ''
+WHERE id IN (SELECT id FROM victims)`
+	res, err := r.db.ExecContext(ctx, updateQuery, cutoff, batch)
+	if err != nil {
+		return 0, fmt.Errorf("purge expired ai generation content: %w", err)
+	}
+	return res.RowsAffected()
 }
 
 // GetRecent 返回最近 limit 条采集样本，LEFT JOIN users/groups 取归因展示名（脱敏文本原样返回，截断由 handler 做）。

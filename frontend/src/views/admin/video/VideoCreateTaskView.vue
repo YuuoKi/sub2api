@@ -274,7 +274,7 @@ async function loadProviders() {
     providers.value = res.items || []
     const first = preferredProvider()
     if (first && !form.model) {
-      form.model = modelDisplayName(first.provider, first.default_model)
+      form.model = defaultModelValue(first)
     }
   } catch (err) {
     appStore.showError(extractApiErrorMessage(err, isVideoGatewayDemoMode ? '加载生成通道失败' : '加载模型通道失败'))
@@ -292,7 +292,7 @@ function syncProviderModel() {
     ? providers.value.find((item) => item.id === form.provider_account_id)
     : preferredProvider()
   if (provider?.default_model) {
-    form.model = modelDisplayName(provider.provider, provider.default_model)
+    form.model = defaultModelValue(provider)
   }
 }
 
@@ -304,7 +304,7 @@ function selectPreferredProvider() {
   const first = preferredProvider()
   if (!first) return
   form.provider_account_id = 0
-  form.model = modelDisplayName(first.provider, first.default_model)
+  form.model = defaultModelValue(first)
 }
 
 function selectMockProvider() {
@@ -345,6 +345,9 @@ async function submitTask() {
     if (!payload.provider_account_id) {
       delete payload.provider_account_id
     }
+    if (!payload.model) {
+      delete payload.model
+    }
     const task = await videoTaskAPI.create(payload)
     appStore.showSuccess(isVideoGatewayDemoMode ? '试跑任务已提交，系统会检查接收、处理和记录流程。' : '任务已进入队列，可在详情查看处理进度。')
     router.push(`/admin/video/tasks/${task.id}`)
@@ -364,6 +367,10 @@ function isValidOptionalUrl(value: string): boolean {
   } catch {
     return false
   }
+}
+
+function defaultModelValue(provider: VideoProviderAccount): string {
+  return provider.default_model?.trim() || ''
 }
 
 function applyDraftIfPresent() {

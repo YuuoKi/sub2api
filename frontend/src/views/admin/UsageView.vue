@@ -133,7 +133,6 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { saveAs } from 'file-saver'
 import { useRoute } from 'vue-router'
 import { useAppStore } from '@/stores/app'; import { adminAPI } from '@/api/admin'; import { adminUsageAPI } from '@/api/admin/usage'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
@@ -460,12 +459,38 @@ const getRequestTypeLabel = (log: AdminUsageLog): string => {
   return t('usage.unknown')
 }
 
+const escapeCSVValue = (value: unknown): string => {
+  if (value == null) return ''
+
+  const str = String(value)
+  const escaped = str.replace(/"/g, '""')
+  const safeValue = /^[=+\-@\t\r]/.test(str) ? `'${escaped}` : escaped
+
+  if (/[,"\n\r]/.test(safeValue)) {
+    return `"${safeValue}"`
+  }
+
+  return safeValue
+}
+
+const downloadCSV = (rows: unknown[][], filename: string) => {
+  const csvContent = rows.map((row) => row.map(escapeCSVValue).join(',')).join('\n')
+  const blob = new Blob(['\uFEFF', csvContent], { type: 'text/csv;charset=utf-8;' })
+  const url = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.URL.revokeObjectURL(url)
+}
+
 const exportToExcel = async () => {
   if (exporting.value) return; exporting.value = true; exportProgress.show = true
   const c = new AbortController(); exportAbortController = c
   try {
     let p = 1; let total = pagination.total; let exportedCount = 0
-    const XLSX = await import('xlsx')
     const headers = [
       t('usage.time'), t('admin.usage.user'), t('usage.apiKeyFilter'),
       t('admin.usage.account'), t('usage.model'), t('usage.upstreamModel'), t('usage.reasoningEffort'), t('admin.usage.group'),
@@ -479,7 +504,7 @@ const exportToExcel = async () => {
       t('usage.firstToken'), t('usage.duration'),
       t('admin.usage.requestId'), t('usage.userAgent'), t('admin.usage.ipAddress')
     ]
-    const ws = XLSX.utils.aoa_to_sheet([headers])
+    const exportRows: unknown[][] = [headers]
     while (true) {
       const res = await adminUsageAPI.list(
         buildUsageListParams(p, 100, true),
@@ -499,7 +524,7 @@ const exportToExcel = async () => {
         log.request_id || '', log.user_agent || '', log.ip_address || ''
       ])
       if (rows.length) {
-        XLSX.utils.sheet_add_aoa(ws, rows, { origin: -1 })
+        exportRows.push(...rows)
       }
       exportedCount += rows.length
       exportProgress.current = exportedCount
@@ -507,9 +532,7 @@ const exportToExcel = async () => {
       if (exportedCount >= total || res.items.length < 100) break; p++
     }
     if(!c.signal.aborted) {
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, ws, 'Usage')
-      saveAs(new Blob([XLSX.write(wb, { bookType: 'xlsx', type: 'array' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `usage_${filters.value.start_date}_to_${filters.value.end_date}.xlsx`)
+      downloadCSV(exportRows, `usage_${filters.value.start_date}_to_${filters.value.end_date}.csv`)
       appStore.showSuccess(t('usage.exportSuccess'))
     }
   } catch (error) { console.error('Failed to export:', error); appStore.showError('Export Failed') }

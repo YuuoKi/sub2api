@@ -102,16 +102,24 @@ const checkItems = computed(() => [
   },
 ])
 
+const backendRoot = (import.meta.env.VITE_API_BASE_URL || '/api/v1')
+  .replace(/\/api\/v1\/?$/, '')
+  .replace(/\/$/, '')
+
+function backendFetch(path: string): Promise<Response> {
+  return fetch(`${backendRoot}${path}`, { cache: 'no-store' })
+}
+
 async function loadChecks() {
   loading.value = true
   try {
     const [healthResponse, setupResponse, dashboard] = await Promise.all([
-      fetch('/health', { cache: 'no-store' }),
-      fetch('/setup/status', { cache: 'no-store' }),
+      backendFetch('/health').catch(() => null),
+      backendFetch('/setup/status').catch(() => null),
       adminAPI.video.dashboard().catch(() => null),
     ])
-    serviceReady.value = healthResponse.ok ? 'normal' : 'warning'
-    setupReady.value = setupResponse.ok ? 'normal' : 'warning'
+    serviceReady.value = healthResponse?.ok ? 'normal' : 'warning'
+    setupReady.value = setupResponse?.ok ? 'normal' : 'warning'
     taskCount.value = dashboard?.today_tasks ?? 0
   } catch (err) {
     serviceReady.value = 'warning'

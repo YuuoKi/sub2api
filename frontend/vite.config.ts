@@ -21,7 +21,7 @@ function injectPublicSettings(backendUrl: string): Plugin {
           if (response.ok) {
             const data = await response.json()
             if (data.code === 0 && data.data) {
-              const script = `<script>window.__APP_CONFIG__=${JSON.stringify(data.data)};</script>`
+              const script = `<script>window.__APP_CONFIG__=${serializeInlineJson(data.data)};</script>`
               return html.replace('</head>', `${script}\n</head>`)
             }
           }
@@ -32,6 +32,13 @@ function injectPublicSettings(backendUrl: string): Plugin {
       }
     }
   }
+}
+
+function serializeInlineJson(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, '\\u003c')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029')
 }
 
 export default defineConfig(({ mode }) => {
@@ -119,6 +126,10 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true
         },
         '/setup': {
+          target: backendUrl,
+          changeOrigin: true
+        },
+        '/health': {
           target: backendUrl,
           changeOrigin: true
         }

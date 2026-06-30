@@ -194,8 +194,10 @@ describe('路由守卫逻辑', () => {
       const rootRoute = router.getRoutes().find((route) => route.path === '/')
       const homeRoute = router.getRoutes().find((route) => route.path === '/home')
 
-      expect(rootRoute?.redirect).toBe('/internal-pilot')
-      expect(homeRoute?.redirect).toBe('/internal-pilot')
+      expect(typeof rootRoute?.redirect).toBe('function')
+      expect(typeof homeRoute?.redirect).toBe('function')
+      expect((rootRoute?.redirect as () => string)()).toBe('/login')
+      expect((homeRoute?.redirect as () => string)()).toBe('/login')
     })
   })
 

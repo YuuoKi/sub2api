@@ -343,6 +343,129 @@ describe('AccountUsageCell', () => {
     expect(wrapper.text()).toContain('5h|18|900')
   })
 
+  it('OpenAI OAuth 移动端延迟进入视口时保留刷新信号的 bypass cache', async () => {
+    let mediaListener: ((event: MediaQueryListEvent) => void) | undefined
+    let triggerIntersect: (() => void) | undefined
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: vi.fn().mockImplementation(() => ({
+        matches: true,
+        media: '(min-width: 768px)',
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn((event: string, listener: (event: MediaQueryListEvent) => void) => {
+          if (event === 'change') mediaListener = listener
+        }),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }))
+    })
+    const mockIntersectionObserver = vi.fn((callback: IntersectionObserverCallback) => {
+      const observer = {
+        observe: vi.fn(),
+        disconnect: vi.fn(),
+        unobserve: vi.fn(),
+        takeRecords: vi.fn(),
+        root: null,
+        rootMargin: '',
+        thresholds: []
+      } as unknown as IntersectionObserver
+      triggerIntersect = () => callback([{ isIntersecting: true } as IntersectionObserverEntry], observer)
+      return observer
+    })
+    Object.defineProperty(window, 'IntersectionObserver', {
+      writable: true,
+      value: mockIntersectionObserver
+    })
+    Object.defineProperty(globalThis, 'IntersectionObserver', {
+      writable: true,
+      value: mockIntersectionObserver
+    })
+
+    const account = makeAccount({
+      id: 2099,
+      platform: 'openai',
+      type: 'oauth',
+      extra: {
+        codex_usage_updated_at: '2099-03-07T10:00:00Z',
+        codex_5h_used_percent: 12,
+        codex_5h_reset_at: '2099-03-07T12:00:00Z'
+      }
+    })
+    getUsage
+      .mockResolvedValueOnce({
+        five_hour: {
+          utilization: 18,
+          resets_at: '2099-03-07T12:00:00Z',
+          remaining_seconds: 3600,
+          window_stats: {
+            requests: 9,
+            tokens: 900,
+            cost: 0.09,
+            standard_cost: 0.09,
+            user_cost: 0.09
+          }
+        },
+        seven_day: null
+      })
+      .mockResolvedValueOnce({
+        five_hour: {
+          utilization: 64,
+          resets_at: '2099-03-07T12:00:00Z',
+          remaining_seconds: 1800,
+          window_stats: {
+            requests: 12,
+            tokens: 1200,
+            cost: 0.12,
+            standard_cost: 0.12,
+            user_cost: 0.12
+          }
+        },
+        seven_day: null
+      })
+
+    const wrapper = mount(AccountUsageCell, {
+      props: { account },
+      global: {
+        stubs: {
+          UsageProgressBar: {
+            props: ['label', 'utilization', 'windowStats'],
+            template: '<div class="usage-bar">{{ label }}|{{ utilization }}|{{ windowStats?.tokens }}</div>'
+          },
+          AccountQuotaInfo: true
+        }
+      }
+    })
+    await flushPromises()
+    expect(getUsage).toHaveBeenCalledTimes(1)
+    expect(wrapper.text()).toContain('5h|18|900')
+
+    mediaListener?.({ matches: false } as MediaQueryListEvent)
+    await flushPromises()
+    expect(getUsage).toHaveBeenCalledTimes(1)
+
+    await wrapper.setProps({
+      account: {
+        ...account,
+        updated_at: '2099-03-07T11:00:00Z',
+        extra: {
+          ...account.extra,
+          codex_usage_updated_at: '2099-03-07T11:00:00Z',
+          codex_5h_used_percent: 64
+        }
+      }
+    })
+    await flushPromises()
+    expect(getUsage).toHaveBeenCalledTimes(1)
+
+    triggerIntersect?.()
+    await flushPromises()
+
+    expect(getUsage).toHaveBeenCalledTimes(2)
+    expect(wrapper.text()).toContain('5h|64|1200')
+  })
+
   it('OpenAI OAuth 在无 codex 快照时会回退显示 usage 接口窗口', async () => {
 	getUsage.mockResolvedValue({
 	  five_hour: {

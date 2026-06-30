@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useAppStore } from '@/stores/app'
 import { getPublicSettings } from '@/api/auth'
+import { VIDEO_GATEWAY_PRODUCT_NAME } from '@/utils/productMode'
 
 // Mock API 模块
 vi.mock('@/api/admin/system', () => ({
@@ -267,9 +268,10 @@ describe('useAppStore', () => {
       const result = store.initFromInjectedConfig()
 
       expect(result).toBe(true)
-      expect(store.siteName).toBe('TestSite')
-      expect(store.siteLogo).toBe('/logo.png')
-      expect(store.siteVersion).toBe('1.0.0')
+      expect(store.siteName).toBe(VIDEO_GATEWAY_PRODUCT_NAME)
+      expect(store.siteLogo).toBe('')
+      expect(store.siteVersion).toBe('')
+      expect(store.docUrl).toBe('')
       expect(store.publicSettingsLoaded).toBe(true)
     })
 

@@ -342,7 +342,7 @@ async function loadProviders() {
   try {
     const [providerRes, dashboardRes] = await Promise.all([
       adminAPI.video.listProviders(),
-      adminAPI.video.dashboard(),
+      adminAPI.video.dashboard().catch(() => null),
     ])
     providers.value = providerRes.items || []
     dashboard.value = dashboardRes

@@ -151,7 +151,7 @@ function startPolling() {
   pollTimer = setInterval(async () => {
     try {
       const token = document.cookie.split('; ').find(c => c.startsWith('token='))?.split('=')[1]
-        || localStorage.getItem('token') || ''
+        || localStorage.getItem('auth_token') || ''
       const res = await fetch('/api/v1/payment/orders/' + orderId, {
         headers: token ? { Authorization: 'Bearer ' + token } : {},
         credentials: 'include',

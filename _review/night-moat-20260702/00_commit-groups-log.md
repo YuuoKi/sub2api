@@ -45,5 +45,19 @@
 
 ## Group 5 - review evidence
 
-- Status: in progress.
+- Status: committed.
 - Planned gate: `tools/secret_scan.py --include-untracked`; if clean, add `_review/`.
+- Gate result: bundled Python `tools/secret_scan.py --include-untracked` exit 0 (`no high-confidence tracked-plus-untracked findings`).
+- Boundary: current scanner intentionally skips `_review`; historical evidence was committed without whitespace cleanup to avoid rewriting evidence.
+- Commit: `3fa81e9a` `docs(review): track historical Sub2API review evidence (M0A-M1B, D3 redaction, dashboard C)`.
+
+## S1 closeout
+
+- Five requested commit groups completed locally on `wujie/night-moat-20260702`.
+- No push, no merge, no real provider call, no credential read.
+
+## S2 - moat status
+
+- Status: in progress.
+- Output: `_review/night-moat-20260702/moat-status.md`.
+- Evidence inputs: `git show --stat` for `6478237a`, `b919650f`, `eca1b65c`, `e078749a`, `38df1bcd`; current-code `rg` anchors for content capture, retention, dashboard, and skill gaps.

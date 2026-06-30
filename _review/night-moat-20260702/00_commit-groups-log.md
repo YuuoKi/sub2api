@@ -86,7 +86,7 @@
 
 ## Final closeout
 
-- Status: in progress.
+- Status: completed.
 - Current branch: `wujie/night-moat-20260702`.
 - Final secret scan: bundled Python `tools/secret_scan.py --include-untracked` exit 0.
 - Remaining untracked, intentionally not committed: `.impeccable/`, `MORNING_RESULT_2026_06_28.md`.

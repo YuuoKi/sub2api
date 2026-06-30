@@ -58,6 +58,17 @@
 
 ## S2 - moat status
 
-- Status: in progress.
+- Status: committed.
 - Output: `_review/night-moat-20260702/moat-status.md`.
 - Evidence inputs: `git show --stat` for `6478237a`, `b919650f`, `eca1b65c`, `e078749a`, `38df1bcd`; current-code `rg` anchors for content capture, retention, dashboard, and skill gaps.
+- Commit: `60da4f5c` `docs(review): record Sub2API moat status`.
+
+## S3 - Skill Engine v0 skeleton
+
+- Status: in progress.
+- Files: `_review/night-moat-20260702/skill-engine-design.md`, `backend/internal/service/skill_engine.go`, `backend/internal/service/skill_engine_test.go`.
+- Safety posture: flag-off by default; enabled path returns explicit not-implemented; no provider call, no DB write, no route wiring.
+- Gate result:
+  - `go test ./internal/service -run TestSkillEngine -count=1` exit 0.
+  - `go build ./...` exit 0.
+  - `go test ./...` exit 0.

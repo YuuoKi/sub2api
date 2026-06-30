@@ -77,8 +77,16 @@
 
 ## Optional Stage C - dependency audit
 
-- Status: in progress.
+- Status: committed.
 - Command: `pnpm audit --json` from `frontend`.
 - Result: exit 1, vulnerabilities reported; raw JSON saved to `_review/night-moat-20260702/frontend-pnpm-audit-raw.json`.
 - Summary: 1 critical / 14 high / 33 moderate / 3 low, 51 advisories total.
 - Boundary: report only; no upgrade/fix/approve-builds command executed.
+- Commit: `55040eef` `docs(review): add optional dependency audit report`.
+
+## Final closeout
+
+- Status: in progress.
+- Current branch: `wujie/night-moat-20260702`.
+- Final secret scan: bundled Python `tools/secret_scan.py --include-untracked` exit 0.
+- Remaining untracked, intentionally not committed: `.impeccable/`, `MORNING_RESULT_2026_06_28.md`.

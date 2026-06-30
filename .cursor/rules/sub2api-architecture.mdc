@@ -1,0 +1,74 @@
+---
+description: Sub2API project architecture, quality gates, and agent workflow conventions
+alwaysApply: true
+---
+
+# Sub2API Architecture & Quality Rules
+
+## Entry points (read first in new sessions)
+
+1. [00_START_HERE.md](../../00_START_HERE.md) — current project status and truth sources
+2. [DEV_GUIDE.md](../../DEV_GUIDE.md) — environment, CI, and local test commands
+3. Latest review: `docs/reviews/LATEST_REVIEW_PACKAGE.html`
+
+Do **not** treat `_review/` or `_archive/` as current state; they are historical evidence only.
+
+## Backend layering (enforced by golangci-lint depguard)
+
+```
+handler → service → repository
+```
+
+Hard rules from [backend/.golangci.yml](../../backend/.golangci.yml):
+
+- **handler** and **service** must NOT import `github.com/Wei-Shaw/sub2api/internal/repository`
+- **handler** and **service** must NOT import `gorm.io/gorm` or `github.com/redis/go-redis/v9`
+- Exceptions exist only for explicitly listed ops/wire files in `.golangci.yml`
+
+When adding features, place logic in the correct layer. Handlers parse HTTP; services hold business logic; repositories handle DB/Redis.
+
+## Frontend conventions
+
+- Package manager: **pnpm only** (never npm). Commit `pnpm-lock.yaml` with dependency changes.
+- Lint: `pnpm --dir frontend run lint:check`
+- Typecheck: `pnpm --dir frontend run typecheck`
+- Critical tests: `make test-frontend-critical`
+
+## Local verification commands
+
+```bash
+make test-backend          # go test + golangci-lint
+make test-frontend         # lint + typecheck + critical vitest
+make secret-scan           # high-confidence secret scanner
+```
+
+Run relevant checks before claiming work is complete.
+
+## Security-sensitive paths
+
+For changes touching payment webhooks, API keys, OAuth, or video gateway credentials:
+
+- Run `/review-security` before push
+- Never commit `.env` or credential files
+- Use `make secret-scan` after adding config or integration code
+
+## Recommended agent workflow
+
+Use **Superpowers** for multi-step work:
+
+1. `brainstorming` → `writing-plans` (save to `docs/superpowers/plans/`)
+2. `subagent-driven-development` with `verification-before-completion` per task
+3. `requesting-code-review` before merge
+
+Use **Cursor Team Kit** skills when applicable:
+
+- `check-compiler-errors` after code changes
+- `fix-ci` / `ci-watcher` after push
+- `deslop` after large agent edits
+- `thermo-nuclear-code-quality-review` before shipping
+
+Push前 run `/review-bugbot`. Enable Bugbot on GitHub repo `Wei-Shaw/sub2api` via Cursor Dashboard → Bugbot.
+
+## Optional: Snyk
+
+If Snyk plugin is installed, set `SNYK_TOKEN` for dependency and code security scans during development.

@@ -1,5 +1,7 @@
 .PHONY: build build-backend build-frontend build-datamanagementd test test-backend test-frontend test-frontend-critical test-datamanagementd secret-scan
 
+PYTHON ?= python3
+
 FRONTEND_CRITICAL_VITEST := \
 	src/views/auth/__tests__/LinuxDoCallbackView.spec.ts \
 	src/views/auth/__tests__/WechatCallbackView.spec.ts \
@@ -41,4 +43,4 @@ test-datamanagementd:
 	@cd datamanagement && go test ./...
 
 secret-scan:
-	@python3 tools/secret_scan.py
+	@$(PYTHON) tools/secret_scan.py --include-untracked

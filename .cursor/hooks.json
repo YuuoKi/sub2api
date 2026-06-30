@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeShellExecution": [
+      {
+        "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .cursor/hooks/secret-scan.ps1",
+        "matcher": "git push",
+        "failClosed": false
+      }
+    ]
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "recommendations": [
+    "golang.go",
+    "Vue.volar",
+    "dbaeumer.vscode-eslint",
+    "usernamehw.errorlens",
+    "ms-azuretools.vscode-docker"
+  ],
+  "unwantedRecommendations": [
+    "octref.vetur"
+  ]
+}

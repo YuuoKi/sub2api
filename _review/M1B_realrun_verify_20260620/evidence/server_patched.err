@@ -1,0 +1,23 @@
+2026-06-20T17:25:41.459+0800	WARN	slog	TOTP encryption key auto-generated. Consider setting a fixed key for production.	{"service": "sub2api", "env": "bootstrap"}
+2026-06-20T17:25:41.461+0800	WARN	slog	security.url_allowlist.enabled=false; allowlist/SSRF checks disabled (minimal format validation only).	{"service": "sub2api", "env": "bootstrap"}
+2026-06-20T17:25:41.467+0800	WARN	slog	logger/slog_handler.go:55	TOTP encryption key auto-generated. Consider setting a fixed key for production.	{"service": "sub2api", "env": "production"}
+2026-06-20T17:25:41.470+0800	WARN	slog	logger/slog_handler.go:55	security.url_allowlist.enabled=false; allowlist/SSRF checks disabled (minimal format validation only).	{"service": "sub2api", "env": "production"}
+2026-06-20T17:25:42.091+0800	WARN	stdlog	repository/ent.go:71	Warning: JWT secret auto-generated and persisted to database. Consider rotating to a managed secret for production.	{"service": "sub2api", "env": "production", "legacy_stdlog": true}
+2026-06-20T17:25:43.463+0800	WARN	slog	logger/slog_handler.go:55	payment encryption/signing key is not explicitly configured; set TOTP_ENCRYPTION_KEY to enable payment resume tokens	{"service": "sub2api", "env": "production"}
+2026-06-20T17:25:43.488+0800	WARN	stdlog	server/wire_gen.go:266	Warning: server.trusted_proxies is empty in release mode; client IP trust chain is disabled	{"service": "sub2api", "env": "production", "legacy_stdlog": true}
+2026-06-20T17:25:43.489+0800	WARN	stdlog	sync/once.go:78	Warning: CORS allowed_origins not configured; cross-origin requests will be rejected.	{"service": "sub2api", "env": "production", "legacy_stdlog": true}
+2026-06-20T17:26:14.641+0800	ERROR	handler/gateway_handler.go:932	gateway.record_usage_failed	{"service": "sub2api", "env": "production", "component": "handler.gateway.messages", "user_id": 1, "api_key_id": 1, "group_id": 2, "model": "claude-3-5-sonnet-20241022", "account_id": 1, "error": "usage billing request fingerprint conflict"}
+github.com/Wei-Shaw/sub2api/internal/handler.(*GatewayHandler).Messages.func5
+	D:/sub2api-trunk/backend/internal/handler/gateway_handler.go:932
+github.com/Wei-Shaw/sub2api/internal/service.(*UsageRecordWorkerPool).execute
+	D:/sub2api-trunk/backend/internal/service/usage_record_worker_pool.go:330
+github.com/Wei-Shaw/sub2api/internal/service.(*UsageRecordWorkerPool).Submit.func1
+	D:/sub2api-trunk/backend/internal/service/usage_record_worker_pool.go:156
+github.com/alitto/pond/v2.invokeTask[...]
+	C:/Users/浩臣移动工作站/go/pkg/mod/github.com/alitto/pond/v2@v2.6.2/task.go:58
+github.com/alitto/pond/v2.wrappedTask[...].Run
+	C:/Users/浩臣移动工作站/go/pkg/mod/github.com/alitto/pond/v2@v2.6.2/task.go:18
+github.com/alitto/pond/v2.invokeTask[...]
+	C:/Users/浩臣移动工作站/go/pkg/mod/github.com/alitto/pond/v2@v2.6.2/task.go:60
+github.com/alitto/pond/v2.(*pool).worker
+	C:/Users/浩臣移动工作站/go/pkg/mod/github.com/alitto/pond/v2@v2.6.2/pool.go:255

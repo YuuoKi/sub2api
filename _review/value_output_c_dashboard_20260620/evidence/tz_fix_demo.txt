@@ -1,0 +1,2 @@
+buggy_effective_boundary	fixed_boundary_utc
+2026-06-20 00:00:00 +0800 CST	2026-06-20 08:00:00 +0800 CST

@@ -1,0 +1,31 @@
+# Empirical re-run config template (LOCAL/throwaway only — ¥0, mock upstream, NOT for real use).
+# Place next to the server binary (viper searches ./ and ./config). Flag is ON here ON PURPOSE for the empirical run.
+# For BC-OFF, flip gateway.content_capture.enabled to false.
+
+server:
+  host: 0.0.0.0
+  port: 8090
+  mode: release
+
+database:
+  host: 127.0.0.1
+  port: 5433
+  user: postgres
+  password: postgres
+  dbname: postgres
+  sslmode: disable
+
+redis:
+  host: 127.0.0.1
+  port: 6380
+  db: 0
+
+gateway:
+  content_capture:
+    enabled: true          # <-- M1 采集口主开关 (no viper default => MUST live in config.yaml; env is unreliable)
+    response_max_bytes: 0   # 0 => code default 64KiB
+    prompt_max_bytes: 0     # 0 => code default 256KiB
+
+video_gateway:
+  # 32-byte AES key, hex (throwaway local value; must NOT reuse the totp key). Boot rejects empty/totp-reuse.
+  encryption_key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"

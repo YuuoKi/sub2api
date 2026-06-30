@@ -1,0 +1,42 @@
+================ D3-b RETENTION (NULL-OUT) REAL-PG PROOF ================
+PG: zonky embedded 17.5 @ 127.0.0.1:5434 (throwaway, SQL_ASCII, ¥0, no real data)
+UTC 2026-06-20T16:11:16Z
+
+## 1) apply schema: stub parents + migration 140 (table) + migration 141 (partial index)
+OK
+
+## 2) confirm partial index 141 created
+indexname
+idx_ai_generation_content_unpurged_created_at
+
+## 3) seed: 1 expired (created_at = now-100d) + 1 fresh (now-1d), both WITH content
+OK
+seeded rows:
+request_id	prompt_redacted	response_redacted	expired
+d3-expired	PROMPT	RESPONSE	true
+d3-fresh	PROMPT	RESPONSE	false
+
+## 4) DRY-RUN (exact repo COUNT SQL, cutoff = now-90d): expect 1, zero side effects
+would_purge
+1
+rows still WITH content after dry-run (expect 2 = no side effect):
+with_content
+2
+
+## 5) REAL PURGE (exact repo CTE UPDATE SQL, cutoff = now-90d)
+OK
+
+## 6) AFTER PURGE — assert: rows retained, only expired blanked, fresh survives
+total rows (expect 2 = NULL-OUT keeps the row / 看板计数不缩水):
+total_rows
+2
+per-row content + byte cols (expired blanked, fresh intact, bytes preserved both):
+request_id	prompt_redacted	response_redacted	prompt_bytes	response_bytes
+d3-expired			6	8
+d3-fresh	PROMPT	RESPONSE	6	8
+
+## 7) RE-DRY-RUN: already-blanked expired row must NOT be re-counted (expect 0)
+would_purge_again
+0
+
+================ PROOF END ================

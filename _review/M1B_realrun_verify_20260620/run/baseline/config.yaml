@@ -1,0 +1,27 @@
+# M1-B realrun · baseline/after config (flag ON). LOCAL throwaway, ¥0, mock upstream.
+server:
+  host: 0.0.0.0
+  port: 8090
+  mode: release
+
+database:
+  host: 127.0.0.1
+  port: 5433
+  user: postgres
+  password: postgres
+  dbname: postgres
+  sslmode: disable
+
+redis:
+  host: 127.0.0.1
+  port: 6380
+  db: 0
+
+gateway:
+  content_capture:
+    enabled: true
+    response_max_bytes: 0
+    prompt_max_bytes: 0
+
+video_gateway:
+  encryption_key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"

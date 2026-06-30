@@ -1,0 +1,6 @@
+ok  	github.com/Wei-Shaw/sub2api/internal/service	89.738s
+ok  	github.com/Wei-Shaw/sub2api/internal/service/openai_ws_v2	3.651s
+ok  	github.com/Wei-Shaw/sub2api/internal/handler	25.063s
+ok  	github.com/Wei-Shaw/sub2api/internal/handler/admin	3.501s
+ok  	github.com/Wei-Shaw/sub2api/internal/handler/dto	2.758s
+UNIT_TEST_EXIT=0

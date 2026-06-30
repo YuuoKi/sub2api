@@ -1,0 +1,46 @@
+=== RUN   TestRedactGenerationHardening_BeforeAfterDemo
+--- PASS: TestRedactGenerationHardening_BeforeAfterDemo (0.00s)
+=== RUN   TestRedactGenerationPII_PhonesRedacted
+--- PASS: TestRedactGenerationPII_PhonesRedacted (0.00s)
+=== RUN   TestRedactGenerationPII_IdentifiersUntouched
+--- PASS: TestRedactGenerationPII_IdentifiersUntouched (0.00s)
+=== RUN   TestRedactGenerationPrompt_UUIDNotMangledByPhone
+--- PASS: TestRedactGenerationPrompt_UUIDNotMangledByPhone (0.00s)
+=== RUN   TestRedactGenerationStructuredPII_CNIDCardRedacted
+--- PASS: TestRedactGenerationStructuredPII_CNIDCardRedacted (0.00s)
+=== RUN   TestRedactGenerationStructuredPII_BankCardRedacted
+--- PASS: TestRedactGenerationStructuredPII_BankCardRedacted (0.00s)
+=== RUN   TestRedactGenerationStructuredPII_OpaqueTokenRedacted
+--- PASS: TestRedactGenerationStructuredPII_OpaqueTokenRedacted (0.00s)
+=== RUN   TestRedactGenerationStructuredPII_IdentifiersUntouched
+--- PASS: TestRedactGenerationStructuredPII_IdentifiersUntouched (0.00s)
+=== RUN   TestRedactGenerationStructuredPII_InvalidIDNotRedacted
+--- PASS: TestRedactGenerationStructuredPII_InvalidIDNotRedacted (0.00s)
+=== RUN   TestRedactGenerationStructuredPII_NormalChinesePreserved
+--- PASS: TestRedactGenerationStructuredPII_NormalChinesePreserved (0.00s)
+=== RUN   TestRedactGenerationPrompt_IDAndCardRedacted
+--- PASS: TestRedactGenerationPrompt_IDAndCardRedacted (0.00s)
+=== RUN   TestRedactGenerationPromptStripsSecretsAndPII
+--- PASS: TestRedactGenerationPromptStripsSecretsAndPII (0.00s)
+=== RUN   TestRedactGenerationResponseStripsSecrets
+--- PASS: TestRedactGenerationResponseStripsSecrets (0.00s)
+=== RUN   TestRedactGenerationEmptyInputs
+--- PASS: TestRedactGenerationEmptyInputs (0.00s)
+=== RUN   TestNewGenerationContentRetentionService_UsesConfig
+--- PASS: TestNewGenerationContentRetentionService_UsesConfig (0.00s)
+=== RUN   TestNewGenerationContentRetentionService_Defaults
+--- PASS: TestNewGenerationContentRetentionService_Defaults (0.00s)
+=== RUN   TestNewGenerationContentRetentionService_ClampsRetentionDays
+--- PASS: TestNewGenerationContentRetentionService_ClampsRetentionDays (0.00s)
+=== RUN   TestGenerationContentRetention_RunOnceDryRun_NoSideEffects
+--- PASS: TestGenerationContentRetention_RunOnceDryRun_NoSideEffects (0.00s)
+=== RUN   TestGenerationContentRetention_RunOncePurgesOnlyExpired
+--- PASS: TestGenerationContentRetention_RunOncePurgesOnlyExpired (0.00s)
+=== RUN   TestGenerationContentRetention_RunOnceDrainsMultipleBatches
+--- PASS: TestGenerationContentRetention_RunOnceDrainsMultipleBatches (0.00s)
+=== RUN   TestGenerationContentRetention_RunOnceFailOpenOnRepoError
+--- PASS: TestGenerationContentRetention_RunOnceFailOpenOnRepoError (0.00s)
+=== RUN   TestGenerationContentRetention_NilSafe
+--- PASS: TestGenerationContentRetention_NilSafe (0.00s)
+PASS
+ok  	github.com/Wei-Shaw/sub2api/internal/service	4.188s

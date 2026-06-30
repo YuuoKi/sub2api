@@ -1,0 +1,34 @@
+=== RUN   TestRedactGenerationHardening_BeforeAfterDemo
+    generation_content_redact_demo_test.go:36: ==== (A) 漏网 PII/凭据（连续形态）：加固前漏全量 / 加固后抹 ====
+    generation_content_redact_demo_test.go:40: [身份证号]
+          IN    : 我的身份证 11010519491231002X 麻烦核对
+          BEFORE: 我的身份证 11010519491231002X 麻烦核对
+          AFTER : 我的身份证 [ID] 麻烦核对
+    generation_content_redact_demo_test.go:40: [银行卡号(连续)]
+          IN    : 卡号 4111111111111111 转账
+          BEFORE: 卡号 4111111111111111 转账
+          AFTER : 卡号 [CARD] 转账
+    generation_content_redact_demo_test.go:40: [高熵token]
+          IN    : 临时令牌 Ab3Cd6Ef9Gh2Jk5Lm8Np1Qr4 已发
+          BEFORE: 临时令牌 Ab3Cd6Ef9Gh2Jk5Lm8Np1Qr4 已发
+          AFTER : 临时令牌 [已脱敏] 已发
+    generation_content_redact_demo_test.go:52: ==== (A2) 分隔形态银行卡：phone 先行吸收主体（仍脱敏，仅 marker 不同）====
+    generation_content_redact_demo_test.go:55:   IN   : 卡号 4111 1111 1111 1111 转账
+          AFTER: 卡号 [PHONE] 1111 转账
+    generation_content_redact_demo_test.go:55:   IN   : 卡号 4111-1111-1111-1111 转账
+          AFTER: 卡号 [PHONE]-1111 转账
+    generation_content_redact_demo_test.go:68: ==== (B) 正常业务 prompt：加固后不误抹 ====
+    generation_content_redact_demo_test.go:71:   IN /AFTER 一致? true
+          IN   : 用户反馈登录后首页加载很慢，希望排查接口超时问题并给出优化建议。
+          AFTER: 用户反馈登录后首页加载很慢，希望排查接口超时问题并给出优化建议。
+    generation_content_redact_demo_test.go:71:   IN /AFTER 一致? true
+          IN   : 请帮我把这段产品介绍润色得更专业一些，目标受众是企业采购决策者。
+          AFTER: 请帮我把这段产品介绍润色得更专业一些，目标受众是企业采购决策者。
+    generation_content_redact_demo_test.go:71:   IN /AFTER 一致? true
+          IN   : 工单号 ORD-20240115-0042，客户要求本周内回复处理进度与预计完成时间。
+          AFTER: 工单号 ORD-20240115-0042，客户要求本周内回复处理进度与预计完成时间。
+    generation_content_redact_demo_test.go:78: ==== (C) 分析必需字段保留 ====
+    generation_content_redact_demo_test.go:83:   模型名保留 OK: 调用模型 claude-opus-4-8 处理
+--- PASS: TestRedactGenerationHardening_BeforeAfterDemo (0.00s)
+PASS
+ok  	github.com/Wei-Shaw/sub2api/internal/service	4.490s

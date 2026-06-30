@@ -1,0 +1,180 @@
+Reading additional input from stdin...
+OpenAI Codex v0.139.0
+--------
+workdir: D:\sub2api-trunk\backend
+model: gpt-5.5
+provider: openai
+approval: on-request
+sandbox: read-only
+reasoning effort: xhigh
+reasoning summaries: concise
+session id: 019ee196-a471-7bb0-8803-7af65996ef4d
+--------
+user
+You are an INDEPENDENT senior Go reviewer (reviewer != author). The <stdin> block is a self-contained review packet for a 12-line patch on a hot request path. Answer its 5 review questions and give a final verdict line 'VERDICT: APPROVE | APPROVE-WITH-NITS | REJECT'. Reason ONLY from the packet contents; do not run shell commands or read files.
+
+<stdin>
+# Independent code review request — M1-B main-path collection patch
+
+You are an INDEPENDENT reviewer (reviewer ≠ author). Review ONLY the material in this packet using pure
+reasoning. Do NOT run shell commands or read files — everything you need is inline. Output a clear verdict.
+
+## What changed
+A 12-line patch (uncommitted) on branch `wujie/trunk`, baseline `b919650f`, in
+`backend/internal/handler/gateway_handler.go`. It adds content collection to the **main Anthropic
+`/v1/messages`** forward path (the `Messages` handler), which previously recorded usage but did NOT
+collect prompt/response content. It mirrors an already-in-production call in the gemini closure of the
+same file and in the chat-completions handler.
+
+## THE RED LINE
+The bytes the CLIENT receives in its HTTP response must be **byte-for-byte unchanged** by this patch.
+A change that alters/delays/reorders/blocks client bytes is an automatic FAIL.
+
+## The diff (git diff, the only change in the repo)
+```diff
+diff --git a/backend/internal/handler/gateway_handler.go b/backend/internal/handler/gateway_handler.go
+@@ -931,6 +931,18 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
+ 						zap.Int64("account_id", account.ID),
+ 					).Error("gateway.record_usage_failed", zap.Error(err))
+ 				}
++				// M1 采集口：与 RecordUsage 并列、与计费隔离的内容采集（fail-open，默认关闭）。
++				h.gatewayService.CollectGenerationContent(ctx, service.GenerationContentCaptureArgs{
++					RequestID:          result.RequestID,
++					UserID:             subject.UserID,
++					APIKeyID:           currentAPIKey.ID,
++					GroupID:            currentAPIKey.GroupID,
++					AccountID:          account.ID,
++					Model:              reqModel,
++					RequestPayloadHash: requestPayloadHash,
++					PromptBody:         parsedReq.Body,
++					Result:             result,
++				})
+ 			})
+ 			return
+ 		}
+```
+
+## Surrounding context: the main closure (gateway_handler.go ~907-940, AFTER patch)
+```go
+				// 使用量记录通过有界 worker 池提交，避免请求热路径创建无界 goroutine。
+				h.submitUsageRecordTask(func(ctx context.Context) {
+					if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
+						Result:             result,
+						ParsedRequest:      parsedReq,
+						APIKey:             currentAPIKey,
+						User:               currentAPIKey.User,
+						Account:            account,
+						Subscription:       currentSubscription,
+						// ... (other fields)
+						ChannelUsageFields: channelMapping.ToUsageFields(reqModel, result.UpstreamModel),
+					}); err != nil {
+						logger.L().With( /* ... */ ).Error("gateway.record_usage_failed", zap.Error(err))
+					}
+					// >>> INSERTED 12 lines: CollectGenerationContent(...) <<<
+				})
+				return
+```
+
+## The mirror it copies — gemini closure (gateway_handler.go ~534-545, UNCHANGED, in production)
+```go
+					// M1 采集口：与 RecordUsage 并列、与计费隔离的内容采集（fail-open，默认关闭）。
+					h.gatewayService.CollectGenerationContent(ctx, service.GenerationContentCaptureArgs{
+						RequestID:          result.RequestID,
+						UserID:             subject.UserID,
+						APIKeyID:           apiKey.ID,        // <-- gemini uses apiKey (no fallback in that closure)
+						GroupID:            apiKey.GroupID,
+						AccountID:          account.ID,
+						Model:              reqModel,
+						RequestPayloadHash: requestPayloadHash,
+						PromptBody:         parsedReq.Body,
+						Result:             result,
+					})
+```
+NOTE: the main-path patch uses `currentAPIKey.ID/.GroupID` instead of `apiKey.*`, to match the
+**same closure's** RecordUsage attribution (which uses `currentAPIKey`/`currentAPIKey.User`/`currentSubscription`,
+because the main path supports a fallback-group retry that reassigns `currentAPIKey = fallbackAPIKey`).
+
+## How the task is dispatched — submitUsageRecordTask (gateway_handler.go ~1857)
+```go
+func (h *GatewayHandler) submitUsageRecordTask(task service.UsageRecordTask) {
+	if task == nil { return }
+	if h.usageRecordWorkerPool != nil {
+		h.usageRecordWorkerPool.Submit(task)   // PROD: runs on a bounded worker pool, AFTER handler returns the response
+		return
+	}
+	// fallback (no pool): run synchronously with panic recovery
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	defer func() { if r := recover(); r != nil { /* logged, recovered */ } }()
+	task(ctx)
+}
+```
+
+## Collector entry + body (service/generation_content.go)
+```go
+func (s *GatewayService) CollectGenerationContent(ctx context.Context, args GenerationContentCaptureArgs) {
+	if s == nil || s.generationCollector == nil || !s.contentCaptureEnabled() { return } // flag off -> no-op
+	s.generationCollector.Collect(ctx, args)
+}
+func (s *GatewayService) contentCaptureEnabled() bool {
+	return s != nil && s.cfg != nil && s.cfg.Gateway.ContentCapture.Enabled // default false
+}
+func (c *GenerationContentCollector) Collect(ctx context.Context, args GenerationContentCaptureArgs) {
+	if c == nil || c.repo == nil { return }
+	defer func() { if r := recover(); r != nil { /* log, swallow */ } }() // fail-open
+	// reads args.PromptBody (caps), args.Result.ResponseSample/Bytes/Truncated, redacts, then repo.Create (errors swallowed+logged)
+}
+type GenerationContentCaptureArgs struct {
+	RequestID, RequestPayloadHash, Model string
+	UserID, APIKeyID, AccountID int64
+	GroupID *int64
+	PromptBody []byte
+	Result *ForwardResult   // ResponseSample populated by the B.2 response-capture tee inside Forward (UNCHANGED by this patch)
+}
+```
+The collector NEVER references `c.Writer`, headers, flush, Content-Length, or the SSE stream. The response
+sample it reads (`Result.ResponseSample`) is a separate capped copy filled by the B.2 tee during Forward.
+
+## Your review questions (answer each)
+1. RED LINE: Can this patch change the bytes the client receives? Consider timing (the call runs inside the
+   usage-record task, which in prod is submitted to a worker pool that runs after the response is written; in the
+   sync fallback it runs after Forward returns, i.e. after the response is fully written). Yes/No + why.
+2. Fail-open: Can the inserted call panic, error, or block in a way that harms the request or billing path?
+3. Attribution: Is `currentAPIKey` (not `apiKey`) the correct choice here, given the same closure's RecordUsage
+   uses `currentAPIKey`? Any field wrong?
+4. Scope: Is adding only this block (no change to the gemini mirror, the chat-completions handler, or any
+   client-write statement) the right minimal change?
+5. Overall verdict: APPROVE / APPROVE-WITH-NITS / REJECT — and the single most important risk, if any.
+</stdin>
+**Analyzing packet timing and byte handling**
+**Evaluating byte delay and nil pointer safety**
+codex
+结论：基于 packet 内容，未发现会破坏热路径响应字节的缺陷。
+
+1. **RED LINE：No。** 插入调用不接触 `c.Writer`、headers、flush、`Content-Length` 或 SSE 流；读取的是 `ForwardResult.ResponseSample` 的独立 capped copy。生产路径提交到有界 worker pool，在响应写完后执行；无 pool fallback 也是 `Forward` 返回后执行，即响应已完整写出。不会改变、重排或阻塞客户端响应字节。
+
+2. **Fail-open：不会实质伤害请求或计费路径。** 默认 flag off 直接 no-op；collector 内部 recover，repo 错误吞掉并记录。调用放在 `RecordUsage` 之后，同一个 usage task 内，不影响已经完成的 client response。唯一注意点是无 worker pool fallback 下，开启采集后 repo 慢可能拉长 handler 后置收尾时间，但 packet 表明响应字节已写完，且不影响计费记录已先执行。
+
+3. **Attribution：`currentAPIKey` 是正确选择。** main path 存在 fallback-group retry，会重赋 `currentAPIKey = fallbackAPIKey`；同 closure 的 `RecordUsage` 也使用 `currentAPIKey/currentAPIKey.User/currentSubscription`。采集归因应跟计费归因一致。字段看起来没有明显错误：`UserID` 来自 subject，`APIKeyID/GroupID` 来自实际 current key，`AccountID/Model/hash/prompt/result` 与 mirror 一致。
+
+4. **Scope：是最小变更。** 只在 main Anthropic `/v1/messages` 成功 forward 后的 usage task 中补齐采集调用；不改 gemini mirror、chat-completions、不改任何 client-write 语句，符合“补主路径缺口”的范围。
+
+5. **Overall verdict：APPROVE-WITH-NITS。** 最重要风险是：在没有 worker pool 且内容采集开启时，collector 的 repo 写入可能增加 handler 后置耗时；但按 packet 不会影响客户端响应字节，也不改变计费主逻辑。
+
+VERDICT: APPROVE-WITH-NITS
+tokens used
+20,194
+结论：基于 packet 内容，未发现会破坏热路径响应字节的缺陷。
+
+1. **RED LINE：No。** 插入调用不接触 `c.Writer`、headers、flush、`Content-Length` 或 SSE 流；读取的是 `ForwardResult.ResponseSample` 的独立 capped copy。生产路径提交到有界 worker pool，在响应写完后执行；无 pool fallback 也是 `Forward` 返回后执行，即响应已完整写出。不会改变、重排或阻塞客户端响应字节。
+
+2. **Fail-open：不会实质伤害请求或计费路径。** 默认 flag off 直接 no-op；collector 内部 recover，repo 错误吞掉并记录。调用放在 `RecordUsage` 之后，同一个 usage task 内，不影响已经完成的 client response。唯一注意点是无 worker pool fallback 下，开启采集后 repo 慢可能拉长 handler 后置收尾时间，但 packet 表明响应字节已写完，且不影响计费记录已先执行。
+
+3. **Attribution：`currentAPIKey` 是正确选择。** main path 存在 fallback-group retry，会重赋 `currentAPIKey = fallbackAPIKey`；同 closure 的 `RecordUsage` 也使用 `currentAPIKey/currentAPIKey.User/currentSubscription`。采集归因应跟计费归因一致。字段看起来没有明显错误：`UserID` 来自 subject，`APIKeyID/GroupID` 来自实际 current key，`AccountID/Model/hash/prompt/result` 与 mirror 一致。
+
+4. **Scope：是最小变更。** 只在 main Anthropic `/v1/messages` 成功 forward 后的 usage task 中补齐采集调用；不改 gemini mirror、chat-completions、不改任何 client-write 语句，符合“补主路径缺口”的范围。
+
+5. **Overall verdict：APPROVE-WITH-NITS。** 最重要风险是：在没有 worker pool 且内容采集开启时，collector 的 repo 写入可能增加 handler 后置耗时；但按 packet 不会影响客户端响应字节，也不改变计费主逻辑。
+
+VERDICT: APPROVE-WITH-NITS
+CODEX_EXIT=0

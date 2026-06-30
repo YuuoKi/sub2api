@@ -1,0 +1,10 @@
+HTTP/1.1 200 OK
+Content-Type: application/json
+Date: Fri, 20 Jun 2026 00:00:00 GMT
+Referrer-Policy: strict-origin-when-cross-origin
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+X-Request-Id: bc-ns-001
+X-Request-Id: mock-req-1
+Content-Length: 300
+

@@ -1,0 +1,21 @@
+# B-1 empty-brake overlay — UNTRACKED, NOT committed.
+# Injects the VA1 budget-gate config into the app container for the phase-2B B-1
+# "空踩刹车" (empty-brake) runtime check against a real server + real DB.
+#
+# Bring up (rebuilds app from the current working tree = phase2b branch code):
+#   docker compose -f deploy/docker-compose.wsl.yml -f deploy/docker-compose.b1-emptybrake.yml up -d --build
+#
+# With cost_per_second=1.5 and per_call_budget=2, a 4–5s create estimates
+# 1.5 × 5 = 7.5 > cap 2 ⇒ rejected by the gate at CreateTask (no DB row, no
+# provider dispatch, no charge). After verifying the brake, set per_call_budget
+# back to 30 below and re-run `up -d` (no --build needed) to confirm a normal
+# single clip is admitted (7.5 ≤ 30).
+services:
+  app:
+    environment:
+      - VIDEO_GATEWAY_COST_PER_SECOND=1.5
+      - VIDEO_GATEWAY_PER_CALL_BUDGET=2
+      # phase2b code hard-requires a dedicated video-gateway at-rest key (refuses
+      # to fall back to totp.encryption_key). Local dry-run value lives in the
+      # git-ignored deploy/.env (a local symmetric key, NOT a provider key).
+      - VIDEO_GATEWAY_ENCRYPTION_KEY=${VIDEO_GATEWAY_ENCRYPTION_KEY:?VIDEO_GATEWAY_ENCRYPTION_KEY required in deploy/.env}

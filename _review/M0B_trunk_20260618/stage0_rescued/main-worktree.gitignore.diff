@@ -1,0 +1,9 @@
+diff --git a/.gitignore b/.gitignore
+index f25418b3..973cb70e 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -141,3 +141,4 @@ docs/*
+ frontend/coverage/
+ aicodex
+ output/
++_review_packages/

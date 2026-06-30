@@ -1,0 +1,2 @@
+{"code":0,"message":"success","data":{"captured_today":3,"captured_week":8,"daily_rate":1.1428571428571428,"daily_series":[{"count":1,"date":"2026-06-14"},{"count":1,"date":"2026-06-15"},{"count":0,"date":"2026-06-16"},{"count":1,"date":"2026-06-17"},{"count":1,"date":"2026-06-18"},{"count":1,"date":"2026-06-19"},{"count":3,"date":"2026-06-20"}],"distinct_employees":4,"distinct_models":3,"distinct_teams":3,"is_live":true,"total_bytes":77084}}
+HTTP 200

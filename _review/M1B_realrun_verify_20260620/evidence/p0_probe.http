@@ -1,0 +1,11 @@
+HTTP/1.1 200 OK
+Content-Type: application/json
+Date: Fri, 20 Jun 2026 00:00:00 GMT
+Referrer-Policy: strict-origin-when-cross-origin
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+X-Request-Id: p0-probe
+X-Request-Id: mock-req-1
+Content-Length: 300
+
+{"id":"msg_mock_0001","type":"message","role":"assistant","model":"claude-3-5-sonnet-20241022","content":[{"type":"text","text":"MOCK_REPLY 工单已收到,我们会尽快回电 +86-10-87654321 处理。"}],"stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":12,"output_tokens":18}}

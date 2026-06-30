@@ -1,0 +1,16 @@
+=== sha256 manifest (golden vs after vs flagoff) ===
+94fd0553bad09c3c2428d344f5462aa2090996b1953329b7032bd8972cc0847a *golden/ns.body
+94fd0553bad09c3c2428d344f5462aa2090996b1953329b7032bd8972cc0847a *after/ns.body
+94fd0553bad09c3c2428d344f5462aa2090996b1953329b7032bd8972cc0847a *flagoff/ns.body
+da163e260a23ac017a702805a8bc6897f6766253c04355d2de9384bd40f573bd *golden/st.body
+da163e260a23ac017a702805a8bc6897f6766253c04355d2de9384bd40f573bd *after/st.body
+da163e260a23ac017a702805a8bc6897f6766253c04355d2de9384bd40f573bd *flagoff/st.body
+
+=== capture sizes ===
+ 300 golden/ns.body
+ 300 after/ns.body
+ 300 flagoff/ns.body
+ 785 golden/st.body
+ 785 after/st.body
+ 785 flagoff/st.body
+3255 total

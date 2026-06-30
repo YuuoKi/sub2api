@@ -65,10 +65,20 @@
 
 ## S3 - Skill Engine v0 skeleton
 
-- Status: in progress.
+- Status: committed.
 - Files: `_review/night-moat-20260702/skill-engine-design.md`, `backend/internal/service/skill_engine.go`, `backend/internal/service/skill_engine_test.go`.
 - Safety posture: flag-off by default; enabled path returns explicit not-implemented; no provider call, no DB write, no route wiring.
 - Gate result:
   - `go test ./internal/service -run TestSkillEngine -count=1` exit 0.
   - `go build ./...` exit 0.
   - `go test ./...` exit 0.
+  - bundled Python `tools/secret_scan.py --include-untracked` exit 0.
+- Commit: `cbf7af25` `feat(moat): add skill engine v0 skeleton (flag off)`.
+
+## Optional Stage C - dependency audit
+
+- Status: in progress.
+- Command: `pnpm audit --json` from `frontend`.
+- Result: exit 1, vulnerabilities reported; raw JSON saved to `_review/night-moat-20260702/frontend-pnpm-audit-raw.json`.
+- Summary: 1 critical / 14 high / 33 moderate / 3 low, 51 advisories total.
+- Boundary: report only; no upgrade/fix/approve-builds command executed.

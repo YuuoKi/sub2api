@@ -1,0 +1,1705 @@
+﻿{
+  "advisories": {
+    "1102341": {
+      "findings": [
+        {
+          "version": "0.21.5",
+          "paths": [
+            ".>@vitejs/plugin-vue>vite>esbuild",
+            ".>@vitest/coverage-v8>vitest>@vitest/mocker>vite>esbuild",
+            ".>@vitest/coverage-v8>vitest>vite>esbuild",
+            ".>@vitest/coverage-v8>vitest>vite-node>vite>esbuild",
+            ".>vite>esbuild",
+            ".>vite-plugin-checker>vite>esbuild",
+            ".>vitest>@vitest/mocker>vite>esbuild",
+            ".>vitest>vite>esbuild",
+            ".>vitest>vite-node>vite>esbuild"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1102341,
+      "title": "esbuild enables any website to send any requests to the development server and read the response",
+      "module_name": "esbuild",
+      "vulnerable_versions": "<=0.24.2",
+      "patched_versions": ">=0.24.3",
+      "severity": "moderate",
+      "cwe": "CWE-346",
+      "github_advisory_id": "GHSA-67mh-4wv8-2f99",
+      "url": "https://github.com/advisories/GHSA-67mh-4wv8-2f99"
+    },
+    "1113459": {
+      "findings": [
+        {
+          "version": "3.1.2",
+          "paths": [
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>eslint>@eslint/eslintrc>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>eslint>@humanwhocodes/config-array>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>eslint>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>@eslint/eslintrc>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>@humanwhocodes/config-array>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>eslint>@eslint/eslintrc>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>eslint>@humanwhocodes/config-array>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>eslint>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>eslint>@eslint/eslintrc>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>eslint>@humanwhocodes/config-array>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>eslint>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>@eslint/eslintrc>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>@humanwhocodes/config-array>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>eslint>@eslint/eslintrc>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>eslint>@humanwhocodes/config-array>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>eslint>minimatch",
+            ".>@typescript-eslint/eslint-plugin>eslint>@eslint/eslintrc>minimatch",
+            ".>@typescript-eslint/eslint-plugin>eslint>@humanwhocodes/config-array>minimatch",
+            ".>@typescript-eslint/eslint-plugin>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>@typescript-eslint/eslint-plugin>eslint>minimatch",
+            ".>@typescript-eslint/parser>eslint>@eslint/eslintrc>minimatch",
+            ".>@typescript-eslint/parser>eslint>@humanwhocodes/config-array>minimatch",
+            ".>@typescript-eslint/parser>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>@typescript-eslint/parser>eslint>minimatch",
+            ".>eslint>@eslint/eslintrc>minimatch",
+            ".>eslint>@humanwhocodes/config-array>minimatch",
+            ".>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>eslint>minimatch",
+            ".>eslint-plugin-vue>@eslint-community/eslint-utils>eslint>@eslint/eslintrc>minimatch",
+            ".>eslint-plugin-vue>@eslint-community/eslint-utils>eslint>@humanwhocodes/config-array>minimatch",
+            ".>eslint-plugin-vue>@eslint-community/eslint-utils>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>eslint-plugin-vue>@eslint-community/eslint-utils>eslint>minimatch",
+            ".>eslint-plugin-vue>eslint>@eslint/eslintrc>minimatch",
+            ".>eslint-plugin-vue>eslint>@humanwhocodes/config-array>minimatch",
+            ".>eslint-plugin-vue>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>eslint-plugin-vue>eslint>minimatch",
+            ".>eslint-plugin-vue>vue-eslint-parser>eslint>@eslint/eslintrc>minimatch",
+            ".>eslint-plugin-vue>vue-eslint-parser>eslint>@humanwhocodes/config-array>minimatch",
+            ".>eslint-plugin-vue>vue-eslint-parser>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>eslint-plugin-vue>vue-eslint-parser>eslint>minimatch",
+            ".>vite-plugin-checker>eslint>@eslint/eslintrc>minimatch",
+            ".>vite-plugin-checker>eslint>@humanwhocodes/config-array>minimatch",
+            ".>vite-plugin-checker>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>vite-plugin-checker>eslint>minimatch"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1113459,
+      "title": "minimatch has a ReDoS via repeated wildcards with non-matching literal in pattern",
+      "module_name": "minimatch",
+      "vulnerable_versions": "<3.1.3",
+      "patched_versions": ">=3.1.3",
+      "severity": "high",
+      "cwe": "CWE-1333",
+      "github_advisory_id": "GHSA-3ppc-4f35-3m26",
+      "url": "https://github.com/advisories/GHSA-3ppc-4f35-3m26"
+    },
+    "1113465": {
+      "findings": [
+        {
+          "version": "9.0.5",
+          "paths": [
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>@typescript-eslint/typescript-estree>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/typescript-estree>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@typescript-eslint/typescript-estree>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@typescript-eslint/typescript-estree>minimatch",
+            ".>@typescript-eslint/parser>@typescript-eslint/typescript-estree>minimatch",
+            ".>@vitest/coverage-v8>test-exclude>glob>minimatch",
+            ".>@vitest/coverage-v8>test-exclude>minimatch",
+            ".>@vue/test-utils>js-beautify>glob>minimatch",
+            ".>vite-plugin-checker>vue-tsc>@vue/language-core>minimatch",
+            ".>vue-tsc>@vue/language-core>minimatch"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "version": "9.0.1",
+          "paths": [
+            ".>@vue/test-utils>js-beautify>editorconfig>minimatch"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1113465,
+      "title": "minimatch has a ReDoS via repeated wildcards with non-matching literal in pattern",
+      "module_name": "minimatch",
+      "vulnerable_versions": ">=9.0.0 <9.0.6",
+      "patched_versions": ">=9.0.6",
+      "severity": "high",
+      "cwe": "CWE-1333",
+      "github_advisory_id": "GHSA-3ppc-4f35-3m26",
+      "url": "https://github.com/advisories/GHSA-3ppc-4f35-3m26"
+    },
+    "1113515": {
+      "findings": [
+        {
+          "version": "4.54.0",
+          "paths": [
+            ".>@vitejs/plugin-vue>vite>rollup",
+            ".>@vitest/coverage-v8>vitest>@vitest/mocker>vite>rollup",
+            ".>@vitest/coverage-v8>vitest>vite>rollup",
+            ".>@vitest/coverage-v8>vitest>vite-node>vite>rollup",
+            ".>vite>rollup",
+            ".>vite-plugin-checker>vite>rollup",
+            ".>vitest>@vitest/mocker>vite>rollup",
+            ".>vitest>vite>rollup",
+            ".>vitest>vite-node>vite>rollup"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1113515,
+      "title": "Rollup 4 has Arbitrary File Write via Path Traversal",
+      "module_name": "rollup",
+      "vulnerable_versions": ">=4.0.0 <4.59.0",
+      "patched_versions": ">=4.59.0",
+      "severity": "high",
+      "cwe": "CWE-22",
+      "github_advisory_id": "GHSA-mw96-cpmx-2vgc",
+      "url": "https://github.com/advisories/GHSA-mw96-cpmx-2vgc"
+    },
+    "1113538": {
+      "findings": [
+        {
+          "version": "3.1.2",
+          "paths": [
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>eslint>@eslint/eslintrc>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>eslint>@humanwhocodes/config-array>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>eslint>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>@eslint/eslintrc>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>@humanwhocodes/config-array>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>eslint>@eslint/eslintrc>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>eslint>@humanwhocodes/config-array>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>eslint>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>eslint>@eslint/eslintrc>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>eslint>@humanwhocodes/config-array>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>eslint>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>@eslint/eslintrc>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>@humanwhocodes/config-array>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>eslint>@eslint/eslintrc>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>eslint>@humanwhocodes/config-array>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>eslint>minimatch",
+            ".>@typescript-eslint/eslint-plugin>eslint>@eslint/eslintrc>minimatch",
+            ".>@typescript-eslint/eslint-plugin>eslint>@humanwhocodes/config-array>minimatch",
+            ".>@typescript-eslint/eslint-plugin>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>@typescript-eslint/eslint-plugin>eslint>minimatch",
+            ".>@typescript-eslint/parser>eslint>@eslint/eslintrc>minimatch",
+            ".>@typescript-eslint/parser>eslint>@humanwhocodes/config-array>minimatch",
+            ".>@typescript-eslint/parser>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>@typescript-eslint/parser>eslint>minimatch",
+            ".>eslint>@eslint/eslintrc>minimatch",
+            ".>eslint>@humanwhocodes/config-array>minimatch",
+            ".>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>eslint>minimatch",
+            ".>eslint-plugin-vue>@eslint-community/eslint-utils>eslint>@eslint/eslintrc>minimatch",
+            ".>eslint-plugin-vue>@eslint-community/eslint-utils>eslint>@humanwhocodes/config-array>minimatch",
+            ".>eslint-plugin-vue>@eslint-community/eslint-utils>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>eslint-plugin-vue>@eslint-community/eslint-utils>eslint>minimatch",
+            ".>eslint-plugin-vue>eslint>@eslint/eslintrc>minimatch",
+            ".>eslint-plugin-vue>eslint>@humanwhocodes/config-array>minimatch",
+            ".>eslint-plugin-vue>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>eslint-plugin-vue>eslint>minimatch",
+            ".>eslint-plugin-vue>vue-eslint-parser>eslint>@eslint/eslintrc>minimatch",
+            ".>eslint-plugin-vue>vue-eslint-parser>eslint>@humanwhocodes/config-array>minimatch",
+            ".>eslint-plugin-vue>vue-eslint-parser>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>eslint-plugin-vue>vue-eslint-parser>eslint>minimatch",
+            ".>vite-plugin-checker>eslint>@eslint/eslintrc>minimatch",
+            ".>vite-plugin-checker>eslint>@humanwhocodes/config-array>minimatch",
+            ".>vite-plugin-checker>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>vite-plugin-checker>eslint>minimatch"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1113538,
+      "title": "minimatch has ReDoS: matchOne() combinatorial backtracking via multiple non-adjacent GLOBSTAR segments",
+      "module_name": "minimatch",
+      "vulnerable_versions": "<3.1.3",
+      "patched_versions": ">=3.1.3",
+      "severity": "high",
+      "cwe": "CWE-407",
+      "github_advisory_id": "GHSA-7r86-cg39-jmmj",
+      "url": "https://github.com/advisories/GHSA-7r86-cg39-jmmj"
+    },
+    "1113544": {
+      "findings": [
+        {
+          "version": "9.0.5",
+          "paths": [
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>@typescript-eslint/typescript-estree>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/typescript-estree>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@typescript-eslint/typescript-estree>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@typescript-eslint/typescript-estree>minimatch",
+            ".>@typescript-eslint/parser>@typescript-eslint/typescript-estree>minimatch",
+            ".>@vitest/coverage-v8>test-exclude>glob>minimatch",
+            ".>@vitest/coverage-v8>test-exclude>minimatch",
+            ".>@vue/test-utils>js-beautify>glob>minimatch",
+            ".>vite-plugin-checker>vue-tsc>@vue/language-core>minimatch",
+            ".>vue-tsc>@vue/language-core>minimatch"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "version": "9.0.1",
+          "paths": [
+            ".>@vue/test-utils>js-beautify>editorconfig>minimatch"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1113544,
+      "title": "minimatch has ReDoS: matchOne() combinatorial backtracking via multiple non-adjacent GLOBSTAR segments",
+      "module_name": "minimatch",
+      "vulnerable_versions": ">=9.0.0 <9.0.7",
+      "patched_versions": ">=9.0.7",
+      "severity": "high",
+      "cwe": "CWE-407",
+      "github_advisory_id": "GHSA-7r86-cg39-jmmj",
+      "url": "https://github.com/advisories/GHSA-7r86-cg39-jmmj"
+    },
+    "1113546": {
+      "findings": [
+        {
+          "version": "3.1.2",
+          "paths": [
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>eslint>@eslint/eslintrc>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>eslint>@humanwhocodes/config-array>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>eslint>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>@eslint/eslintrc>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>@humanwhocodes/config-array>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>eslint>@eslint/eslintrc>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>eslint>@humanwhocodes/config-array>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>eslint>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>eslint>@eslint/eslintrc>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>eslint>@humanwhocodes/config-array>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>eslint>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>@eslint/eslintrc>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>@humanwhocodes/config-array>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>eslint>@eslint/eslintrc>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>eslint>@humanwhocodes/config-array>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>eslint>minimatch",
+            ".>@typescript-eslint/eslint-plugin>eslint>@eslint/eslintrc>minimatch",
+            ".>@typescript-eslint/eslint-plugin>eslint>@humanwhocodes/config-array>minimatch",
+            ".>@typescript-eslint/eslint-plugin>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>@typescript-eslint/eslint-plugin>eslint>minimatch",
+            ".>@typescript-eslint/parser>eslint>@eslint/eslintrc>minimatch",
+            ".>@typescript-eslint/parser>eslint>@humanwhocodes/config-array>minimatch",
+            ".>@typescript-eslint/parser>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>@typescript-eslint/parser>eslint>minimatch",
+            ".>eslint>@eslint/eslintrc>minimatch",
+            ".>eslint>@humanwhocodes/config-array>minimatch",
+            ".>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>eslint>minimatch",
+            ".>eslint-plugin-vue>@eslint-community/eslint-utils>eslint>@eslint/eslintrc>minimatch",
+            ".>eslint-plugin-vue>@eslint-community/eslint-utils>eslint>@humanwhocodes/config-array>minimatch",
+            ".>eslint-plugin-vue>@eslint-community/eslint-utils>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>eslint-plugin-vue>@eslint-community/eslint-utils>eslint>minimatch",
+            ".>eslint-plugin-vue>eslint>@eslint/eslintrc>minimatch",
+            ".>eslint-plugin-vue>eslint>@humanwhocodes/config-array>minimatch",
+            ".>eslint-plugin-vue>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>eslint-plugin-vue>eslint>minimatch",
+            ".>eslint-plugin-vue>vue-eslint-parser>eslint>@eslint/eslintrc>minimatch",
+            ".>eslint-plugin-vue>vue-eslint-parser>eslint>@humanwhocodes/config-array>minimatch",
+            ".>eslint-plugin-vue>vue-eslint-parser>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>eslint-plugin-vue>vue-eslint-parser>eslint>minimatch",
+            ".>vite-plugin-checker>eslint>@eslint/eslintrc>minimatch",
+            ".>vite-plugin-checker>eslint>@humanwhocodes/config-array>minimatch",
+            ".>vite-plugin-checker>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch",
+            ".>vite-plugin-checker>eslint>minimatch"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1113546,
+      "title": "minimatch ReDoS: nested *() extglobs generate catastrophically backtracking regular expressions",
+      "module_name": "minimatch",
+      "vulnerable_versions": "<3.1.4",
+      "patched_versions": ">=3.1.4",
+      "severity": "high",
+      "cwe": "CWE-1333",
+      "github_advisory_id": "GHSA-23c5-xmqv-rm74",
+      "url": "https://github.com/advisories/GHSA-23c5-xmqv-rm74"
+    },
+    "1113552": {
+      "findings": [
+        {
+          "version": "9.0.5",
+          "paths": [
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>@typescript-eslint/typescript-estree>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/typescript-estree>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@typescript-eslint/typescript-estree>minimatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@typescript-eslint/typescript-estree>minimatch",
+            ".>@typescript-eslint/parser>@typescript-eslint/typescript-estree>minimatch",
+            ".>@vitest/coverage-v8>test-exclude>glob>minimatch",
+            ".>@vitest/coverage-v8>test-exclude>minimatch",
+            ".>@vue/test-utils>js-beautify>glob>minimatch",
+            ".>vite-plugin-checker>vue-tsc>@vue/language-core>minimatch",
+            ".>vue-tsc>@vue/language-core>minimatch"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "version": "9.0.1",
+          "paths": [
+            ".>@vue/test-utils>js-beautify>editorconfig>minimatch"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1113552,
+      "title": "minimatch ReDoS: nested *() extglobs generate catastrophically backtracking regular expressions",
+      "module_name": "minimatch",
+      "vulnerable_versions": ">=9.0.0 <9.0.7",
+      "patched_versions": ">=9.0.7",
+      "severity": "high",
+      "cwe": "CWE-1333",
+      "github_advisory_id": "GHSA-23c5-xmqv-rm74",
+      "url": "https://github.com/advisories/GHSA-23c5-xmqv-rm74"
+    },
+    "1113714": {
+      "findings": [
+        {
+          "version": "6.12.6",
+          "paths": [
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>eslint>@eslint/eslintrc>ajv",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>eslint>ajv",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>@eslint/eslintrc>ajv",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>ajv",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>eslint>@eslint/eslintrc>ajv",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>eslint>ajv",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>eslint>@eslint/eslintrc>ajv",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>eslint>ajv",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>@eslint/eslintrc>ajv",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>ajv",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>eslint>@eslint/eslintrc>ajv",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>eslint>ajv",
+            ".>@typescript-eslint/eslint-plugin>eslint>@eslint/eslintrc>ajv",
+            ".>@typescript-eslint/eslint-plugin>eslint>ajv",
+            ".>@typescript-eslint/parser>eslint>@eslint/eslintrc>ajv",
+            ".>@typescript-eslint/parser>eslint>ajv",
+            ".>eslint>@eslint/eslintrc>ajv",
+            ".>eslint>ajv",
+            ".>eslint-plugin-vue>@eslint-community/eslint-utils>eslint>@eslint/eslintrc>ajv",
+            ".>eslint-plugin-vue>@eslint-community/eslint-utils>eslint>ajv",
+            ".>eslint-plugin-vue>eslint>@eslint/eslintrc>ajv",
+            ".>eslint-plugin-vue>eslint>ajv",
+            ".>eslint-plugin-vue>vue-eslint-parser>eslint>@eslint/eslintrc>ajv",
+            ".>eslint-plugin-vue>vue-eslint-parser>eslint>ajv",
+            ".>vite-plugin-checker>eslint>@eslint/eslintrc>ajv",
+            ".>vite-plugin-checker>eslint>ajv"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1113714,
+      "title": "ajv has ReDoS when using `$data` option",
+      "module_name": "ajv",
+      "vulnerable_versions": "<6.14.0",
+      "patched_versions": ">=6.14.0",
+      "severity": "moderate",
+      "cwe": "CWE-400, CWE-1333",
+      "github_advisory_id": "GHSA-2g4f-4pwh-qvx6",
+      "url": "https://github.com/advisories/GHSA-2g4f-4pwh-qvx6"
+    },
+    "1114526": {
+      "findings": [
+        {
+          "version": "3.3.3",
+          "paths": [
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>eslint>file-entry-cache>flat-cache>flatted",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>file-entry-cache>flat-cache>flatted",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>eslint>file-entry-cache>flat-cache>flatted",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>eslint>file-entry-cache>flat-cache>flatted",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>file-entry-cache>flat-cache>flatted",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>eslint>file-entry-cache>flat-cache>flatted",
+            ".>@typescript-eslint/eslint-plugin>eslint>file-entry-cache>flat-cache>flatted",
+            ".>@typescript-eslint/parser>eslint>file-entry-cache>flat-cache>flatted",
+            ".>eslint>file-entry-cache>flat-cache>flatted",
+            ".>eslint-plugin-vue>@eslint-community/eslint-utils>eslint>file-entry-cache>flat-cache>flatted",
+            ".>eslint-plugin-vue>eslint>file-entry-cache>flat-cache>flatted",
+            ".>eslint-plugin-vue>vue-eslint-parser>eslint>file-entry-cache>flat-cache>flatted",
+            ".>vite-plugin-checker>eslint>file-entry-cache>flat-cache>flatted"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1114526,
+      "title": "flatted vulnerable to unbounded recursion DoS in parse() revive phase",
+      "module_name": "flatted",
+      "vulnerable_versions": "<3.4.0",
+      "patched_versions": ">=3.4.0",
+      "severity": "high",
+      "cwe": "CWE-674",
+      "github_advisory_id": "GHSA-25h7-pfq9-p65f",
+      "url": "https://github.com/advisories/GHSA-25h7-pfq9-p65f"
+    },
+    "1115357": {
+      "findings": [
+        {
+          "version": "3.3.3",
+          "paths": [
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>eslint>file-entry-cache>flat-cache>flatted",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>file-entry-cache>flat-cache>flatted",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>eslint>file-entry-cache>flat-cache>flatted",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>eslint>file-entry-cache>flat-cache>flatted",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>file-entry-cache>flat-cache>flatted",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>eslint>file-entry-cache>flat-cache>flatted",
+            ".>@typescript-eslint/eslint-plugin>eslint>file-entry-cache>flat-cache>flatted",
+            ".>@typescript-eslint/parser>eslint>file-entry-cache>flat-cache>flatted",
+            ".>eslint>file-entry-cache>flat-cache>flatted",
+            ".>eslint-plugin-vue>@eslint-community/eslint-utils>eslint>file-entry-cache>flat-cache>flatted",
+            ".>eslint-plugin-vue>eslint>file-entry-cache>flat-cache>flatted",
+            ".>eslint-plugin-vue>vue-eslint-parser>eslint>file-entry-cache>flat-cache>flatted",
+            ".>vite-plugin-checker>eslint>file-entry-cache>flat-cache>flatted"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1115357,
+      "title": "Prototype Pollution via parse() in NodeJS flatted",
+      "module_name": "flatted",
+      "vulnerable_versions": "<=3.4.1",
+      "patched_versions": ">=3.4.2",
+      "severity": "high",
+      "cwe": "CWE-1321",
+      "github_advisory_id": "GHSA-rf6f-7fwh-wjgh",
+      "url": "https://github.com/advisories/GHSA-rf6f-7fwh-wjgh"
+    },
+    "1115540": {
+      "findings": [
+        {
+          "version": "1.1.12",
+          "paths": [
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>eslint>@eslint/eslintrc>minimatch>brace-expansion",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>eslint>@humanwhocodes/config-array>minimatch>brace-expansion",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch>brace-expansion",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>eslint>minimatch>brace-expansion",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>@eslint/eslintrc>minimatch>brace-expansion",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>@humanwhocodes/config-array>minimatch>brace-expansion",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch>brace-expansion",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>minimatch>brace-expansion",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>eslint>@eslint/eslintrc>minimatch>brace-expansion",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>eslint>@humanwhocodes/config-array>minimatch>brace-expansion",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch>brace-expansion",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>eslint>minimatch>brace-expansion",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>eslint>@eslint/eslintrc>minimatch>brace-expansion",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>eslint>@humanwhocodes/config-array>minimatch>brace-expansion",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch>brace-expansion",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>eslint>minimatch>brace-expansion",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>@eslint/eslintrc>minimatch>brace-expansion",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>@humanwhocodes/config-array>minimatch>brace-expansion",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch>brace-expansion",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>minimatch>brace-expansion",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>eslint>@eslint/eslintrc>minimatch>brace-expansion",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>eslint>@humanwhocodes/config-array>minimatch>brace-expansion",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch>brace-expansion",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>eslint>minimatch>brace-expansion",
+            ".>@typescript-eslint/eslint-plugin>eslint>@eslint/eslintrc>minimatch>brace-expansion",
+            ".>@typescript-eslint/eslint-plugin>eslint>@humanwhocodes/config-array>minimatch>brace-expansion",
+            ".>@typescript-eslint/eslint-plugin>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch>brace-expansion",
+            ".>@typescript-eslint/eslint-plugin>eslint>minimatch>brace-expansion",
+            ".>@typescript-eslint/parser>eslint>@eslint/eslintrc>minimatch>brace-expansion",
+            ".>@typescript-eslint/parser>eslint>@humanwhocodes/config-array>minimatch>brace-expansion",
+            ".>@typescript-eslint/parser>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch>brace-expansion",
+            ".>@typescript-eslint/parser>eslint>minimatch>brace-expansion",
+            ".>eslint>@eslint/eslintrc>minimatch>brace-expansion",
+            ".>eslint>@humanwhocodes/config-array>minimatch>brace-expansion",
+            ".>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch>brace-expansion",
+            ".>eslint>minimatch>brace-expansion",
+            ".>eslint-plugin-vue>@eslint-community/eslint-utils>eslint>@eslint/eslintrc>minimatch>brace-expansion",
+            ".>eslint-plugin-vue>@eslint-community/eslint-utils>eslint>@humanwhocodes/config-array>minimatch>brace-expansion",
+            ".>eslint-plugin-vue>@eslint-community/eslint-utils>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch>brace-expansion",
+            ".>eslint-plugin-vue>@eslint-community/eslint-utils>eslint>minimatch>brace-expansion",
+            ".>eslint-plugin-vue>eslint>@eslint/eslintrc>minimatch>brace-expansion",
+            ".>eslint-plugin-vue>eslint>@humanwhocodes/config-array>minimatch>brace-expansion",
+            ".>eslint-plugin-vue>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch>brace-expansion",
+            ".>eslint-plugin-vue>eslint>minimatch>brace-expansion",
+            ".>eslint-plugin-vue>vue-eslint-parser>eslint>@eslint/eslintrc>minimatch>brace-expansion",
+            ".>eslint-plugin-vue>vue-eslint-parser>eslint>@humanwhocodes/config-array>minimatch>brace-expansion",
+            ".>eslint-plugin-vue>vue-eslint-parser>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch>brace-expansion",
+            ".>eslint-plugin-vue>vue-eslint-parser>eslint>minimatch>brace-expansion",
+            ".>vite-plugin-checker>eslint>@eslint/eslintrc>minimatch>brace-expansion",
+            ".>vite-plugin-checker>eslint>@humanwhocodes/config-array>minimatch>brace-expansion",
+            ".>vite-plugin-checker>eslint>file-entry-cache>flat-cache>rimraf>glob>minimatch>brace-expansion",
+            ".>vite-plugin-checker>eslint>minimatch>brace-expansion"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1115540,
+      "title": "brace-expansion: Zero-step sequence causes process hang and memory exhaustion",
+      "module_name": "brace-expansion",
+      "vulnerable_versions": "<1.1.13",
+      "patched_versions": ">=1.1.13",
+      "severity": "moderate",
+      "cwe": "CWE-400",
+      "github_advisory_id": "GHSA-f886-m6hf-6m8v",
+      "url": "https://github.com/advisories/GHSA-f886-m6hf-6m8v"
+    },
+    "1115541": {
+      "findings": [
+        {
+          "version": "2.0.2",
+          "paths": [
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>@typescript-eslint/typescript-estree>minimatch>brace-expansion",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/typescript-estree>minimatch>brace-expansion",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@typescript-eslint/typescript-estree>minimatch>brace-expansion",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@typescript-eslint/typescript-estree>minimatch>brace-expansion",
+            ".>@typescript-eslint/parser>@typescript-eslint/typescript-estree>minimatch>brace-expansion",
+            ".>@vitest/coverage-v8>test-exclude>glob>minimatch>brace-expansion",
+            ".>@vitest/coverage-v8>test-exclude>minimatch>brace-expansion",
+            ".>@vue/test-utils>js-beautify>editorconfig>minimatch>brace-expansion",
+            ".>@vue/test-utils>js-beautify>glob>minimatch>brace-expansion",
+            ".>vite-plugin-checker>vue-tsc>@vue/language-core>minimatch>brace-expansion",
+            ".>vue-tsc>@vue/language-core>minimatch>brace-expansion"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1115541,
+      "title": "brace-expansion: Zero-step sequence causes process hang and memory exhaustion",
+      "module_name": "brace-expansion",
+      "vulnerable_versions": ">=2.0.0 <2.0.3",
+      "patched_versions": ">=2.0.3",
+      "severity": "moderate",
+      "cwe": "CWE-400",
+      "github_advisory_id": "GHSA-f886-m6hf-6m8v",
+      "url": "https://github.com/advisories/GHSA-f886-m6hf-6m8v"
+    },
+    "1115549": {
+      "findings": [
+        {
+          "version": "2.3.1",
+          "paths": [
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>@typescript-eslint/typescript-estree>globby>fast-glob>micromatch>picomatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/typescript-estree>globby>fast-glob>micromatch>picomatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@typescript-eslint/typescript-estree>globby>fast-glob>micromatch>picomatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@typescript-eslint/typescript-estree>globby>fast-glob>micromatch>picomatch",
+            ".>@typescript-eslint/parser>@typescript-eslint/typescript-estree>globby>fast-glob>micromatch>picomatch",
+            ".>tailwindcss>chokidar>anymatch>picomatch",
+            ".>tailwindcss>chokidar>readdirp>picomatch",
+            ".>tailwindcss>fast-glob>micromatch>picomatch",
+            ".>tailwindcss>micromatch>picomatch"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1115549,
+      "title": "Picomatch: Method Injection in POSIX Character Classes causes incorrect Glob Matching",
+      "module_name": "picomatch",
+      "vulnerable_versions": "<2.3.2",
+      "patched_versions": ">=2.3.2",
+      "severity": "moderate",
+      "cwe": "CWE-1321",
+      "github_advisory_id": "GHSA-3v7f-55p6-f55p",
+      "url": "https://github.com/advisories/GHSA-3v7f-55p6-f55p"
+    },
+    "1115551": {
+      "findings": [
+        {
+          "version": "4.0.3",
+          "paths": [
+            ".>tailwindcss>sucrase>tinyglobby>fdir>picomatch",
+            ".>tailwindcss>sucrase>tinyglobby>picomatch",
+            ".>vite-plugin-checker>picomatch",
+            ".>vite-plugin-checker>tinyglobby>fdir>picomatch",
+            ".>vite-plugin-checker>tinyglobby>picomatch"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1115551,
+      "title": "Picomatch: Method Injection in POSIX Character Classes causes incorrect Glob Matching",
+      "module_name": "picomatch",
+      "vulnerable_versions": ">=4.0.0 <4.0.4",
+      "patched_versions": ">=4.0.4",
+      "severity": "moderate",
+      "cwe": "CWE-1321",
+      "github_advisory_id": "GHSA-3v7f-55p6-f55p",
+      "url": "https://github.com/advisories/GHSA-3v7f-55p6-f55p"
+    },
+    "1115552": {
+      "findings": [
+        {
+          "version": "2.3.1",
+          "paths": [
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>@typescript-eslint/typescript-estree>globby>fast-glob>micromatch>picomatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/typescript-estree>globby>fast-glob>micromatch>picomatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@typescript-eslint/typescript-estree>globby>fast-glob>micromatch>picomatch",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@typescript-eslint/typescript-estree>globby>fast-glob>micromatch>picomatch",
+            ".>@typescript-eslint/parser>@typescript-eslint/typescript-estree>globby>fast-glob>micromatch>picomatch",
+            ".>tailwindcss>chokidar>anymatch>picomatch",
+            ".>tailwindcss>chokidar>readdirp>picomatch",
+            ".>tailwindcss>fast-glob>micromatch>picomatch",
+            ".>tailwindcss>micromatch>picomatch"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1115552,
+      "title": "Picomatch has a ReDoS vulnerability via extglob quantifiers",
+      "module_name": "picomatch",
+      "vulnerable_versions": "<2.3.2",
+      "patched_versions": ">=2.3.2",
+      "severity": "high",
+      "cwe": "CWE-1333",
+      "github_advisory_id": "GHSA-c2c7-rcm5-vvqj",
+      "url": "https://github.com/advisories/GHSA-c2c7-rcm5-vvqj"
+    },
+    "1115554": {
+      "findings": [
+        {
+          "version": "4.0.3",
+          "paths": [
+            ".>tailwindcss>sucrase>tinyglobby>fdir>picomatch",
+            ".>tailwindcss>sucrase>tinyglobby>picomatch",
+            ".>vite-plugin-checker>picomatch",
+            ".>vite-plugin-checker>tinyglobby>fdir>picomatch",
+            ".>vite-plugin-checker>tinyglobby>picomatch"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1115554,
+      "title": "Picomatch has a ReDoS vulnerability via extglob quantifiers",
+      "module_name": "picomatch",
+      "vulnerable_versions": ">=4.0.0 <4.0.4",
+      "patched_versions": ">=4.0.4",
+      "severity": "high",
+      "cwe": "CWE-1333",
+      "github_advisory_id": "GHSA-c2c7-rcm5-vvqj",
+      "url": "https://github.com/advisories/GHSA-c2c7-rcm5-vvqj"
+    },
+    "1115555": {
+      "findings": [
+        {
+          "version": "1.10.2",
+          "paths": [
+            ".>@lobehub/icons>@lobehub/ui>@lobehub/fluent-emoji>antd-style>@emotion/css>@emotion/babel-plugin>babel-plugin-macros>cosmiconfig>yaml",
+            ".>@lobehub/icons>@lobehub/ui>@lobehub/fluent-emoji>antd-style>@emotion/react>@emotion/babel-plugin>babel-plugin-macros>cosmiconfig>yaml",
+            ".>@lobehub/icons>@lobehub/ui>antd-style>@emotion/css>@emotion/babel-plugin>babel-plugin-macros>cosmiconfig>yaml",
+            ".>@lobehub/icons>@lobehub/ui>antd-style>@emotion/react>@emotion/babel-plugin>babel-plugin-macros>cosmiconfig>yaml",
+            ".>@lobehub/icons>antd-style>@emotion/css>@emotion/babel-plugin>babel-plugin-macros>cosmiconfig>yaml",
+            ".>@lobehub/icons>antd-style>@emotion/react>@emotion/babel-plugin>babel-plugin-macros>cosmiconfig>yaml"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1115555,
+      "title": "yaml is vulnerable to Stack Overflow via deeply nested YAML collections",
+      "module_name": "yaml",
+      "vulnerable_versions": ">=1.0.0 <1.10.3",
+      "patched_versions": ">=1.10.3",
+      "severity": "moderate",
+      "cwe": "CWE-674",
+      "github_advisory_id": "GHSA-48c2-rrv3-qjmp",
+      "url": "https://github.com/advisories/GHSA-48c2-rrv3-qjmp"
+    },
+    "1115668": {
+      "findings": [
+        {
+          "version": "3.3.1",
+          "paths": [
+            ".>dompurify",
+            ".>@types/dompurify>dompurify"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1115668,
+      "title": "DOMPurify contains a Cross-site Scripting vulnerability",
+      "module_name": "dompurify",
+      "vulnerable_versions": ">=3.1.3 <=3.3.1",
+      "patched_versions": ">=3.3.2",
+      "severity": "moderate",
+      "cwe": "CWE-79",
+      "github_advisory_id": "GHSA-v2wj-7wpq-c8vv",
+      "url": "https://github.com/advisories/GHSA-v2wj-7wpq-c8vv"
+    },
+    "1115806": {
+      "findings": [
+        {
+          "version": "4.17.21",
+          "paths": [
+            ".>eslint-plugin-vue>vue-eslint-parser>lodash"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1115806,
+      "title": "lodash vulnerable to Code Injection via `_.template` imports key names",
+      "module_name": "lodash",
+      "vulnerable_versions": ">=4.0.0 <=4.17.23",
+      "patched_versions": ">=4.17.24",
+      "severity": "high",
+      "cwe": "CWE-94",
+      "github_advisory_id": "GHSA-r5fr-rjxr-66jc",
+      "url": "https://github.com/advisories/GHSA-r5fr-rjxr-66jc"
+    },
+    "1115810": {
+      "findings": [
+        {
+          "version": "4.17.21",
+          "paths": [
+            ".>eslint-plugin-vue>vue-eslint-parser>lodash"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1115810,
+      "title": "lodash vulnerable to Prototype Pollution via array path bypass in `_.unset` and `_.omit`",
+      "module_name": "lodash",
+      "vulnerable_versions": "<=4.17.23",
+      "patched_versions": ">=4.17.24",
+      "severity": "moderate",
+      "cwe": "CWE-1321",
+      "github_advisory_id": "GHSA-f23m-r3pf-42rh",
+      "url": "https://github.com/advisories/GHSA-f23m-r3pf-42rh"
+    },
+    "1115921": {
+      "findings": [
+        {
+          "version": "3.3.1",
+          "paths": [
+            ".>dompurify",
+            ".>@types/dompurify>dompurify"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1115921,
+      "title": "DOMPurify ADD_ATTR predicate skips URI validation",
+      "module_name": "dompurify",
+      "vulnerable_versions": "<=3.3.1",
+      "patched_versions": ">=3.3.2",
+      "severity": "moderate",
+      "cwe": "CWE-183",
+      "github_advisory_id": "GHSA-cjmm-f4jc-qw8r",
+      "url": "https://github.com/advisories/GHSA-cjmm-f4jc-qw8r"
+    },
+    "1115922": {
+      "findings": [
+        {
+          "version": "3.3.1",
+          "paths": [
+            ".>dompurify",
+            ".>@types/dompurify>dompurify"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1115922,
+      "title": "DOMPurify USE_PROFILES prototype pollution allows event handlers",
+      "module_name": "dompurify",
+      "vulnerable_versions": "<=3.3.1",
+      "patched_versions": ">=3.3.2",
+      "severity": "moderate",
+      "cwe": "CWE-1321",
+      "github_advisory_id": "GHSA-cj63-jhhr-wcxv",
+      "url": "https://github.com/advisories/GHSA-cj63-jhhr-wcxv"
+    },
+    "1116229": {
+      "findings": [
+        {
+          "version": "5.4.21",
+          "paths": [
+            ".>@vitejs/plugin-vue>vite",
+            ".>@vitest/coverage-v8>vitest>@vitest/mocker>vite",
+            ".>@vitest/coverage-v8>vitest>vite",
+            ".>@vitest/coverage-v8>vitest>vite-node>vite",
+            ".>vite",
+            ".>vite-plugin-checker>vite",
+            ".>vitest>@vitest/mocker>vite",
+            ".>vitest>vite",
+            ".>vitest>vite-node>vite"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1116229,
+      "title": "Vite Vulnerable to Path Traversal in Optimized Deps `.map` Handling",
+      "module_name": "vite",
+      "vulnerable_versions": "<=6.4.1",
+      "patched_versions": ">=6.4.2",
+      "severity": "moderate",
+      "cwe": "CWE-22, CWE-200",
+      "github_advisory_id": "GHSA-4w7w-66w2-5vf9",
+      "url": "https://github.com/advisories/GHSA-4w7w-66w2-5vf9"
+    },
+    "1116663": {
+      "findings": [
+        {
+          "version": "3.3.3",
+          "paths": [
+            ".>@lobehub/icons>@lobehub/ui>mermaid>dompurify"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "version": "3.3.1",
+          "paths": [
+            ".>dompurify",
+            ".>@types/dompurify>dompurify"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1116663,
+      "title": "DOMPurify's ADD_TAGS function form bypasses FORBID_TAGS due to short-circuit evaluation",
+      "module_name": "dompurify",
+      "vulnerable_versions": "<=3.3.3",
+      "patched_versions": ">=3.3.4",
+      "severity": "moderate",
+      "cwe": "CWE-783",
+      "github_advisory_id": "GHSA-39q2-94rc-95cp",
+      "url": "https://github.com/advisories/GHSA-39q2-94rc-95cp"
+    },
+    "1117015": {
+      "findings": [
+        {
+          "version": "8.5.6",
+          "paths": [
+            ".>@lobehub/icons>@lobehub/ui>shiki-stream>vue>@vue/compiler-sfc>postcss",
+            ".>@tanstack/vue-virtual>vue>@vue/compiler-sfc>postcss",
+            ".>@vueuse/core>@vueuse/shared>vue-demi>vue>@vue/compiler-sfc>postcss",
+            ".>@vueuse/core>vue-demi>vue>@vue/compiler-sfc>postcss",
+            ".>pinia>vue>@vue/compiler-sfc>postcss",
+            ".>pinia>vue-demi>vue>@vue/compiler-sfc>postcss",
+            ".>vue>@vue/compiler-sfc>postcss",
+            ".>vue-chartjs>vue>@vue/compiler-sfc>postcss",
+            ".>vue-i18n>vue>@vue/compiler-sfc>postcss",
+            ".>vue-router>vue>@vue/compiler-sfc>postcss",
+            ".>@vitejs/plugin-vue>vite>postcss",
+            ".>@vitejs/plugin-vue>vue>@vue/compiler-sfc>postcss",
+            ".>@vitest/coverage-v8>vitest>@vitest/mocker>vite>postcss",
+            ".>@vitest/coverage-v8>vitest>vite>postcss",
+            ".>@vitest/coverage-v8>vitest>vite-node>vite>postcss",
+            ".>autoprefixer>postcss",
+            ".>postcss",
+            ".>tailwindcss>postcss",
+            ".>tailwindcss>postcss-import>postcss",
+            ".>tailwindcss>postcss-js>postcss",
+            ".>tailwindcss>postcss-load-config>postcss",
+            ".>tailwindcss>postcss-nested>postcss",
+            ".>vite>postcss",
+            ".>vite-plugin-checker>vite>postcss",
+            ".>vitest>@vitest/mocker>vite>postcss",
+            ".>vitest>vite>postcss",
+            ".>vitest>vite-node>vite>postcss"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1117015,
+      "title": "PostCSS has XSS via Unescaped </style> in its CSS Stringify Output",
+      "module_name": "postcss",
+      "vulnerable_versions": "<8.5.10",
+      "patched_versions": ">=8.5.10",
+      "severity": "moderate",
+      "cwe": "CWE-79",
+      "github_advisory_id": "GHSA-qx2v-qp2m-jg93",
+      "url": "https://github.com/advisories/GHSA-qx2v-qp2m-jg93"
+    },
+    "1117138": {
+      "findings": [
+        {
+          "version": "3.3.3",
+          "paths": [
+            ".>@lobehub/icons>@lobehub/ui>mermaid>dompurify"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "version": "3.3.1",
+          "paths": [
+            ".>dompurify",
+            ".>@types/dompurify>dompurify"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1117138,
+      "title": "DOMPurify: FORBID_TAGS bypassed by function-based ADD_TAGS predicate (asymmetry with FORBID_ATTR fix)",
+      "module_name": "dompurify",
+      "vulnerable_versions": "<3.4.0",
+      "patched_versions": ">=3.4.0",
+      "severity": "moderate",
+      "cwe": "CWE-79, CWE-183",
+      "github_advisory_id": "GHSA-h7mw-gpvr-xq4m",
+      "url": "https://github.com/advisories/GHSA-h7mw-gpvr-xq4m"
+    },
+    "1117139": {
+      "findings": [
+        {
+          "version": "3.3.3",
+          "paths": [
+            ".>@lobehub/icons>@lobehub/ui>mermaid>dompurify"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "version": "3.3.1",
+          "paths": [
+            ".>dompurify",
+            ".>@types/dompurify>dompurify"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1117139,
+      "title": "DOMPurify has a SAFE_FOR_TEMPLATES bypass in RETURN_DOM mode",
+      "module_name": "dompurify",
+      "vulnerable_versions": ">=1.0.10 <3.4.0",
+      "patched_versions": ">=3.4.0",
+      "severity": "moderate",
+      "cwe": "CWE-79, CWE-1289",
+      "github_advisory_id": "GHSA-crv5-9vww-q3g8",
+      "url": "https://github.com/advisories/GHSA-crv5-9vww-q3g8"
+    },
+    "1117140": {
+      "findings": [
+        {
+          "version": "3.3.3",
+          "paths": [
+            ".>@lobehub/icons>@lobehub/ui>mermaid>dompurify"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "version": "3.3.1",
+          "paths": [
+            ".>dompurify",
+            ".>@types/dompurify>dompurify"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1117140,
+      "title": "DOMPurify: Prototype Pollution to XSS Bypass via CUSTOM_ELEMENT_HANDLING Fallback",
+      "module_name": "dompurify",
+      "vulnerable_versions": ">=3.0.1 <3.4.0",
+      "patched_versions": ">=3.4.0",
+      "severity": "moderate",
+      "cwe": "CWE-79, CWE-1321",
+      "github_advisory_id": "GHSA-v9jr-rg53-9pgp",
+      "url": "https://github.com/advisories/GHSA-v9jr-rg53-9pgp"
+    },
+    "1117795": {
+      "findings": [
+        {
+          "version": "3.3.1",
+          "paths": [
+            ".>dompurify",
+            ".>@types/dompurify>dompurify"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1117795,
+      "title": "DOMPurify is vulnerable to mutation-XSS via Re-Contextualization ",
+      "module_name": "dompurify",
+      "vulnerable_versions": "<3.3.2",
+      "patched_versions": ">=3.3.2",
+      "severity": "moderate",
+      "cwe": "CWE-79",
+      "github_advisory_id": "GHSA-h8r8-wccr-v5f2",
+      "url": "https://github.com/advisories/GHSA-h8r8-wccr-v5f2"
+    },
+    "1119108": {
+      "findings": [
+        {
+          "version": "8.19.0",
+          "paths": [
+            ".>@vitest/coverage-v8>vitest>jsdom>ws",
+            ".>jsdom>ws",
+            ".>vitest>jsdom>ws"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1119108,
+      "title": "ws: Uninitialized memory disclosure",
+      "module_name": "ws",
+      "vulnerable_versions": ">=8.0.0 <8.20.1",
+      "patched_versions": ">=8.20.1",
+      "severity": "moderate",
+      "cwe": "CWE-908",
+      "github_advisory_id": "GHSA-58qx-3vcg-4xpx",
+      "url": "https://github.com/advisories/GHSA-58qx-3vcg-4xpx"
+    },
+    "1119441": {
+      "findings": [
+        {
+          "version": "11.1.0",
+          "paths": [
+            ".>@lobehub/icons>@lobehub/ui>mermaid>uuid"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1119441,
+      "title": "uuid: Missing buffer bounds check in v3/v5/v6 when buf is provided",
+      "module_name": "uuid",
+      "vulnerable_versions": "<11.1.1",
+      "patched_versions": ">=11.1.1",
+      "severity": "moderate",
+      "cwe": "CWE-787, CWE-1285",
+      "github_advisory_id": "GHSA-w5hq-g745-h8pq",
+      "url": "https://github.com/advisories/GHSA-w5hq-g745-h8pq"
+    },
+    "1119442": {
+      "findings": [
+        {
+          "version": "13.0.0",
+          "paths": [
+            ".>@lobehub/icons>@lobehub/ui>uuid"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1119442,
+      "title": "uuid: Missing buffer bounds check in v3/v5/v6 when buf is provided",
+      "module_name": "uuid",
+      "vulnerable_versions": ">=13.0.0 <13.0.1",
+      "patched_versions": ">=13.0.1",
+      "severity": "moderate",
+      "cwe": "CWE-787, CWE-1285",
+      "github_advisory_id": "GHSA-w5hq-g745-h8pq",
+      "url": "https://github.com/advisories/GHSA-w5hq-g745-h8pq"
+    },
+    "1120126": {
+      "findings": [
+        {
+          "version": "2.1.9",
+          "paths": [
+            ".>@vitest/coverage-v8>vitest",
+            ".>vitest"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1120126,
+      "title": "When Vitest UI server is listening, arbitrary file can be read and executed",
+      "module_name": "vitest",
+      "vulnerable_versions": "<3.2.6",
+      "patched_versions": ">=3.2.6",
+      "severity": "critical",
+      "cwe": "CWE-862",
+      "github_advisory_id": "GHSA-5xrq-8626-4rwp",
+      "url": "https://github.com/advisories/GHSA-5xrq-8626-4rwp"
+    },
+    "1120138": {
+      "findings": [
+        {
+          "version": "11.14.0",
+          "paths": [
+            ".>@lobehub/icons>@lobehub/ui>mermaid"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1120138,
+      "title": "Mermaid: Improper sanitization of `classDef` in state diagrams leads to HTML injection",
+      "module_name": "mermaid",
+      "vulnerable_versions": ">=11.0.0-alpha.1 <=11.14.0",
+      "patched_versions": ">=11.14.1",
+      "severity": "moderate",
+      "cwe": "CWE-94",
+      "github_advisory_id": "GHSA-ghcm-xqfw-q4vr",
+      "url": "https://github.com/advisories/GHSA-ghcm-xqfw-q4vr"
+    },
+    "1120140": {
+      "findings": [
+        {
+          "version": "11.14.0",
+          "paths": [
+            ".>@lobehub/icons>@lobehub/ui>mermaid"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1120140,
+      "title": "Mermaid: Improper sanitization of `classDefs` in diagrams leads to CSS injection",
+      "module_name": "mermaid",
+      "vulnerable_versions": ">=11.0.0-alpha.1 <=11.14.0",
+      "patched_versions": ">=11.14.1",
+      "severity": "moderate",
+      "cwe": "CWE-94",
+      "github_advisory_id": "GHSA-xcj9-5m2h-648r",
+      "url": "https://github.com/advisories/GHSA-xcj9-5m2h-648r"
+    },
+    "1120324": {
+      "findings": [
+        {
+          "version": "11.14.0",
+          "paths": [
+            ".>@lobehub/icons>@lobehub/ui>mermaid"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1120324,
+      "title": "Mermaid: Improper sanitization of configuration leads to CSS injection",
+      "module_name": "mermaid",
+      "vulnerable_versions": ">=11.0.0-alpha.1 <=11.14.0",
+      "patched_versions": ">=11.14.1",
+      "severity": "moderate",
+      "cwe": "CWE-94",
+      "github_advisory_id": "GHSA-87f9-hvmw-gh4p",
+      "url": "https://github.com/advisories/GHSA-87f9-hvmw-gh4p"
+    },
+    "1120326": {
+      "findings": [
+        {
+          "version": "11.14.0",
+          "paths": [
+            ".>@lobehub/icons>@lobehub/ui>mermaid"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1120326,
+      "title": "Mermaid Gantt Charts are vulnerable to an Infinite Loop DoS",
+      "module_name": "mermaid",
+      "vulnerable_versions": ">=11.0.0-alpha.1 <=11.14.0",
+      "patched_versions": ">=11.14.1",
+      "severity": "moderate",
+      "cwe": "CWE-835",
+      "github_advisory_id": "GHSA-6m6c-36f7-fhxh",
+      "url": "https://github.com/advisories/GHSA-6m6c-36f7-fhxh"
+    },
+    "1120370": {
+      "findings": [
+        {
+          "version": "4.17.21",
+          "paths": [
+            ".>eslint-plugin-vue>vue-eslint-parser>lodash"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1120370,
+      "title": "Lodash has Prototype Pollution Vulnerability in `_.unset` and `_.omit` functions",
+      "module_name": "lodash",
+      "vulnerable_versions": ">=4.0.0 <=4.17.22",
+      "patched_versions": ">=4.17.23",
+      "severity": "moderate",
+      "cwe": "CWE-1321",
+      "github_advisory_id": "GHSA-xxjr-mmjv-4gpg",
+      "url": "https://github.com/advisories/GHSA-xxjr-mmjv-4gpg"
+    },
+    "1120730": {
+      "findings": [
+        {
+          "version": "8.19.0",
+          "paths": [
+            ".>@vitest/coverage-v8>vitest>jsdom>ws",
+            ".>jsdom>ws",
+            ".>vitest>jsdom>ws"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1120730,
+      "title": "ws: Memory exhaustion DoS from tiny fragments and data chunks",
+      "module_name": "ws",
+      "vulnerable_versions": ">=8.0.0 <8.21.0",
+      "patched_versions": ">=8.21.0",
+      "severity": "high",
+      "cwe": "CWE-400, CWE-770",
+      "github_advisory_id": "GHSA-96hv-2xvq-fx4p",
+      "url": "https://github.com/advisories/GHSA-96hv-2xvq-fx4p"
+    },
+    "1120784": {
+      "findings": [
+        {
+          "version": "5.4.21",
+          "paths": [
+            ".>@vitejs/plugin-vue>vite",
+            ".>@vitest/coverage-v8>vitest>@vitest/mocker>vite",
+            ".>@vitest/coverage-v8>vitest>vite",
+            ".>@vitest/coverage-v8>vitest>vite-node>vite",
+            ".>vite",
+            ".>vite-plugin-checker>vite",
+            ".>vitest>@vitest/mocker>vite",
+            ".>vitest>vite",
+            ".>vitest>vite-node>vite"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1120784,
+      "title": "launch-editor: NTLMv2 hash disclosure via UNC path handling on Windows",
+      "module_name": "vite",
+      "vulnerable_versions": "<=6.4.2",
+      "patched_versions": ">=6.4.3",
+      "severity": "moderate",
+      "cwe": "CWE-73, CWE-522",
+      "github_advisory_id": "GHSA-v6wh-96g9-6wx3",
+      "url": "https://github.com/advisories/GHSA-v6wh-96g9-6wx3"
+    },
+    "1120789": {
+      "findings": [
+        {
+          "version": "5.4.21",
+          "paths": [
+            ".>@vitejs/plugin-vue>vite",
+            ".>@vitest/coverage-v8>vitest>@vitest/mocker>vite",
+            ".>@vitest/coverage-v8>vitest>vite",
+            ".>@vitest/coverage-v8>vitest>vite-node>vite",
+            ".>vite",
+            ".>vite-plugin-checker>vite",
+            ".>vitest>@vitest/mocker>vite",
+            ".>vitest>vite",
+            ".>vitest>vite-node>vite"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1120789,
+      "title": "vite: `server.fs.deny` bypass on Windows alternate paths",
+      "module_name": "vite",
+      "vulnerable_versions": "<=6.4.2",
+      "patched_versions": ">=6.4.3",
+      "severity": "high",
+      "cwe": "CWE-22, CWE-200",
+      "github_advisory_id": "GHSA-fx2h-pf6j-xcff",
+      "url": "https://github.com/advisories/GHSA-fx2h-pf6j-xcff"
+    },
+    "1120800": {
+      "findings": [
+        {
+          "version": "3.3.3",
+          "paths": [
+            ".>@lobehub/icons>@lobehub/ui>mermaid>dompurify"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "version": "3.3.1",
+          "paths": [
+            ".>dompurify",
+            ".>@types/dompurify>dompurify"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1120800,
+      "title": "DOMPurify: `IN_PLACE` mode trusts attacker-controlled `nodeName` on live non-form nodes, allowing script retention and XSS via attacker-supplied DOM objects",
+      "module_name": "dompurify",
+      "vulnerable_versions": "<=3.4.6",
+      "patched_versions": ">=3.4.7",
+      "severity": "low",
+      "cwe": "CWE-79",
+      "github_advisory_id": "GHSA-x4vx-rjvf-j5p4",
+      "url": "https://github.com/advisories/GHSA-x4vx-rjvf-j5p4"
+    },
+    "1120801": {
+      "findings": [
+        {
+          "version": "3.3.3",
+          "paths": [
+            ".>@lobehub/icons>@lobehub/ui>mermaid>dompurify"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "version": "3.3.1",
+          "paths": [
+            ".>dompurify",
+            ".>@types/dompurify>dompurify"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1120801,
+      "title": "DOMPurify: Hook mutation of `data.allowedTags` / `data.allowedAttributes` permanently pollutes `DEFAULT_ALLOWED_TAGS` / `DEFAULT_ALLOWED_ATTR`",
+      "module_name": "dompurify",
+      "vulnerable_versions": "<3.4.7",
+      "patched_versions": ">=3.4.7",
+      "severity": "moderate",
+      "cwe": "CWE-501, CWE-693",
+      "github_advisory_id": "GHSA-76mc-f452-cxcm",
+      "url": "https://github.com/advisories/GHSA-76mc-f452-cxcm"
+    },
+    "1120802": {
+      "findings": [
+        {
+          "version": "3.3.3",
+          "paths": [
+            ".>@lobehub/icons>@lobehub/ui>mermaid>dompurify"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "version": "3.3.1",
+          "paths": [
+            ".>dompurify",
+            ".>@types/dompurify>dompurify"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1120802,
+      "title": "DOMPurify: Cross-realm IN_PLACE sanitization leaves executable markup intact via realm-bound `instanceof` checks",
+      "module_name": "dompurify",
+      "vulnerable_versions": "<=3.4.5",
+      "patched_versions": ">=3.4.6",
+      "severity": "moderate",
+      "cwe": "CWE-79, CWE-501, CWE-693",
+      "github_advisory_id": "GHSA-hpcv-96wg-7vj8",
+      "url": "https://github.com/advisories/GHSA-hpcv-96wg-7vj8"
+    },
+    "1120803": {
+      "findings": [
+        {
+          "version": "3.3.3",
+          "paths": [
+            ".>@lobehub/icons>@lobehub/ui>mermaid>dompurify"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "version": "3.3.1",
+          "paths": [
+            ".>dompurify",
+            ".>@types/dompurify>dompurify"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1120803,
+      "title": "DOMPurify: IN_PLACE mode preserves attributes of a clobbered root element, allowing XSS via attacker-controlled root DOM",
+      "module_name": "dompurify",
+      "vulnerable_versions": "<=3.4.5",
+      "patched_versions": ">=3.4.6",
+      "severity": "moderate",
+      "cwe": "CWE-79, CWE-693, CWE-1321",
+      "github_advisory_id": "GHSA-r47g-fvhr-h676",
+      "url": "https://github.com/advisories/GHSA-r47g-fvhr-h676"
+    },
+    "1120805": {
+      "findings": [
+        {
+          "version": "3.3.3",
+          "paths": [
+            ".>@lobehub/icons>@lobehub/ui>mermaid>dompurify"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "version": "3.3.1",
+          "paths": [
+            ".>dompurify",
+            ".>@types/dompurify>dompurify"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1120805,
+      "title": "DOMPurify: Trusted Types policy survives `clearConfig()` and can poison later `RETURN_TRUSTED_TYPE` output",
+      "module_name": "dompurify",
+      "vulnerable_versions": "<3.4.9",
+      "patched_versions": ">=3.4.9",
+      "severity": "low",
+      "cwe": "CWE-693",
+      "github_advisory_id": "GHSA-vxr8-fq34-vvx9",
+      "url": "https://github.com/advisories/GHSA-vxr8-fq34-vvx9"
+    },
+    "1120812": {
+      "findings": [
+        {
+          "version": "3.3.3",
+          "paths": [
+            ".>@lobehub/icons>@lobehub/ui>mermaid>dompurify"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "version": "3.3.1",
+          "paths": [
+            ".>dompurify",
+            ".>@types/dompurify>dompurify"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1120812,
+      "title": "DOMPurify: SAFE_FOR_TEMPLATES bypass - template expressions survive sanitization inside <template> content when using DOM output modes",
+      "module_name": "dompurify",
+      "vulnerable_versions": ">=3.0.0 <=3.4.7",
+      "patched_versions": ">=3.4.8",
+      "severity": "low",
+      "cwe": "CWE-79",
+      "github_advisory_id": "GHSA-gvmj-g25r-r7wr",
+      "url": "https://github.com/advisories/GHSA-gvmj-g25r-r7wr"
+    },
+    "1120813": {
+      "findings": [
+        {
+          "version": "3.3.3",
+          "paths": [
+            ".>@lobehub/icons>@lobehub/ui>mermaid>dompurify"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "version": "3.3.1",
+          "paths": [
+            ".>dompurify",
+            ".>@types/dompurify>dompurify"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1120813,
+      "title": "DOMPurify IN_PLACE Sanitization Bypass via Attached Shadow Root Inside <template>.content",
+      "module_name": "dompurify",
+      "vulnerable_versions": "<=3.4.6",
+      "patched_versions": ">=3.4.7",
+      "severity": "moderate",
+      "cwe": "CWE-79",
+      "github_advisory_id": "GHSA-rp9w-3fw7-7cwq",
+      "url": "https://github.com/advisories/GHSA-rp9w-3fw7-7cwq"
+    },
+    "1121192": {
+      "findings": [
+        {
+          "version": "3.3.3",
+          "paths": [
+            ".>@lobehub/icons>@lobehub/ui>mermaid>dompurify"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        },
+        {
+          "version": "3.3.1",
+          "paths": [
+            ".>dompurify",
+            ".>@types/dompurify>dompurify"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1121192,
+      "title": "DOMPurify: Permanent `ALLOWED_ATTR` pollution via `setConfig()` bypassing the hook clone-guard (incomplete fix of the 3.4.7 hook-pollution patch)",
+      "module_name": "dompurify",
+      "vulnerable_versions": "<=3.4.10",
+      "patched_versions": ">=3.4.11",
+      "severity": "moderate",
+      "cwe": "CWE-79, CWE-471, CWE-665",
+      "github_advisory_id": "GHSA-cmwh-pvxp-8882",
+      "url": "https://github.com/advisories/GHSA-cmwh-pvxp-8882"
+    },
+    "1121860": {
+      "findings": [
+        {
+          "version": "4.1.1",
+          "paths": [
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>eslint>@eslint/eslintrc>js-yaml",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/parser>eslint>js-yaml",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>@eslint/eslintrc>js-yaml",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>js-yaml",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>eslint>@eslint/eslintrc>js-yaml",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>@typescript-eslint/utils>eslint>js-yaml",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>eslint>@eslint/eslintrc>js-yaml",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/type-utils>eslint>js-yaml",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>@eslint/eslintrc>js-yaml",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>@eslint-community/eslint-utils>eslint>js-yaml",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>eslint>@eslint/eslintrc>js-yaml",
+            ".>@typescript-eslint/eslint-plugin>@typescript-eslint/utils>eslint>js-yaml",
+            ".>@typescript-eslint/eslint-plugin>eslint>@eslint/eslintrc>js-yaml",
+            ".>@typescript-eslint/eslint-plugin>eslint>js-yaml",
+            ".>@typescript-eslint/parser>eslint>@eslint/eslintrc>js-yaml",
+            ".>@typescript-eslint/parser>eslint>js-yaml",
+            ".>eslint>@eslint/eslintrc>js-yaml",
+            ".>eslint>js-yaml",
+            ".>eslint-plugin-vue>@eslint-community/eslint-utils>eslint>@eslint/eslintrc>js-yaml",
+            ".>eslint-plugin-vue>@eslint-community/eslint-utils>eslint>js-yaml",
+            ".>eslint-plugin-vue>eslint>@eslint/eslintrc>js-yaml",
+            ".>eslint-plugin-vue>eslint>js-yaml",
+            ".>eslint-plugin-vue>vue-eslint-parser>eslint>@eslint/eslintrc>js-yaml",
+            ".>eslint-plugin-vue>vue-eslint-parser>eslint>js-yaml",
+            ".>vite-plugin-checker>eslint>@eslint/eslintrc>js-yaml",
+            ".>vite-plugin-checker>eslint>js-yaml"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1121860,
+      "title": "JS-YAML: Quadratic-complexity DoS in merge key handling via repeated aliases",
+      "module_name": "js-yaml",
+      "vulnerable_versions": ">=4.0.0 <=4.1.1",
+      "patched_versions": ">=4.1.2",
+      "severity": "moderate",
+      "cwe": "CWE-407",
+      "github_advisory_id": "GHSA-h67p-54hq-rp68",
+      "url": "https://github.com/advisories/GHSA-h67p-54hq-rp68"
+    }
+  },
+  "metadata": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 3,
+      "moderate": 33,
+      "high": 14,
+      "critical": 1
+    },
+    "dependencies": 667,
+    "devDependencies": 336,
+    "optionalDependencies": 47,
+    "totalDependencies": 1003
+  }
+}

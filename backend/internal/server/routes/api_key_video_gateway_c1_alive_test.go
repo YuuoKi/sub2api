@@ -134,7 +134,7 @@ func TestAPIKeyVideoGatewayC1MockAliveReachesSucceeded(t *testing.T) {
 
 	// --- the live result the candidate pool consumes ---
 	require.Equal(t, service.VideoStatusSucceeded, final.Data.Status, "mock chain must reach succeeded")
-	require.Equal(t, fmt.Sprintf("https://mock.sub2api.local/video/%d.mp4", taskID), final.Data.ResultURL,
+	require.Equal(t, fmt.Sprintf("/api/v1/video/mock-assets/%d.svg", taskID), final.Data.ResultURL,
 		"succeeded response must carry the playable result_url QCanvas maps to resultUrl")
 	require.Empty(t, final.Data.ErrorMessage)
 	require.Equal(t, service.VideoProviderMock, final.Data.Provider)

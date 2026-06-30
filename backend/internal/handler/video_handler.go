@@ -505,10 +505,12 @@ func apiKeyVideoTaskToResponse(task *service.VideoTask, events []*service.VideoT
 
 	if task != nil && task.Provider == service.VideoProviderSeedance {
 		boundary = "api-key-video-seedance-tiny-trial"
-		realDispatchCount = 1
 	}
 
 	for _, ev := range events {
+		if task != nil && task.Provider != service.VideoProviderMock && ev != nil && ev.EventType == service.VideoStatusSubmitted {
+			realDispatchCount++
+		}
 		if ev != nil && ev.EventType == "trial_gate" && ev.Payload != nil {
 			if v, ok := ev.Payload["trial_mode"]; ok {
 				trialMode = fmt.Sprint(v)

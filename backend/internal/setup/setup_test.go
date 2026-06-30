@@ -87,3 +87,24 @@ func TestWriteConfigFileKeepsDefaultUserConcurrency(t *testing.T) {
 		t.Fatalf("config missing default user concurrency, got:\n%s", string(data))
 	}
 }
+
+func TestWriteConfigFileIncludesVideoGatewayEncryptionKey(t *testing.T) {
+	t.Setenv("DATA_DIR", t.TempDir())
+
+	key := strings.Repeat("a", 64)
+	if err := writeConfigFile(&SetupConfig{
+		VideoGateway: VideoGatewayConfig{EncryptionKey: key},
+	}); err != nil {
+		t.Fatalf("writeConfigFile() error = %v", err)
+	}
+
+	data, err := os.ReadFile(GetConfigFilePath())
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+
+	got := string(data)
+	if !strings.Contains(got, "video_gateway:") || !strings.Contains(got, "encryption_key: "+key) {
+		t.Fatalf("config missing video gateway encryption key, got:\n%s", got)
+	}
+}

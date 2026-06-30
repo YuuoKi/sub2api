@@ -259,6 +259,7 @@ type VideoGatewayRepository interface {
 	UpdateProviderAccount(ctx context.Context, account *VideoProviderAccount) error
 
 	CreateTask(ctx context.Context, task *VideoTask) error
+	CreateDailyTrialTask(ctx context.Context, task *VideoTask, provider string, createdBy int64, trialDate time.Time) (bool, error)
 	GetTask(ctx context.Context, id int64) (*VideoTask, error)
 	ListTasks(ctx context.Context, params VideoTaskListParams) ([]*VideoTask, int64, error)
 	ListRunnableTasks(ctx context.Context, limit int) ([]*VideoTask, error)

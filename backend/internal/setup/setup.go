@@ -73,12 +73,13 @@ func GetInstallLockPath() string {
 
 // SetupConfig holds the setup configuration
 type SetupConfig struct {
-	Database DatabaseConfig `json:"database" yaml:"database"`
-	Redis    RedisConfig    `json:"redis" yaml:"redis"`
-	Admin    AdminConfig    `json:"admin" yaml:"-"` // Not stored in config file
-	Server   ServerConfig   `json:"server" yaml:"server"`
-	JWT      JWTConfig      `json:"jwt" yaml:"jwt"`
-	Timezone string         `json:"timezone" yaml:"timezone"` // e.g. "Asia/Shanghai", "UTC"
+	Database     DatabaseConfig     `json:"database" yaml:"database"`
+	Redis        RedisConfig        `json:"redis" yaml:"redis"`
+	Admin        AdminConfig        `json:"admin" yaml:"-"` // Not stored in config file
+	Server       ServerConfig       `json:"server" yaml:"server"`
+	JWT          JWTConfig          `json:"jwt" yaml:"jwt"`
+	VideoGateway VideoGatewayConfig `json:"video_gateway" yaml:"video_gateway"`
+	Timezone     string             `json:"timezone" yaml:"timezone"` // e.g. "Asia/Shanghai", "UTC"
 }
 
 type DatabaseConfig struct {
@@ -112,6 +113,10 @@ type ServerConfig struct {
 type JWTConfig struct {
 	Secret     string `json:"secret" yaml:"secret"`
 	ExpireHour int    `json:"expire_hour" yaml:"expire_hour"`
+}
+
+type VideoGatewayConfig struct {
+	EncryptionKey string `json:"encryption_key" yaml:"encryption_key"`
 }
 
 const (
@@ -288,6 +293,9 @@ func Install(cfg *SetupConfig) error {
 		cfg.JWT.Secret = secret
 		logger.LegacyPrintf("setup", "%s", "Warning: JWT secret auto-generated. Consider setting a fixed secret for production.")
 	}
+	if err := ensureVideoGatewayEncryptionKey(cfg); err != nil {
+		return err
+	}
 
 	// Test connections
 	if err := TestDatabaseConnection(&cfg.Database); err != nil {
@@ -450,7 +458,8 @@ func writeConfigFile(cfg *SetupConfig) error {
 			APIKeyPrefix    string  `yaml:"api_key_prefix"`
 			RateMultiplier  float64 `yaml:"rate_multiplier"`
 		} `yaml:"default"`
-		RateLimit struct {
+		VideoGateway VideoGatewayConfig `yaml:"video_gateway"`
+		RateLimit    struct {
 			RequestsPerMinute int `yaml:"requests_per_minute"`
 			BurstSize         int `yaml:"burst_size"`
 		} `yaml:"rate_limit"`
@@ -477,6 +486,7 @@ func writeConfigFile(cfg *SetupConfig) error {
 			APIKeyPrefix:    "sk-",
 			RateMultiplier:  1.0,
 		},
+		VideoGateway: cfg.VideoGateway,
 		RateLimit: struct {
 			RequestsPerMinute int `yaml:"requests_per_minute"`
 			BurstSize         int `yaml:"burst_size"`
@@ -501,6 +511,20 @@ func generateSecret(length int) (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(bytes), nil
+}
+
+func ensureVideoGatewayEncryptionKey(cfg *SetupConfig) error {
+	if strings.TrimSpace(cfg.VideoGateway.EncryptionKey) != "" {
+		cfg.VideoGateway.EncryptionKey = strings.TrimSpace(cfg.VideoGateway.EncryptionKey)
+		return nil
+	}
+	key, err := generateSecret(32)
+	if err != nil {
+		return fmt.Errorf("failed to generate video gateway encryption key: %w", err)
+	}
+	cfg.VideoGateway.EncryptionKey = key
+	logger.LegacyPrintf("setup", "%s", "Warning: video gateway encryption key auto-generated. Keep config.yaml persistent for provider key decryption.")
+	return nil
 }
 
 // =============================================================================
@@ -573,6 +597,9 @@ func AutoSetupFromEnv() error {
 			Secret:     getEnvOrDefault("JWT_SECRET", ""),
 			ExpireHour: getEnvIntOrDefault("JWT_EXPIRE_HOUR", 24),
 		},
+		VideoGateway: VideoGatewayConfig{
+			EncryptionKey: getEnvOrDefault("VIDEO_GATEWAY_ENCRYPTION_KEY", ""),
+		},
 		Timezone: tz,
 	}
 
@@ -584,6 +611,9 @@ func AutoSetupFromEnv() error {
 		}
 		cfg.JWT.Secret = secret
 		logger.LegacyPrintf("setup", "%s", "Warning: JWT secret auto-generated. Consider setting a fixed secret for production.")
+	}
+	if err := ensureVideoGatewayEncryptionKey(cfg); err != nil {
+		return err
 	}
 
 	// Test database connection

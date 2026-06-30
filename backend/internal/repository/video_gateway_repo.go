@@ -19,6 +19,22 @@ func NewVideoGatewayRepository(db *sql.DB) service.VideoGatewayRepository {
 	return &videoGatewayRepository{db: db}
 }
 
+const insertVideoUsageLogSQL = `
+	WITH usage_log_insert_lock AS (
+		SELECT pg_advisory_xact_lock($1)
+	)
+	INSERT INTO video_usage_logs (video_task_id, provider, model, status, cost_estimate, duration)
+	SELECT $1,$2,$3,$4,$5,$6
+	FROM usage_log_insert_lock
+	WHERE NOT EXISTS (
+		SELECT 1
+		FROM video_usage_logs
+		WHERE video_task_id = $1
+	)
+`
+
+const videoTaskClaimLeaseSeconds = 120
+
 const videoTaskSelectColumns = `
 		vt.id, vt.provider_account_id, vt.provider, vt.model, vt.task_type, vt.prompt, vt.negative_prompt,
 		vt.reference_image_url, vt.reference_video_url, vt.aspect_ratio, vt.duration, vt.resolution,
@@ -31,6 +47,15 @@ const videoTaskJoinSQL = `
 		FROM video_tasks vt
 		LEFT JOIN video_provider_accounts vpa ON vpa.id = vt.provider_account_id
 		LEFT JOIN users u ON u.id = vt.created_by
+`
+
+const createVideoTaskSQL = `
+	INSERT INTO video_tasks (
+		provider_account_id, provider, model, task_type, prompt, negative_prompt,
+		reference_image_url, reference_video_url, aspect_ratio, duration, resolution,
+		status, created_by
+	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+	RETURNING id, created_at, updated_at
 `
 
 func (r *videoGatewayRepository) CreateProviderAccount(ctx context.Context, account *service.VideoProviderAccount) error {
@@ -138,15 +163,7 @@ func (r *videoGatewayRepository) UpdateProviderAccount(ctx context.Context, acco
 }
 
 func (r *videoGatewayRepository) CreateTask(ctx context.Context, task *service.VideoTask) error {
-	const q = `
-		INSERT INTO video_tasks (
-			provider_account_id, provider, model, task_type, prompt, negative_prompt,
-			reference_image_url, reference_video_url, aspect_ratio, duration, resolution,
-			status, created_by
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-		RETURNING id, created_at, updated_at
-	`
-	return r.db.QueryRowContext(ctx, q,
+	return scanCreatedVideoTask(r.db.QueryRowContext(ctx, createVideoTaskSQL,
 		task.ProviderAccountID,
 		task.Provider,
 		task.Model,
@@ -160,7 +177,60 @@ func (r *videoGatewayRepository) CreateTask(ctx context.Context, task *service.V
 		task.Resolution,
 		task.Status,
 		task.CreatedBy,
-	).Scan(&task.ID, &task.CreatedAt, &task.UpdatedAt)
+	), task)
+}
+
+func (r *videoGatewayRepository) CreateDailyTrialTask(ctx context.Context, task *service.VideoTask, provider string, createdBy int64, trialDate time.Time) (bool, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var reservationID int64
+	err = tx.QueryRowContext(ctx, `
+		INSERT INTO video_daily_trial_reservations (provider, created_by, trial_date)
+		VALUES ($1,$2,$3)
+		ON CONFLICT (provider, created_by, trial_date) DO NOTHING
+		RETURNING id
+	`, provider, createdBy, trialDate).Scan(&reservationID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return false, nil
+		}
+		return false, err
+	}
+
+	if err := scanCreatedVideoTask(tx.QueryRowContext(ctx, createVideoTaskSQL,
+		task.ProviderAccountID,
+		task.Provider,
+		task.Model,
+		task.TaskType,
+		task.Prompt,
+		task.NegativePrompt,
+		task.ReferenceImageURL,
+		task.ReferenceVideoURL,
+		task.AspectRatio,
+		task.Duration,
+		task.Resolution,
+		task.Status,
+		task.CreatedBy,
+	), task); err != nil {
+		return false, err
+	}
+
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE video_daily_trial_reservations
+		SET video_task_id = $2
+		WHERE id = $1
+	`, reservationID, task.ID); err != nil {
+		return false, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func (r *videoGatewayRepository) GetTask(ctx context.Context, id int64) (*service.VideoTask, error) {
@@ -222,12 +292,31 @@ func (r *videoGatewayRepository) ListRunnableTasks(ctx context.Context, limit in
 	if limit <= 0 {
 		limit = 20
 	}
-	q := "SELECT" + videoTaskSelectColumns + videoTaskJoinSQL + `
-		WHERE vt.status IN ('queued', 'submitted', 'running')
+	q := `
+		WITH candidate_ids AS (
+			SELECT vt.id
+			FROM video_tasks vt
+			WHERE vt.status IN ('queued', 'submitted', 'running')
+			  AND (vt.worker_claimed_until IS NULL OR vt.worker_claimed_until <= NOW())
+			ORDER BY vt.updated_at ASC, vt.id ASC
+			LIMIT $1
+			FOR UPDATE SKIP LOCKED
+		),
+		claimed AS (
+			UPDATE video_tasks vt
+			SET worker_claimed_at = NOW(),
+			    worker_claimed_until = NOW() + ($2::int * INTERVAL '1 second')
+			FROM candidate_ids c
+			WHERE vt.id = c.id
+			RETURNING vt.*
+		)
+		SELECT` + videoTaskSelectColumns + `
+		FROM claimed vt
+		LEFT JOIN video_provider_accounts vpa ON vpa.id = vt.provider_account_id
+		LEFT JOIN users u ON u.id = vt.created_by
 		ORDER BY vt.updated_at ASC, vt.id ASC
-		LIMIT $1
 	`
-	rows, err := r.db.QueryContext(ctx, q, limit)
+	rows, err := r.db.QueryContext(ctx, q, limit, videoTaskClaimLeaseSeconds)
 	if err != nil {
 		return nil, err
 	}
@@ -244,6 +333,8 @@ func (r *videoGatewayRepository) UpdateTask(ctx context.Context, task *service.V
 		    error_message = $5,
 		    cost_estimate = $6,
 		    poll_count = $8,
+		    worker_claimed_at = NULL,
+		    worker_claimed_until = NULL,
 		    updated_at = NOW(),
 		    completed_at = $7
 		WHERE id = $1
@@ -316,11 +407,7 @@ func (r *videoGatewayRepository) ListTaskEvents(ctx context.Context, taskID int6
 }
 
 func (r *videoGatewayRepository) InsertUsageLog(ctx context.Context, task *service.VideoTask) error {
-	const q = `
-		INSERT INTO video_usage_logs (video_task_id, provider, model, status, cost_estimate, duration)
-		VALUES ($1,$2,$3,$4,$5,$6)
-	`
-	_, err := r.db.ExecContext(ctx, q,
+	_, err := r.db.ExecContext(ctx, insertVideoUsageLogSQL,
 		task.ID,
 		task.Provider,
 		task.Model,
@@ -479,6 +566,10 @@ func (r *videoGatewayRepository) UsageSummarySince(ctx context.Context, since ti
 
 type scanner interface {
 	Scan(dest ...any) error
+}
+
+func scanCreatedVideoTask(row scanner, task *service.VideoTask) error {
+	return row.Scan(&task.ID, &task.CreatedAt, &task.UpdatedAt)
 }
 
 func scanVideoProvider(row scanner) (*service.VideoProviderAccount, error) {

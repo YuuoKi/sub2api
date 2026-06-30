@@ -26,6 +26,7 @@ type memoryVideoGatewayRepo struct {
 	tasks          map[int64]*VideoTask
 	events         []*VideoTaskEvent
 	usage          []*VideoTask
+	dailyTrials    map[string]struct{}
 }
 
 func newMemoryVideoGatewayRepo() *memoryVideoGatewayRepo {
@@ -35,6 +36,7 @@ func newMemoryVideoGatewayRepo() *memoryVideoGatewayRepo {
 		nextEventID:    1,
 		providers:      make(map[int64]*VideoProviderAccount),
 		tasks:          make(map[int64]*VideoTask),
+		dailyTrials:    make(map[string]struct{}),
 	}
 }
 
@@ -96,6 +98,19 @@ func (r *memoryVideoGatewayRepo) CreateTask(_ context.Context, task *VideoTask) 
 	task.UpdatedAt = now
 	r.tasks[task.ID] = cloneVideoTask(task)
 	return nil
+}
+
+func (r *memoryVideoGatewayRepo) CreateDailyTrialTask(ctx context.Context, task *VideoTask, provider string, createdBy int64, trialDate time.Time) (bool, error) {
+	key := fmt.Sprintf("%s:%d:%s", provider, createdBy, trialDate.Format("2006-01-02"))
+	if _, ok := r.dailyTrials[key]; ok {
+		return false, nil
+	}
+	r.dailyTrials[key] = struct{}{}
+	if err := r.CreateTask(ctx, task); err != nil {
+		delete(r.dailyTrials, key)
+		return false, err
+	}
+	return true, nil
 }
 
 func (r *memoryVideoGatewayRepo) GetTask(_ context.Context, id int64) (*VideoTask, error) {
@@ -235,7 +250,7 @@ func TestVideoGatewayMockWorkerSuccessAndFailure(t *testing.T) {
 	if success.Status != VideoStatusSucceeded {
 		t.Fatalf("expected succeeded, got %s", success.Status)
 	}
-	if !strings.Contains(success.ResultURL, "mock.sub2api.local") {
+	if !strings.Contains(success.ResultURL, "/api/v1/video/mock-assets/") {
 		t.Fatalf("expected mock result url, got %q", success.ResultURL)
 	}
 

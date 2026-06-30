@@ -34,7 +34,7 @@ func TestC1ApiKeyVideoResponseMatchesQCanvasContract(t *testing.T) {
 		Prompt:         "qcanvas C1 skeleton clip",
 		Status:         service.VideoStatusSucceeded,
 		UpstreamTaskID: "mock-video-12345",
-		ResultURL:      "https://mock.sub2api.local/video/12345.mp4",
+		ResultURL:      "/api/v1/video/mock-assets/12345.svg",
 	}
 
 	raw, err := json.Marshal(apiKeyVideoTaskToResponse(task, nil))
@@ -53,7 +53,7 @@ func TestC1ApiKeyVideoResponseMatchesQCanvasContract(t *testing.T) {
 	if m["status"] != "succeeded" {
 		t.Fatalf("response `status` = %v, want succeeded (QCanvas status source)", m["status"])
 	}
-	if m["result_url"] != "https://mock.sub2api.local/video/12345.mp4" {
+	if m["result_url"] != "/api/v1/video/mock-assets/12345.svg" {
 		t.Fatalf("response `result_url` = %v (QCanvas resultUrl source)", m["result_url"])
 	}
 	if _, ok := m["error_message"]; !ok {

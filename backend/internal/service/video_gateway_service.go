@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 )
 
 const (
@@ -397,21 +399,29 @@ func (s *VideoGatewayService) CreateAPIKeySeedanceTinyTrialTask(ctx context.Cont
 		return nil, err
 	}
 	var seedanceAccount *VideoProviderAccount
+	seedanceBlockedReason := ""
 	for _, acc := range accounts {
 		if acc != nil && acc.Provider == VideoProviderSeedance && acc.Enabled {
 			s.decorateProviderForResponse(acc, VideoProviderRuntimeStats{})
-			if acc.RouteAvailable || acc.APIKeyConfigured {
+			if acc.RouteAvailable {
 				seedanceAccount = acc
 				break
+			}
+			if seedanceBlockedReason == "" {
+				seedanceBlockedReason = strings.TrimSpace(acc.RouteSkipReason)
 			}
 		}
 	}
 	if seedanceAccount == nil {
-		return nil, infraerrors.Forbidden("VIDEO_PROVIDER_DISABLED", "seedance provider account not available for trial").WithMetadata(map[string]string{
+		metadata := map[string]string{
 			"provider":                     VideoProviderSeedance,
 			"mock_only":                    "false",
 			"real_provider_dispatch_count": "0",
-		})
+		}
+		if seedanceBlockedReason != "" {
+			metadata["reason"] = seedanceBlockedReason
+		}
+		return nil, infraerrors.Forbidden("VIDEO_PROVIDER_DISABLED", "seedance provider account not available for trial").WithMetadata(metadata)
 	}
 
 	model := firstNonEmptyVideo(strings.TrimSpace(p.Model), seedanceAccount.DefaultModel, defaultVideoModel(VideoProviderSeedance))
@@ -431,31 +441,25 @@ func (s *VideoGatewayService) CreateAPIKeySeedanceTinyTrialTask(ctx context.Cont
 		})
 	}
 
-	tasks, _, err := s.repo.ListTasks(ctx, VideoTaskListParams{
-		Provider:  VideoProviderSeedance,
-		CreatedBy: p.CreatedBy,
-		Page:      1,
-		PageSize:  100,
-	})
-	if err != nil {
-		return nil, err
-	}
-	today := time.Now().In(time.Local).Truncate(24 * time.Hour)
-	seedanceTasksToday := 0
-	for _, t := range tasks {
-		if t.CreatedAt.After(today) || t.CreatedAt.Equal(today) {
-			seedanceTasksToday++
-		}
-	}
-	if seedanceTasksToday >= 1 {
-		return nil, infraerrors.Forbidden("VIDEO_TRIAL_LIMIT_EXCEEDED", "seedance tiny real trial limited to 1 call per day per user").WithMetadata(map[string]string{
-			"provider":                     VideoProviderSeedance,
-			"real_provider_dispatch_count": "0",
-		})
-	}
-
 	p.ProviderAccountID = seedanceAccount.ID
-	task, err := s.CreateTask(ctx, p)
+	route := &videoRouteDecision{
+		Account:  seedanceAccount,
+		Strategy: "api-key-seedance-tiny-trial",
+		Reason:   "seedance tiny real trial gate passed",
+	}
+	task, err := s.createTaskWithRoute(ctx, p, route, func(ctx context.Context, task *VideoTask) error {
+		reserved, err := s.repo.CreateDailyTrialTask(ctx, task, VideoProviderSeedance, task.CreatedBy, timezone.Today())
+		if err != nil {
+			return err
+		}
+		if !reserved {
+			return infraerrors.Forbidden("VIDEO_TRIAL_LIMIT_EXCEEDED", "seedance tiny real trial limited to 1 call per day per user").WithMetadata(map[string]string{
+				"provider":                     VideoProviderSeedance,
+				"real_provider_dispatch_count": "0",
+			})
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -465,10 +469,11 @@ func (s *VideoGatewayService) CreateAPIKeySeedanceTinyTrialTask(ctx context.Cont
 		EventType:   "trial_gate",
 		Message:     "seedance tiny real trial gate passed",
 		Payload: map[string]any{
-			"provider":                     VideoProviderSeedance,
-			"trial_mode":                   "tiny_real",
-			"gate_result":                  "passed",
-			"real_provider_dispatch_count": 1,
+			"provider":                        VideoProviderSeedance,
+			"trial_mode":                      "tiny_real",
+			"gate_result":                     "passed",
+			"planned_provider_dispatch_count": 1,
+			"real_provider_dispatch_count":    0,
 		},
 	})
 
@@ -591,6 +596,14 @@ func (s *VideoGatewayService) CreateTask(ctx context.Context, p VideoTaskCreateP
 	if _, err := s.adapterFor(account.Provider); err != nil {
 		return nil, err
 	}
+	return s.createTaskWithRoute(ctx, p, route, s.repo.CreateTask)
+}
+
+func (s *VideoGatewayService) createTaskWithRoute(ctx context.Context, p VideoTaskCreateParams, route *videoRouteDecision, create func(context.Context, *VideoTask) error) (*VideoTask, error) {
+	if route == nil || route.Account == nil {
+		return nil, ErrVideoProviderDisabled
+	}
+	account := route.Account
 	task := &VideoTask{
 		ProviderAccountID:   account.ID,
 		ProviderAccountName: account.DisplayName,
@@ -615,7 +628,11 @@ func (s *VideoGatewayService) CreateTask(ctx context.Context, p VideoTaskCreateP
 			return nil, err
 		}
 	}
-	if err := s.repo.CreateTask(ctx, task); err != nil {
+	if err := create(ctx, task); err != nil {
+		var appErr *infraerrors.ApplicationError
+		if errors.As(err, &appErr) {
+			return nil, err
+		}
 		return nil, fmt.Errorf("create video task: %w", err)
 	}
 	_ = s.repo.AddTaskEvent(ctx, &VideoTaskEvent{
@@ -724,7 +741,7 @@ func (s *VideoGatewayService) CancelTask(ctx context.Context, id, userID int64, 
 }
 
 func (s *VideoGatewayService) Dashboard(ctx context.Context) (*VideoDashboard, error) {
-	since := time.Now().In(time.Local).Truncate(24 * time.Hour)
+	since := timezone.Today()
 	statusCounts, err := s.repo.CountTasksSince(ctx, since)
 	if err != nil {
 		return nil, fmt.Errorf("count video tasks: %w", err)
@@ -796,7 +813,7 @@ func (s *VideoGatewayService) Dashboard(ctx context.Context) (*VideoDashboard, e
 }
 
 func (s *VideoGatewayService) providerRuntimeStats(ctx context.Context) (map[int64]VideoProviderRuntimeStats, error) {
-	since := time.Now().In(time.Local).Truncate(24 * time.Hour)
+	since := timezone.Today()
 	stats, err := s.repo.ProviderAccountTaskStatsSince(ctx, since)
 	if err != nil {
 		return nil, fmt.Errorf("count video provider account tasks: %w", err)

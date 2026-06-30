@@ -1,10 +1,10 @@
 package repository
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -16,18 +16,18 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
 
-// S3BackupStore implements service.BackupObjectStore using AWS S3 compatible storage
+// S3BackupStore implements service.BackupObjectStore using AWS S3 compatible storage.
 type S3BackupStore struct {
 	client *s3.Client
 	bucket string
 }
 
-// NewS3BackupStoreFactory returns a BackupObjectStoreFactory that creates S3-backed stores
+// NewS3BackupStoreFactory returns a BackupObjectStoreFactory that creates S3-backed stores.
 func NewS3BackupStoreFactory() service.BackupObjectStoreFactory {
 	return func(ctx context.Context, cfg *service.BackupS3Config) (service.BackupObjectStore, error) {
 		region := cfg.Region
 		if region == "" {
-			region = "auto" // Cloudflare R2 默认 region
+			region = "auto"
 		}
 
 		awsCfg, err := awsconfig.LoadDefaultConfig(ctx,
@@ -56,23 +56,47 @@ func NewS3BackupStoreFactory() service.BackupObjectStoreFactory {
 }
 
 func (s *S3BackupStore) Upload(ctx context.Context, key string, body io.Reader, contentType string) (int64, error) {
-	// 读取全部内容以获取大小（S3 PutObject 需要知道内容长度）
-	// 注意：阿里云 OSS 不兼容 s3manager 分片上传的签名方式，因此使用 PutObject
-	data, err := io.ReadAll(body)
+	// PutObject stays compatible with S3-compatible stores while avoiding a full
+	// in-memory ReadAll: stream the input to a temp file, then upload that file.
+	uploadBody, sizeBytes, cleanup, err := spoolBackupUploadBody(body)
 	if err != nil {
-		return 0, fmt.Errorf("read body: %w", err)
+		return 0, err
 	}
+	defer cleanup()
 
 	_, err = s.client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket:      &s.bucket,
-		Key:         &key,
-		Body:        bytes.NewReader(data),
-		ContentType: &contentType,
+		Bucket:        &s.bucket,
+		Key:           &key,
+		Body:          uploadBody,
+		ContentLength: &sizeBytes,
+		ContentType:   &contentType,
 	})
 	if err != nil {
 		return 0, fmt.Errorf("S3 PutObject: %w", err)
 	}
-	return int64(len(data)), nil
+	return sizeBytes, nil
+}
+
+func spoolBackupUploadBody(body io.Reader) (*os.File, int64, func(), error) {
+	tmp, err := os.CreateTemp("", "sub2api-backup-upload-*.tmp")
+	if err != nil {
+		return nil, 0, func() {}, fmt.Errorf("create upload temp file: %w", err)
+	}
+	cleanup := func() {
+		name := tmp.Name()
+		_ = tmp.Close()
+		_ = os.Remove(name)
+	}
+	sizeBytes, err := io.Copy(tmp, body)
+	if err != nil {
+		cleanup()
+		return nil, 0, func() {}, fmt.Errorf("spool upload body: %w", err)
+	}
+	if _, err := tmp.Seek(0, io.SeekStart); err != nil {
+		cleanup()
+		return nil, 0, func() {}, fmt.Errorf("rewind upload body: %w", err)
+	}
+	return tmp, sizeBytes, cleanup, nil
 }
 
 func (s *S3BackupStore) Download(ctx context.Context, key string) (io.ReadCloser, error) {

@@ -49,6 +49,10 @@ type mockVideoAdapter struct{}
 
 func (a *mockVideoAdapter) Provider() string { return VideoProviderMock }
 
+func mockVideoResultURL(taskID int64) string {
+	return fmt.Sprintf("/api/v1/video/mock-assets/%d.svg", taskID)
+}
+
 func (a *mockVideoAdapter) CreateTask(_ context.Context, _ *VideoProviderAccount, task *VideoTask) (*VideoAdapterResult, error) {
 	return &VideoAdapterResult{
 		UpstreamTaskID: fmt.Sprintf("mock-video-%d", task.ID),
@@ -80,13 +84,14 @@ func (a *mockVideoAdapter) PollTask(_ context.Context, _ *VideoProviderAccount, 
 			},
 		}, nil
 	}
+	resultURL := mockVideoResultURL(task.ID)
 	return &VideoAdapterResult{
 		Status:       VideoStatusSucceeded,
-		ResultURL:    fmt.Sprintf("https://mock.sub2api.local/video/%d.mp4", task.ID),
+		ResultURL:    resultURL,
 		CostEstimate: 0,
 		Payload: map[string]any{
 			"stage":      "mock_render_completed",
-			"result_url": fmt.Sprintf("https://mock.sub2api.local/video/%d.mp4", task.ID),
+			"result_url": resultURL,
 		},
 	}, nil
 }
@@ -475,10 +480,10 @@ func (a *seedanceVideoAdapter) BuildCreatePayload(account *VideoProviderAccount,
 		content = append(content, map[string]any{"type": "video_url", "video_url": task.ReferenceVideoURL})
 	}
 	return map[string]any{
-		"base_url":                    account.BaseURL,
-		"model":                       task.Model,
-		"content":                     content,
-		"negative_prompt":             task.NegativePrompt,
+		"base_url":        account.BaseURL,
+		"model":           task.Model,
+		"content":         content,
+		"negative_prompt": task.NegativePrompt,
 		// B1: Ark's create field is `ratio` (16:9 / 9:16 / 1:1), NOT `aspect_ratio`.
 		"ratio":                       normalizeSeedanceRatio(task.AspectRatio),
 		"duration":                    task.Duration,

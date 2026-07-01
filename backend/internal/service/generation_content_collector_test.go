@@ -23,6 +23,14 @@ func (f *fakeGenContentRepo) Create(_ context.Context, c *GenerationContent) err
 	return nil
 }
 
+func (f *fakeGenContentRepo) CreateVideoTaskContent(_ context.Context, c *GenerationContent) error {
+	if f.err != nil {
+		return f.err
+	}
+	f.rows = append(f.rows, c)
+	return nil
+}
+
 // 只读看板方法在采集器写入测试中用不到，提供满足接口的空实现即可。
 func (f *fakeGenContentRepo) GetCaptureStats(context.Context) (*GenerationContentStats, error) {
 	return &GenerationContentStats{}, nil
@@ -99,6 +107,49 @@ func TestCollectorFailOpenOnRepoError(t *testing.T) {
 	collector := NewGenerationContentCollector(repo, enabledContentCaptureCfg())
 	// must not panic / must return normally despite repo error
 	collector.Collect(context.Background(), GenerationContentCaptureArgs{RequestID: "req-2", PromptBody: []byte(`{}`)})
+}
+
+func TestCollectorStoresVideoTaskMetadataWithoutAccountAttribution(t *testing.T) {
+	repo := &fakeGenContentRepo{}
+	collector := NewGenerationContentCollector(repo, enabledContentCaptureCfg())
+
+	collector.CollectVideoTask(context.Background(), VideoGenerationContentCaptureArgs{
+		TaskID:         99,
+		UserID:         7,
+		Model:          "mock-video-v1",
+		Prompt:         "render launch storyboard for render@example.test",
+		NegativePrompt: "no brand token 13800138000",
+		ResultURL:      "/api/v1/video/mock-assets/task-99.mp4",
+		Resolution:     "720p",
+		Duration:       5,
+		AspectRatio:    "16:9",
+	})
+
+	if len(repo.rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(repo.rows))
+	}
+	row := repo.rows[0]
+	if row.TaskID == nil || *row.TaskID != 99 {
+		t.Fatalf("expected task_id 99, got %+v", row.TaskID)
+	}
+	if row.UserID == nil || *row.UserID != 7 {
+		t.Fatalf("expected user_id 7, got %+v", row.UserID)
+	}
+	if row.APIKeyID != nil || row.GroupID != nil || row.AccountID != nil {
+		t.Fatalf("video capture must leave api_key_id/group_id/account_id empty: %+v", row)
+	}
+	if row.RequestID != "" {
+		t.Fatalf("video capture must not invent request_id, got %q", row.RequestID)
+	}
+	if strings.Contains(row.PromptRedacted, "render@example.test") || strings.Contains(row.PromptRedacted, "13800138000") {
+		t.Fatalf("video prompt was not redacted: %s", row.PromptRedacted)
+	}
+	if !strings.Contains(row.ResponseRedacted, "metadata_summary") || !strings.Contains(row.ResponseRedacted, "task-99.mp4") {
+		t.Fatalf("video response summary missing expected metadata: %s", row.ResponseRedacted)
+	}
+	if row.ResponseBytes == 0 || row.PromptBytes == 0 {
+		t.Fatalf("expected byte counts, got prompt=%d response=%d", row.PromptBytes, row.ResponseBytes)
+	}
 }
 
 func TestCollectorNilSafe(t *testing.T) {

@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sub2API video 接采集审查包 - 2026-07-02</title>
+  <style>
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;line-height:1.65;color:#172033;background:#f6f7fb}
+    main{max-width:1080px;margin:0 auto;padding:32px 20px 56px}
+    section{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:18px 22px;margin:14px 0}
+    h1{margin:0 0 8px;font-size:28px}h2{margin:0 0 10px;font-size:19px}
+    code,pre{font-family:Consolas,"SFMono-Regular",monospace}
+    pre{white-space:pre-wrap;background:#0f172a;color:#e2e8f0;padding:12px;border-radius:6px;overflow-x:auto}
+    table{width:100%;border-collapse:collapse}th,td{border:1px solid #e2e8f0;padding:8px;text-align:left;vertical-align:top}th{background:#f1f5f9}
+    .badge{display:inline-block;margin:2px 4px 2px 0;padding:2px 8px;border-radius:6px;font-size:13px;font-weight:700}.ok{background:#dcfce7;color:#166534}.warn{background:#fef3c7;color:#92400e}
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Sub2API video 接采集审查包</h1>
+    <p><span class="badge ok">阶段0-2完成</span><span class="badge ok">内部可用</span><span class="badge warn">阶段3待授权</span><span class="badge ok">无真实 provider 调用</span></p>
+    <p>时间：2026-07-02；目录：<code>D:\sub2api-trunk</code>；分支：<code>wujie/video-capture-moat-20260702</code>。</p>
+  </header>
+
+  <section>
+    <h2>目标</h2>
+    <p>严格执行任务书阶段0到阶段2：从 <code>wujie/night-moat-20260702</code> 新建分支，在视频任务成功终态后把脱敏后的 video 元数据摘要写入 <code>ai_generation_content</code>，并完成 migration、测试、证据文档和本地 commit。阶段3不自动执行。</p>
+  </section>
+
+  <section>
+    <h2>执行目录</h2>
+    <ul>
+      <li><code>_review/video-capture-moat-20260702/baseline.md</code></li>
+      <li><code>_review/video-capture-moat-20260702/capture-evidence.md</code></li>
+      <li><code>_review/video-capture-moat-20260702/SUMMARY.md</code></li>
+      <li><code>_review/video-capture-moat-20260702/LATEST_REVIEW_PACKAGE.html</code></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>变更清单</h2>
+    <ul>
+      <li>新增 <code>backend/migrations/146_ai_generation_content_task_id_unique_notx.sql</code>，为 video 采集行增加 <code>task_id</code> partial unique 幂等约束。</li>
+      <li>新增 <code>VideoGenerationContentCaptureArgs</code> 与 <code>CollectVideoTask</code>，复用现有脱敏函数和版本号。</li>
+      <li>新增 <code>CreateVideoTaskContent</code>，SQL 使用 <code>ON CONFLICT (task_id) WHERE task_id IS NOT NULL DO NOTHING</code>。</li>
+      <li><code>VideoGatewayService</code> 新增可选采集器注入；默认不开启，仍受 <code>content_capture.enabled</code> 控制。</li>
+      <li><code>pollTask</code> 的 <code>succeeded</code> 分支在 usage log 与计费后执行 fail-open 采集。</li>
+      <li><code>wire_gen.go</code> 接入 video 采集器，并复用本轮看板用 <code>generationContentRepository</code> 实例。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>实现细节</h2>
+    <ul>
+      <li>Video 行只写 <code>task_id</code>、<code>user_id</code>、<code>model</code>、脱敏 prompt 和 result metadata summary。</li>
+      <li><code>api_key_id</code>、<code>group_id</code>、<code>account_id</code> 对 video 行保持空；未把 <code>task.ProviderAccountID</code> 写入 <code>account_id</code>。</li>
+      <li>result 侧记录的是 <code>result_url</code>、分辨率、时长、比例等元数据摘要，不是 provider 原始模型输出体。</li>
+      <li>采集发生在任务成功闭环之后，repo error/panic 只记录日志，不影响任务成功、usage log 或计费。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>验证命令和结果</h2>
+    <table>
+      <tr><th>命令</th><th>结果</th></tr>
+      <tr><td><code>cd backend; go build ./...</code></td><td>exit 0</td></tr>
+      <tr><td><code>cd backend; go test ./...</code></td><td>exit 0</td></tr>
+      <tr><td><code>cd frontend; pnpm test:run</code></td><td>exit 0，97 files / 581 tests passed；既有 stderr/warnings 未导致失败</td></tr>
+      <tr><td><code>cd frontend; pnpm typecheck</code></td><td>exit 0</td></tr>
+      <tr><td><code>cd frontend; pnpm lint:check</code></td><td>exit 0</td></tr>
+      <tr><td>bundled Python <code>tools/secret_scan.py --include-untracked</code></td><td>exit 0；无 high-confidence findings</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>RED/GREEN 证据</h2>
+    <pre>RED: go test ./internal/service -run "TestCollectorStoresVideoTaskMetadataWithoutAccountAttribution|TestVideoGatewayCapturesSucceededTaskContent|TestVideoGatewayCaptureDisabledByFlag|TestVideoGatewayCaptureFailOpenKeepsSucceededAndUsage" -count=1
+FAIL: CollectVideoTask / VideoGenerationContentCaptureArgs / TaskID / VideoGatewayService.SetGenerationContentCollector missing.
+
+GREEN: go test ./internal/service ./internal/repository -run "TestCollectorStoresVideoTaskMetadataWithoutAccountAttribution|TestVideoGatewayCapturesSucceededTaskContent|TestVideoGatewayCaptureDisabledByFlag|TestVideoGatewayCaptureFailOpenKeepsSucceededAndUsage|TestGenerationContentRepositoryCreateVideoTaskContent" -count=1
+ok github.com/Wei-Shaw/sub2api/internal/service
+ok github.com/Wei-Shaw/sub2api/internal/repository</pre>
+  </section>
+
+  <section>
+    <h2>风险</h2>
+    <ul>
+      <li>真实 flag 验证和 retention 验活未执行，状态必须保持“阶段3待授权”。</li>
+      <li>本轮没有真实 provider 调用，不能宣称真实供应商生产链路已闭环。</li>
+      <li>全局 <code>docs/reviews/LATEST_REVIEW_PACKAGE.html</code> 当前被 <code>docs/*</code> ignore，本轮可提交审查包放在 <code>_review/video-capture-moat-20260702/</code>。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>回滚方案</h2>
+    <p>本地回滚：revert 本轮实现 commit，或按文件索引反向恢复。未 push，无远端回滚。</p>
+  </section>
+
+  <section>
+    <h2>当前状态</h2>
+    <p>阶段0-2完成，安全门全绿，未进入阶段3。请在需要 flag 受控验证和 retention 验活时另行明确授权。</p>
+  </section>
+
+  <section>
+    <h2>文件索引</h2>
+    <ul>
+      <li><code>backend/internal/service/generation_content.go</code></li>
+      <li><code>backend/internal/service/video_gateway_service.go</code></li>
+      <li><code>backend/internal/service/video_gateway_worker.go</code></li>
+      <li><code>backend/internal/repository/generation_content_repo.go</code></li>
+      <li><code>backend/cmd/server/wire_gen.go</code></li>
+      <li><code>backend/migrations/146_ai_generation_content_task_id_unique_notx.sql</code></li>
+      <li><code>backend/internal/service/generation_content_collector_test.go</code></li>
+      <li><code>backend/internal/service/video_gateway_worker_test.go</code></li>
+      <li><code>backend/internal/repository/generation_content_repo_test.go</code></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>后续提示词</h2>
+    <pre>继续执行 Sub2API video capture moat 阶段3。只允许在我明确授权的本地/测试环境打开 content_capture.enabled，先做 flag 受控验证，再做 retention RunOnce dryRun 与非 dryRun 验活。不得读取 secret，不得触发生产 provider，不得 push。</pre>
+  </section>
+</main>
+</body>
+</html>

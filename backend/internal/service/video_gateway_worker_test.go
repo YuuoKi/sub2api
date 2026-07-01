@@ -2,10 +2,13 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/config"
 )
 
 type noopVideoKeyEncryptor struct{}
@@ -283,6 +286,129 @@ func TestVideoGatewayMockWorkerSuccessAndFailure(t *testing.T) {
 	}
 	if len(repo.usage) != 2 {
 		t.Fatalf("expected usage logs for terminal tasks, got %d", len(repo.usage))
+	}
+}
+
+func TestVideoGatewayCapturesSucceededTaskContent(t *testing.T) {
+	ctx := context.Background()
+	repo := newMemoryVideoGatewayRepo()
+	providerID := repo.seedMockProvider()
+	contentRepo := &fakeGenContentRepo{}
+	cfg := enabledContentCaptureCfg()
+	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfg)
+	svc.SetGenerationContentCollector(NewGenerationContentCollector(contentRepo, cfg))
+
+	task, err := svc.CreateTask(ctx, VideoTaskCreateParams{
+		ProviderAccountID: providerID,
+		TaskType:          VideoTaskTypeTextToVideo,
+		Model:             "mock-video-v1",
+		Prompt:            "render launch video for owner@example.test",
+		NegativePrompt:    "avoid 13800138000",
+		AspectRatio:       "16:9",
+		Duration:          5,
+		Resolution:        "720p",
+		CreatedBy:         7,
+	})
+	if err != nil {
+		t.Fatalf("create task: %v", err)
+	}
+	for range 3 {
+		if err := svc.ProcessRunnableTasks(ctx, 10, time.Minute); err != nil {
+			t.Fatalf("process task: %v", err)
+		}
+	}
+
+	task, _, err = svc.GetTask(ctx, task.ID, 7, false)
+	if err != nil {
+		t.Fatalf("get task: %v", err)
+	}
+	if task.Status != VideoStatusSucceeded {
+		t.Fatalf("expected succeeded, got %s", task.Status)
+	}
+	if len(contentRepo.rows) != 1 {
+		t.Fatalf("expected one content capture row, got %d", len(contentRepo.rows))
+	}
+	row := contentRepo.rows[0]
+	if row.TaskID == nil || *row.TaskID != task.ID {
+		t.Fatalf("expected task_id %d, got %+v", task.ID, row.TaskID)
+	}
+	if row.UserID == nil || *row.UserID != 7 {
+		t.Fatalf("expected user_id 7, got %+v", row.UserID)
+	}
+	if row.AccountID != nil || row.APIKeyID != nil || row.GroupID != nil {
+		t.Fatalf("video capture must not write account/api-key/group attribution: %+v", row)
+	}
+	if strings.Contains(row.PromptRedacted, "owner@example.test") || strings.Contains(row.PromptRedacted, "13800138000") {
+		t.Fatalf("video prompt was not redacted: %s", row.PromptRedacted)
+	}
+
+	if err := svc.ProcessRunnableTasks(ctx, 10, time.Minute); err != nil {
+		t.Fatalf("process terminal task again: %v", err)
+	}
+	if len(contentRepo.rows) != 1 {
+		t.Fatalf("terminal task should not duplicate content capture, got %d rows", len(contentRepo.rows))
+	}
+}
+
+func TestVideoGatewayCaptureDisabledByFlag(t *testing.T) {
+	ctx := context.Background()
+	repo := newMemoryVideoGatewayRepo()
+	providerID := repo.seedMockProvider()
+	contentRepo := &fakeGenContentRepo{}
+	disabledCfg := &config.Config{}
+	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, disabledCfg)
+	svc.SetGenerationContentCollector(NewGenerationContentCollector(contentRepo, disabledCfg))
+
+	if _, err := svc.CreateTask(ctx, VideoTaskCreateParams{
+		ProviderAccountID: providerID,
+		TaskType:          VideoTaskTypeTextToVideo,
+		Prompt:            "capture flag disabled path",
+		CreatedBy:         7,
+	}); err != nil {
+		t.Fatalf("create task: %v", err)
+	}
+	for range 3 {
+		if err := svc.ProcessRunnableTasks(ctx, 10, time.Minute); err != nil {
+			t.Fatalf("process task: %v", err)
+		}
+	}
+	if len(contentRepo.rows) != 0 {
+		t.Fatalf("disabled capture flag should write zero rows, got %d", len(contentRepo.rows))
+	}
+}
+
+func TestVideoGatewayCaptureFailOpenKeepsSucceededAndUsage(t *testing.T) {
+	ctx := context.Background()
+	repo := newMemoryVideoGatewayRepo()
+	providerID := repo.seedMockProvider()
+	contentRepo := &fakeGenContentRepo{err: errors.New("capture db down")}
+	cfg := enabledContentCaptureCfg()
+	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfg)
+	svc.SetGenerationContentCollector(NewGenerationContentCollector(contentRepo, cfg))
+
+	task, err := svc.CreateTask(ctx, VideoTaskCreateParams{
+		ProviderAccountID: providerID,
+		TaskType:          VideoTaskTypeTextToVideo,
+		Prompt:            "capture fail-open path",
+		CreatedBy:         7,
+	})
+	if err != nil {
+		t.Fatalf("create task: %v", err)
+	}
+	for range 3 {
+		if err := svc.ProcessRunnableTasks(ctx, 10, time.Minute); err != nil {
+			t.Fatalf("process task: %v", err)
+		}
+	}
+	task, _, err = svc.GetTask(ctx, task.ID, 7, false)
+	if err != nil {
+		t.Fatalf("get task: %v", err)
+	}
+	if task.Status != VideoStatusSucceeded {
+		t.Fatalf("capture error must not block task success, got %s", task.Status)
+	}
+	if len(repo.usage) != 1 {
+		t.Fatalf("capture error must not block usage log, got %d", len(repo.usage))
 	}
 }
 

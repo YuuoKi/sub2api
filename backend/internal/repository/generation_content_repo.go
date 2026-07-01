@@ -61,6 +61,46 @@ RETURNING id, created_at`,
 	return nil
 }
 
+func (r *generationContentRepository) CreateVideoTaskContent(ctx context.Context, content *service.GenerationContent) error {
+	if r == nil || r.db == nil || content == nil || content.TaskID == nil || *content.TaskID <= 0 {
+		return nil
+	}
+	var apiKeyID, userID, groupID, accountID any
+	if content.APIKeyID != nil {
+		apiKeyID = *content.APIKeyID
+	}
+	if content.UserID != nil {
+		userID = *content.UserID
+	}
+	if content.GroupID != nil {
+		groupID = *content.GroupID
+	}
+	if content.AccountID != nil {
+		accountID = *content.AccountID
+	}
+	err := r.db.QueryRowContext(ctx, `
+INSERT INTO ai_generation_content (
+    request_id, api_key_id, user_id, group_id, account_id, task_id, model, request_payload_hash,
+    prompt_redacted, response_redacted, prompt_bytes, response_bytes, response_truncated, redaction_version
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8,
+    $9, $10, $11, $12, $13, $14
+)
+ON CONFLICT (task_id) WHERE task_id IS NOT NULL DO NOTHING
+RETURNING id, created_at`,
+		content.RequestID, apiKeyID, userID, groupID, accountID, *content.TaskID, content.Model, content.RequestPayloadHash,
+		content.PromptRedacted, content.ResponseRedacted, content.PromptBytes, content.ResponseBytes, content.ResponseTruncated, content.RedactionVersion,
+	).Scan(&content.ID, &content.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		// 命中 task_id 唯一索引 → 该视频任务已采集，幂等 no-op。
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("insert video ai generation content: %w", err)
+	}
+	return nil
+}
+
 // GetCaptureStats 聚合 ai_generation_content：计数/去重/体量 + 近 7 日每日序列。
 // 全程只读；空表返回零值快照（非错误）。镜像 usage_log_repo 的 COUNT/SUM/COALESCE/TO_CHAR 套路。
 func (r *generationContentRepository) GetCaptureStats(ctx context.Context) (*service.GenerationContentStats, error) {
@@ -119,7 +159,7 @@ ORDER BY d ASC`
 
 // PurgeExpiredContent 保留期清理（NULL-OUT）：把 created_at < cutoff 且仍有内容的行的
 // prompt_redacted/response_redacted 置空——保留行与计数（看板全时段指标持续累计），仅抹内容。
-// 谓词含 (prompt_redacted <> '' OR response_redacted <> '') 命中 partial index
+// 谓词含 (prompt_redacted <> ” OR response_redacted <> ”) 命中 partial index
 // idx_ai_generation_content_unpurged_created_at，使已清空行不被重复扫描。
 // 单批最多 batch 行；dryRun=true 只 COUNT（封顶 batch，与真实清理语义一致），零副作用。
 // 镜像 idempotency_repo.go::DeleteExpired 的 CTE 批处理形，但用 UPDATE 而非 DELETE。

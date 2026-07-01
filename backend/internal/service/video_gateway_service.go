@@ -50,7 +50,8 @@ type VideoGatewayService struct {
 	cfg       *config.Config
 	// budget is the optional VA1 budget gate / billing hook. nil => no gate (current
 	// production default until phase-2 real billing wires a concrete guard).
-	budget VideoBudgetGuard
+	budget              VideoBudgetGuard
+	generationCollector *GenerationContentCollector
 }
 
 type videoRouteDecision struct {

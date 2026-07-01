@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -24,6 +25,7 @@ type GenerationContent struct {
 	UserID             *int64
 	GroupID            *int64
 	AccountID          *int64
+	TaskID             *int64
 	Model              string
 	RequestPayloadHash string
 	PromptRedacted     string
@@ -38,6 +40,7 @@ type GenerationContent struct {
 // GenerationContentRepository 写入采集内容（append-only 旁路表），并为只读看板提供聚合/样本读取。
 type GenerationContentRepository interface {
 	Create(ctx context.Context, content *GenerationContent) error
+	CreateVideoTaskContent(ctx context.Context, content *GenerationContent) error
 	// GetCaptureStats 返回采集内容的聚合快照（计数/去重/体量 + 近 7 日序列），用于护城河看板。
 	GetCaptureStats(ctx context.Context) (*GenerationContentStats, error)
 	// GetRecent 返回最近 limit 条采集样本（已 LEFT JOIN 归因名），按 created_at 倒序。
@@ -91,6 +94,20 @@ type GenerationContentCaptureArgs struct {
 	RequestPayloadHash string
 	PromptBody         []byte
 	Result             *ForwardResult
+}
+
+// VideoGenerationContentCaptureArgs 是 video worker 成功终态交给采集器的原料。
+// response 侧只记录任务结果元数据摘要，不是 provider 原始模型输出体。
+type VideoGenerationContentCaptureArgs struct {
+	TaskID         int64
+	UserID         int64
+	Model          string
+	Prompt         string
+	NegativePrompt string
+	ResultURL      string
+	Resolution     string
+	Duration       int
+	AspectRatio    string
 }
 
 // GenerationContentCollector 负责把 prompt+response 脱敏后写入内容表。
@@ -165,6 +182,76 @@ func (c *GenerationContentCollector) Collect(ctx context.Context, args Generatio
 	}
 }
 
+// CollectVideoTask writes a video-task capture row. It deliberately leaves
+// api_key_id/group_id/account_id empty: video provider accounts live in a
+// different table from chat/image accounts, so task_id is the durable join key.
+func (c *GenerationContentCollector) CollectVideoTask(ctx context.Context, args VideoGenerationContentCaptureArgs) {
+	if c == nil || c.repo == nil || args.TaskID <= 0 {
+		return
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			logger.LegacyPrintf("service.gateway", "video generation content collect panic: %v (task_id=%d)", r, args.TaskID)
+		}
+	}()
+
+	prompt := marshalGenerationContentJSON(struct {
+		SummaryKind    string `json:"summary_kind"`
+		Prompt         string `json:"prompt"`
+		NegativePrompt string `json:"negative_prompt,omitempty"`
+	}{
+		SummaryKind:    "video_task_prompt",
+		Prompt:         args.Prompt,
+		NegativePrompt: args.NegativePrompt,
+	})
+	promptBytes := len(prompt)
+	if max := c.promptMaxBytes(); max > 0 && len(prompt) > max {
+		prompt = prompt[:max]
+	}
+
+	response := marshalGenerationContentJSON(struct {
+		MetadataSummary bool   `json:"metadata_summary"`
+		SummaryKind     string `json:"summary_kind"`
+		ResultURL       string `json:"result_url,omitempty"`
+		Resolution      string `json:"resolution,omitempty"`
+		Duration        int    `json:"duration,omitempty"`
+		AspectRatio     string `json:"aspect_ratio,omitempty"`
+	}{
+		MetadataSummary: true,
+		SummaryKind:     "video_task_result_metadata",
+		ResultURL:       args.ResultURL,
+		Resolution:      args.Resolution,
+		Duration:        args.Duration,
+		AspectRatio:     args.AspectRatio,
+	})
+
+	row := &GenerationContent{
+		Model:             args.Model,
+		PromptRedacted:    redactGenerationPrompt(prompt),
+		ResponseRedacted:  redactGenerationResponse(response),
+		PromptBytes:       promptBytes,
+		ResponseBytes:     len(response),
+		ResponseTruncated: false,
+		RedactionVersion:  generationRedactionVersion,
+	}
+	row.TaskID = &args.TaskID
+	if args.UserID > 0 {
+		row.UserID = &args.UserID
+	}
+
+	if err := c.repo.CreateVideoTaskContent(ctx, row); err != nil {
+		logger.LegacyPrintf("service.gateway", "video generation content create failed: %v (task_id=%d)", err, args.TaskID)
+	}
+}
+
+func marshalGenerationContentJSON(v any) []byte {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return []byte("{}")
+	}
+	return b
+}
+
 // SetGenerationContentCollector 注入采集器（可选依赖）。传 nil = 关闭采集（默认即关闭）。
 // 仿 SetBudgetGuard 的可选依赖模式：未注入时所有采集调用为 no-op。
 func (s *GatewayService) SetGenerationContentCollector(collector *GenerationContentCollector) {
@@ -183,4 +270,30 @@ func (s *GatewayService) CollectGenerationContent(ctx context.Context, args Gene
 		return
 	}
 	s.generationCollector.Collect(ctx, args)
+}
+
+// SetGenerationContentCollector 注入 video 成功任务采集器（可选依赖）。传 nil = no-op。
+func (s *VideoGatewayService) SetGenerationContentCollector(collector *GenerationContentCollector) {
+	s.generationCollector = collector
+}
+
+func (s *VideoGatewayService) videoContentCaptureEnabled() bool {
+	return s != nil && s.cfg != nil && s.cfg.Gateway.ContentCapture.Enabled
+}
+
+func (s *VideoGatewayService) CollectVideoTaskGenerationContent(ctx context.Context, task *VideoTask) {
+	if s == nil || s.generationCollector == nil || !s.videoContentCaptureEnabled() || task == nil {
+		return
+	}
+	s.generationCollector.CollectVideoTask(ctx, VideoGenerationContentCaptureArgs{
+		TaskID:         task.ID,
+		UserID:         task.CreatedBy,
+		Model:          task.Model,
+		Prompt:         task.Prompt,
+		NegativePrompt: task.NegativePrompt,
+		ResultURL:      task.ResultURL,
+		Resolution:     task.Resolution,
+		Duration:       task.Duration,
+		AspectRatio:    task.AspectRatio,
+	})
 }

@@ -401,6 +401,7 @@ func (s *VideoGatewayService) pollTask(ctx context.Context, adapter VideoAdapter
 		// VA1 billing: deduct only on a delivered (succeeded) generation.
 		if status == VideoStatusSucceeded {
 			s.chargeForVideo(ctx, task)
+			s.CollectVideoTaskGenerationContent(ctx, task)
 		}
 	}
 	return nil

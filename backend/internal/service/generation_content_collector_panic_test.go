@@ -14,6 +14,10 @@ func (panicGenContentRepo) Create(context.Context, *GenerationContent) error {
 	panic("boom in repo.Create")
 }
 
+func (panicGenContentRepo) CreateVideoTaskContent(context.Context, *GenerationContent) error {
+	panic("boom in repo.CreateVideoTaskContent")
+}
+
 // 只读看板方法在采集器 fail-open 测试中用不到，提供满足接口的空实现即可。
 func (panicGenContentRepo) GetCaptureStats(context.Context) (*GenerationContentStats, error) {
 	return &GenerationContentStats{}, nil

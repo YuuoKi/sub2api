@@ -1,14 +1,16 @@
 # Sub2API-specific quality gate (invoked by ~/.cursor/hooks/agent-stop-quality.ps1).
+# Only matches real source-file extensions so doc/JSON/migration-only diffs don't
+# nag for a full test run. Repeat-notice de-duplication is handled by the caller.
 param([string[]]$Changed = @())
 
 $needsBackend = $false
 $needsFrontend = $false
 foreach ($line in $Changed) {
-    if ($line -match '^backend/') { $needsBackend = $true }
-    if ($line -match '^frontend/') { $needsFrontend = $true }
+    if ($line -match '^backend/.*\.go$') { $needsBackend = $true }
+    if ($line -match '^frontend/.*\.(vue|tsx?|jsx?)$') { $needsFrontend = $true }
 }
 
-if (-not $needsBackend -and -not $needsFrontend) { exit 0 }
+if (-not $needsBackend -and -not $needsFrontend) { Write-Output '{}'; exit 0 }
 
 $parts = @()
 if ($needsBackend) { $parts += 'make test-backend (or cd backend && golangci-lint run ./...)' }

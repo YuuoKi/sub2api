@@ -27,6 +27,14 @@ func (panicGenContentRepo) GetRecent(context.Context, int) ([]GenerationContentS
 	return nil, nil
 }
 
+func (panicGenContentRepo) UpdateVideoTaskAdoption(context.Context, GenerationContentAdoptionInput) (*GenerationContentAdoption, error) {
+	return &GenerationContentAdoption{}, nil
+}
+
+func (panicGenContentRepo) GetWeeklyReport(context.Context, time.Time, time.Time) (*GenerationContentWeeklyReport, error) {
+	return &GenerationContentWeeklyReport{}, nil
+}
+
 func (panicGenContentRepo) PurgeExpiredContent(context.Context, time.Time, int, bool) (int64, error) {
 	return 0, nil
 }

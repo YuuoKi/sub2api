@@ -72,7 +72,45 @@
       </div>
 
       <!-- 真实脱敏样本墙 -->
-      <ContentWall :samples="samples" :is-live="isLive" />
+      <div v-if="weeklyReport" class="card space-y-4 p-4" :class="{ 'opacity-60': !isLive }">
+        <div class="grid grid-cols-2 gap-3 md:grid-cols-5">
+          <StatCard
+            :title="t('admin.generationContent.weeklyEntries')"
+            :value="weeklyReport.entries"
+            :format-value="fmtNum"
+            icon-variant="primary"
+          />
+          <StatCard
+            :title="t('admin.generationContent.weeklyCost')"
+            :value="weeklyReport.total_cost_estimate"
+            :format-value="fmtCurrency"
+            icon-variant="warning"
+          />
+          <StatCard
+            :title="t('admin.generationContent.adopted')"
+            :value="weeklyReport.adopted_count"
+            :format-value="fmtNum"
+            icon-variant="success"
+          />
+          <StatCard
+            :title="t('admin.generationContent.pending')"
+            :value="weeklyReport.pending_count + weeklyReport.unreviewed_count"
+            :format-value="fmtNum"
+            icon-variant="primary"
+          />
+          <StatCard
+            :title="t('admin.generationContent.anomalies')"
+            :value="weeklyAnomalyCount"
+            :format-value="fmtNum"
+            icon-variant="danger"
+          />
+        </div>
+        <pre
+          class="max-h-64 overflow-auto whitespace-pre-wrap rounded border border-gray-100 bg-gray-50 p-3 text-xs text-gray-600 dark:border-dark-700 dark:bg-dark-900 dark:text-dark-300"
+        >{{ weeklyReport.markdown }}</pre>
+      </div>
+
+      <ContentWall :samples="samples" :is-live="isLive" @updated="load" />
     </div>
   </AppLayout>
 </template>
@@ -85,22 +123,33 @@ import StatCard from '@/components/common/StatCard.vue'
 import CaptureSparkline from '@/components/admin/generation-content/CaptureSparkline.vue'
 import ContentWall from '@/components/admin/generation-content/ContentWall.vue'
 import { adminAPI } from '@/api/admin'
-import type { GenerationContentStats, GenerationSample } from '@/api/admin/generation_content'
-import { formatBytes, formatCompactNumber } from '@/utils/format'
+import type {
+  GenerationContentStats,
+  GenerationContentWeeklyReport,
+  GenerationSample
+} from '@/api/admin/generation_content'
+import { formatBytes, formatCompactNumber, formatCurrency } from '@/utils/format'
 
 const { t } = useI18n()
 
 const stats = ref<GenerationContentStats | null>(null)
 const samples = ref<GenerationSample[]>([])
+const weeklyReport = ref<GenerationContentWeeklyReport | null>(null)
 const loading = ref(false)
 let abortController: AbortController | null = null
 
 const isLive = computed(() => stats.value?.is_live ?? false)
 const dailySeries = computed(() => (stats.value?.daily_series ?? []).map((p) => p.count))
 const dailyRateText = computed(() => (stats.value?.daily_rate ?? 0).toFixed(1))
+const weeklyAnomalyCount = computed(() => {
+  const anomalies = weeklyReport.value?.anomalies
+  if (!anomalies) return 0
+  return anomalies.failed_tasks + anomalies.missing_task_joins + anomalies.truncated_rows
+})
 
 const fmtNum = (v: number | string) => formatCompactNumber(Number(v))
 const fmtBytes = (v: number | string) => formatBytes(Number(v))
+const fmtCurrency = (v: number | string) => formatCurrency(Number(v))
 
 const load = async () => {
   abortController?.abort()
@@ -108,13 +157,15 @@ const load = async () => {
   abortController = c
   loading.value = true
   try {
-    const [s, sm] = await Promise.all([
+    const [s, sm, wr] = await Promise.all([
       adminAPI.generationContent.getStats({ signal: c.signal }),
-      adminAPI.generationContent.getSamples({ signal: c.signal })
+      adminAPI.generationContent.getSamples({ signal: c.signal }),
+      adminAPI.generationContent.getWeeklyReport({ signal: c.signal })
     ])
     if (c.signal.aborted) return
     stats.value = s
     samples.value = sm.samples ?? []
+    weeklyReport.value = wr
   } catch (e: unknown) {
     // 取消请求(切走页面)不算错误
     if ((e as { name?: string })?.name !== 'AbortError' && (e as { code?: string })?.code !== 'ERR_CANCELED') {

@@ -42,6 +42,26 @@ func (f *fakeGenContentRepo) GetRecent(context.Context, int) ([]GenerationConten
 
 // PurgeExpiredContent 内存实现：按 created_at < cutoff 且仍有内容过滤，单批封顶 batch；
 // dryRun 只计数不改。供保留期清理服务测试真证谓词与批处理排空。
+func (f *fakeGenContentRepo) UpdateVideoTaskAdoption(_ context.Context, input GenerationContentAdoptionInput) (*GenerationContentAdoption, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &GenerationContentAdoption{
+		TaskID:         input.TaskID,
+		AdoptionStatus: input.AdoptionStatus,
+		QualityScore:   input.QualityScore,
+		Notes:          input.Notes,
+		Saved:          true,
+	}, nil
+}
+
+func (f *fakeGenContentRepo) GetWeeklyReport(context.Context, time.Time, time.Time) (*GenerationContentWeeklyReport, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &GenerationContentWeeklyReport{}, nil
+}
+
 func (f *fakeGenContentRepo) PurgeExpiredContent(_ context.Context, cutoff time.Time, batch int, dryRun bool) (int64, error) {
 	if f.err != nil {
 		return 0, f.err

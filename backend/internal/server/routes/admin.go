@@ -257,6 +257,8 @@ func registerGenerationContentRoutes(admin *gin.RouterGroup, h *handler.Handlers
 	{
 		gc.GET("/stats", h.Admin.GenerationContent.GetStats)
 		gc.GET("/samples", h.Admin.GenerationContent.GetSamples)
+		gc.GET("/weekly-report", h.Admin.GenerationContent.GetWeeklyReport)
+		gc.POST("/:task_id/adoption", h.Admin.GenerationContent.UpdateAdoption)
 	}
 }
 

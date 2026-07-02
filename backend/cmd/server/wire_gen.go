@@ -249,7 +249,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	generationContentRepository := repository.NewGenerationContentRepository(db)
 	videoGatewayService.SetGenerationContentCollector(service.NewGenerationContentCollector(generationContentRepository, configConfig))
 	generationContentRetentionService := service.ProvideGenerationContentRetentionService(generationContentRepository, configConfig)
-	generationContentHandler := admin.NewGenerationContentHandler(generationContentRepository)
+	generationContentHandler := admin.NewGenerationContentHandler(generationContentRepository, configConfig)
 	adminHandlers := handler.ProvideAdminHandlers(dashboardHandler, adminUserHandler, groupHandler, accountHandler, adminAnnouncementHandler, dataManagementHandler, backupHandler, oAuthHandler, openAIOAuthHandler, geminiOAuthHandler, antigravityOAuthHandler, proxyHandler, adminRedeemHandler, promoHandler, settingHandler, opsHandler, systemHandler, adminSubscriptionHandler, adminUsageHandler, userAttributeHandler, errorPassthroughHandler, tlsFingerprintProfileHandler, adminAPIKeyHandler, scheduledTestHandler, channelHandler, channelMonitorHandler, channelMonitorRequestTemplateHandler, contentModerationHandler, paymentHandler, affiliateHandler, videoHandler, generationContentHandler)
 	usageRecordWorkerPool := service.NewUsageRecordWorkerPool(configConfig)
 	userMsgQueueCache := repository.NewUserMsgQueueCache(redisClient)

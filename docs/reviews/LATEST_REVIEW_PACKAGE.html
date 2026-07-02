@@ -1,213 +1,244 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Phase A' Tiny Real 三证成功审查包</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sub2API Phase B1 账本日常化审查包 - 20260703</title>
   <style>
     :root {
-      color-scheme: light;
-      --bg: #f7f8fa;
+      color-scheme: light dark;
+      --bg: #f7f8fb;
       --panel: #ffffff;
-      --text: #18202a;
-      --muted: #5f6875;
-      --border: #d8dee8;
-      --ok: #0b7a4b;
-      --warn: #9a5b00;
-      --code: #111827;
+      --text: #172033;
+      --muted: #5f6b7a;
+      --line: #dfe5ee;
+      --accent: #2563eb;
+      --good: #047857;
+      --warn: #a16207;
+      --danger: #b91c1c;
+      --code: #0f172a;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f172a;
+        --panel: #111827;
+        --text: #e5e7eb;
+        --muted: #a6adbb;
+        --line: #263244;
+        --accent: #60a5fa;
+        --good: #34d399;
+        --warn: #facc15;
+        --danger: #f87171;
+        --code: #e5e7eb;
+      }
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       background: var(--bg);
       color: var(--text);
-      font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font: 14px/1.62 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
     main {
-      max-width: 1080px;
+      max-width: 1120px;
       margin: 0 auto;
       padding: 32px 20px 56px;
     }
-    header {
-      padding: 24px 0 20px;
-      border-bottom: 1px solid var(--border);
-    }
-    h1 {
-      margin: 0 0 10px;
-      font-size: 30px;
-      line-height: 1.25;
-      letter-spacing: 0;
-    }
-    h2 {
-      margin: 28px 0 12px;
-      font-size: 20px;
-      letter-spacing: 0;
-    }
-    p { margin: 8px 0; }
-    ul { margin: 8px 0 0 22px; padding: 0; }
-    li { margin: 4px 0; }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 12px 0 18px;
+    header, section {
       background: var(--panel);
-      border: 1px solid var(--border);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 22px;
+      margin: 0 0 16px;
     }
-    th, td {
-      padding: 10px 12px;
-      border-bottom: 1px solid var(--border);
-      text-align: left;
-      vertical-align: top;
-    }
-    th { background: #eef2f7; }
-    code {
-      background: #eef2f7;
-      border: 1px solid #dde3ec;
-      border-radius: 4px;
-      padding: 1px 5px;
+    h1, h2, h3 { margin: 0 0 12px; line-height: 1.25; }
+    h1 { font-size: 28px; }
+    h2 { font-size: 18px; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+    h3 { font-size: 15px; color: var(--muted); }
+    p { margin: 8px 0; }
+    ul { margin: 8px 0 0 20px; padding: 0; }
+    li { margin: 5px 0; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid var(--line); padding: 9px 10px; text-align: left; vertical-align: top; }
+    th { background: rgba(37, 99, 235, 0.08); }
+    code, pre {
+      font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
       color: var(--code);
-      font-family: Consolas, "Liberation Mono", monospace;
-      font-size: 0.92em;
     }
     pre {
       overflow: auto;
-      background: #111827;
-      color: #f8fafc;
+      background: rgba(15, 23, 42, 0.06);
+      border: 1px solid var(--line);
       border-radius: 8px;
-      padding: 14px 16px;
-      font-size: 13px;
-      line-height: 1.5;
+      padding: 12px;
+      white-space: pre-wrap;
     }
-    .badge {
-      display: inline-block;
-      border: 1px solid currentColor;
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--line);
       border-radius: 999px;
-      padding: 2px 9px;
-      font-size: 12px;
-      font-weight: 700;
+      padding: 5px 10px;
+      font-weight: 600;
+      background: rgba(37, 99, 235, 0.08);
     }
-    .ok { color: var(--ok); }
-    .warn { color: var(--warn); }
-    .panel {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 16px 18px;
-      margin: 14px 0;
-    }
-    .muted { color: var(--muted); }
+    .good { color: var(--good); font-weight: 700; }
+    .warn { color: var(--warn); font-weight: 700; }
+    .danger { color: var(--danger); font-weight: 700; }
+    .small { color: var(--muted); font-size: 12px; }
   </style>
 </head>
 <body>
 <main>
   <header>
-    <h1>Phase A' Tiny Real 三证成功审查包</h1>
-    <p><span class="badge ok">内部可用</span> <span class="badge ok">可演示</span> <span class="muted">2026-07-03 · D:\sub2api-trunk · wujie/video-capture-moat-20260702</span></p>
+    <p class="pill">当前状态：内部可用</p>
+    <h1>Sub2API Phase B1 账本日常化审查包</h1>
+    <p>本审查包覆盖 2026-07-03 超级循环 Phase B1-Sub2API：把生成内容采集从“只读样本墙”推进到内部生产账本，增加采纳反馈、周报聚合、异常计数和前端管理入口。</p>
+    <div class="meta">
+      <div><strong>执行目录</strong><br><code>D:\sub2api-trunk</code></div>
+      <div><strong>分支</strong><br><code>wujie/video-capture-moat-20260702</code></div>
+      <div><strong>红线</strong><br>无 push；无真实出片；无密钥读取；无多租户/商业化扩展。</div>
+      <div><strong>截图</strong><br><span class="warn">待复核</span>：未启动带管理员会话的本地浏览器，仅完成编译与构建验证。</div>
+    </div>
   </header>
 
-  <section class="panel">
+  <section>
     <h2>目标</h2>
-    <p>把 Sub2API 当前入口从 Phase A' 历史阻塞包更新为 Phase A' tiny real 三证成功包，并保留旧阻塞证据作为历史。</p>
+    <ul>
+      <li>让 <code>ai_generation_content</code> 进入内部日常账本：能按视频任务写入采纳状态、质量分、备注。</li>
+      <li>增加周报聚合：条目数、视频任务数、成本估算、采纳/拒绝/待处理/未复核、异常计数与 Markdown 摘要。</li>
+      <li>让管理员在现有 Generation Content 页面看到周报，并能在样本卡片上提交采纳反馈。</li>
+      <li>保持真实供应商调用与真实出片 <span class="warn">已冻结</span>，本轮只做本地代码、测试与构建。</li>
+    </ul>
   </section>
 
-  <section class="panel">
-    <h2>结论</h2>
-    <p>Phase A' tiny real 已在受控单次路径中形成三证：QCanvas 节点有真实结果回填，Sub2API <code>ai_generation_content</code> 对任务 <code>1</code> 有 1 行记录，Admin stats 返回 <code>is_live=true</code>。</p>
-    <p>状态只限本次 Phase A' tiny real 证据链：<b>内部可用 / 可演示</b>。后续任何真实供应商调用仍需单独授权；本包不声明整体产品状态。</p>
+  <section>
+    <h2>背景</h2>
+    <p>Phase A' 已经证明 Tiny Real 三证链路。本阶段不再真出片，而是把已采集的生产内容与视频任务编号、成本估算、采用反馈连接起来，服务老板/员工/技术管理员的内部复盘。</p>
+    <p>本轮没有引入租户模型、供应商真实调用、外部发布或公网暴露。</p>
   </section>
 
-  <h2>背景</h2>
-  <ul>
-    <li>历史阻塞包仍保留在 <code>_review/phase-a-prime-tiny-real_20260702/blocked_result.json</code> 与相关 WSL 预检证据中。</li>
-    <li>后续成功包以 <code>PHASE_A_PRIME_TINY_REAL_REVIEW_HANDOFF_20260703.md</code> 和 <code>FINAL_EVIDENCE_20260702.md</code> 为入口。</li>
-    <li>截图与 HTML 证据只保留脱敏结果，不包含完整签名 URL。</li>
-  </ul>
+  <section>
+    <h2>变更清单</h2>
+    <table>
+      <thead><tr><th>文件</th><th>变更</th></tr></thead>
+      <tbody>
+        <tr><td><code>backend/internal/service/generation_content.go</code></td><td>扩展采集样本、采纳反馈输入/输出、周报聚合模型和仓储接口。</td></tr>
+        <tr><td><code>backend/internal/repository/generation_content_repo.go</code></td><td>新增按 <code>task_id</code> 更新采纳反馈；新增周报 SQL 聚合；样本查询返回任务、状态、成本和采纳字段。</td></tr>
+        <tr><td><code>backend/internal/handler/admin/generation_content_handler.go</code></td><td>新增采纳反馈写入接口与周报接口；采集开关关闭或仓储异常时返回可解释的内部结果。</td></tr>
+        <tr><td><code>backend/internal/server/routes/admin.go</code></td><td>挂载 <code>GET /api/v1/admin/generation-content/weekly-report</code> 与 <code>POST /api/v1/admin/generation-content/:task_id/adoption</code>。</td></tr>
+        <tr><td><code>backend/cmd/server/wire_gen.go</code></td><td>注入 config 给 GenerationContentHandler。</td></tr>
+        <tr><td><code>backend/migrations/147_ai_generation_content_adoption_notes.sql</code></td><td>新增 <code>adoption_notes</code> 字段。</td></tr>
+        <tr><td><code>backend/internal/repository/generation_content_repo_test.go</code></td><td>新增采纳反馈 SQL 与周报聚合测试。</td></tr>
+        <tr><td><code>backend/internal/handler/admin/generation_content_handler_test.go</code></td><td>新增采纳反馈、开关关闭、仓储异常和周报 Markdown 测试。</td></tr>
+        <tr><td><code>backend/internal/service/*collector*_test.go</code></td><td>补齐 fake 仓储接口方法，保持既有测试可编译。</td></tr>
+        <tr><td><code>frontend/src/api/admin/generation_content.ts</code></td><td>新增采纳反馈、周报 API 类型与调用。</td></tr>
+        <tr><td><code>frontend/src/views/admin/GenerationContentView.vue</code></td><td>新增周报卡片、异常计数与保存后刷新。</td></tr>
+        <tr><td><code>frontend/src/components/admin/generation-content/ContentWall.vue</code></td><td>样本卡片显示任务/成本/视频状态，并提供采纳状态、质量分、备注保存。</td></tr>
+        <tr><td><code>frontend/src/i18n/locales/en.ts</code> / <code>frontend/src/i18n/locales/zh.ts</code></td><td>补齐周报统计文案。</td></tr>
+      </tbody>
+    </table>
+  </section>
 
-  <h2>执行目录</h2>
-  <table>
-    <tbody>
-      <tr><th>Git root</th><td><code>D:\sub2api-trunk</code></td></tr>
-      <tr><th>分支</th><td><code>wujie/video-capture-moat-20260702</code></td></tr>
-      <tr><th>证据目录</th><td><code>_review/phase-a-prime-tiny-real_20260702/</code></td></tr>
-    </tbody>
-  </table>
+  <section>
+    <h2>实现细节</h2>
+    <ul>
+      <li>采纳反馈以 <code>task_id</code> 为业务键写入 <code>ai_generation_content</code>，不新增账号、租户或商业化模型。</li>
+      <li>接口允许状态 <code>adopted</code>、<code>rejected</code>、<code>pending</code>，质量分范围为 <code>0..1</code>，备注最多 2048 字符。</li>
+      <li>采集开关未启用时，采纳接口返回 <code>enabled:false</code>、<code>saved:false</code>，避免误判为已写入。</li>
+      <li>周报聚合使用 <code>ai_generation_content</code> 左连接 <code>video_tasks</code>，统计失败任务、缺失任务关联和截断行，便于后续运营复盘。</li>
+      <li>前端沿用现有 <code>StatCard</code> 与内容墙，不新增独立导航或大范围 UI 重构。</li>
+    </ul>
+  </section>
 
-  <h2>变更清单</h2>
-  <ul>
-    <li>更新 <code>docs/reviews/LATEST_REVIEW_PACKAGE.html</code> 为 Phase A' 三证成功入口。</li>
-    <li>更新 <code>_review/phase-a-prime-tiny-real_20260702/SUMMARY.md</code> 为成功摘要。</li>
-    <li>新增 <code>_review/phase-a-prime-tiny-real_20260702/success_result.json</code>。</li>
-    <li>更新 <code>00_START_HERE.md</code> 与 <code>docs/CHAT_STRATEGY_CONTEXT.md</code> 的当前状态口径。</li>
-    <li>纳入 7 个成功证据文件：2 个 Markdown、2 张脱敏截图、3 个生成/采集脚本。</li>
-  </ul>
+  <section>
+    <h2>验证命令和结果</h2>
+    <table>
+      <thead><tr><th>命令</th><th>结果</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>go test ./internal/handler/admin ./internal/repository ./internal/service -count=1</code></td><td class="good">退出码 0</td><td>覆盖 B1 核心 handler/repository/service。</td></tr>
+        <tr><td><code>go test ./cmd/server ./internal/server/... -count=1</code></td><td class="good">退出码 0</td><td>先因 Windows Go cache 沙箱权限失败，随后同命令提权重跑成功。</td></tr>
+        <tr><td><code>go test ./... -count=1</code></td><td class="good">退出码 0</td><td>后端全包验证。</td></tr>
+        <tr><td><code>pnpm run typecheck</code></td><td class="good">退出码 0</td><td>Vue/TypeScript 类型检查。</td></tr>
+        <tr><td><code>pnpm run build:fast</code></td><td class="good">退出码 0</td><td>Vite 生产构建成功；仅出现既有 chunk 与 Browserslist 警告。</td></tr>
+        <tr><td><code>git diff --check</code></td><td class="good">退出码 0</td><td>无空白错误。</td></tr>
+        <tr><td><code>python tools/secret_scan.py --include-untracked</code></td><td class="good">退出码 0</td><td>系统 Python 不在 PATH，改用 Codex bundled Python；无高置信 tracked-plus-untracked 发现。</td></tr>
+      </tbody>
+    </table>
+  </section>
 
-  <h2>实现细节</h2>
-  <table>
-    <thead><tr><th>证据点</th><th>结果</th><th>来源</th></tr></thead>
-    <tbody>
-      <tr><td>QCanvas 节点</td><td class="ok"><code>task_id=1</code>、<code>succeeded</code>、<code>realChainReady=true</code></td><td><code>qcanvas_studio_v2_node_masked.png</code></td></tr>
-      <tr><td>Sub2API 入库</td><td class="ok"><code>SELECT COUNT(*) ... task_id='1'</code> 返回 <code>1</code></td><td><code>PHASE_A_PRIME_TINY_REAL_REVIEW_HANDOFF_20260703.md</code></td></tr>
-      <tr><td>Admin 看板</td><td class="ok"><code>is_live=true</code>、<code>captured_today=1</code></td><td><code>FINAL_EVIDENCE_20260702.md</code></td></tr>
-    </tbody>
-  </table>
+  <section>
+    <h2>截图 / 日志证据</h2>
+    <ul>
+      <li>前端截图：<span class="warn">待复核</span>。本轮未启动带管理员登录态的浏览器，不伪造 UI 截图。</li>
+      <li>构建证据：<code>GenerationContentView-*.js</code> 已进入 <code>backend/internal/web/dist/assets/</code> 的 Vite 输出列表。</li>
+      <li>真实供应商调用：<span class="warn">已冻结</span>。本轮没有发起真实出片。</li>
+    </ul>
+  </section>
 
-  <h2>验证命令和结果</h2>
-  <pre><code>git status --short
-git branch --show-current
-git rev-parse --show-toplevel
-Select-String ... PHASE_A_PRIME_TINY_REAL_REVIEW_HANDOFF_20260703.md
-Select-String ... FINAL_EVIDENCE_20260702.md</code></pre>
-  <p>本次 A0 只复核并重定向当前入口；未重新触发真实供应商调用，未重新启动服务。</p>
+  <section>
+    <h2>风险</h2>
+    <ul>
+      <li><span class="warn">待复核</span>：采纳反馈字段迁移需要在实际运行数据库执行后再确认。</li>
+      <li><span class="warn">待复核</span>：周报成本使用 <code>video_tasks.cost_estimate</code> 聚合，若上游成本估算缺失，账本会显示低估。</li>
+      <li><span class="warn">待复核</span>：未做真实浏览器截图，需在管理员会话里复核页面布局和保存交互。</li>
+    </ul>
+  </section>
 
-  <h2>截图 / 日志证据</h2>
-  <ul>
-    <li><code>qcanvas_three_proofs_masked.png</code>：三证同屏截图。</li>
-    <li><code>qcanvas_studio_v2_node_masked.png</code>：QCanvas 节点截图。</li>
-    <li><code>FINAL_EVIDENCE_20260702.md</code>：Sub2API 最终证据索引。</li>
-    <li><code>PHASE_A_PRIME_TINY_REAL_REVIEW_HANDOFF_20260703.md</code>：交付说明与复核点。</li>
-  </ul>
+  <section>
+    <h2>回滚方案</h2>
+    <ul>
+      <li>代码回滚：回退本轮 B1 提交即可移除接口、前端入口和测试。</li>
+      <li>数据库回滚：如已执行迁移，可手动执行 <code>ALTER TABLE ai_generation_content DROP COLUMN IF EXISTS adoption_notes;</code>。</li>
+      <li>运行期降级：关闭内容采集开关后，采纳反馈接口会返回未保存结果，不影响既有只读样本墙。</li>
+    </ul>
+  </section>
 
-  <h2>风险</h2>
-  <ul>
-    <li>Phase A' 成功只覆盖受控单次真实链路；后续真实调用仍需单独授权。</li>
-    <li>QCanvas 仓本身仍有大量未收口工作树内容，本包只记录 Sub2API 当前入口。</li>
-    <li>旧阻塞证据仍保留，引用时必须区分历史阻塞与当前成功入口。</li>
-  </ul>
+  <section>
+    <h2>当前状态</h2>
+    <p><span class="good">内部可用</span>：后端 API、仓储、周报聚合、前端编译和生产构建均已验证。浏览器截图与实际数据库迁移执行仍为 <span class="warn">待复核</span>。</p>
+  </section>
 
-  <h2>回滚方案</h2>
-  <ul>
-    <li>回滚本次 A0 当前入口提交即可恢复旧入口。</li>
-    <li>历史阻塞证据文件未删除，可继续用于追溯前置失败原因。</li>
-  </ul>
+  <section>
+    <h2>下一步建议</h2>
+    <ul>
+      <li>在本地管理员会话中打开 Generation Content 页面，检查周报卡片和采纳保存交互。</li>
+      <li>执行数据库迁移后，用真实采集样本验证 <code>task_id</code> 关联和周报成本。</li>
+      <li>进入下一 cycle 前，继续遵守真实出片 <span class="warn">已冻结</span> 与不 push 边界。</li>
+    </ul>
+  </section>
 
-  <h2>当前状态</h2>
-  <table>
-    <thead><tr><th>对象</th><th>状态</th><th>依据</th></tr></thead>
-    <tbody>
-      <tr><td>Phase A' tiny real 三证</td><td class="ok">内部可用 / 可演示</td><td>task 1、入库 1 行、Admin <code>is_live=true</code>、脱敏截图。</td></tr>
-      <tr><td>后续真实供应商调用</td><td class="warn">已冻结</td><td>本轮授权已用尽，必须单独授权。</td></tr>
-      <tr><td>公开商业化、多租户、完整 skill v1</td><td class="warn">已冻结</td><td>北极星 V4.1 明文冻结。</td></tr>
-    </tbody>
-  </table>
+  <section>
+    <h2>文件索引</h2>
+    <pre>backend/cmd/server/wire_gen.go
+backend/internal/handler/admin/generation_content_handler.go
+backend/internal/handler/admin/generation_content_handler_test.go
+backend/internal/repository/generation_content_repo.go
+backend/internal/repository/generation_content_repo_test.go
+backend/internal/server/routes/admin.go
+backend/internal/service/generation_content.go
+backend/internal/service/generation_content_collector_panic_test.go
+backend/internal/service/generation_content_collector_test.go
+backend/migrations/147_ai_generation_content_adoption_notes.sql
+frontend/src/api/admin/generation_content.ts
+frontend/src/components/admin/generation-content/ContentWall.vue
+frontend/src/i18n/locales/en.ts
+frontend/src/i18n/locales/zh.ts
+frontend/src/views/admin/GenerationContentView.vue
+docs/reviews/LATEST_REVIEW_PACKAGE.html</pre>
+  </section>
 
-  <h2>下一步建议</h2>
-  <ul>
-    <li>继续 A0-北极星，生成 V4.1 增量审查包并修正状态口径。</li>
-    <li>进入 A1 只读契约快照，生成跨仓字段缝与采集语义报告。</li>
-    <li>进入 A2 时只走 mock/dev 复核，不触发真实供应商调用。</li>
-  </ul>
-
-  <h2>文件索引</h2>
-  <ul>
-    <li><code>_review/phase-a-prime-tiny-real_20260702/PHASE_A_PRIME_TINY_REAL_REVIEW_HANDOFF_20260703.md</code></li>
-    <li><code>_review/phase-a-prime-tiny-real_20260702/FINAL_EVIDENCE_20260702.md</code></li>
-    <li><code>_review/phase-a-prime-tiny-real_20260702/success_result.json</code></li>
-    <li><code>_review/phase-a-prime-tiny-real_20260702/qcanvas_three_proofs_masked.png</code></li>
-    <li><code>_review/phase-a-prime-tiny-real_20260702/qcanvas_studio_v2_node_masked.png</code></li>
-  </ul>
-
-  <h2>可复制后续提示词</h2>
-  <pre><code>继续北极星 V4.1 超级循环。先重读锚文件 #current-state/#roadmap/#guardrails、Sub2API 与 QCanvas 当前审查包、progress log；本轮从 A0-北极星继续。保持不 push、不触发真实供应商调用、不读取 key/token/.env，只用五状态词。</code></pre>
+  <section>
+    <h2>可复制后续提示词</h2>
+    <pre>继续 Phase B1-Sub2API 复核：在不读取/打印 key/token/.env、不真实出片、不 push 的前提下，启动本地管理员会话，打开 Generation Content 页面，验证周报卡片、采纳反馈保存、刷新后回显、迁移执行后的真实 task_id 关联与成本聚合；把结果追加进 docs/reviews/LATEST_REVIEW_PACKAGE.html 和超级循环 progress。</pre>
+  </section>
 </main>
 </body>
 </html>

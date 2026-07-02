@@ -101,6 +101,47 @@ RETURNING id, created_at`,
 	return nil
 }
 
+func (r *generationContentRepository) UpdateVideoTaskAdoption(ctx context.Context, input service.GenerationContentAdoptionInput) (*service.GenerationContentAdoption, error) {
+	out := &service.GenerationContentAdoption{
+		TaskID:         input.TaskID,
+		AdoptionStatus: input.AdoptionStatus,
+		QualityScore:   input.QualityScore,
+		Notes:          input.Notes,
+		Saved:          false,
+	}
+	if r == nil || r.db == nil || input.TaskID <= 0 {
+		return out, nil
+	}
+
+	const q = `
+UPDATE ai_generation_content
+SET adoption_status = $2,
+    quality_score = $3,
+    adoption_notes = $4
+WHERE task_id = $1
+RETURNING task_id, adoption_status, quality_score, adoption_notes`
+	var score sql.NullFloat64
+	var notes sql.NullString
+	err := r.db.QueryRowContext(ctx, q, input.TaskID, input.AdoptionStatus, input.QualityScore, input.Notes).
+		Scan(&out.TaskID, &out.AdoptionStatus, &score, &notes)
+	if errors.Is(err, sql.ErrNoRows) {
+		return out, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("update video task adoption: %w", err)
+	}
+	if score.Valid {
+		out.QualityScore = &score.Float64
+	} else {
+		out.QualityScore = nil
+	}
+	if notes.Valid {
+		out.Notes = notes.String
+	}
+	out.Saved = true
+	return out, nil
+}
+
 // GetCaptureStats 聚合 ai_generation_content：计数/去重/体量 + 近 7 日每日序列。
 // 全程只读；空表返回零值快照（非错误）。镜像 usage_log_repo 的 COUNT/SUM/COALESCE/TO_CHAR 套路。
 func (r *generationContentRepository) GetCaptureStats(ctx context.Context) (*service.GenerationContentStats, error) {
@@ -155,6 +196,49 @@ ORDER BY d ASC`
 		return nil, fmt.Errorf("iterate generation content daily: %w", err)
 	}
 	return stats, nil
+}
+
+func (r *generationContentRepository) GetWeeklyReport(ctx context.Context, start, end time.Time) (*service.GenerationContentWeeklyReport, error) {
+	report := &service.GenerationContentWeeklyReport{
+		PeriodStart: start,
+		PeriodEnd:   end,
+	}
+	if r == nil || r.db == nil {
+		return report, nil
+	}
+	const q = `
+SELECT
+    COUNT(*) AS entries,
+    COUNT(c.task_id) FILTER (WHERE c.task_id IS NOT NULL) AS video_tasks,
+    COALESCE(SUM(COALESCE(vt.cost_estimate, 0)), 0)::float8 AS total_cost_estimate,
+    COUNT(*) FILTER (WHERE c.adoption_status = 'adopted') AS adopted_count,
+    COUNT(*) FILTER (WHERE c.adoption_status = 'rejected') AS rejected_count,
+    COUNT(*) FILTER (WHERE c.adoption_status = 'pending') AS pending_count,
+    COUNT(*) FILTER (WHERE COALESCE(c.adoption_status, '') = '') AS unreviewed_count,
+    COUNT(*) FILTER (WHERE vt.status = 'failed') AS failed_task_count,
+    COUNT(*) FILTER (WHERE c.task_id IS NOT NULL AND vt.id IS NULL) AS missing_task_join_count,
+    COUNT(*) FILTER (WHERE c.response_truncated = TRUE) AS truncated_count
+FROM ai_generation_content c
+LEFT JOIN video_tasks vt ON vt.id = c.task_id
+WHERE c.created_at >= $1 AND c.created_at < $2`
+	if err := scanSingleRow(ctx, r.db, q, []any{start, end},
+		&report.Entries,
+		&report.VideoTasks,
+		&report.TotalCostEstimate,
+		&report.AdoptedCount,
+		&report.RejectedCount,
+		&report.PendingCount,
+		&report.UnreviewedCount,
+		&report.Anomalies.FailedTasks,
+		&report.Anomalies.MissingTaskJoins,
+		&report.Anomalies.TruncatedRows,
+	); err != nil {
+		return nil, fmt.Errorf("generation content weekly report: %w", err)
+	}
+	if report.Entries > 0 {
+		report.AdoptionRate = float64(report.AdoptedCount) / float64(report.Entries)
+	}
+	return report, nil
 }
 
 // PurgeExpiredContent 保留期清理（NULL-OUT）：把 created_at < cutoff 且仍有内容的行的
@@ -218,6 +302,7 @@ func (r *generationContentRepository) GetRecent(ctx context.Context, limit int) 
 	}
 	const query = `
 SELECT
+    c.task_id,
     c.model,
     c.created_at,
     c.prompt_redacted,
@@ -227,10 +312,16 @@ SELECT
     c.response_truncated,
     COALESCE(u.username, ''),
     COALESCE(u.email, ''),
-    COALESCE(g.name, '')
+    COALESCE(g.name, ''),
+    c.adoption_status,
+    c.quality_score,
+    c.adoption_notes,
+    COALESCE(vt.status, ''),
+    COALESCE(vt.cost_estimate, 0)::float8
 FROM ai_generation_content c
 LEFT JOIN users  u ON u.id = c.user_id
 LEFT JOIN groups g ON g.id = c.group_id
+LEFT JOIN video_tasks vt ON vt.id = c.task_id
 ORDER BY c.created_at DESC
 LIMIT $1`
 	rows, err := r.db.QueryContext(ctx, query, limit)
@@ -241,7 +332,10 @@ LIMIT $1`
 	var out []service.GenerationContentSample
 	for rows.Next() {
 		var s service.GenerationContentSample
+		var taskID sql.NullInt64
+		var score sql.NullFloat64
 		if err := rows.Scan(
+			&taskID,
 			&s.Model,
 			&s.CreatedAt,
 			&s.PromptRedacted,
@@ -252,8 +346,19 @@ LIMIT $1`
 			&s.Username,
 			&s.Email,
 			&s.GroupName,
+			&s.AdoptionStatus,
+			&score,
+			&s.AdoptionNotes,
+			&s.VideoStatus,
+			&s.CostEstimate,
 		); err != nil {
 			return nil, fmt.Errorf("scan generation content recent: %w", err)
+		}
+		if taskID.Valid {
+			s.TaskID = &taskID.Int64
+		}
+		if score.Valid {
+			s.QualityScore = &score.Float64
 		}
 		out = append(out, s)
 	}

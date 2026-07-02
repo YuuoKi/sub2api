@@ -4334,6 +4334,11 @@ export default {
       promptLabel: 'Prompt',
       responseLabel: 'Response',
       truncated: 'truncated',
+      weeklyEntries: 'Weekly entries',
+      weeklyCost: 'Weekly cost',
+      adopted: 'Adopted',
+      pending: 'Pending',
+      anomalies: 'Anomalies',
       exampleBannerTitle: 'Example — capture not enabled',
       exampleBannerDesc: 'Real redacted samples appear here once content capture is turned on.'
     },

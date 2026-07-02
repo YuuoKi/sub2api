@@ -23,19 +23,64 @@ export interface GenerationContentStats {
 }
 
 export interface GenerationSample {
+  task_id: number | null
   employee_name: string
   team_name: string
   model: string
+  video_status: string
+  cost_estimate: number
   created_at: string
   prompt_preview: string
   response_preview: string
   total_bytes: number
+  adoption_status: AdoptionStatus | ''
+  quality_score: number | null
+  adoption_notes: string
   truncated: boolean
 }
 
 export interface GenerationContentSamplesResponse {
   samples: GenerationSample[]
   is_live: boolean
+}
+
+export type AdoptionStatus = 'adopted' | 'rejected' | 'pending'
+
+export interface UpdateAdoptionPayload {
+  adoption_status: AdoptionStatus
+  quality_score?: number | null
+  notes?: string
+}
+
+export interface UpdateAdoptionResponse {
+  enabled: boolean
+  saved: boolean
+  reason?: string
+  task_id: number
+  adoption_status: AdoptionStatus
+  quality_score?: number | null
+  notes?: string
+}
+
+export interface WeeklyReportAnomalies {
+  failed_tasks: number
+  missing_task_joins: number
+  truncated_rows: number
+}
+
+export interface GenerationContentWeeklyReport {
+  period_start: string
+  period_end: string
+  entries: number
+  video_tasks: number
+  total_cost_estimate: number
+  adopted_count: number
+  rejected_count: number
+  pending_count: number
+  unreviewed_count: number
+  adoption_rate: number
+  anomalies: WeeklyReportAnomalies
+  markdown: string
 }
 
 /**
@@ -61,9 +106,32 @@ export async function getSamples(options?: {
   return data
 }
 
+export async function updateAdoption(
+  taskId: number,
+  payload: UpdateAdoptionPayload
+): Promise<UpdateAdoptionResponse> {
+  const { data } = await apiClient.post<UpdateAdoptionResponse>(
+    `/admin/generation-content/${taskId}/adoption`,
+    payload
+  )
+  return data
+}
+
+export async function getWeeklyReport(options?: {
+  signal?: AbortSignal
+}): Promise<GenerationContentWeeklyReport> {
+  const { data } = await apiClient.get<GenerationContentWeeklyReport>(
+    '/admin/generation-content/weekly-report',
+    { signal: options?.signal }
+  )
+  return data
+}
+
 export const generationContentAPI = {
   getStats,
-  getSamples
+  getSamples,
+  updateAdoption,
+  getWeeklyReport
 }
 
 export default generationContentAPI

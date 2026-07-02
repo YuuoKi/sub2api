@@ -94,3 +94,77 @@ RETURNING id, created_at`)).
 		t.Fatalf("unmet sql expectations: %v", err)
 	}
 }
+
+func TestGenerationContentRepositoryUpdateVideoTaskAdoptionUsesTaskID(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("new sqlmock: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	score := 0.875
+	input := service.GenerationContentAdoptionInput{
+		TaskID:         42,
+		AdoptionStatus: "adopted",
+		QualityScore:   &score,
+		Notes:          "picked for episode cut",
+	}
+
+	mock.ExpectQuery(`(?s)UPDATE ai_generation_content.*adoption_status.*quality_score.*adoption_notes.*WHERE task_id = \$1.*RETURNING task_id, adoption_status, quality_score, adoption_notes`).
+		WithArgs(input.TaskID, input.AdoptionStatus, input.QualityScore, input.Notes).
+		WillReturnRows(sqlmock.NewRows([]string{"task_id", "adoption_status", "quality_score", "adoption_notes"}).
+			AddRow(input.TaskID, input.AdoptionStatus, score, input.Notes))
+
+	repo := NewGenerationContentRepository(db)
+	got, err := repo.UpdateVideoTaskAdoption(context.Background(), input)
+	if err != nil {
+		t.Fatalf("update adoption: %v", err)
+	}
+	if got == nil || !got.Saved || got.TaskID != input.TaskID || got.AdoptionStatus != input.AdoptionStatus || got.QualityScore == nil || *got.QualityScore != score || got.Notes != input.Notes {
+		t.Fatalf("unexpected adoption result: %+v", got)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sql expectations: %v", err)
+	}
+}
+
+func TestGenerationContentRepositoryWeeklyReportAggregatesLedgerSignals(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("new sqlmock: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	start := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	end := start.AddDate(0, 0, 7)
+
+	mock.ExpectQuery(`(?s)FROM ai_generation_content c.*LEFT JOIN video_tasks vt ON vt\.id = c\.task_id.*WHERE c\.created_at >= \$1 AND c\.created_at < \$2`).
+		WithArgs(start, end).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"entries",
+			"video_tasks",
+			"total_cost_estimate",
+			"adopted_count",
+			"rejected_count",
+			"pending_count",
+			"unreviewed_count",
+			"failed_task_count",
+			"missing_task_join_count",
+			"truncated_count",
+		}).AddRow(int64(10), int64(4), 1.25, int64(3), int64(1), int64(2), int64(4), int64(1), int64(1), int64(2)))
+
+	repo := NewGenerationContentRepository(db)
+	got, err := repo.GetWeeklyReport(context.Background(), start, end)
+	if err != nil {
+		t.Fatalf("weekly report: %v", err)
+	}
+	if got == nil || got.Entries != 10 || got.VideoTasks != 4 || got.TotalCostEstimate != 1.25 || got.AdoptionRate != 0.3 {
+		t.Fatalf("unexpected weekly report: %+v", got)
+	}
+	if got.Anomalies.FailedTasks != 1 || got.Anomalies.MissingTaskJoins != 1 || got.Anomalies.TruncatedRows != 2 {
+		t.Fatalf("unexpected anomalies: %+v", got.Anomalies)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sql expectations: %v", err)
+	}
+}

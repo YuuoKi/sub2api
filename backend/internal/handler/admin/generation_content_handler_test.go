@@ -1,0 +1,151 @@
+package admin
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/require"
+)
+
+type generationContentRepoStub struct {
+	adoptionInput service.GenerationContentAdoptionInput
+	adoptionErr   error
+	weeklyReport  *service.GenerationContentWeeklyReport
+}
+
+func (s *generationContentRepoStub) Create(context.Context, *service.GenerationContent) error {
+	panic("unexpected Create call")
+}
+
+func (s *generationContentRepoStub) CreateVideoTaskContent(context.Context, *service.GenerationContent) error {
+	panic("unexpected CreateVideoTaskContent call")
+}
+
+func (s *generationContentRepoStub) GetCaptureStats(context.Context) (*service.GenerationContentStats, error) {
+	return &service.GenerationContentStats{}, nil
+}
+
+func (s *generationContentRepoStub) GetRecent(context.Context, int) ([]service.GenerationContentSample, error) {
+	return nil, nil
+}
+
+func (s *generationContentRepoStub) PurgeExpiredContent(context.Context, time.Time, int, bool) (int64, error) {
+	panic("unexpected PurgeExpiredContent call")
+}
+
+func (s *generationContentRepoStub) UpdateVideoTaskAdoption(_ context.Context, input service.GenerationContentAdoptionInput) (*service.GenerationContentAdoption, error) {
+	s.adoptionInput = input
+	if s.adoptionErr != nil {
+		return nil, s.adoptionErr
+	}
+	return &service.GenerationContentAdoption{
+		TaskID:         input.TaskID,
+		AdoptionStatus: input.AdoptionStatus,
+		QualityScore:   input.QualityScore,
+		Notes:          input.Notes,
+		Saved:          true,
+	}, nil
+}
+
+func (s *generationContentRepoStub) GetWeeklyReport(context.Context, time.Time, time.Time) (*service.GenerationContentWeeklyReport, error) {
+	return s.weeklyReport, nil
+}
+
+func setupGenerationContentRouter(repo *generationContentRepoStub, cfg *config.Config) *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	h := NewGenerationContentHandler(repo, cfg)
+	router.POST("/api/v1/admin/generation-content/:task_id/adoption", h.UpdateAdoption)
+	router.GET("/api/v1/admin/generation-content/weekly-report", h.GetWeeklyReport)
+	return router
+}
+
+func TestGenerationContentHandlerUpdateAdoptionMapsPayload(t *testing.T) {
+	repo := &generationContentRepoStub{}
+	router := setupGenerationContentRouter(repo, &config.Config{
+		Gateway: config.GatewayConfig{ContentCapture: config.ContentCaptureConfig{Enabled: true}},
+	})
+
+	body, err := json.Marshal(map[string]any{
+		"adoption_status": "adopted",
+		"quality_score":   0.875,
+		"notes":           "picked for episode cut",
+	})
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/generation-content/42/adoption", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, int64(42), repo.adoptionInput.TaskID)
+	require.Equal(t, "adopted", repo.adoptionInput.AdoptionStatus)
+	require.NotNil(t, repo.adoptionInput.QualityScore)
+	require.Equal(t, 0.875, *repo.adoptionInput.QualityScore)
+	require.Equal(t, "picked for episode cut", repo.adoptionInput.Notes)
+}
+
+func TestGenerationContentHandlerUpdateAdoptionFlagOffFailOpen(t *testing.T) {
+	repo := &generationContentRepoStub{}
+	router := setupGenerationContentRouter(repo, &config.Config{})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/generation-content/42/adoption", bytes.NewBufferString(`{"adoption_status":"adopted"}`))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Zero(t, repo.adoptionInput.TaskID)
+	require.Contains(t, rec.Body.String(), `"enabled":false`)
+	require.Contains(t, rec.Body.String(), `"saved":false`)
+}
+
+func TestGenerationContentHandlerUpdateAdoptionRepoErrorFailOpen(t *testing.T) {
+	repo := &generationContentRepoStub{adoptionErr: errors.New("db temporarily unavailable")}
+	router := setupGenerationContentRouter(repo, &config.Config{
+		Gateway: config.GatewayConfig{ContentCapture: config.ContentCaptureConfig{Enabled: true}},
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/generation-content/42/adoption", bytes.NewBufferString(`{"adoption_status":"pending"}`))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Contains(t, rec.Body.String(), `"saved":false`)
+	require.Contains(t, rec.Body.String(), `"reason":"adoption_feedback_unavailable"`)
+}
+
+func TestGenerationContentHandlerWeeklyReportReturnsMarkdown(t *testing.T) {
+	repo := &generationContentRepoStub{weeklyReport: &service.GenerationContentWeeklyReport{
+		PeriodStart:       time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC),
+		PeriodEnd:         time.Date(2026, 7, 8, 0, 0, 0, 0, time.UTC),
+		Entries:           10,
+		VideoTasks:        4,
+		TotalCostEstimate: 1.25,
+		AdoptedCount:      3,
+		PendingCount:      2,
+		UnreviewedCount:   4,
+		AdoptionRate:      0.3,
+	}}
+	router := setupGenerationContentRouter(repo, &config.Config{})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/generation-content/weekly-report", nil)
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Contains(t, rec.Body.String(), `"entries":10`)
+	require.Contains(t, rec.Body.String(), `"markdown"`)
+	require.Contains(t, rec.Body.String(), "Weekly Production Ledger")
+}

@@ -4414,6 +4414,11 @@ export default {
       promptLabel: '提示词',
       responseLabel: '回复',
       truncated: '已截断',
+      weeklyEntries: '周条目',
+      weeklyCost: '周成本',
+      adopted: '已采纳',
+      pending: '待处理',
+      anomalies: '异常',
       exampleBannerTitle: '示例 — 未开启采集',
       exampleBannerDesc: '开启内容采集后,真实脱敏样本会展示在这里。'
     },

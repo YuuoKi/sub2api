@@ -34,6 +34,9 @@ type GenerationContent struct {
 	ResponseBytes      int
 	ResponseTruncated  bool
 	RedactionVersion   int
+	AdoptionStatus     string
+	QualityScore       *float64
+	AdoptionNotes      string
 	CreatedAt          time.Time
 }
 
@@ -41,6 +44,8 @@ type GenerationContent struct {
 type GenerationContentRepository interface {
 	Create(ctx context.Context, content *GenerationContent) error
 	CreateVideoTaskContent(ctx context.Context, content *GenerationContent) error
+	UpdateVideoTaskAdoption(ctx context.Context, input GenerationContentAdoptionInput) (*GenerationContentAdoption, error)
+	GetWeeklyReport(ctx context.Context, start, end time.Time) (*GenerationContentWeeklyReport, error)
 	// GetCaptureStats 返回采集内容的聚合快照（计数/去重/体量 + 近 7 日序列），用于护城河看板。
 	GetCaptureStats(ctx context.Context) (*GenerationContentStats, error)
 	// GetRecent 返回最近 limit 条采集样本（已 LEFT JOIN 归因名），按 created_at 倒序。
@@ -71,6 +76,7 @@ type GenerationContentStats struct {
 
 // GenerationContentSample 是一条最近采集样本，附带用户/团队展示名（脱敏文本未截断，截断交给 handler）。
 type GenerationContentSample struct {
+	TaskID            *int64
 	Model             string
 	CreatedAt         time.Time
 	PromptRedacted    string
@@ -81,6 +87,46 @@ type GenerationContentSample struct {
 	Username          string // COALESCE(users.username,'')
 	Email             string // COALESCE(users.email,'')
 	GroupName         string // COALESCE(groups.name,'')
+	AdoptionStatus    string
+	QualityScore      *float64
+	AdoptionNotes     string
+	VideoStatus       string
+	CostEstimate      float64
+}
+
+type GenerationContentAdoptionInput struct {
+	TaskID         int64
+	AdoptionStatus string
+	QualityScore   *float64
+	Notes          string
+}
+
+type GenerationContentAdoption struct {
+	TaskID         int64
+	AdoptionStatus string
+	QualityScore   *float64
+	Notes          string
+	Saved          bool
+}
+
+type GenerationContentWeeklyAnomalies struct {
+	FailedTasks      int64
+	MissingTaskJoins int64
+	TruncatedRows    int64
+}
+
+type GenerationContentWeeklyReport struct {
+	PeriodStart       time.Time
+	PeriodEnd         time.Time
+	Entries           int64
+	VideoTasks        int64
+	TotalCostEstimate float64
+	AdoptedCount      int64
+	RejectedCount     int64
+	PendingCount      int64
+	UnreviewedCount   int64
+	AdoptionRate      float64
+	Anomalies         GenerationContentWeeklyAnomalies
 }
 
 // GenerationContentCaptureArgs 是 gateway handler 在一次中继完成后交给采集器的原料。

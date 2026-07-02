@@ -1,0 +1,33 @@
+{
+  "phase": "Phase A' tiny real",
+  "status": ["内部可用", "可演示"],
+  "scope": "受控单次 tiny real 三证链路",
+  "date": "2026-07-03",
+  "git_root": "D:\\sub2api-trunk",
+  "branch": "wujie/video-capture-moat-20260702",
+  "task_id": 1,
+  "final_status": "succeeded",
+  "result_url_present": true,
+  "real_chain_ready": true,
+  "ai_generation_content_rows_for_task": 1,
+  "admin_is_live": true,
+  "captured_today": 1,
+  "evidence_files": [
+    "_review/phase-a-prime-tiny-real_20260702/PHASE_A_PRIME_TINY_REAL_REVIEW_HANDOFF_20260703.md",
+    "_review/phase-a-prime-tiny-real_20260702/FINAL_EVIDENCE_20260702.md",
+    "_review/phase-a-prime-tiny-real_20260702/qcanvas_three_proofs_masked.png",
+    "_review/phase-a-prime-tiny-real_20260702/qcanvas_studio_v2_node_masked.png",
+    "_review/phase-a-prime-tiny-real_20260702/generate_qcanvas_review_package.mjs",
+    "_review/phase-a-prime-tiny-real_20260702/qcanvas_studio_v2_render_final.mjs",
+    "_review/phase-a-prime-tiny-real_20260702/qcanvas_studio_v2_single_shot.mjs"
+  ],
+  "historical_blocker_file": "_review/phase-a-prime-tiny-real_20260702/blocked_result.json",
+  "boundaries": {
+    "no_push": true,
+    "no_product_ready_claim": true,
+    "no_real_provider_call_in_a0": true,
+    "no_secret_values_in_evidence": true,
+    "no_full_signed_result_url": true,
+    "future_real_calls_require_separate_authorization": true
+  }
+}

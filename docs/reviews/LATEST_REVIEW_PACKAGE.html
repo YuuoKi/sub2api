@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Phase A' Tiny Real WSL 续跑审查包</title>
+  <title>Phase A' Tiny Real 三证成功审查包</title>
   <style>
     :root {
       color-scheme: light;
@@ -12,7 +12,6 @@
       --text: #18202a;
       --muted: #5f6875;
       --border: #d8dee8;
-      --bad: #b42318;
       --ok: #0b7a4b;
       --warn: #9a5b00;
       --code: #111827;
@@ -87,7 +86,6 @@
       font-size: 12px;
       font-weight: 700;
     }
-    .blocked { color: var(--bad); }
     .ok { color: var(--ok); }
     .warn { color: var(--warn); }
     .panel {
@@ -103,87 +101,113 @@
 <body>
 <main>
   <header>
-    <h1>Phase A' Tiny Real WSL 续跑审查包</h1>
-    <p><span class="badge blocked">已阻塞</span> <span class="muted">2026-07-02 · D:\sub2api-trunk · wujie/video-capture-moat-20260702</span></p>
+    <h1>Phase A' Tiny Real 三证成功审查包</h1>
+    <p><span class="badge ok">内部可用</span> <span class="badge ok">可演示</span> <span class="muted">2026-07-03 · D:\sub2api-trunk · wujie/video-capture-moat-20260702</span></p>
   </header>
 
   <section class="panel">
-    <h2>结论</h2>
-    <p>WSL Docker 已可用，Sub2API 在 WSL keepalive 后连续 10 次 health 全绿；但 Seedance provider 未处于可路由状态，真实 tiny POST 未发起，QCanvas 未启动，task id 为空，供应商成本为 0。</p>
-    <p>停止原因：Phase A' dev DB 的 Admin provider 脱敏摘要没有任何 Seedance provider 同时满足 <code>enabled=true</code>、<code>api_key_configured=true</code>、<code>route_available=true</code>。后续只读盘点发现旧 <code>s2a-mock-pg</code> 中有一个 <code>seedance-smoke</code> 密文行，但没有找到匹配的 <code>VIDEO_GATEWAY_ENCRYPTION_KEY</code>；已发现的 3 个命名 key 候选全部解密失败，所以不能复用。</p>
+    <h2>目标</h2>
+    <p>把 Sub2API 当前入口从 Phase A' 历史阻塞包更新为 Phase A' tiny real 三证成功包，并保留旧阻塞证据作为历史。</p>
   </section>
 
-  <h2>WSL 与稳定性</h2>
+  <section class="panel">
+    <h2>结论</h2>
+    <p>Phase A' tiny real 已在受控单次路径中形成三证：QCanvas 节点有真实结果回填，Sub2API <code>ai_generation_content</code> 对任务 <code>1</code> 有 1 行记录，Admin stats 返回 <code>is_live=true</code>。</p>
+    <p>状态只限本次 Phase A' tiny real 证据链：<b>内部可用 / 可演示</b>。后续任何真实供应商调用仍需单独授权；本包不声明整体产品状态。</p>
+  </section>
+
+  <h2>背景</h2>
+  <ul>
+    <li>历史阻塞包仍保留在 <code>_review/phase-a-prime-tiny-real_20260702/blocked_result.json</code> 与相关 WSL 预检证据中。</li>
+    <li>后续成功包以 <code>PHASE_A_PRIME_TINY_REAL_REVIEW_HANDOFF_20260703.md</code> 和 <code>FINAL_EVIDENCE_20260702.md</code> 为入口。</li>
+    <li>截图与 HTML 证据只保留脱敏结果，不包含完整签名 URL。</li>
+  </ul>
+
+  <h2>执行目录</h2>
   <table>
-    <thead><tr><th>检查项</th><th>结果</th></tr></thead>
     <tbody>
-      <tr><td>WSL distro</td><td>Ubuntu-24.04 / WSL2。初始无 distro，本轮安装/注册后执行。</td></tr>
-      <tr><td>Docker</td><td>client/server 29.1.3</td></tr>
-      <tr><td>Docker Compose</td><td>2.37.1+ds1-0ubuntu2~24.04.1</td></tr>
-      <tr><td>Health 门禁</td><td class="ok">keepalive 后 10/10 OK，21:11:18 到 21:15:43。</td></tr>
-      <tr><td>Compose 状态</td><td class="ok">sub2api、postgres、redis、anthropic-mock 均 Up 5 minutes (healthy)。</td></tr>
+      <tr><th>Git root</th><td><code>D:\sub2api-trunk</code></td></tr>
+      <tr><th>分支</th><td><code>wujie/video-capture-moat-20260702</code></td></tr>
+      <tr><th>证据目录</th><td><code>_review/phase-a-prime-tiny-real_20260702/</code></td></tr>
     </tbody>
   </table>
 
-  <pre><code>21:11:18 health[01]={"status":"ok"}
-21:11:47 health[02]={"status":"ok"}
-21:12:17 health[03]={"status":"ok"}
-21:12:46 health[04]={"status":"ok"}
-21:13:15 health[05]={"status":"ok"}
-21:13:45 health[06]={"status":"ok"}
-21:14:15 health[07]={"status":"ok"}
-21:14:44 health[08]={"status":"ok"}
-21:15:14 health[09]={"status":"ok"}
-21:15:43 health[10]={"status":"ok"}</code></pre>
+  <h2>变更清单</h2>
+  <ul>
+    <li>更新 <code>docs/reviews/LATEST_REVIEW_PACKAGE.html</code> 为 Phase A' 三证成功入口。</li>
+    <li>更新 <code>_review/phase-a-prime-tiny-real_20260702/SUMMARY.md</code> 为成功摘要。</li>
+    <li>新增 <code>_review/phase-a-prime-tiny-real_20260702/success_result.json</code>。</li>
+    <li>更新 <code>00_START_HERE.md</code> 与 <code>docs/CHAT_STRATEGY_CONTEXT.md</code> 的当前状态口径。</li>
+    <li>纳入 7 个成功证据文件：2 个 Markdown、2 张脱敏截图、3 个生成/采集脚本。</li>
+  </ul>
 
-  <h2>三证状态</h2>
+  <h2>实现细节</h2>
   <table>
-    <thead><tr><th>证据</th><th>结果</th><th>说明</th></tr></thead>
+    <thead><tr><th>证据点</th><th>结果</th><th>来源</th></tr></thead>
     <tbody>
-      <tr><td>画布有真片</td><td class="blocked">未执行</td><td>Seedance provider preflight 阻塞，未启动 QCanvas。</td></tr>
-      <tr><td>数据库有记录</td><td class="blocked">未执行</td><td>未创建 HTTP task id，未写入 <code>ai_generation_content</code>。</td></tr>
-      <tr><td>看板 is_live=true</td><td class="blocked">未执行</td><td>未产生内容记录，未调用 stats/samples 终验。</td></tr>
+      <tr><td>QCanvas 节点</td><td class="ok"><code>task_id=1</code>、<code>succeeded</code>、<code>realChainReady=true</code></td><td><code>qcanvas_studio_v2_node_masked.png</code></td></tr>
+      <tr><td>Sub2API 入库</td><td class="ok"><code>SELECT COUNT(*) ... task_id='1'</code> 返回 <code>1</code></td><td><code>PHASE_A_PRIME_TINY_REAL_REVIEW_HANDOFF_20260703.md</code></td></tr>
+      <tr><td>Admin 看板</td><td class="ok"><code>is_live=true</code>、<code>captured_today=1</code></td><td><code>FINAL_EVIDENCE_20260702.md</code></td></tr>
     </tbody>
   </table>
 
-  <h2>Provider 预检</h2>
+  <h2>验证命令和结果</h2>
+  <pre><code>git status --short
+git branch --show-current
+git rev-parse --show-toplevel
+Select-String ... PHASE_A_PRIME_TINY_REAL_REVIEW_HANDOFF_20260703.md
+Select-String ... FINAL_EVIDENCE_20260702.md</code></pre>
+  <p>本次 A0 只复核并重定向当前入口；未重新触发真实供应商调用，未重新启动服务。</p>
+
+  <h2>截图 / 日志证据</h2>
   <ul>
-    <li class="ok"><code>GATEWAY_CONTENT_CAPTURE_ENABLED=true</code></li>
-    <li class="ok"><code>GATEWAY_CONTENT_RETENTION_ENABLED=true</code></li>
-    <li class="blocked">Seedance rows: disabled / missing key / auth_failed；无可用 route。</li>
-    <li class="warn">旧 <code>s2a-mock-pg</code> 存在 <code>seedance-smoke</code> 行：enabled=true、api_key_configured=true、smoke metadata present；但 3 个命名 encryption key 候选全部匹配失败，不能作为 ready 证据。</li>
-    <li>脱敏证据：<code>_review/phase-a-prime-tiny-real_20260702/wsl_provider_preflight.json</code></li>
+    <li><code>qcanvas_three_proofs_masked.png</code>：三证同屏截图。</li>
+    <li><code>qcanvas_studio_v2_node_masked.png</code>：QCanvas 节点截图。</li>
+    <li><code>FINAL_EVIDENCE_20260702.md</code>：Sub2API 最终证据索引。</li>
+    <li><code>PHASE_A_PRIME_TINY_REAL_REVIEW_HANDOFF_20260703.md</code>：交付说明与复核点。</li>
   </ul>
 
-  <h2>红线</h2>
+  <h2>风险</h2>
   <ul>
-    <li class="ok">真实 tiny video POST：未发起。</li>
-    <li class="ok">retry storm：未发生。</li>
-    <li class="ok">provider key/token/cookie：未打印、未写入证据。</li>
-    <li class="ok">push：未执行。</li>
-    <li class="ok">成本：0。</li>
+    <li>Phase A' 成功只覆盖受控单次真实链路；后续真实调用仍需单独授权。</li>
+    <li>QCanvas 仓本身仍有大量未收口工作树内容，本包只记录 Sub2API 当前入口。</li>
+    <li>旧阻塞证据仍保留，引用时必须区分历史阻塞与当前成功入口。</li>
   </ul>
 
-  <h2>证据文件</h2>
+  <h2>回滚方案</h2>
   <ul>
-    <li><code>_review/phase-a-prime-tiny-real_20260702/SUMMARY.md</code></li>
-    <li><code>_review/phase-a-prime-tiny-real_20260702/wsl_docker_baseline.txt</code></li>
-    <li><code>_review/phase-a-prime-tiny-real_20260702/wsl_health_gate_10x.txt</code></li>
-    <li><code>_review/phase-a-prime-tiny-real_20260702/wsl_content_flags.txt</code></li>
-    <li><code>_review/phase-a-prime-tiny-real_20260702/wsl_provider_preflight.json</code></li>
-    <li><code>_review/phase-a-prime-tiny-real_20260702/wsl_seedance_blocker.txt</code></li>
-    <li><code>_review/phase-a-prime-tiny-real_20260702/wsl_candidate_provider_inventory.txt</code></li>
-    <li><code>_review/phase-a-prime-tiny-real_20260702/wsl_candidate_decrypt_probe.txt</code></li>
-    <li><code>_review/phase-a-prime-tiny-real_20260702/wsl_named_key_decrypt_scan.txt</code></li>
-    <li><code>_review/phase-a-prime-tiny-real_20260702/wsl_key_inventory.txt</code></li>
-    <li><code>_review/phase-a-prime-tiny-real_20260702/wsl_cleanup_result.txt</code></li>
+    <li>回滚本次 A0 当前入口提交即可恢复旧入口。</li>
+    <li>历史阻塞证据文件未删除，可继续用于追溯前置失败原因。</li>
   </ul>
 
-  <h2>清理</h2>
-  <p>已执行 <code>docker compose -p sub2api_phasea_prime -f docker-compose.dev.yml down -v</code>；本轮容器、network、volumes 已删除。<code>deploy/.env</code> 已删除，临时 WSL keepalive 已停止。</p>
+  <h2>当前状态</h2>
+  <table>
+    <thead><tr><th>对象</th><th>状态</th><th>依据</th></tr></thead>
+    <tbody>
+      <tr><td>Phase A' tiny real 三证</td><td class="ok">内部可用 / 可演示</td><td>task 1、入库 1 行、Admin <code>is_live=true</code>、脱敏截图。</td></tr>
+      <tr><td>后续真实供应商调用</td><td class="warn">已冻结</td><td>本轮授权已用尽，必须单独授权。</td></tr>
+      <tr><td>公开商业化、多租户、完整 skill v1</td><td class="warn">已冻结</td><td>北极星 V4.1 明文冻结。</td></tr>
+    </tbody>
+  </table>
 
-  <h2>后续</h2>
-  <p>继续前需要先提供或恢复与 <code>seedance-smoke</code> 密文匹配的 <code>VIDEO_GATEWAY_ENCRYPTION_KEY</code>，或在管理后台重新保存一个可用 Seedance provider，使 Phase A' dev DB 同时满足 <code>enabled=true</code>、<code>api_key_configured=true</code>、<code>route_available=true</code> 且可解密。当前已发现的 3 个命名 key 候选均不匹配。然后在 WSL keepalive 存在时重新跑 10 次 health 与 provider preflight，再进入 QCanvas 真链。</p>
+  <h2>下一步建议</h2>
+  <ul>
+    <li>继续 A0-北极星，生成 V4.1 增量审查包并修正状态口径。</li>
+    <li>进入 A1 只读契约快照，生成跨仓字段缝与采集语义报告。</li>
+    <li>进入 A2 时只走 mock/dev 复核，不触发真实供应商调用。</li>
+  </ul>
+
+  <h2>文件索引</h2>
+  <ul>
+    <li><code>_review/phase-a-prime-tiny-real_20260702/PHASE_A_PRIME_TINY_REAL_REVIEW_HANDOFF_20260703.md</code></li>
+    <li><code>_review/phase-a-prime-tiny-real_20260702/FINAL_EVIDENCE_20260702.md</code></li>
+    <li><code>_review/phase-a-prime-tiny-real_20260702/success_result.json</code></li>
+    <li><code>_review/phase-a-prime-tiny-real_20260702/qcanvas_three_proofs_masked.png</code></li>
+    <li><code>_review/phase-a-prime-tiny-real_20260702/qcanvas_studio_v2_node_masked.png</code></li>
+  </ul>
+
+  <h2>可复制后续提示词</h2>
+  <pre><code>继续北极星 V4.1 超级循环。先重读锚文件 #current-state/#roadmap/#guardrails、Sub2API 与 QCanvas 当前审查包、progress log；本轮从 A0-北极星继续。保持不 push、不触发真实供应商调用、不读取 key/token/.env，只用五状态词。</code></pre>
 </main>
 </body>
 </html>

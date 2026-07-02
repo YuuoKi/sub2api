@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# REVIEW-ONLY: Evidence/reproduction helper. Do not run real provider or paid flows without explicit user authorization.
 set -euo pipefail
 
 for c in s2a-mock-pg s2a-mock-redis sub2api wujie-api-day0; do

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# REVIEW-ONLY: Evidence/reproduction helper. Do not run real provider or paid flows without explicit user authorization.
 set -euo pipefail
 
 echo "== container env key lengths =="

@@ -1,0 +1,183 @@
+{
+  "cycle": "C04",
+  "phase": "A1",
+  "status": "待复核",
+  "generated_at": "2026-07-03 01:21:09 +08:00",
+  "write_root": "D:/sub2api-trunk",
+  "read_roots": [
+    "D:/sub2api-trunk",
+    "D:/Codex创业任务/QCanvas（无界版）/QCanvas"
+  ],
+  "boundaries": {
+    "qcanvas_write": "已阻塞",
+    "qcanvas_write_reason": "ABC progress contains RUNNING; A1 only reads QCanvas and writes this Sub2API review artifact.",
+    "real_provider_calls": "已冻结",
+    "push": "已冻结",
+    "secrets": "No secret-bearing config content was read or serialized."
+  },
+  "git": {
+    "sub2api": {
+      "root": "D:/sub2api-trunk",
+      "branch": "wujie/video-capture-moat-20260702",
+      "head": "2d77007885be545ebb4a4daf0e3162ae7cd0a27c",
+      "dirty_summary": [
+        "M .cursor/SETUP.md",
+        "?? .cursor/mcp.json",
+        "?? .cursor/skills/building-nango-functions-locally/",
+        "?? .cursor/skills/nango-toolbox/",
+        "?? .cursor/skills/quickstart/",
+        "?? nango-integrations/"
+      ]
+    },
+    "qcanvas": {
+      "root": "D:/Codex创业任务/QCanvas（无界版）/QCanvas",
+      "branch": "work/night-hardening-20260702",
+      "head": "b1aa25f23d0af92f7b31258e509173f56b2c6843",
+      "dirty_summary": [
+        "M docs/goals/20260630_NIGHT_CODEX_TASK_A_*.md",
+        "M docs/goals/20260630_NIGHT_CODEX_TASK_B_*.md",
+        "M docs/goals/20260701_DAY_CODEX_TASK_*.md",
+        "M docs/goals/20260702_NIGHT_CODEX_TASK_A_*.md",
+        "M docs/goals/20260702_NIGHT_CODEX_TASK_B_*.md",
+        "M docs/reviews/LATEST_REVIEW_PACKAGE.html",
+        "M docs/reviews/夜间硬化_20260702/baseline.md",
+        "?? .codex/",
+        "?? apps/web/%SystemDrive%/",
+        "?? docs/goals/20260702_NIGHT_CODEX_TASK_A2_*.md",
+        "?? docs/goals/20260702_NIGHT_CODEX_*.md",
+        "?? docs/goals/20260703_CODEX_*.md",
+        "?? docs/reviews/PhaseA-prime-tiny-real_20260702/",
+        "?? docs/reviews/超级任务书_ABC_20260703/phase-b0-web.pid"
+      ]
+    }
+  },
+  "source_hashes_sha256": {
+    "qcanvas/packages/schemas/generation-contract/sub2api-video-field-seam-v2.snapshot.json": "d479077995b302bb2d7b70625ef034160d22d08b88288d91f57a07b2eca3c418",
+    "qcanvas/apps/hono-api/src/modules/sub2api/sub2api.video-mock-gateway.service.ts": "9863c58fa34cd237bfea37497143e8858c50f9d3d4fd88bd6f57fb2bf2c12821",
+    "qcanvas/apps/hono-api/src/modules/sub2api/sub2api.video-mock-gateway.service.test.ts": "8088bbbdcb3080acc6c692ad85c417b3505ff83204da617c371cad967f9e8550",
+    "qcanvas/docs/reviews/超级任务书_ABC_20260703/progress.md": "c112fbdcc90fb59b379369bf0c83fe796abe30bf350d7e9263092af0f3cb7f22",
+    "qcanvas/docs/reviews/LATEST_REVIEW_PACKAGE.html": "d303044c2c383342605bb3afcc093421421f992f417902a107473d9097df1080",
+    "qcanvas/docs/LATEST_REVIEW_PACKAGE.md": "42c8d1e401b86594eac6e87eb9a4b6fcc9c66c9a87003dae45b191c07ed63438",
+    "sub2api/backend/internal/handler/video_handler.go": "9cf0e5c747d6e45a9b4b2b4fdb1d3390e6234e6f3864fafefff5839404421620",
+    "sub2api/backend/internal/handler/video_handler_c1_contract_test.go": "aa7eb33b6b555e8e629474c3d2ae30b3dd89c0519b1d49915304edf099eff689",
+    "sub2api/backend/internal/handler/testdata/api_key_video_task_contract_v1.json": "ebf16a280d07a7cd662251bd910c4def037cdc2fb993ef70c05bc5f436e7b5fc",
+    "sub2api/backend/internal/service/generation_content.go": "771d6e8f4c51034031f1a5a8c0c406265c73f80effcbb39dad080831b830b886",
+    "sub2api/backend/internal/repository/generation_content_repo.go": "3e96d2ec9d30ef0cb61718761c0c5344f66f56bdcd30ab885ebba5fb92aa5e25",
+    "sub2api/backend/internal/handler/admin/generation_content_handler.go": "cd0ac5144e8fde3c293616587341147f47e0beb75a67c02b17b0dc2316a0626a",
+    "sub2api/backend/migrations/140_ai_generation_content.sql": "4587a9b54a58e0e2f3c0f9234298bd4baef2350981da1d3f53c689a8cc5c89b9",
+    "sub2api/backend/migrations/146_ai_generation_content_task_id_unique_notx.sql": "40a8c15d905acbce1d7074ccdcd781ee1c478f99c214a8b73f588bbfd8d471c3"
+  },
+  "contract": {
+    "request": {
+      "qcanvas_snapshot_version": "sub2api-video-field-seam/v2",
+      "path": "/v1/video/tasks",
+      "method": "POST",
+      "go_bound_top_level_fields": [
+        "provider",
+        "trial_mode",
+        "task_type",
+        "prompt",
+        "model",
+        "negative_prompt",
+        "reference_image_url",
+        "reference_video_url",
+        "aspect_ratio",
+        "duration",
+        "resolution"
+      ],
+      "hono_flattening": {
+        "aspect_ratio": "params.aspect | params.aspect_ratio | params.aspectRatio",
+        "resolution": "params.quality | params.resolution",
+        "duration": "params.duration, 1..60 integer seconds",
+        "reference_image_url": "params.reference_image_url | params.referenceImageUrl | params.firstFrameUrl",
+        "reference_video_url": "params.reference_video_url | params.referenceVideoUrl",
+        "task_type": "image_to_video when first-frame reference exists or metadata.taskKind=image_to_video; otherwise text_to_video"
+      },
+      "differences": [
+        "QCanvas snapshot lists params and metadata as required top-level fields for diagnostics, but Sub2API binding does not consume them; Gin ignores unknown JSON fields.",
+        "Sub2API accepts reference_to_video, while QCanvas Hono currently emits text_to_video or image_to_video only."
+      ]
+    },
+    "response": {
+      "qcanvas_task_id_sources": [
+        "task_id",
+        "taskId",
+        "id"
+      ],
+      "sub2api_current_id_field": "id",
+      "result_url_sources": [
+        "result_url",
+        "resultUrl",
+        "ResultURL",
+        "url",
+        "result.url",
+        "result.result_url",
+        "result.resultUrl",
+        "result.ResultURL"
+      ],
+      "sub2api_current_result_fields": [
+        "result_url",
+        "ResultURL"
+      ],
+      "mock_boundary_fields": [
+        "mock_only",
+        "provider_boundary",
+        "real_provider_dispatch_count"
+      ]
+    },
+    "ai_generation_content": {
+      "table": "ai_generation_content",
+      "video_idempotency_key": "task_id",
+      "idempotency_enforcement": "uq_ai_generation_content_task_id plus ON CONFLICT (task_id) WHERE task_id IS NOT NULL DO NOTHING",
+      "capture_trigger": "VideoGatewayService.pollTask calls CollectVideoTaskGenerationContent only when normalized status is succeeded.",
+      "capture_gate": "GenerationContentCollector must be injected and Gateway.ContentCapture.Enabled must be true.",
+      "planned_feedback_fields": [
+        "adoption_status",
+        "quality_score"
+      ]
+    },
+    "admin_generation_content": {
+      "stats_endpoint": "GET /api/v1/admin/generation-content/stats",
+      "stats_fields": [
+        "captured_today",
+        "captured_week",
+        "distinct_employees",
+        "distinct_teams",
+        "distinct_models",
+        "total_bytes",
+        "daily_rate",
+        "daily_series",
+        "is_live"
+      ],
+      "samples_endpoint": "GET /api/v1/admin/generation-content/samples",
+      "sample_fields": [
+        "employee_name",
+        "team_name",
+        "model",
+        "created_at",
+        "prompt_preview",
+        "response_preview",
+        "total_bytes",
+        "truncated"
+      ]
+    }
+  },
+  "validation": [
+    {
+      "command": "node -e \"const fs=require('fs'); const p='packages/schemas/generation-contract/sub2api-video-field-seam-v2.snapshot.json'; const j=JSON.parse(fs.readFileSync(p,'utf8')); console.log([j.version,j.request.path,j.request.requiredTopLevelFields.includes('task_type'),j.response.resultUrl.readFrom.includes('ResultURL')].join('|'));\"",
+      "cwd": "D:/Codex创业任务/QCanvas（无界版）/QCanvas",
+      "result": "sub2api-video-field-seam/v2|/v1/video/tasks|true|true"
+    },
+    {
+      "command": "go test ./internal/handler -run \"TestD2ApiKeyVideoContractMatchesSnapshotV1|TestC1ApiKeyVideoResponseMatchesQCanvasContract|TestC1ApiKeyVideoCreateRequestAcceptsQCanvasBody\" -count=1",
+      "cwd": "D:/sub2api-trunk/backend",
+      "result": "ok github.com/Wei-Shaw/sub2api/internal/handler 3.566s"
+    }
+  ],
+  "status_judgement": {
+    "a1_contract_snapshot": "待复核",
+    "sub2api_mock_contract": "内部可用",
+    "qcanvas_code_write": "已阻塞",
+    "future_real_provider_call": "已冻结"
+  }
+}

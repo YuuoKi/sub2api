@@ -3,15 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sub2API D2 G3 采集受控 dev 验证补跑审查包</title>
+  <title>Phase A' Tiny Real 三证同屏审查包</title>
   <style>
     :root {
       color-scheme: light;
-      --bg: #f6f7f9;
+      --bg: #f7f8fa;
       --panel: #ffffff;
       --text: #18202a;
-      --muted: #5d6875;
+      --muted: #5f6875;
       --border: #d8dee8;
+      --bad: #b42318;
       --ok: #0b7a4b;
       --warn: #9a5b00;
       --code: #111827;
@@ -24,40 +25,49 @@
       font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
     main {
-      max-width: 1120px;
+      max-width: 1080px;
       margin: 0 auto;
       padding: 32px 20px 56px;
     }
     header {
-      padding: 28px 0 22px;
+      padding: 24px 0 20px;
       border-bottom: 1px solid var(--border);
     }
     h1 {
-      margin: 0 0 12px;
+      margin: 0 0 10px;
       font-size: 30px;
       line-height: 1.25;
       letter-spacing: 0;
     }
     h2 {
-      margin: 30px 0 12px;
+      margin: 28px 0 12px;
       font-size: 20px;
-      letter-spacing: 0;
-    }
-    h3 {
-      margin: 20px 0 8px;
-      font-size: 16px;
       letter-spacing: 0;
     }
     p { margin: 8px 0; }
     ul { margin: 8px 0 0 22px; padding: 0; }
     li { margin: 4px 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 18px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+    }
+    th, td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #eef2f7; }
     code {
       background: #eef2f7;
       border: 1px solid #dde3ec;
       border-radius: 4px;
       padding: 1px 5px;
       color: var(--code);
-      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      font-family: Consolas, "Liberation Mono", monospace;
       font-size: 0.92em;
     }
     pre {
@@ -69,210 +79,100 @@
       font-size: 13px;
       line-height: 1.5;
     }
-    pre code {
-      background: transparent;
-      border: 0;
-      color: inherit;
-      padding: 0;
-      font-size: inherit;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 12px 0;
-      background: var(--panel);
-    }
-    th, td {
-      border: 1px solid var(--border);
-      padding: 9px 10px;
-      text-align: left;
-      vertical-align: top;
-    }
-    th { background: #edf1f6; }
-    .meta {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-      gap: 8px;
-      color: var(--muted);
-    }
     .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      border-radius: 4px;
-      padding: 3px 8px;
+      display: inline-block;
+      border: 1px solid currentColor;
+      border-radius: 999px;
+      padding: 2px 9px;
+      font-size: 12px;
       font-weight: 700;
-      border: 1px solid var(--border);
-      background: #fff;
     }
+    .blocked { color: var(--bad); }
     .ok { color: var(--ok); }
     .warn { color: var(--warn); }
     .panel {
       background: var(--panel);
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 16px;
-      margin: 16px 0;
+      padding: 16px 18px;
+      margin: 14px 0;
     }
+    .muted { color: var(--muted); }
   </style>
 </head>
 <body>
-  <main>
-    <header>
-      <h1>Sub2API D2 G3 采集受控 dev 验证补跑审查包</h1>
-      <div class="meta">
-        <div>执行日期：2026-07-02</div>
-        <div>执行目录：<code>D:\sub2api-trunk</code></div>
-        <div>分支：<code>wujie/video-capture-moat-20260702</code></div>
-        <div>当前判定：<span class="badge ok">内部可用</span></div>
-      </div>
-    </header>
+<main>
+  <header>
+    <h1>Phase A' Tiny Real 三证同屏审查包</h1>
+    <p><span class="badge blocked">已阻塞</span> <span class="muted">2026-07-02 · D:\sub2api-trunk · wujie/video-capture-moat-20260702</span></p>
+  </header>
 
-    <section class="panel">
-      <h2>结论</h2>
-      <p>G3 受控 dev 闭环已跑通，可从「已阻塞」改判为 <strong>内部可用</strong>。</p>
-      <p>本轮完成 dev compose 环境启动、采集双闸开启、1 条 chat completions、1 条 <code>provider=mock</code> video task、SQL 脱敏验证、Admin stats/samples 看板验证，以及 <code>down -v</code> 清理。</p>
-      <table>
-        <thead><tr><th>验收项</th><th>结果</th></tr></thead>
-        <tbody>
-          <tr><td>dev 是否起得来</td><td>能起，并在验证窗口内 <code>/health=true</code>；本机 Docker/WSL 有外部 fast shutdown/restart 敏感性，见风险。</td></tr>
-          <tr><td><code>ai_generation_content</code> 近 15 分钟行数</td><td><strong>2</strong></td></tr>
-          <tr><td><code>suspicious_rows</code></td><td><strong>0</strong></td></tr>
-          <tr><td>Admin 看板</td><td><code>is_live=true</code>，<code>captured_today=2</code>，<code>sample_count=2</code></td></tr>
-          <tr><td>清理</td><td>已完成：<code>deploy/.env</code> 已删除，named volumes 已删除，<code>deploy/data/</code>、<code>deploy/postgres_data/</code>、<code>deploy/redis_data/</code> 不存在。</td></tr>
-        </tbody>
-      </table>
-    </section>
+  <section class="panel">
+    <h2>结论</h2>
+    <p>本轮停在 Sub2API provider preflight，未进入 QCanvas，未发起真实 tiny video POST，未产生 task id，未产生计费。</p>
+    <p>停止原因：独立 compose project <code>sub2api_phasea_prime</code> 可构建、可启动，<code>/health</code> 曾短暂返回 <code>{"status":"ok"}</code>，但服务持续重启。Admin provider preflight 期间登录请求无法稳定连接，随后 <code>docker compose ps</code> 显示服务又回到 <code>Up 5 seconds (health: starting)</code>。</p>
+  </section>
 
-    <section>
-      <h2>边界</h2>
-      <ul>
-        <li>未 push、未 deploy。</li>
-        <li>未调用真实付费 provider；chat 使用 compose 内部 <code>anthropic-mock</code>，video 使用 <code>provider=mock</code>。</li>
-        <li>未打印密码、API Key、JWT 明文。</li>
-        <li>未修改 <code>config.example.yaml</code> 默认值。</li>
-        <li>未纳入既有脏文件：<code>.cursor/SETUP.md</code>、<code>.impeccable/</code>、<code>MORNING_RESULT_2026_06_28.md</code>。</li>
-      </ul>
-    </section>
+  <h2>三证状态</h2>
+  <table>
+    <thead>
+      <tr><th>证据</th><th>结果</th><th>说明</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>画布有真片</td><td class="blocked">未执行</td><td>因 Sub2API preflight 阻塞，未启动 QCanvas，未截图。</td></tr>
+      <tr><td>数据库有记录</td><td class="blocked">未执行</td><td>未创建 HTTP task id，未写入 <code>ai_generation_content</code>。</td></tr>
+      <tr><td>看板 is_live=true</td><td class="blocked">未执行</td><td>未产生内容记录，未调用 stats/samples 验收。</td></tr>
+    </tbody>
+  </table>
 
-    <section>
-      <h2>变更清单</h2>
-      <ul>
-        <li><code>backend/internal/config/config.go</code>：新增 content capture / retention 显式 <code>BindEnv</code>。</li>
-        <li><code>backend/internal/config/config_test.go</code>：新增 <code>TestLoadContentCaptureFlagsFromEnv</code>。</li>
-        <li><code>deploy/docker-compose.dev.yml</code>：显式传入采集双闸环境变量；dev 数据改 named volumes；增加内部 <code>anthropic-mock</code>。</li>
-        <li><code>frontend/package.json</code>：增加 <code>pnpm.overrides</code>，解除当前 Docker frozen install 阻塞。</li>
-        <li><code>_review/capture-arming-D2-20260702-G3/</code>：保存验证脚本、SQL/Admin 证据、结果摘要。</li>
-      </ul>
-    </section>
+  <h2>已执行</h2>
+  <ul>
+    <li>复核 Git 三件套：root 为 <code>D:/sub2api-trunk</code>，分支为 <code>wujie/video-capture-moat-20260702</code>。</li>
+    <li>仅提交 G3 白名单文件，本地 commit：<code>98b4ea8e docs(review): close G3 capture dev validation</code>。</li>
+    <li>采集 flag 测试通过：<code>go test ./internal/config -run TestLoadContentCaptureFlagsFromEnv</code>，结果 <code>ok github.com/Wei-Shaw/sub2api/internal/config 1.428s</code>。</li>
+    <li>创建临时 <code>deploy/.env</code>，只写本轮运行变量，未打印 secret 值。</li>
+    <li>使用独立 project 启动：<code>docker compose -p sub2api_phasea_prime -f docker-compose.dev.yml up --build -d</code>，构建和启动命令完成。</li>
+  </ul>
 
-    <section>
-      <h2>实现细节</h2>
-      <h3>配置映射</h3>
-      <p><code>gateway.content_capture.enabled</code> 对应 <code>GATEWAY_CONTENT_CAPTURE_ENABLED</code>。原问题是 env-only 配置没有稳定进入 Viper unmarshal 结果；本轮增加显式 <code>BindEnv</code>，默认仍关闭。</p>
-      <h3>Dev harness</h3>
-      <p><code>anthropic-mock</code> 只在 compose network 内提供 `/v1/messages` mock SSE 响应，不暴露宿主机端口；mock video 继续走现有 <code>provider=mock</code> 路径。</p>
-    </section>
+  <h2>关键证据</h2>
+  <pre><code>docker compose ps:
+sub2api-dev                  sub2api_phasea_prime-sub2api   ...   Up 5 seconds (health: starting)   127.0.0.1:8080-&gt;8080/tcp
+sub2api-postgres-dev         postgres:18-alpine             ...   Up 5 seconds (health: starting)
+sub2api-redis-dev            redis:8-alpine                 ...   Up 5 seconds (health: starting)</code></pre>
 
-    <section>
-      <h2>验证命令和结果</h2>
-      <h3>Git 基线</h3>
-      <pre><code>git status --short
-git branch --show-current
-git rev-parse --show-toplevel</code></pre>
-      <p>结果：分支 <code>wujie/video-capture-moat-20260702</code>，Git root <code>D:/sub2api-trunk</code>，未执行 <code>git add</code>，未 push。</p>
+  <pre><code>Sub2API logs:
+2026-07-02T20:01:29.603+0800 INFO Server started on 0.0.0.0:8080
+2026-07-02T20:01:40.158+0800 INFO Shutting down server...
+2026-07-02T20:01:40.158+0800 INFO Server exited
+2026-07-02T20:01:40.159+0800 INFO [Cleanup] GenerationContentRetentionService succeeded
+2026-07-02T20:01:40.159+0800 INFO [Cleanup] VideoGatewayWorker succeeded</code></pre>
 
-      <h3>Dev 启动</h3>
-      <pre><code>cd D:\sub2api-trunk\deploy
-docker compose -p sub2api_g3 -f docker-compose.dev.yml up --build -d</code></pre>
-      <p>验证窗口内 <code>sub2api</code> health 探针返回 true；chat、mock video、SQL、Admin probe 均完成。</p>
+  <h2>证据文件</h2>
+  <ul>
+    <li><code>_review/phase-a-prime-tiny-real_20260702/SUMMARY.md</code></li>
+    <li><code>_review/phase-a-prime-tiny-real_20260702/blocked_result.json</code></li>
+    <li><code>_review/phase-a-prime-tiny-real_20260702/compose_ps_blocked.txt</code></li>
+    <li><code>_review/phase-a-prime-tiny-real_20260702/sub2api_logs_tail_blocked.txt</code></li>
+  </ul>
 
-      <h3>HTTP 用户路径</h3>
-      <p>证据文件：<code>_review/capture-arming-D2-20260702-G3/g3_http_result.json</code></p>
-      <pre><code>{
-  "status": "ok",
-  "chat_ok": true,
-  "video_provider": "mock",
-  "video_final_status": "succeeded",
-  "result_url_present": true,
-  "ResultURL_present": true
-}</code></pre>
+  <h2>红线</h2>
+  <ul>
+    <li class="ok">真实 tiny video POST：未发起。</li>
+    <li class="ok">retry storm：未发生。</li>
+    <li class="ok">provider key/token/cookie：未打印。</li>
+    <li class="ok">push：未执行。</li>
+    <li class="ok">成本：0，本轮未调用真实视频供应商。</li>
+  </ul>
 
-      <h3>SQL 采集与脱敏</h3>
-      <pre><code>docker compose -p sub2api_g3 -f docker-compose.dev.yml cp ../_review/capture-arming-D2-20260702-G3/g3_sql_evidence.sql postgres:/tmp/g3_sql_evidence.sql
-docker compose -p sub2api_g3 -f docker-compose.dev.yml exec -T postgres psql -U sub2api -d sub2api -v ON_ERROR_STOP=1 -f /tmp/g3_sql_evidence.sql</code></pre>
-      <ul>
-        <li><code>g3_sql_recent_count.txt</code>：<strong>2</strong></li>
-        <li><code>g3_sql_suspicious_rows.txt</code>：<strong>0</strong></li>
-        <li><code>g3_sql_recent_rows.txt</code>：包含 <code>mock-video-v1</code> 与 <code>claude-3-5-haiku-20241022</code>，手机号和 token preview 已脱敏。</li>
-      </ul>
+  <h2>风险</h2>
+  <ul>
+    <li>当前独立 compose project 的服务生命周期不稳定，不能作为 tiny real 验证基线。</li>
+    <li>启动日志中 PricingService 尝试拉取公开 pricing 文件并超时，这不是视频供应商调用，但说明本地 dev 启动仍可能触发外部网络尝试。</li>
+    <li>compose 文件中的 container_name 仍是通用 dev 名称，虽使用独立 project 和独立 volumes，后续仍建议复核是否会与其他本机 dev 栈产生名称层面的冲突。</li>
+  </ul>
 
-      <h3>Admin 看板</h3>
-      <pre><code>docker compose -p sub2api_g3 -f docker-compose.dev.yml exec -T sub2api sh -c "chmod +x /tmp/g3_admin_probe.sh &amp;&amp; /tmp/g3_admin_probe.sh"</code></pre>
-      <p>证据文件：<code>_review/capture-arming-D2-20260702-G3/g3_admin_result.json</code></p>
-      <pre><code>{
-  "status": "ok",
-  "stats_status": 200,
-  "samples_status": 200,
-  "is_live": true,
-  "samples_live": true,
-  "captured_today": 2,
-  "sample_count": 2,
-  "sample_preview_safe": true
-}</code></pre>
-    </section>
-
-    <section>
-      <h2>清理结果</h2>
-      <pre><code>cd D:\sub2api-trunk\deploy
-docker compose -p sub2api_g3 -f docker-compose.dev.yml down -v
-Remove-Item -LiteralPath D:\sub2api-trunk\deploy\.env -Force</code></pre>
-      <ul>
-        <li><code>down -v</code> 输出显示 <code>sub2api_g3_postgres_data_dev</code>、<code>sub2api_g3_redis_data_dev</code>、<code>sub2api_g3_sub2api_data_dev</code> 已删除。</li>
-        <li><code>deploy/.env</code>、<code>deploy/data/</code>、<code>deploy/postgres_data/</code>、<code>deploy/redis_data/</code> 均不存在。</li>
-        <li><code>git status --short --ignored deploy _review/capture-arming-D2-20260702-G3 docs/reviews/LATEST_REVIEW_PACKAGE.html</code> 未显示 `.env` 或数据目录被 staged。</li>
-      </ul>
-    </section>
-
-    <section>
-      <h2>风险</h2>
-      <ul>
-        <li><span class="warn">本机 Docker/WSL 复查阶段存在外部 fast shutdown/restart 敏感性</span>；G3 闭环已在健康窗口内完成，但不宣称长期 dev 环境稳定。</li>
-        <li><code>anthropic-mock</code> 是 dev-only harness，不用于生产。</li>
-        <li>Dev 数据改为 named volumes 后，不再生成旧的 <code>deploy/postgres_data/</code> 等目录。</li>
-        <li><code>docs/reviews/LATEST_REVIEW_PACKAGE.html</code> 是 ignored 文件，已更新但不会自然出现在普通 <code>git status --short</code> 中。</li>
-      </ul>
-    </section>
-
-    <section>
-      <h2>回滚方案</h2>
-      <pre><code>git checkout -- backend/internal/config/config.go backend/internal/config/config_test.go deploy/docker-compose.dev.yml frontend/package.json
-Remove-Item -Recurse -Force _review/capture-arming-D2-20260702-G3</code></pre>
-      <p>环境清理可重复执行：</p>
-      <pre><code>cd D:\sub2api-trunk\deploy
-docker compose -p sub2api_g3 -f docker-compose.dev.yml down -v</code></pre>
-    </section>
-
-    <section>
-      <h2>文件索引</h2>
-      <ul>
-        <li><code>_review/capture-arming-D2-20260702-G3/SUMMARY.md</code></li>
-        <li><code>_review/capture-arming-D2-20260702-G3/run_g3_verify.ps1</code></li>
-        <li><code>_review/capture-arming-D2-20260702-G3/admin_probe_container.sh</code></li>
-        <li><code>_review/capture-arming-D2-20260702-G3/g3_http_result.json</code></li>
-        <li><code>_review/capture-arming-D2-20260702-G3/g3_admin_result.json</code></li>
-        <li><code>_review/capture-arming-D2-20260702-G3/g3_sql_evidence.sql</code></li>
-        <li><code>_review/capture-arming-D2-20260702-G3/g3_sql_recent_count.txt</code></li>
-        <li><code>_review/capture-arming-D2-20260702-G3/g3_sql_suspicious_rows.txt</code></li>
-        <li><code>_review/capture-arming-D2-20260702-G3/g3_sql_recent_rows.txt</code></li>
-        <li><code>docs/reviews/LATEST_REVIEW_PACKAGE.html</code></li>
-      </ul>
-    </section>
-
-    <section>
-      <h2>后续提示词</h2>
-      <pre><code>继续 Sub2API D2/G3 采集受控 dev 验证收口。当前 G3 已在 D:\sub2api-trunk 的 wujie/video-capture-moat-20260702 分支补跑到「内部可用」：SQL 近 15 分钟 2 行，suspicious_rows=0，Admin is_live=true，清理已完成。请只读复核 _review/capture-arming-D2-20260702-G3/SUMMARY.md 与 docs/reviews/LATEST_REVIEW_PACKAGE.html，不触达真实 provider，不打印任何密钥/JWT/API Key，不 push。</code></pre>
-    </section>
-  </main>
+  <h2>回滚与后续</h2>
+  <p>G3 commit 可回滚：<code>git revert 98b4ea8e</code>。继续 Phase A' 前，请先只读排查 dev 栈为何启动约 10 秒后自行 shutdown，确认 <code>/health</code> 和 Admin provider preflight 可连续稳定通过，再继续 QCanvas 真链。</p>
+</main>
 </body>
 </html>

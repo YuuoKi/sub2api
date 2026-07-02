@@ -1,0 +1,13 @@
+﻿{
+    "status":  "blocked",
+    "phase":  "sub2api_provider_preflight",
+    "health_probe":  "flapping",
+    "real_post_attempted":  false,
+    "qcanvas_attempted":  false,
+    "reason":  "Sub2API phase-a compose project restarted before Admin provider preflight could confirm seedance readiness.",
+    "redline":  "No tiny real provider call was attempted.",
+    "evidence":  [
+                     "compose_ps_blocked.txt",
+                     "sub2api_logs_tail_blocked.txt"
+                 ]
+}

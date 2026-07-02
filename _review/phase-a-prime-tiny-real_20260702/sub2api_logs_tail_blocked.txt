@@ -1,0 +1,23 @@
+Command:
+docker compose -p sub2api_phasea_prime -f docker-compose.dev.yml logs --tail=220 sub2api
+
+Result captured: 2026-07-02 20:02 Asia/Shanghai
+
+Relevant route registration evidence:
+[GIN-debug] GET    /api/v1/admin/video/providers --> github.com/Wei-Shaw/sub2api/internal/handler/admin.(*VideoHandler).ListProviders-fm (8 handlers)
+[GIN-debug] GET    /v1/video/providers       --> github.com/Wei-Shaw/sub2api/internal/handler.(*VideoHandler).ListAPIKeyVideoProviders-fm (13 handlers)
+[GIN-debug] POST   /v1/video/tasks           --> github.com/Wei-Shaw/sub2api/internal/handler.(*VideoHandler).CreateAPIKeyVideoTask-fm (13 handlers)
+[GIN-debug] GET    /v1/video/tasks/:id       --> github.com/Wei-Shaw/sub2api/internal/handler.(*VideoHandler).GetAPIKeyVideoTask-fm (13 handlers)
+
+Relevant shutdown evidence:
+2026-07-02T20:01:29.603+0800 INFO Server started on 0.0.0.0:8080
+2026-07-02T20:01:40.158+0800 INFO Shutting down server...
+2026-07-02T20:01:40.158+0800 INFO Server exited
+2026-07-02T20:01:40.159+0800 INFO [Cleanup] GenerationContentRetentionService succeeded
+2026-07-02T20:01:40.159+0800 INFO [Cleanup] VideoGatewayWorker succeeded
+2026-07-02T20:01:40.166+0800 INFO [Cleanup] All cleanup steps completed
+2026-07-02T20:02:10.502+0800 INFO Timezone initialized: Asia/Shanghai (UTC offset: +08:00)
+
+Interpretation:
+The service started and exposed the expected video routes, but it shut itself down roughly 10 seconds later.
+This repeated while provider preflight was being attempted, so the run stopped before any tiny real provider call.

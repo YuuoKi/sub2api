@@ -30,6 +30,25 @@ New project template: `~/.cursor/templates/project-quality/` (copy `.cursor/` in
 
 **Windows 注意:** stop 的 `followup_message` 在部分版本有 stdout 捕获问题（[论坛已知 bug](https://forum.cursor.com/t/stop-hook-followup-message-not-captured-on-windows-execution-log-shows-despite-valid-json-on-stdout/155078)）；脚本已加 `[Console]::Out.Flush()`。若 Execution Log 显示 `{}` 但手动测试有输出，属 Cursor 侧问题，可在 Settings → Hooks → Execution Log 排查。
 
+## Windows：Agent Shell 频繁报 `no exit status`（2026-07 已知问题）
+
+**症状：** Agent 的 Shell 工具每条命令都报 `The shell command returned no exit status`，无 stdout/stderr；但你在集成终端里手动跑同一命令完全正常。
+
+**根因：** Windows 上 Agent 默认走 **Sandbox 执行通道**，该通道在 Windows 上不可靠（pty 未正确拉起或流被提前关闭）。这与本仓库的 hooks / PowerShell 配置无关；`beforeShellExecution` 仅在 `git push` 时触发，不会影响 `echo` / `git status` 等普通命令。
+
+**一次性修复（推荐，≈30 秒）：**
+
+1. 打开 **Cursor Settings**（`Ctrl+Shift+J` 或 `Ctrl+,` → Agents）
+2. **Agents → Inline Editing & Terminal** → 打开 **Legacy Terminal Tool**
+3. **Agents → Auto-Run**：若曾启用过 **Auto-Run in Sandbox**（新版 UI 可能已隐藏该选项，但旧值会残留），改为 **Use Allowlist** 或 **Auto-review**
+4. **完全退出并重启 Cursor**（或 `Developer: Reload Window`）
+
+修复后可用 Agent 跑 `echo hello`、`git status` 验证：应返回 exit code 0 且有输出。
+
+**参考：** [Cursor 论坛 — Windows Agent Shell no exit status](https://forum.cursor.com/t/windows-agent-shell-tool-returns-no-exit-status-and-produces-no-terminal-output-files-integrated-terminal-works-perfectly/163565)
+
+**临时绕过（未改设置前）：** Agent 调用 Shell 时加 `required_permissions: ["full_network"]` 或 `["all"]` 通常可执行成功，但不如开启 Legacy Terminal Tool 彻底。
+
 Complete these once (≈5 minutes):
 
 1. **Cursor Team Kit** — In Agent chat: `/add-plugin cursor-team-kit`

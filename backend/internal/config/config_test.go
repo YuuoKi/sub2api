@@ -225,6 +225,23 @@ func TestLoadSchedulingConfigFromEnv(t *testing.T) {
 	}
 }
 
+func TestLoadContentCaptureFlagsFromEnv(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("GATEWAY_CONTENT_CAPTURE_ENABLED", "true")
+	t.Setenv("GATEWAY_CONTENT_RETENTION_ENABLED", "true")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if !cfg.Gateway.ContentCapture.Enabled {
+		t.Fatalf("Gateway.ContentCapture.Enabled = false, want true")
+	}
+	if !cfg.Gateway.ContentRetention.Enabled {
+		t.Fatalf("Gateway.ContentRetention.Enabled = false, want true")
+	}
+}
+
 func TestLoadWeChatConnectConfigFromLegacyEnv(t *testing.T) {
 	resetViperWithJWTSecret(t)
 	t.Setenv("WECHAT_OAUTH_OPEN_APP_ID", "wx-open-app")

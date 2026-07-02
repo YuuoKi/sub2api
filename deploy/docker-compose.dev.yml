@@ -18,7 +18,7 @@ services:
     ports:
       - "${BIND_HOST:-127.0.0.1}:${SERVER_PORT:-8080}:8080"
     volumes:
-      - ./data:/app/data
+      - sub2api_data_dev:/app/data
     environment:
       - AUTO_SETUP=true
       - SERVER_HOST=0.0.0.0
@@ -47,6 +47,8 @@ services:
       - GATEWAY_IMAGE_CONCURRENCY_OVERFLOW_MODE=${GATEWAY_IMAGE_CONCURRENCY_OVERFLOW_MODE:-reject}
       - GATEWAY_IMAGE_CONCURRENCY_WAIT_TIMEOUT_SECONDS=${GATEWAY_IMAGE_CONCURRENCY_WAIT_TIMEOUT_SECONDS:-30}
       - GATEWAY_IMAGE_CONCURRENCY_MAX_WAITING_REQUESTS=${GATEWAY_IMAGE_CONCURRENCY_MAX_WAITING_REQUESTS:-100}
+      - GATEWAY_CONTENT_CAPTURE_ENABLED=${GATEWAY_CONTENT_CAPTURE_ENABLED:-false}
+      - GATEWAY_CONTENT_RETENTION_ENABLED=${GATEWAY_CONTENT_RETENTION_ENABLED:-false}
     depends_on:
       postgres:
         condition: service_healthy
@@ -66,7 +68,7 @@ services:
     container_name: sub2api-postgres-dev
     restart: unless-stopped
     volumes:
-      - ./postgres_data:/var/lib/postgresql/data
+      - postgres_data_dev:/var/lib/postgresql/data
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-sub2api}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
@@ -87,7 +89,7 @@ services:
     container_name: sub2api-redis-dev
     restart: unless-stopped
     volumes:
-      - ./redis_data:/data
+      - redis_data_dev:/data
     command: >
         sh -c '
           redis-server
@@ -107,6 +109,84 @@ services:
       retries: 5
       start_period: 5s
 
+  anthropic-mock:
+    image: node:24-alpine
+    container_name: sub2api-anthropic-mock-dev
+    restart: unless-stopped
+    command:
+      - node
+      - -e
+      - |
+        const http = require('http');
+        const event = (name, data) => 'event: ' + name + '\n' + 'data: ' + JSON.stringify(data) + '\n\n';
+        http.createServer((req, res) => {
+          if (req.url === '/health') {
+            res.writeHead(200, {'content-type': 'application/json'});
+            return res.end('{"status":"ok"}');
+          }
+          if (req.method !== 'POST' || !req.url.startsWith('/v1/messages')) {
+            res.writeHead(404, {'content-type': 'application/json'});
+            return res.end('{"error":{"message":"not found"}}');
+          }
+          const chunks = [];
+          req.on('data', chunk => chunks.push(chunk));
+          req.on('end', () => {
+            res.writeHead(200, {
+              'content-type': 'text/event-stream; charset=utf-8',
+              'cache-control': 'no-cache',
+              'x-request-id': 'mock-chat-g3'
+            });
+            const model = 'mock-chat-v1';
+            res.write(event('message_start', {
+              type: 'message_start',
+              message: {
+                id: 'msg_mock_g3',
+                type: 'message',
+                role: 'assistant',
+                model,
+                content: [],
+                stop_reason: null,
+                stop_sequence: null,
+                usage: { input_tokens: 9, output_tokens: 0 }
+              }
+            }));
+            res.write(event('content_block_start', {
+              type: 'content_block_start',
+              index: 0,
+              content_block: { type: 'text', text: '' }
+            }));
+            res.write(event('content_block_delta', {
+              type: 'content_block_delta',
+              index: 0,
+              delta: {
+                type: 'text_delta',
+                text: 'D2 dev capture mock response with phone 13800138000 and token placeholder'
+              }
+            }));
+            res.write(event('content_block_stop', { type: 'content_block_stop', index: 0 }));
+            res.write(event('message_delta', {
+              type: 'message_delta',
+              delta: { stop_reason: 'end_turn', stop_sequence: null },
+              usage: { output_tokens: 12 }
+            }));
+            res.write(event('message_stop', { type: 'message_stop' }));
+            res.end();
+          });
+        }).listen(8081, '0.0.0.0');
+    networks:
+      - sub2api-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-T", "5", "-O", "/dev/null", "http://127.0.0.1:8081/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
 networks:
   sub2api-network:
     driver: bridge
+
+volumes:
+  sub2api_data_dev:
+  postgres_data_dev:
+  redis_data_dev:

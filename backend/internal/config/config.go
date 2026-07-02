@@ -1323,6 +1323,7 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 	// 环境变量支持
 	viper.AutomaticEnv()
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	bindDarkDefaultEnvKeys()
 
 	// 默认值
 	setDefaults()
@@ -1460,6 +1461,22 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 	}
 
 	return &cfg, nil
+}
+
+func bindDarkDefaultEnvKeys() {
+	keys := []string{
+		"gateway.content_capture.enabled",
+		"gateway.content_capture.response_max_bytes",
+		"gateway.content_capture.prompt_max_bytes",
+		"gateway.content_retention.enabled",
+		"gateway.content_retention.retention_days",
+		"gateway.content_retention.batch_size",
+		"gateway.content_retention.interval_seconds",
+		"gateway.content_retention.dry_run",
+	}
+	for _, key := range keys {
+		_ = viper.BindEnv(key)
+	}
 }
 
 func setDefaults() {

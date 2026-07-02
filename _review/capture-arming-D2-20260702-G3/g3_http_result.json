@@ -1,0 +1,18 @@
+{
+  "status": "ok",
+  "health": true,
+  "admin_login_token_present": true,
+  "api_key_created": true,
+  "api_key_bound_to_mock_group": true,
+  "chat_ok": true,
+  "video_provider": "mock",
+  "video_task_id_present": true,
+  "video_final_status": "succeeded",
+  "result_url_present": true,
+  "ResultURL_present": true,
+  "evidence_basis": [
+    "run_g3_verify.ps1 reached the SQL phase after the chat and video guards; the later failure was the nested PowerShell docker CLI lookup, not HTTP/video validation",
+    "g3_sql_recent_rows.txt contains both claude-3-5-haiku-20241022 chat capture and mock-video-v1 video capture rows",
+    "g3_admin_result.json reports is_live=true, captured_today=2, sample_count=2, sample_preview_safe=true"
+  ]
+}

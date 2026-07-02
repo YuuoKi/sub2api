@@ -1,0 +1,2 @@
+2|1|mock-video-v1|{"prompt":"D2 dev capture check, phone [PHONE], token [已脱敏]","summary_kind":"video_task_prompt"}|{"aspect_ratio":"16:9","duration":5,"metadata_summary":true,"resolution":"720p","result_url":"/api/v1/video/mock-assets/|135|171|f
+1||claude-3-5-haiku-20241022|{"messages":[{"content":"G3 dev capture chat check phone [PHONE] token [已脱敏]","role":"user"}],"model":"claude-3-5-haiku-|data: {"id":"msg_mock_g3","object":"chat.completion.chunk","created":1782985003,"model":"claude-3-5-haiku-20241022","cho|183|653|f

@@ -1,0 +1,53 @@
+﻿{
+    "phase":  "login_probe",
+    "attempts":  [
+                     {
+                         "error":  "无法将值“HTTP_STATUS:000”转换为类型“System.Int32”。错误:“输入字符串的格式不正确。”",
+                         "attempt":  1
+                     },
+                     {
+                         "error":  "无法将值“HTTP_STATUS:000”转换为类型“System.Int32”。错误:“输入字符串的格式不正确。”",
+                         "attempt":  2
+                     },
+                     {
+                         "error":  "无法将值“HTTP_STATUS:000”转换为类型“System.Int32”。错误:“输入字符串的格式不正确。”",
+                         "attempt":  3
+                     },
+                     {
+                         "error":  "无法将值“HTTP_STATUS:000”转换为类型“System.Int32”。错误:“输入字符串的格式不正确。”",
+                         "attempt":  4
+                     },
+                     {
+                         "error":  "无法将值“HTTP_STATUS:000”转换为类型“System.Int32”。错误:“输入字符串的格式不正确。”",
+                         "attempt":  5
+                     },
+                     {
+                         "error":  "无法将值“HTTP_STATUS:000”转换为类型“System.Int32”。错误:“输入字符串的格式不正确。”",
+                         "attempt":  6
+                     },
+                     {
+                         "error":  "无法将值“HTTP_STATUS:000”转换为类型“System.Int32”。错误:“输入字符串的格式不正确。”",
+                         "attempt":  7
+                     },
+                     {
+                         "error":  "无法将值“HTTP_STATUS:000”转换为类型“System.Int32”。错误:“输入字符串的格式不正确。”",
+                         "attempt":  8
+                     },
+                     {
+                         "error":  "无法将值“HTTP_STATUS:000”转换为类型“System.Int32”。错误:“输入字符串的格式不正确。”",
+                         "attempt":  9
+                     },
+                     {
+                         "error":  "无法将值“HTTP_STATUS:000”转换为类型“System.Int32”。错误:“输入字符串的格式不正确。”",
+                         "attempt":  10
+                     },
+                     {
+                         "error":  "无法将值“HTTP_STATUS:000”转换为类型“System.Int32”。错误:“输入字符串的格式不正确。”",
+                         "attempt":  11
+                     },
+                     {
+                         "error":  "无法将值“HTTP_STATUS:000”转换为类型“System.Int32”。错误:“输入字符串的格式不正确。”",
+                         "attempt":  12
+                     }
+                 ]
+}

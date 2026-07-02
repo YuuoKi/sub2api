@@ -21,6 +21,8 @@ WSL 续跑已把 Sub2API 稳住：Ubuntu-24.04 WSL2 内 Docker 29.1.3 / Compose 
 
 停止原因：Admin provider 脱敏摘要显示没有任何 Seedance provider 同时满足 `enabled=true`、`api_key_configured=true`、`route_available=true`。当前 Seedance 行分别处于 disabled、missing key、auth_failed 状态。
 
+续跑补充取证：WSL Docker 中另有一个旧的 `s2a-mock-pg`，只读 SQL 发现 `seedance-smoke` 行满足 `enabled=true`、`api_key_configured=true`，并带 smoke 授权 metadata。但它没有 compose labels，来源不明；唯一发现的 `wujie-api-day0:VIDEO_GATEWAY_ENCRYPTION_KEY` 对该行密文解密失败（`InvalidTag`），Windows/WSL/Docker env 中也没有发现 Seedance/Ark upstream key 变量。因此不能把该行当作可用 provider，也不能复制到 Phase A' dev DB 后宣称 ready。
+
 三证结果：
 
 | 证据 | 结果 | 说明 |
@@ -96,6 +98,9 @@ docker compose -p sub2api_phasea_prime -f docker-compose.dev.yml up --build -d
 - `wsl_content_flags.txt`：容器内采集双闸。
 - `wsl_provider_preflight.json`：Admin provider 脱敏摘要。
 - `wsl_seedance_blocker.txt`：Seedance 未 ready 的非敏感结论。
+- `wsl_candidate_provider_inventory.txt`：现有 WSL Postgres 容器的 provider 非敏感盘点。
+- `wsl_candidate_decrypt_probe.txt`：候选 `seedance-smoke` 密文与候选 encryption key 的不泄密匹配结果。
+- `wsl_key_inventory.txt`：Windows/WSL/Docker env 中 key 变量名和值长度盘点，不含值。
 - `wsl_cleanup_result.txt`：WSL 清理结果。
 
 ## 红线执行情况
@@ -111,6 +116,7 @@ docker compose -p sub2api_phasea_prime -f docker-compose.dev.yml up --build -d
 
 - Windows 侧直接调用 WSL 时，distro 可能在命令结束后回收，导致 Docker state 重启；本轮通过临时 keepalive 后健康门禁通过。
 - 当前 dev DB 内 Seedance provider 未配置到可路由状态，不能作为 tiny real 验证基线。
+- `s2a-mock-pg` 中存在一个配置状 seedance-smoke 行，但没有匹配 encryption key 证据；强行复用会把“密文存在”误判为“真实可路由”。
 - 启动日志中 PricingService 尝试拉取公开 pricing 文件并超时，这不是视频供应商调用，但说明本地 dev 启动仍可能触发外部网络尝试。
 - compose 文件中的 container_name 仍是通用 dev 名称，虽使用了独立 project 和独立 volumes，后续仍建议复核是否会与其他本机 dev 栈产生名称层面的冲突。
 
@@ -130,4 +136,4 @@ docker compose -p sub2api_phasea_prime -f docker-compose.dev.yml down -v
 
 ## 后续提示词
 
-继续 Phase A' 前，请先在管理后台或数据库中配置一个 Seedance provider，使其同时满足 `enabled=true`、`api_key_configured=true`、`route_available=true`。然后在 WSL 中保持 keepalive，重新跑 10 次 health 门禁和 provider preflight。不要补发 tiny real POST，不要重试出片，仍保持 1 次真实 POST 上限。
+继续 Phase A' 前，请先提供或恢复与 `seedance-smoke` 密文匹配的 `VIDEO_GATEWAY_ENCRYPTION_KEY`，或在管理后台重新保存一个 Seedance provider，使其在 Phase A' dev DB 中同时满足 `enabled=true`、`api_key_configured=true`、`route_available=true` 且可解密。然后在 WSL 中保持 keepalive，重新跑 10 次 health 门禁和 provider preflight。不要补发 tiny real POST，不要重试出片，仍保持 1 次真实 POST 上限。

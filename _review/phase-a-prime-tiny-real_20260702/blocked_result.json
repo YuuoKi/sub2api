@@ -4,7 +4,7 @@
     "health_probe":  "wsl_keepalive_10x_ok",
     "real_post_attempted":  false,
     "qcanvas_attempted":  false,
-    "reason":  "WSL Docker and Sub2API health stabilized, but no Seedance provider row was enabled with api_key_configured=true and route_available=true.",
+    "reason":  "WSL Docker and Sub2API health stabilized. A candidate s2a-mock-pg seedance-smoke row exists, but no matching VIDEO_GATEWAY_ENCRYPTION_KEY or Seedance/Ark upstream key source was discoverable; the Phase A dev provider preflight remains not ready.",
     "redline":  "No tiny real provider call was attempted.",
     "evidence":  [
                      "wsl_docker_baseline.txt",
@@ -12,6 +12,9 @@
                      "wsl_content_flags.txt",
                      "wsl_provider_preflight.json",
                      "wsl_seedance_blocker.txt",
+                     "wsl_candidate_provider_inventory.txt",
+                     "wsl_candidate_decrypt_probe.txt",
+                     "wsl_key_inventory.txt",
                      "wsl_cleanup_result.txt"
                  ]
 }

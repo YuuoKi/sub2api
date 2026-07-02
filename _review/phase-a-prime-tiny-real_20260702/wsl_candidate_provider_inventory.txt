@@ -1,0 +1,27 @@
+Read-only WSL provider inventory, captured during goal continuation.
+
+Candidate postgres containers:
+
+== s2a-mock-pg ==
+kling    Kling                         enabled=false api_key_configured=false model=kling-v1
+kling    Kling - stopped account        enabled=false api_key_configured=false model=kling-v1
+kling    Kling - rate-limited account   enabled=true  api_key_configured=false model=kling-v1
+mock     demo channel                   enabled=true  api_key_configured=false model=mock-video-v1
+mock     demo channel A                 enabled=true  api_key_configured=false model=mock-video-v1
+seedance Seedance 2.0                   enabled=false api_key_configured=false model=seedance-2-0-pro
+seedance Seedance 2.0 - missing key     enabled=true  api_key_configured=false model=seedance-2-0-pro
+seedance Seedance 2.0 - auth failed     enabled=true  api_key_configured=false model=seedance-2-0-pro
+seedance seedance-smoke                 enabled=true  api_key_configured=true  model=doubao-seedance-2-0-260128 smoke_metadata_present=true
+
+== qcanvas-honoapi-db ==
+video_provider_accounts=absent
+
+== wujie-api-db ==
+Seedance rows exist, but none have api_key_configured=true.
+
+== sub2api-postgres ==
+Seedance rows exist, but none have api_key_configured=true.
+
+Interpretation:
+s2a-mock-pg has the only non-sensitive evidence of a potentially configured Seedance account.
+It cannot be treated as ready until the matching VIDEO_GATEWAY_ENCRYPTION_KEY can decrypt its encrypted_api_key.

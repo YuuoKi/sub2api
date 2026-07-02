@@ -110,7 +110,7 @@
   <section class="panel">
     <h2>结论</h2>
     <p>WSL Docker 已可用，Sub2API 在 WSL keepalive 后连续 10 次 health 全绿；但 Seedance provider 未处于可路由状态，真实 tiny POST 未发起，QCanvas 未启动，task id 为空，供应商成本为 0。</p>
-    <p>停止原因：Admin provider 脱敏摘要显示没有任何 Seedance provider 同时满足 <code>enabled=true</code>、<code>api_key_configured=true</code>、<code>route_available=true</code>。</p>
+    <p>停止原因：Phase A' dev DB 的 Admin provider 脱敏摘要没有任何 Seedance provider 同时满足 <code>enabled=true</code>、<code>api_key_configured=true</code>、<code>route_available=true</code>。后续只读盘点发现旧 <code>s2a-mock-pg</code> 中有一个 <code>seedance-smoke</code> 密文行，但没有找到匹配的 <code>VIDEO_GATEWAY_ENCRYPTION_KEY</code>；唯一候选 key 解密失败，所以不能复用。</p>
   </section>
 
   <h2>WSL 与稳定性</h2>
@@ -151,6 +151,7 @@
     <li class="ok"><code>GATEWAY_CONTENT_CAPTURE_ENABLED=true</code></li>
     <li class="ok"><code>GATEWAY_CONTENT_RETENTION_ENABLED=true</code></li>
     <li class="blocked">Seedance rows: disabled / missing key / auth_failed；无可用 route。</li>
+    <li class="warn">旧 <code>s2a-mock-pg</code> 存在 <code>seedance-smoke</code> 行：enabled=true、api_key_configured=true、smoke metadata present；但 encryption key 匹配探针失败，不能作为 ready 证据。</li>
     <li>脱敏证据：<code>_review/phase-a-prime-tiny-real_20260702/wsl_provider_preflight.json</code></li>
   </ul>
 
@@ -171,6 +172,9 @@
     <li><code>_review/phase-a-prime-tiny-real_20260702/wsl_content_flags.txt</code></li>
     <li><code>_review/phase-a-prime-tiny-real_20260702/wsl_provider_preflight.json</code></li>
     <li><code>_review/phase-a-prime-tiny-real_20260702/wsl_seedance_blocker.txt</code></li>
+    <li><code>_review/phase-a-prime-tiny-real_20260702/wsl_candidate_provider_inventory.txt</code></li>
+    <li><code>_review/phase-a-prime-tiny-real_20260702/wsl_candidate_decrypt_probe.txt</code></li>
+    <li><code>_review/phase-a-prime-tiny-real_20260702/wsl_key_inventory.txt</code></li>
     <li><code>_review/phase-a-prime-tiny-real_20260702/wsl_cleanup_result.txt</code></li>
   </ul>
 
@@ -178,7 +182,7 @@
   <p>已执行 <code>docker compose -p sub2api_phasea_prime -f docker-compose.dev.yml down -v</code>；本轮容器、network、volumes 已删除。<code>deploy/.env</code> 已删除，临时 WSL keepalive 已停止。</p>
 
   <h2>后续</h2>
-  <p>继续前需要先配置一个可用 Seedance provider，使其同时满足 <code>enabled=true</code>、<code>api_key_configured=true</code>、<code>route_available=true</code>。然后在 WSL keepalive 存在时重新跑 10 次 health 与 provider preflight，再进入 QCanvas 真链。</p>
+  <p>继续前需要先提供或恢复与 <code>seedance-smoke</code> 密文匹配的 <code>VIDEO_GATEWAY_ENCRYPTION_KEY</code>，或在管理后台重新保存一个可用 Seedance provider，使 Phase A' dev DB 同时满足 <code>enabled=true</code>、<code>api_key_configured=true</code>、<code>route_available=true</code> 且可解密。然后在 WSL keepalive 存在时重新跑 10 次 health 与 provider preflight，再进入 QCanvas 真链。</p>
 </main>
 </body>
 </html>

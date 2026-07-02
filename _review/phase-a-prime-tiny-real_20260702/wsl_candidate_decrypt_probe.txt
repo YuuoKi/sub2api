@@ -1,0 +1,11 @@
+Read-only decrypt probe for s2a-mock-pg seedance-smoke encrypted_api_key.
+
+Candidate key tested:
+- wujie-api-day0:VIDEO_GATEWAY_ENCRYPTION_KEY
+
+Result:
+wujie-api-day0:VIDEO_GATEWAY_ENCRYPTION_KEY:decrypt_ok=false:InvalidTag
+
+Interpretation:
+The only discovered WSL Docker VIDEO_GATEWAY_ENCRYPTION_KEY does not match the s2a-mock-pg seedance-smoke ciphertext.
+Copying or pointing Sub2API at that row would not prove provider readiness; real dispatch would fail at decryption or use an unavailable credential path.

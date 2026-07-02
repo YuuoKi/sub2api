@@ -1,0 +1,17 @@
+Key inventory, values not printed.
+
+Windows environment:
+- Process: no SEEDANCE/VOLC/ARK/SUB2API key/video key variables found.
+- User: no SEEDANCE/VOLC/ARK/SUB2API key/video key variables found.
+- Machine: no SEEDANCE/VOLC/ARK/SUB2API key/video key variables found.
+
+WSL process environment:
+- no SEEDANCE/VOLC/ARK/SUB2API key/video key variables found.
+
+Docker container environments:
+- wujie-api-day0: VIDEO_GATEWAY_ENCRYPTION_KEY length=64
+- no SEEDANCE/VOLC/ARK upstream key variable found in inspected containers.
+
+Interpretation:
+No usable Seedance/Ark upstream key source was discoverable from environment variables without printing secrets.
+The one video encryption key discovered does not decrypt the only configured-looking seedance-smoke row.

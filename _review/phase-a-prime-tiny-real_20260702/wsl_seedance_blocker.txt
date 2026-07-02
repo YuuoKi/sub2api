@@ -1,0 +1,14 @@
+Sub2API WSL provider preflight result:
+seedance-provider-not-ready
+
+Non-sensitive evidence:
+- GATEWAY_CONTENT_CAPTURE_ENABLED=true
+- GATEWAY_CONTENT_RETENTION_ENABLED=true
+- No Seedance provider row had enabled=true, api_key_configured=true, and route_available=true at the same time.
+- Seedance rows observed:
+  - enabled=false, api_key_configured=false, route_available=false, key_status=disabled, health_status=disabled
+  - enabled=true, api_key_configured=false, route_available=false, key_status=missing, health_status=needs_key
+  - enabled=true, api_key_configured=false, route_available=false, key_status=auth_failed, health_status=auth_failed
+
+Decision:
+The tiny real POST was not sent. QCanvas was not started. No task id was created. Provider cost remains 0.

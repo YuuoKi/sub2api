@@ -1,13 +1,17 @@
 ﻿{
     "status":  "blocked",
-    "phase":  "sub2api_provider_preflight",
-    "health_probe":  "flapping",
+    "phase":  "sub2api_seedance_provider_preflight",
+    "health_probe":  "wsl_keepalive_10x_ok",
     "real_post_attempted":  false,
     "qcanvas_attempted":  false,
-    "reason":  "Sub2API phase-a compose project restarted before Admin provider preflight could confirm seedance readiness.",
+    "reason":  "WSL Docker and Sub2API health stabilized, but no Seedance provider row was enabled with api_key_configured=true and route_available=true.",
     "redline":  "No tiny real provider call was attempted.",
     "evidence":  [
-                     "compose_ps_blocked.txt",
-                     "sub2api_logs_tail_blocked.txt"
+                     "wsl_docker_baseline.txt",
+                     "wsl_health_gate_10x.txt",
+                     "wsl_content_flags.txt",
+                     "wsl_provider_preflight.json",
+                     "wsl_seedance_blocker.txt",
+                     "wsl_cleanup_result.txt"
                  ]
 }

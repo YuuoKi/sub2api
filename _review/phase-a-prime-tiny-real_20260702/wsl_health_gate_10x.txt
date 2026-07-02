@@ -1,0 +1,33 @@
+First WSL health gate, after compose up:
+21:04:36 health[01]={"status":"ok"}
+21:05:06 health[02]={"status":"ok"}
+21:05:36 health[03]={"status":"ok"}
+21:06:06 health[04]={"status":"ok"}
+21:06:35 health[05]={"status":"ok"}
+21:07:05 health[06]={"status":"ok"}
+21:07:34 health[07]={"status":"ok"}
+21:08:04 health[08]={"status":"ok"}
+21:08:34 health[09]={"status":"ok"}
+21:09:03 health[10]={"status":"ok"}
+
+Follow-up observation:
+After that WSL command ended, a later `docker compose ps` showed all project containers back at `Up 6 seconds (health: starting)`.
+This pointed to WSL distro lifecycle/auto-reclaim restarting Docker state between separate WSL invocations.
+
+Second WSL health gate, after starting a temporary WSL keepalive:
+21:11:18 health[01]={"status":"ok"}
+21:11:47 health[02]={"status":"ok"}
+21:12:17 health[03]={"status":"ok"}
+21:12:46 health[04]={"status":"ok"}
+21:13:15 health[05]={"status":"ok"}
+21:13:45 health[06]={"status":"ok"}
+21:14:15 health[07]={"status":"ok"}
+21:14:44 health[08]={"status":"ok"}
+21:15:14 health[09]={"status":"ok"}
+21:15:43 health[10]={"status":"ok"}
+
+Compose ps after second gate:
+sub2api-anthropic-mock-dev   Up 5 minutes (healthy)
+sub2api-dev                  Up 5 minutes (healthy)   127.0.0.1:8080->8080/tcp
+sub2api-postgres-dev         Up 5 minutes (healthy)
+sub2api-redis-dev            Up 5 minutes (healthy)

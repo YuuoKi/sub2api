@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Phase A' Tiny Real 三证同屏审查包</title>
+  <title>Phase A' Tiny Real WSL 续跑审查包</title>
   <style>
     :root {
       color-scheme: light;
@@ -103,76 +103,82 @@
 <body>
 <main>
   <header>
-    <h1>Phase A' Tiny Real 三证同屏审查包</h1>
+    <h1>Phase A' Tiny Real WSL 续跑审查包</h1>
     <p><span class="badge blocked">已阻塞</span> <span class="muted">2026-07-02 · D:\sub2api-trunk · wujie/video-capture-moat-20260702</span></p>
   </header>
 
   <section class="panel">
     <h2>结论</h2>
-    <p>本轮停在 Sub2API provider preflight，未进入 QCanvas，未发起真实 tiny video POST，未产生 task id，未产生计费。</p>
-    <p>停止原因：独立 compose project <code>sub2api_phasea_prime</code> 可构建、可启动，<code>/health</code> 曾短暂返回 <code>{"status":"ok"}</code>，但服务持续重启。Admin provider preflight 期间登录请求无法稳定连接，随后 <code>docker compose ps</code> 显示服务又回到 <code>Up 5 seconds (health: starting)</code>。</p>
+    <p>WSL Docker 已可用，Sub2API 在 WSL keepalive 后连续 10 次 health 全绿；但 Seedance provider 未处于可路由状态，真实 tiny POST 未发起，QCanvas 未启动，task id 为空，供应商成本为 0。</p>
+    <p>停止原因：Admin provider 脱敏摘要显示没有任何 Seedance provider 同时满足 <code>enabled=true</code>、<code>api_key_configured=true</code>、<code>route_available=true</code>。</p>
   </section>
 
-  <h2>三证状态</h2>
+  <h2>WSL 与稳定性</h2>
   <table>
-    <thead>
-      <tr><th>证据</th><th>结果</th><th>说明</th></tr>
-    </thead>
+    <thead><tr><th>检查项</th><th>结果</th></tr></thead>
     <tbody>
-      <tr><td>画布有真片</td><td class="blocked">未执行</td><td>因 Sub2API preflight 阻塞，未启动 QCanvas，未截图。</td></tr>
-      <tr><td>数据库有记录</td><td class="blocked">未执行</td><td>未创建 HTTP task id，未写入 <code>ai_generation_content</code>。</td></tr>
-      <tr><td>看板 is_live=true</td><td class="blocked">未执行</td><td>未产生内容记录，未调用 stats/samples 验收。</td></tr>
+      <tr><td>WSL distro</td><td>Ubuntu-24.04 / WSL2。初始无 distro，本轮安装/注册后执行。</td></tr>
+      <tr><td>Docker</td><td>client/server 29.1.3</td></tr>
+      <tr><td>Docker Compose</td><td>2.37.1+ds1-0ubuntu2~24.04.1</td></tr>
+      <tr><td>Health 门禁</td><td class="ok">keepalive 后 10/10 OK，21:11:18 到 21:15:43。</td></tr>
+      <tr><td>Compose 状态</td><td class="ok">sub2api、postgres、redis、anthropic-mock 均 Up 5 minutes (healthy)。</td></tr>
     </tbody>
   </table>
 
-  <h2>已执行</h2>
+  <pre><code>21:11:18 health[01]={"status":"ok"}
+21:11:47 health[02]={"status":"ok"}
+21:12:17 health[03]={"status":"ok"}
+21:12:46 health[04]={"status":"ok"}
+21:13:15 health[05]={"status":"ok"}
+21:13:45 health[06]={"status":"ok"}
+21:14:15 health[07]={"status":"ok"}
+21:14:44 health[08]={"status":"ok"}
+21:15:14 health[09]={"status":"ok"}
+21:15:43 health[10]={"status":"ok"}</code></pre>
+
+  <h2>三证状态</h2>
+  <table>
+    <thead><tr><th>证据</th><th>结果</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td>画布有真片</td><td class="blocked">未执行</td><td>Seedance provider preflight 阻塞，未启动 QCanvas。</td></tr>
+      <tr><td>数据库有记录</td><td class="blocked">未执行</td><td>未创建 HTTP task id，未写入 <code>ai_generation_content</code>。</td></tr>
+      <tr><td>看板 is_live=true</td><td class="blocked">未执行</td><td>未产生内容记录，未调用 stats/samples 终验。</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Provider 预检</h2>
   <ul>
-    <li>复核 Git 三件套：root 为 <code>D:/sub2api-trunk</code>，分支为 <code>wujie/video-capture-moat-20260702</code>。</li>
-    <li>仅提交 G3 白名单文件，本地 commit：<code>98b4ea8e docs(review): close G3 capture dev validation</code>。</li>
-    <li>采集 flag 测试通过：<code>go test ./internal/config -run TestLoadContentCaptureFlagsFromEnv</code>，结果 <code>ok github.com/Wei-Shaw/sub2api/internal/config 1.428s</code>。</li>
-    <li>创建临时 <code>deploy/.env</code>，只写本轮运行变量，未打印 secret 值。</li>
-    <li>使用独立 project 启动：<code>docker compose -p sub2api_phasea_prime -f docker-compose.dev.yml up --build -d</code>，构建和启动命令完成。</li>
-  </ul>
-
-  <h2>关键证据</h2>
-  <pre><code>docker compose ps:
-sub2api-dev                  sub2api_phasea_prime-sub2api   ...   Up 5 seconds (health: starting)   127.0.0.1:8080-&gt;8080/tcp
-sub2api-postgres-dev         postgres:18-alpine             ...   Up 5 seconds (health: starting)
-sub2api-redis-dev            redis:8-alpine                 ...   Up 5 seconds (health: starting)</code></pre>
-
-  <pre><code>Sub2API logs:
-2026-07-02T20:01:29.603+0800 INFO Server started on 0.0.0.0:8080
-2026-07-02T20:01:40.158+0800 INFO Shutting down server...
-2026-07-02T20:01:40.158+0800 INFO Server exited
-2026-07-02T20:01:40.159+0800 INFO [Cleanup] GenerationContentRetentionService succeeded
-2026-07-02T20:01:40.159+0800 INFO [Cleanup] VideoGatewayWorker succeeded</code></pre>
-
-  <h2>证据文件</h2>
-  <ul>
-    <li><code>_review/phase-a-prime-tiny-real_20260702/SUMMARY.md</code></li>
-    <li><code>_review/phase-a-prime-tiny-real_20260702/blocked_result.json</code></li>
-    <li><code>_review/phase-a-prime-tiny-real_20260702/compose_ps_blocked.txt</code></li>
-    <li><code>_review/phase-a-prime-tiny-real_20260702/sub2api_logs_tail_blocked.txt</code></li>
+    <li class="ok"><code>GATEWAY_CONTENT_CAPTURE_ENABLED=true</code></li>
+    <li class="ok"><code>GATEWAY_CONTENT_RETENTION_ENABLED=true</code></li>
+    <li class="blocked">Seedance rows: disabled / missing key / auth_failed；无可用 route。</li>
+    <li>脱敏证据：<code>_review/phase-a-prime-tiny-real_20260702/wsl_provider_preflight.json</code></li>
   </ul>
 
   <h2>红线</h2>
   <ul>
     <li class="ok">真实 tiny video POST：未发起。</li>
     <li class="ok">retry storm：未发生。</li>
-    <li class="ok">provider key/token/cookie：未打印。</li>
+    <li class="ok">provider key/token/cookie：未打印、未写入证据。</li>
     <li class="ok">push：未执行。</li>
-    <li class="ok">成本：0，本轮未调用真实视频供应商。</li>
+    <li class="ok">成本：0。</li>
   </ul>
 
-  <h2>风险</h2>
+  <h2>证据文件</h2>
   <ul>
-    <li>当前独立 compose project 的服务生命周期不稳定，不能作为 tiny real 验证基线。</li>
-    <li>启动日志中 PricingService 尝试拉取公开 pricing 文件并超时，这不是视频供应商调用，但说明本地 dev 启动仍可能触发外部网络尝试。</li>
-    <li>compose 文件中的 container_name 仍是通用 dev 名称，虽使用独立 project 和独立 volumes，后续仍建议复核是否会与其他本机 dev 栈产生名称层面的冲突。</li>
+    <li><code>_review/phase-a-prime-tiny-real_20260702/SUMMARY.md</code></li>
+    <li><code>_review/phase-a-prime-tiny-real_20260702/wsl_docker_baseline.txt</code></li>
+    <li><code>_review/phase-a-prime-tiny-real_20260702/wsl_health_gate_10x.txt</code></li>
+    <li><code>_review/phase-a-prime-tiny-real_20260702/wsl_content_flags.txt</code></li>
+    <li><code>_review/phase-a-prime-tiny-real_20260702/wsl_provider_preflight.json</code></li>
+    <li><code>_review/phase-a-prime-tiny-real_20260702/wsl_seedance_blocker.txt</code></li>
+    <li><code>_review/phase-a-prime-tiny-real_20260702/wsl_cleanup_result.txt</code></li>
   </ul>
 
-  <h2>回滚与后续</h2>
-  <p>G3 commit 可回滚：<code>git revert 98b4ea8e</code>。继续 Phase A' 前，请先只读排查 dev 栈为何启动约 10 秒后自行 shutdown，确认 <code>/health</code> 和 Admin provider preflight 可连续稳定通过，再继续 QCanvas 真链。</p>
+  <h2>清理</h2>
+  <p>已执行 <code>docker compose -p sub2api_phasea_prime -f docker-compose.dev.yml down -v</code>；本轮容器、network、volumes 已删除。<code>deploy/.env</code> 已删除，临时 WSL keepalive 已停止。</p>
+
+  <h2>后续</h2>
+  <p>继续前需要先配置一个可用 Seedance provider，使其同时满足 <code>enabled=true</code>、<code>api_key_configured=true</code>、<code>route_available=true</code>。然后在 WSL keepalive 存在时重新跑 10 次 health 与 provider preflight，再进入 QCanvas 真链。</p>
 </main>
 </body>
 </html>

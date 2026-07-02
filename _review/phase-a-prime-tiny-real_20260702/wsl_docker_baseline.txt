@@ -1,0 +1,11 @@
+Command:
+wsl.exe -d Ubuntu-24.04 -u root -- /bin/bash -lc "docker version; docker compose version; curl -s http://127.0.0.1:8080/health || echo '8080 not up'"
+
+Result summary:
+- WSL distro: Ubuntu-24.04, WSL2.
+- Docker client/server: 29.1.3.
+- Docker Compose: 2.37.1+ds1-0ubuntu2~24.04.1.
+- Initial 8080 health before compose startup: 8080 not up.
+
+Note:
+The machine initially had no registered WSL distro. Ubuntu-24.04 was installed/registered before this WSL-side run.

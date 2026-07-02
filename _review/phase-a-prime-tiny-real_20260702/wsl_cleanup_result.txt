@@ -1,0 +1,19 @@
+Cleanup commands:
+cd /mnt/d/sub2api-trunk/deploy
+docker compose -p sub2api_phasea_prime -f docker-compose.dev.yml down -v
+rm -f /mnt/d/sub2api-trunk/deploy/.env
+
+Observed cleanup output:
+- sub2api-dev removed
+- sub2api-postgres-dev removed
+- sub2api-redis-dev removed
+- sub2api-anthropic-mock-dev removed
+- sub2api_phasea_prime_postgres_data_dev removed
+- sub2api_phasea_prime_sub2api_data_dev removed
+- sub2api_phasea_prime_redis_data_dev removed
+- sub2api_phasea_prime_sub2api-network removed
+
+Post-clean checks:
+- deploy/.env removed.
+- Docker label query for project sub2api_phasea_prime returned no containers or volumes.
+- Temporary WSL keepalive was stopped; later `ps -ef | grep "[s]leep 7200"` returned no keepalive process.

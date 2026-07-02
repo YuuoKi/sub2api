@@ -15,9 +15,11 @@
 
 ## 结论
 
-本轮停在 Sub2API provider preflight，未进入 QCanvas，未发起真实 tiny video POST，未产生 task id，未产生计费。
+WSL 续跑已把 Sub2API 稳住：Ubuntu-24.04 WSL2 内 Docker 29.1.3 / Compose 2.37.1 可用，`sub2api_phasea_prime` 在 keepalive 后连续 10 次 `/health` 返回 `{"status":"ok"}`，compose ps 显示 4 个服务 `Up 5 minutes (healthy)`。
 
-停止原因：独立 compose project `sub2api_phasea_prime` 可构建、可启动，`/health` 曾短暂返回 `{"status":"ok"}`，但服务持续重启。provider preflight 期间 Admin 登录请求无法稳定连接，随后 `docker compose ps` 显示服务又回到 `Up 5 seconds (health: starting)`，日志显示 `Server started` 后约 10 秒出现 `Shutting down server...` 和 `Server exited`。
+本轮最终停在 Sub2API Seedance provider preflight，未进入 QCanvas，未发起真实 tiny video POST，未产生 task id，未产生计费。
+
+停止原因：Admin provider 脱敏摘要显示没有任何 Seedance provider 同时满足 `enabled=true`、`api_key_configured=true`、`route_available=true`。当前 Seedance 行分别处于 disabled、missing key、auth_failed 状态。
 
 三证结果：
 
@@ -60,11 +62,41 @@ docker compose -p sub2api_phasea_prime -f docker-compose.dev.yml up --build -d
 
 - provider preflight 未通过：Admin 登录/读取 provider 时服务连接失败，随后确认 compose project 反复重启。
 
+## WSL 续跑
+
+- 初始状态：当前 Windows 用户下没有已注册 WSL distro；已安装/注册 `Ubuntu-24.04` 后继续。
+- WSL Docker：`docker version` client/server 均为 `29.1.3`；`docker compose version` 为 `2.37.1+ds1-0ubuntu2~24.04.1`。
+- 第一次 10 次 health 门禁通过，但下一次 WSL 命令发现容器回到 `Up 6 seconds`，判断为 WSL distro 生命周期回收导致 Docker state 重启。
+- 启动临时 keepalive 后重新跑 10 次 health 门禁，通过：
+
+```text
+21:11:18 health[01]={"status":"ok"}
+21:11:47 health[02]={"status":"ok"}
+21:12:17 health[03]={"status":"ok"}
+21:12:46 health[04]={"status":"ok"}
+21:13:15 health[05]={"status":"ok"}
+21:13:45 health[06]={"status":"ok"}
+21:14:15 health[07]={"status":"ok"}
+21:14:44 health[08]={"status":"ok"}
+21:15:14 health[09]={"status":"ok"}
+21:15:43 health[10]={"status":"ok"}
+```
+
+- compose ps 复核：`sub2api-dev`、postgres、redis、anthropic-mock 均 `Up 5 minutes (healthy)`。
+- 采集 flag 复核：`GATEWAY_CONTENT_CAPTURE_ENABLED=true`、`GATEWAY_CONTENT_RETENTION_ENABLED=true`。
+- Seedance provider 预检：已阻塞。没有 Seedance 行同时满足 `enabled=true`、`api_key_configured=true`、`route_available=true`。
+
 ## 证据文件
 
 - `blocked_result.json`：结构化阻塞结论。
 - `compose_ps_blocked.txt`：compose 状态摘录，显示服务反复处于 `Up 5 seconds (health: starting)`。
 - `sub2api_logs_tail_blocked.txt`：Sub2API 日志摘录，显示 server started 后自行 shutdown。
+- `wsl_docker_baseline.txt`：WSL Docker / Compose 基线。
+- `wsl_health_gate_10x.txt`：两轮 10 次 health 门禁及 keepalive 观察。
+- `wsl_content_flags.txt`：容器内采集双闸。
+- `wsl_provider_preflight.json`：Admin provider 脱敏摘要。
+- `wsl_seedance_blocker.txt`：Seedance 未 ready 的非敏感结论。
+- `wsl_cleanup_result.txt`：WSL 清理结果。
 
 ## 红线执行情况
 
@@ -77,7 +109,8 @@ docker compose -p sub2api_phasea_prime -f docker-compose.dev.yml up --build -d
 
 ## 风险
 
-- 当前独立 compose project 的服务生命周期不稳定，不能作为 tiny real 验证基线。
+- Windows 侧直接调用 WSL 时，distro 可能在命令结束后回收，导致 Docker state 重启；本轮通过临时 keepalive 后健康门禁通过。
+- 当前 dev DB 内 Seedance provider 未配置到可路由状态，不能作为 tiny real 验证基线。
 - 启动日志中 PricingService 尝试拉取公开 pricing 文件并超时，这不是视频供应商调用，但说明本地 dev 启动仍可能触发外部网络尝试。
 - compose 文件中的 container_name 仍是通用 dev 名称，虽使用了独立 project 和独立 volumes，后续仍建议复核是否会与其他本机 dev 栈产生名称层面的冲突。
 
@@ -85,7 +118,7 @@ docker compose -p sub2api_phasea_prime -f docker-compose.dev.yml up --build -d
 
 - G3 commit 可回滚：`git revert 98b4ea8e`
 - Phase A' 审查证据目录：`D:\sub2api-trunk\_review\phase-a-prime-tiny-real_20260702`
-- 本轮 compose 清理命令：
+- 本轮 compose 清理命令已执行：
 
 ```powershell
 cd D:\sub2api-trunk\deploy
@@ -93,7 +126,8 @@ docker compose -p sub2api_phasea_prime -f docker-compose.dev.yml down -v
 ```
 
 - 临时文件清理：删除 `D:\sub2api-trunk\deploy\.env` 与本轮 Go cache `D:\sub2api-trunk\.phasea-go-build-cache`。
+- WSL 续跑清理：`deploy/.env` 已删除，`sub2api_phasea_prime` 容器/network/volumes 已删除，临时 keepalive 已停止。
 
 ## 后续提示词
 
-继续 Phase A' 前，请先只读排查 `sub2api_phasea_prime` dev 栈为何启动约 10 秒后自行 shutdown，确认 `/health` 和 Admin provider preflight 可连续稳定通过，再继续 QCanvas 真链。不要补发 tiny real POST，不要重试出片，仍保持 1 次真实 POST 上限。
+继续 Phase A' 前，请先在管理后台或数据库中配置一个 Seedance provider，使其同时满足 `enabled=true`、`api_key_configured=true`、`route_available=true`。然后在 WSL 中保持 keepalive，重新跑 10 次 health 门禁和 provider preflight。不要补发 tiny real POST，不要重试出片，仍保持 1 次真实 POST 上限。

@@ -23,9 +23,9 @@ func TestRedactGenerationStructuredPII_CNIDCardRedacted(t *testing.T) {
 func TestRedactGenerationStructuredPII_BankCardRedacted(t *testing.T) {
 	// 4111111111111111 是公开的 Visa 测试卡号（Luhn 合法）。
 	for _, card := range []string{
-		"4111111111111111",      // 连续
-		"4111 1111 1111 1111",   // 空格分组
-		"4111-1111-1111-1111",   // 短横线分组
+		"4111111111111111",    // 连续
+		"4111 1111 1111 1111", // 空格分组
+		"4111-1111-1111-1111", // 短横线分组
 	} {
 		out := redactGenerationStructuredPII("卡号 " + card + " 谢谢")
 		if strings.Contains(out, card) {

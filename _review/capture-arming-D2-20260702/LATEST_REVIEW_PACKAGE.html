@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>D2 任务B Sub2API 采集武装与 retention 收口审查包</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 32px; line-height: 1.6; color: #1f2937; }
+    h1, h2 { color: #111827; }
+    code, pre { background: #f3f4f6; border-radius: 4px; padding: 2px 4px; }
+    pre { padding: 12px; overflow: auto; }
+    table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+    th, td { border: 1px solid #d1d5db; padding: 8px; vertical-align: top; }
+    th { background: #f9fafb; }
+    .ok { color: #047857; font-weight: 700; }
+    .warn { color: #b45309; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <h1>D2 任务B Sub2API 采集武装与 retention 收口审查包</h1>
+  <p>执行目录：<code>D:\sub2api-trunk</code>；分支：<code>wujie/video-capture-moat-20260702</code>；日期：2026-07-02。</p>
+  <p><span class="ok">G0/G1/G2/G4 已通过</span>；<span class="warn">G3 本机实跑已阻塞</span>。未 push、未部署、未调用真实 provider、未读取 secret/env/token/cookie。</p>
+
+  <h2>目标状态</h2>
+  <table>
+    <tr><th>目标</th><th>状态</th><th>摘要</th></tr>
+    <tr><td>G0</td><td>内部可用</td><td>make 不可用，fallback 后 go build/go test/golangci-lint 绿。</td></tr>
+    <tr><td>G1</td><td>内部可用</td><td>config example 补 content_capture/content_retention，enabled 默认 false。</td></tr>
+    <tr><td>G2</td><td>内部可用 / 待复核</td><td>retention daemon 双闸启动并进入 cleanup Stop；真实 dev daemon 验证留给 G3。</td></tr>
+    <tr><td>G3</td><td>已阻塞</td><td>本机 5432/5433/6379/6380/8080/8090/18081 无监听，未伪造 SELECT/截图。</td></tr>
+    <tr><td>G4</td><td>内部可用</td><td>新增契约快照；API-key video 响应保留 result_url 并增加 ResultURL。</td></tr>
+  </table>
+
+  <h2>关键变更</h2>
+  <ul>
+    <li><code>deploy/config.example.yaml</code>：补配置样例。</li>
+    <li><code>backend/internal/service/wire.go</code>、<code>backend/cmd/server/wire_gen.go</code>：retention 启动接线。</li>
+    <li><code>backend/internal/handler/testdata/api_key_video_task_contract_v1.json</code>：契约快照。</li>
+    <li><code>backend/internal/handler/video_handler.go</code>：API-key 响应 ResultURL alias。</li>
+  </ul>
+
+  <h2>验证</h2>
+  <pre>go test ./...
+PASS
+
+golangci-lint run
+0 issues
+
+tools/secret_scan.py --include-untracked
+no high-confidence findings
+
+pnpm test:run / typecheck / lint:check
+PASS</pre>
+  <p>详情以同目录 <code>SUMMARY.md</code> 为准。</p>
+</body>
+</html>

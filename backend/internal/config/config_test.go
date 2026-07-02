@@ -1043,7 +1043,7 @@ func TestValidateConfigErrors(t *testing.T) {
 			name: "video_gateway task_timeout below poll window",
 			mutate: func(c *Config) {
 				c.VideoGateway.PollIntervalSeconds = 5
-				c.VideoGateway.MaxPollAttempts = 72 // window = 360s
+				c.VideoGateway.MaxPollAttempts = 72   // window = 360s
 				c.VideoGateway.TaskTimeoutMinutes = 5 // 300s < 360s
 			},
 			wantErr: "task_timeout_minutes (300s)",

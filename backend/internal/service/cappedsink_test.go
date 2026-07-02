@@ -25,7 +25,9 @@ func TestCappedSinkCapsAndCounts(t *testing.T) {
 func TestCappedSinkOwnsBuffer(t *testing.T) {
 	p := []byte("abc")
 	s := newCappedSink(100)
-	s.Write(p)
+	if n, err := s.Write(p); err != nil || n != len(p) {
+		t.Fatalf("write before caller mutation: n=%d err=%v", n, err)
+	}
 	p[0] = 'X' // mutate caller's slice after write
 	if got := string(s.Bytes()); got != "abc" {
 		t.Fatalf("sink buffer aliased caller slice: got %q", got)

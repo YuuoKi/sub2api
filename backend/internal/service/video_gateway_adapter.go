@@ -238,7 +238,7 @@ func (a *seedanceVideoAdapter) CreateTask(ctx context.Context, account *VideoPro
 	if err != nil {
 		return nil, infraerrorsUnavailable("SEEDANCE_CREATE_HTTP_ERROR", "Seedance create task HTTP error: "+err.Error())
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -345,7 +345,7 @@ func (a *seedanceVideoAdapter) PollTask(ctx context.Context, account *VideoProvi
 	if err != nil {
 		return nil, infraerrorsUnavailable("SEEDANCE_POLL_HTTP_ERROR", "Seedance poll task HTTP error: "+err.Error())
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {

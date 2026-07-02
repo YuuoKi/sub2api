@@ -383,9 +383,10 @@ func (s *VideoGatewayService) pollTask(ctx context.Context, adapter VideoAdapter
 	}
 	eventType := status
 	message := "video task status updated"
-	if status == VideoStatusSucceeded {
+	switch status {
+	case VideoStatusSucceeded:
 		message = "video task succeeded"
-	} else if status == VideoStatusFailed {
+	case VideoStatusFailed:
 		message = "video task failed"
 	}
 	if err := s.repo.AddTaskEvent(ctx, &VideoTaskEvent{

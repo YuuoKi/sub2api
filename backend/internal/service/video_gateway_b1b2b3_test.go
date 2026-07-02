@@ -24,11 +24,11 @@ func TestNormalizeSeedanceRatio(t *testing.T) {
 		"portrait":  "9:16",
 		"Landscape": "16:9",
 		"SQUARE":    "1:1",
-		" 9:16 ":    "9:16",  // trimmed
-		"4:3":       "4:3",   // valid-but-unmapped → passthrough verbatim
-		"21:9":      "21:9",  // shape-valid passthrough
-		"banana":    "",      // arbitrary text → dropped (field omitted)
-		"16x9":      "",      // not a W:H shape → dropped
+		" 9:16 ":    "9:16", // trimmed
+		"4:3":       "4:3",  // valid-but-unmapped → passthrough verbatim
+		"21:9":      "21:9", // shape-valid passthrough
+		"banana":    "",     // arbitrary text → dropped (field omitted)
+		"16x9":      "",     // not a W:H shape → dropped
 	}
 	for in, want := range cases {
 		if got := normalizeSeedanceRatio(in); got != want {
@@ -91,7 +91,7 @@ func TestVideoPollBudgetScalesWithResolution(t *testing.T) {
 	p480 := scalePollBudgetForResolution(base, "480p")
 	p720 := scalePollBudgetForResolution(base, "720p")
 	p1080 := scalePollBudgetForResolution(base, "1080p")
-	if !(p480 < p720 && p720 < p1080) {
+	if p480 >= p720 || p720 >= p1080 {
 		t.Fatalf("poll budgets must scale 480p<720p<1080p, got %d/%d/%d", p480, p720, p1080)
 	}
 	// at the default 72 baseline the tiers equal the tier constants.

@@ -199,7 +199,7 @@ func appendRedactedVideoEvent(key, phase string, statusCode int, rawBody string)
 	if err != nil {
 		return fmt.Errorf("open redacted event log: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	// os.OpenFile only applies the mode on creation; enforce 0600 explicitly so a
 	// pre-existing world/group-readable file (e.g. 0644) cannot leak the audit
 	// trail. Fail-closed: if we cannot guarantee 0600, abort rather than write

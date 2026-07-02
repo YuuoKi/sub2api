@@ -84,6 +84,7 @@ type apiKeyVideoTaskResponse struct {
 	MockOnly                  bool   `json:"mock_only"`
 	ProviderBoundary          string `json:"provider_boundary"`
 	RealProviderDispatchCount int    `json:"real_provider_dispatch_count"`
+	ResultURLPascal           string `json:"ResultURL,omitempty"`
 	TrialMode                 string `json:"trial_mode,omitempty"`
 	BlockedReason             string `json:"blocked_reason,omitempty"`
 	TrialGateResult           string `json:"trial_gate_result,omitempty"`
@@ -506,6 +507,10 @@ func apiKeyVideoTaskToResponse(task *service.VideoTask, events []*service.VideoT
 	if task != nil && task.Provider == service.VideoProviderSeedance {
 		boundary = "api-key-video-seedance-tiny-trial"
 	}
+	resultURLPascal := ""
+	if task != nil {
+		resultURLPascal = task.ResultURL
+	}
 
 	for _, ev := range events {
 		if task != nil && task.Provider != service.VideoProviderMock && ev != nil && ev.EventType == service.VideoStatusSubmitted {
@@ -529,6 +534,7 @@ func apiKeyVideoTaskToResponse(task *service.VideoTask, events []*service.VideoT
 		MockOnly:                  mockOnly,
 		ProviderBoundary:          boundary,
 		RealProviderDispatchCount: realDispatchCount,
+		ResultURLPascal:           resultURLPascal,
 		TrialMode:                 trialMode,
 		BlockedReason:             blockedReason,
 		TrialGateResult:           trialGateResult,

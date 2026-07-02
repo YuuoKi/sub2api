@@ -2,10 +2,73 @@ package handler
 
 import (
 	"encoding/json"
+	"os"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
+
+func TestD2ApiKeyVideoContractMatchesSnapshotV1(t *testing.T) {
+	rawSnapshot, err := os.ReadFile("testdata/api_key_video_task_contract_v1.json")
+	if err != nil {
+		t.Fatalf("read contract snapshot: %v", err)
+	}
+	var snapshot struct {
+		Request  apiKeyVideoTaskCreateRequest `json:"request"`
+		Response map[string]any               `json:"response"`
+	}
+	if err := json.Unmarshal(rawSnapshot, &snapshot); err != nil {
+		t.Fatalf("unmarshal contract snapshot: %v", err)
+	}
+
+	reqRaw, err := json.Marshal(snapshot.Request)
+	if err != nil {
+		t.Fatalf("marshal snapshot request: %v", err)
+	}
+	var bound apiKeyVideoTaskCreateRequest
+	if err := json.Unmarshal(reqRaw, &bound); err != nil {
+		t.Fatalf("snapshot request must bind to apiKeyVideoTaskCreateRequest: %v", err)
+	}
+	if bound.TaskType != service.VideoTaskTypeReferenceToVideo ||
+		bound.Model != "mock-video-v1" ||
+		bound.ReferenceImageURL != "https://example.invalid/ref.png" ||
+		bound.AspectRatio != "16:9" ||
+		bound.Duration != 5 ||
+		bound.Resolution != "720p" {
+		t.Fatalf("snapshot request did not bind expected top-level fields: %+v", bound)
+	}
+
+	task := &service.VideoTask{
+		ID:                12345,
+		Provider:          service.VideoProviderMock,
+		Model:             bound.Model,
+		TaskType:          bound.TaskType,
+		Prompt:            bound.Prompt,
+		ReferenceImageURL: bound.ReferenceImageURL,
+		AspectRatio:       bound.AspectRatio,
+		Duration:          bound.Duration,
+		Resolution:        bound.Resolution,
+		Status:            service.VideoStatusSucceeded,
+		ResultURL:         "/api/v1/video/mock-assets/12345.svg",
+	}
+	rawResponse, err := json.Marshal(apiKeyVideoTaskToResponse(task, nil))
+	if err != nil {
+		t.Fatalf("marshal api-key video response: %v", err)
+	}
+	var actual map[string]any
+	if err := json.Unmarshal(rawResponse, &actual); err != nil {
+		t.Fatalf("unmarshal api-key video response: %v", err)
+	}
+	for key, want := range snapshot.Response {
+		got, ok := actual[key]
+		if !ok {
+			t.Fatalf("response missing snapshot key %q; actual keys=%v", key, actual)
+		}
+		if got != want {
+			t.Fatalf("response[%s]=%v (%T), want %v (%T)", key, got, got, want, want)
+		}
+	}
+}
 
 // TestC1ApiKeyVideoResponseMatchesQCanvasContract is the C1 skeleton contract guard.
 //

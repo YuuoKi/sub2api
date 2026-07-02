@@ -375,6 +375,38 @@ gateway:
   # SSE max line size in bytes (default: 40MB)
   # SSE 单行最大字节数（默认 40MB）
   max_line_size: 41943040
+  # Content capture side table switch (dark by default)
+  # 内容采集旁路表总闸（默认关闭）：开启后才会把已脱敏的 prompt/response 写入 ai_generation_content。
+  # 注意：开启只应发生在受控 dev/staging/内网环境；采集逻辑 fail-open，不应影响主调用。
+  content_capture:
+    # Master switch. Keep false unless the deployment explicitly opts in.
+    # 总开关。未明确验收前保持 false；代码默认值也保持 false。
+    enabled: false
+    # Max sampled upstream response bytes. 0 uses code fallback 64KiB.
+    # response 脱敏抽样上限（字节）。0 使用代码兜底 64KiB。
+    response_max_bytes: 65536
+    # Max captured prompt bytes. 0 uses code fallback 256KiB.
+    # prompt 采集上限（字节）。0 使用代码兜底 256KiB。
+    prompt_max_bytes: 262144
+  # ai_generation_content retention daemon (NULL-OUT strategy)
+  # ai_generation_content 保留期清理守护（NULL-OUT 策略）：清空过期内容字段，保留计数行和审计骨架。
+  # 守护启动需要 content_capture.enabled=true 且 content_retention.enabled=true；RunOnce dry-run 可独立调用。
+  content_retention:
+    # Background daemon switch. Keep false until capture is explicitly armed.
+    # 后台清理守护开关。采集未明确开启前保持 false，避免空转。
+    enabled: false
+    # Retention days. 0 uses code fallback 90; values <7 are clamped to 7.
+    # 内容保留天数。0 使用代码兜底 90；小于 7 会被夹紧到 7，保护近 7 日看板窗口。
+    retention_days: 90
+    # Purge batch size. 0 uses code fallback 500.
+    # 单批 NULL-OUT 数量。0 使用代码兜底 500。
+    batch_size: 500
+    # Daemon interval seconds. 0 uses code fallback 3600.
+    # 守护执行间隔（秒）。0 使用代码兜底 3600。
+    interval_seconds: 3600
+    # First rollout should use dry-run=true; set false only after reviewing hit counts.
+    # 首次灰度建议 true，只统计不清空；复核命中数量后再改 false。
+    dry_run: true
   # Log upstream error response body summary (safe/truncated; does not log request content)
   # 记录上游错误响应体摘要（安全/截断；不记录请求内容）
   log_upstream_error_body: true

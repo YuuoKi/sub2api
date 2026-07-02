@@ -143,7 +143,7 @@ ORDER BY d ASC`
 	if err != nil {
 		return nil, fmt.Errorf("generation content daily series: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var p service.GenerationContentDailyPoint
 		if err := rows.Scan(&p.Date, &p.Count); err != nil {
@@ -237,7 +237,7 @@ LIMIT $1`
 	if err != nil {
 		return nil, fmt.Errorf("generation content recent: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []service.GenerationContentSample
 	for rows.Next() {
 		var s service.GenerationContentSample

@@ -87,7 +87,7 @@ func stripCardSeparators(s string) string {
 	b.Grow(len(s))
 	for i := 0; i < len(s); i++ {
 		if c := s[i]; c >= '0' && c <= '9' {
-			b.WriteByte(c)
+			_ = b.WriteByte(c)
 		}
 	}
 	return b.String()

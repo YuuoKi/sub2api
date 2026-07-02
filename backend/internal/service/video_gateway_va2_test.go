@@ -46,7 +46,9 @@ func (a *fakeVideoAdapter) CancelTask(_ context.Context, _ *VideoProviderAccount
 	return &VideoAdapterResult{Status: VideoStatusCancelled}, nil
 }
 
-func (a *fakeVideoAdapter) NormalizeStatus(upstream string) string { return normalizeVideoStatus(upstream) }
+func (a *fakeVideoAdapter) NormalizeStatus(upstream string) string {
+	return normalizeVideoStatus(upstream)
+}
 
 func (a *fakeVideoAdapter) BuildCreatePayload(_ *VideoProviderAccount, _ *VideoTask) map[string]any {
 	return map[string]any{}

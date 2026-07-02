@@ -158,7 +158,7 @@ func TestAppendRedactedVideoEvent(t *testing.T) {
 
 	// Empty env => no-op (must not panic, must not create a file).
 	t.Setenv("SUB2API_VIDEO_REDACTED_EVENT_LOG", "")
-	appendRedactedVideoEvent("", "create", 200, "ignored")
+	_ = appendRedactedVideoEvent("", "create", 200, "ignored")
 }
 
 // --- B3a: SSRF / allowlist URL validation -----------------------------------
@@ -231,7 +231,7 @@ func TestVideoProviderAccountRedactsPlainKey(t *testing.T) {
 	for _, s := range []string{
 		fmt.Sprintf("%v", acc),
 		fmt.Sprintf("%+v", acc),
-		fmt.Sprintf("%s", acc),
+		acc.String(),
 		fmt.Sprintf("%v", &acc),
 		acc.String(),
 	} {

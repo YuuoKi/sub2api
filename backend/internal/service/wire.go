@@ -522,6 +522,7 @@ var ProviderSet = wire.NewSet(
 	NewChannelMonitorRequestTemplateService,
 	ProvideVideoGatewayService,
 	ProvideVideoGatewayWorker,
+	ProvideGenerationContentRetentionService,
 )
 
 // ProvideVideoGatewayService builds the video gateway service and, when a positive
@@ -535,6 +536,23 @@ func ProvideVideoGatewayService(repo VideoGatewayRepository, encryptor VideoKeyE
 	if cfg != nil && cfg.VideoGateway.PerCallBudget > 0 {
 		svc.SetBudgetGuard(NewStaticBudgetGuard(cfg.VideoGateway.PerCallBudget))
 	}
+	return svc
+}
+
+// ProvideGenerationContentRetentionService starts the ai_generation_content NULL-OUT
+// daemon only after both gates are explicitly armed. content_capture.enabled keeps the
+// whole capture surface dark by default; content_retention.enabled is the separate
+// retention daemon switch. RunOnce remains independently callable through
+// NewGenerationContentRetentionService for dry-run/manual checks.
+func ProvideGenerationContentRetentionService(repo GenerationContentRepository, cfg *config.Config) *GenerationContentRetentionService {
+	if repo == nil || cfg == nil {
+		return nil
+	}
+	if !cfg.Gateway.ContentCapture.Enabled || !cfg.Gateway.ContentRetention.Enabled {
+		return nil
+	}
+	svc := NewGenerationContentRetentionService(repo, cfg)
+	svc.Start()
 	return svc
 }
 

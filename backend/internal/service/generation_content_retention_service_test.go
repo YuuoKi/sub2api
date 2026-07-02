@@ -18,6 +18,32 @@ func retentionCfg(days, batch, interval int, dryRun bool) *config.Config {
 	}}}
 }
 
+func retentionStartupCfg(captureEnabled, retentionEnabled bool) *config.Config {
+	return &config.Config{Gateway: config.GatewayConfig{
+		ContentCapture: config.ContentCaptureConfig{Enabled: captureEnabled},
+		ContentRetention: config.ContentRetentionConfig{
+			Enabled:         retentionEnabled,
+			RetentionDays:   90,
+			BatchSize:       1,
+			IntervalSeconds: 60,
+			DryRun:          true,
+		},
+	}}
+}
+
+type countingRetentionRepo struct {
+	fakeGenContentRepo
+	purgeCalls chan struct{}
+}
+
+func (r *countingRetentionRepo) PurgeExpiredContent(ctx context.Context, cutoff time.Time, batch int, dryRun bool) (int64, error) {
+	select {
+	case r.purgeCalls <- struct{}{}:
+	default:
+	}
+	return r.fakeGenContentRepo.PurgeExpiredContent(ctx, cutoff, batch, dryRun)
+}
+
 func contentRow(ageDays int, hasContent bool) *GenerationContent {
 	r := &GenerationContent{CreatedAt: time.Now().AddDate(0, 0, -ageDays)}
 	if hasContent {
@@ -49,6 +75,46 @@ func TestNewGenerationContentRetentionService_ClampsRetentionDays(t *testing.T) 
 	svc := NewGenerationContentRetentionService(&fakeGenContentRepo{}, retentionCfg(3, 0, 0, false))
 	if svc.retentionDays != minGenerationRetentionDays {
 		t.Fatalf("retentionDays not clamped: got %d, want %d", svc.retentionDays, minGenerationRetentionDays)
+	}
+}
+
+func TestProvideGenerationContentRetentionServiceRequiresCaptureAndRetentionFlags(t *testing.T) {
+	cases := []struct {
+		name string
+		cfg  *config.Config
+	}{
+		{name: "nil config", cfg: nil},
+		{name: "capture off retention on", cfg: retentionStartupCfg(false, true)},
+		{name: "capture on retention off", cfg: retentionStartupCfg(true, false)},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if svc := ProvideGenerationContentRetentionService(&fakeGenContentRepo{}, tc.cfg); svc != nil {
+				defer svc.Stop()
+				t.Fatalf("retention daemon must not start for %s", tc.name)
+			}
+		})
+	}
+}
+
+func TestProvideGenerationContentRetentionServiceStartsWhenFlagsEnabled(t *testing.T) {
+	repo := &countingRetentionRepo{
+		fakeGenContentRepo: fakeGenContentRepo{rows: []*GenerationContent{
+			contentRow(100, true),
+		}},
+		purgeCalls: make(chan struct{}, 1),
+	}
+	svc := ProvideGenerationContentRetentionService(repo, retentionStartupCfg(true, true))
+	if svc == nil {
+		t.Fatal("expected retention daemon when content capture and retention flags are enabled")
+	}
+	defer svc.Stop()
+
+	select {
+	case <-repo.purgeCalls:
+	case <-time.After(2 * time.Second):
+		t.Fatal("retention daemon did not schedule its startup cleanup")
 	}
 }
 

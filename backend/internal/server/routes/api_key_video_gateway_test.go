@@ -305,13 +305,14 @@ func apiKeyVideoGatewayAuthMiddleware() middleware.APIKeyAuthMiddleware {
 }
 
 func setEnv(t *testing.T, key, value string) {
+	t.Helper()
 	old := os.Getenv(key)
-	os.Setenv(key, value)
+	require.NoError(t, os.Setenv(key, value))
 	t.Cleanup(func() {
 		if old == "" {
-			os.Unsetenv(key)
+			require.NoError(t, os.Unsetenv(key))
 		} else {
-			os.Setenv(key, old)
+			require.NoError(t, os.Setenv(key, old))
 		}
 	})
 }

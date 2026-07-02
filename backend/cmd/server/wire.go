@@ -98,6 +98,7 @@ func provideCleanup(
 	backupSvc *service.BackupService,
 	paymentOrderExpiry *service.PaymentOrderExpiryService,
 	channelMonitorRunner *service.ChannelMonitorRunner,
+	generationContentRetention *service.GenerationContentRetentionService,
 	videoGatewayWorker *service.VideoGatewayWorker,
 ) func() {
 	return func() {
@@ -244,6 +245,12 @@ func provideCleanup(
 			{"ChannelMonitorRunner", func() error {
 				if channelMonitorRunner != nil {
 					channelMonitorRunner.Stop()
+				}
+				return nil
+			}},
+			{"GenerationContentRetentionService", func() error {
+				if generationContentRetention != nil {
+					generationContentRetention.Stop()
 				}
 				return nil
 			}},

@@ -52,10 +52,10 @@ func TestKnownKeyRedactionClosesPatternBlindSpots(t *testing.T) {
 	for _, bc := range blindSpotKeyCases() {
 		t.Run(bc.name, func(t *testing.T) {
 			echoes := []string{
-				bc.key,                                  // bare
-				neutralEcho(bc.key),                     // prose
-				`{"k":"` + bc.key + `"}`,                // innocuous JSON value
-				`{"api_key":"` + bc.key + `"}`,          // sensitive JSON value (idx1 anchor gap)
+				bc.key,                         // bare
+				neutralEcho(bc.key),            // prose
+				`{"k":"` + bc.key + `"}`,       // innocuous JSON value
+				`{"api_key":"` + bc.key + `"}`, // sensitive JSON value (idx1 anchor gap)
 				`{"error":{"message":"bad ` + bc.key + ` key"}}`, // nested error.message
 			}
 
@@ -91,9 +91,9 @@ func TestKnownKeyRedactionDoesNotOverRedact(t *testing.T) {
 	const someOtherKey = "ZZdifferentkey99887766" // the configured key is NOT present in the bodies below
 	keep := []string{
 		"the quick brown fox jumps over the lazy dog several times today",
-		"antidisestablishmentarianism",        // 28-char pure-letter word
-		`{"id":"cgt-1234","status":"queued"}`, // short ids/statuses
-		"1234567890123456789012",              // 22-digit run (timestamp/counter)
+		"antidisestablishmentarianism",                                  // 28-char pure-letter word
+		`{"id":"cgt-1234","status":"queued"}`,                           // short ids/statuses
+		"1234567890123456789012",                                        // 22-digit run (timestamp/counter)
 		"ark-content.cn-beijing.volces.com/v/tasks/cgt-20250615/ok.mp4", // result url path
 	}
 	for _, body := range keep {

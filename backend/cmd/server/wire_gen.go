@@ -248,6 +248,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	// 注意：本文件由 Wire 生成但已被手工维护，请勿运行 wire codegen（会抹掉手工补丁）。
 	generationContentRepository := repository.NewGenerationContentRepository(db)
 	videoGatewayService.SetGenerationContentCollector(service.NewGenerationContentCollector(generationContentRepository, configConfig))
+	generationContentRetentionService := service.ProvideGenerationContentRetentionService(generationContentRepository, configConfig)
 	generationContentHandler := admin.NewGenerationContentHandler(generationContentRepository)
 	adminHandlers := handler.ProvideAdminHandlers(dashboardHandler, adminUserHandler, groupHandler, accountHandler, adminAnnouncementHandler, dataManagementHandler, backupHandler, oAuthHandler, openAIOAuthHandler, geminiOAuthHandler, antigravityOAuthHandler, proxyHandler, adminRedeemHandler, promoHandler, settingHandler, opsHandler, systemHandler, adminSubscriptionHandler, adminUsageHandler, userAttributeHandler, errorPassthroughHandler, tlsFingerprintProfileHandler, adminAPIKeyHandler, scheduledTestHandler, channelHandler, channelMonitorHandler, channelMonitorRequestTemplateHandler, contentModerationHandler, paymentHandler, affiliateHandler, videoHandler, generationContentHandler)
 	usageRecordWorkerPool := service.NewUsageRecordWorkerPool(configConfig)
@@ -281,7 +282,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	scheduledTestRunnerService := service.ProvideScheduledTestRunnerService(scheduledTestPlanRepository, scheduledTestService, accountTestService, rateLimitService, configConfig)
 	paymentOrderExpiryService := service.ProvidePaymentOrderExpiryService(paymentService)
 	channelMonitorRunner := service.ProvideChannelMonitorRunner(channelMonitorService, settingService)
-	v := provideCleanup(client, redisClient, opsMetricsCollector, opsAggregationService, opsAlertEvaluatorService, opsCleanupService, opsScheduledReportService, opsSystemLogSink, schedulerSnapshotService, tokenRefreshService, accountExpiryService, subscriptionExpiryService, usageCleanupService, idempotencyCleanupService, pricingService, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, openAIGatewayService, scheduledTestRunnerService, backupService, paymentOrderExpiryService, channelMonitorRunner, videoGatewayWorker)
+	v := provideCleanup(client, redisClient, opsMetricsCollector, opsAggregationService, opsAlertEvaluatorService, opsCleanupService, opsScheduledReportService, opsSystemLogSink, schedulerSnapshotService, tokenRefreshService, accountExpiryService, subscriptionExpiryService, usageCleanupService, idempotencyCleanupService, pricingService, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, openAIGatewayService, scheduledTestRunnerService, backupService, paymentOrderExpiryService, channelMonitorRunner, generationContentRetentionService, videoGatewayWorker)
 	application := &Application{
 		Server:  httpServer,
 		Cleanup: v,
@@ -336,6 +337,7 @@ func provideCleanup(
 	backupSvc *service.BackupService,
 	paymentOrderExpiry *service.PaymentOrderExpiryService,
 	channelMonitorRunner *service.ChannelMonitorRunner,
+	generationContentRetention *service.GenerationContentRetentionService,
 	videoGatewayWorker *service.VideoGatewayWorker,
 ) func() {
 	return func() {
@@ -481,6 +483,12 @@ func provideCleanup(
 			{"ChannelMonitorRunner", func() error {
 				if channelMonitorRunner != nil {
 					channelMonitorRunner.Stop()
+				}
+				return nil
+			}},
+			{"GenerationContentRetentionService", func() error {
+				if generationContentRetention != nil {
+					generationContentRetention.Stop()
 				}
 				return nil
 			}},

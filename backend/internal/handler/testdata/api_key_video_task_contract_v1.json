@@ -1,0 +1,28 @@
+{
+  "request": {
+    "provider": "mock",
+    "task_type": "reference_to_video",
+    "model": "mock-video-v1",
+    "prompt": "QCanvas contract prompt",
+    "reference_image_url": "https://example.invalid/ref.png",
+    "aspect_ratio": "16:9",
+    "duration": 5,
+    "resolution": "720p"
+  },
+  "response": {
+    "id": 12345,
+    "provider": "mock",
+    "model": "mock-video-v1",
+    "task_type": "reference_to_video",
+    "reference_image_url": "https://example.invalid/ref.png",
+    "aspect_ratio": "16:9",
+    "duration": 5,
+    "resolution": "720p",
+    "status": "succeeded",
+    "result_url": "/api/v1/video/mock-assets/12345.svg",
+    "ResultURL": "/api/v1/video/mock-assets/12345.svg",
+    "mock_only": true,
+    "provider_boundary": "api-key-video-mock-only",
+    "real_provider_dispatch_count": 0
+  }
+}

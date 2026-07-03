@@ -17,6 +17,19 @@
         <span v-else class="badge badge-gray">{{ t('admin.generationContent.exampleOff') }}</span>
       </div>
 
+      <div
+        v-if="loading"
+        class="rounded border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300"
+      >
+        {{ t('admin.generationContent.loading') }}
+      </div>
+      <div
+        v-if="pageError"
+        class="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300"
+      >
+        {{ pageError }}
+      </div>
+
       <!-- 快照卡:6 个英雄指标(空态降透明,绝不伪造数字) -->
       <div
         class="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6"
@@ -109,6 +122,12 @@
           class="max-h-64 overflow-auto whitespace-pre-wrap rounded border border-gray-100 bg-gray-50 p-3 text-xs text-gray-600 dark:border-dark-700 dark:bg-dark-900 dark:text-dark-300"
         >{{ weeklyReport.markdown }}</pre>
       </div>
+      <div
+        v-else-if="weeklyReportError"
+        class="card border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300"
+      >
+        {{ weeklyReportError }}
+      </div>
 
       <ContentWall :samples="samples" :is-live="isLive" @updated="load" />
     </div>
@@ -134,11 +153,14 @@ const { t } = useI18n()
 
 const stats = ref<GenerationContentStats | null>(null)
 const samples = ref<GenerationSample[]>([])
+const samplesLive = ref(false)
 const weeklyReport = ref<GenerationContentWeeklyReport | null>(null)
 const loading = ref(false)
+const pageError = ref('')
+const weeklyReportError = ref('')
 let abortController: AbortController | null = null
 
-const isLive = computed(() => stats.value?.is_live ?? false)
+const isLive = computed(() => Boolean(stats.value?.is_live || samplesLive.value || samples.value.length > 0))
 const dailySeries = computed(() => (stats.value?.daily_series ?? []).map((p) => p.count))
 const dailyRateText = computed(() => (stats.value?.daily_rate ?? 0).toFixed(1))
 const weeklyAnomalyCount = computed(() => {
@@ -156,26 +178,49 @@ const load = async () => {
   const c = new AbortController()
   abortController = c
   loading.value = true
-  try {
-    const [s, sm, wr] = await Promise.all([
-      adminAPI.generationContent.getStats({ signal: c.signal }),
-      adminAPI.generationContent.getSamples({ signal: c.signal }),
-      adminAPI.generationContent.getWeeklyReport({ signal: c.signal })
-    ])
-    if (c.signal.aborted) return
-    stats.value = s
-    samples.value = sm.samples ?? []
-    weeklyReport.value = wr
-  } catch (e: unknown) {
-    // 取消请求(切走页面)不算错误
-    if ((e as { name?: string })?.name !== 'AbortError' && (e as { code?: string })?.code !== 'ERR_CANCELED') {
-      console.error('Failed to load generation content:', e)
-    }
-  } finally {
-    if (abortController === c) loading.value = false
+  pageError.value = ''
+  weeklyReportError.value = ''
+  const [statsResult, samplesResult, weeklyResult] = await Promise.allSettled([
+    adminAPI.generationContent.getStats({ signal: c.signal }),
+    adminAPI.generationContent.getSamples({ signal: c.signal }),
+    adminAPI.generationContent.getWeeklyReport({ signal: c.signal })
+  ])
+
+  if (c.signal.aborted) return
+
+  if (statsResult.status === 'fulfilled') {
+    stats.value = statsResult.value
+  } else if (!isAbortError(statsResult.reason)) {
+    pageError.value = t('admin.generationContent.loadFailed')
   }
+
+  if (samplesResult.status === 'fulfilled') {
+    samples.value = samplesResult.value.samples ?? []
+    samplesLive.value = Boolean(samplesResult.value.is_live || samples.value.length > 0)
+  } else if (!isAbortError(samplesResult.reason)) {
+    pageError.value = t('admin.generationContent.loadFailed')
+  }
+
+  if (weeklyResult.status === 'fulfilled') {
+    weeklyReport.value = weeklyResult.value
+  } else if (!isAbortError(weeklyResult.reason)) {
+    weeklyReport.value = null
+    weeklyReportError.value = t('admin.generationContent.weeklyReportLoadFailed')
+  }
+
+  if (abortController === c) loading.value = false
+}
+
+function isAbortError(e: unknown): boolean {
+  return (
+    (e as { name?: string })?.name === 'AbortError' ||
+    (e as { code?: string })?.code === 'ERR_CANCELED'
+  )
 }
 
 onMounted(load)
-onUnmounted(() => abortController?.abort())
+onUnmounted(() => {
+  abortController?.abort()
+  if (abortController) loading.value = false
+})
 </script>

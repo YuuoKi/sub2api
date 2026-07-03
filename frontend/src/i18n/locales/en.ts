@@ -4323,6 +4323,8 @@ export default {
       description: 'Moat snapshot and sample wall of captured generations',
       live: '● Live data',
       exampleOff: '○ Example (capture off)',
+      loading: 'Loading generation content...',
+      loadFailed: 'Failed to load generation content.',
       capturedToday: 'Captured today',
       capturedWeek: 'Captured this week',
       distinctEmployees: 'Distinct employees',
@@ -4339,6 +4341,21 @@ export default {
       adopted: 'Adopted',
       pending: 'Pending',
       anomalies: 'Anomalies',
+      weeklyReportLoadFailed: 'Weekly report failed to load.',
+      adoptionStatus: {
+        pending: 'Pending',
+        adopted: 'Adopted',
+        rejected: 'Rejected'
+      },
+      adoptionSave: 'Save',
+      adoptionSaving: 'Saving...',
+      adoptionSaveFailed: 'Save failed; feedback was not saved.',
+      adoptionNotSaved: {
+        content_capture_disabled: 'Content capture is disabled; feedback was not saved.',
+        adoption_feedback_unavailable: 'Adoption feedback is unavailable; feedback was not saved.',
+        task_not_found: 'Task was not found; feedback was not saved.',
+        default: 'Feedback was not saved.'
+      },
       exampleBannerTitle: 'Example — capture not enabled',
       exampleBannerDesc: 'Real redacted samples appear here once content capture is turned on.'
     },

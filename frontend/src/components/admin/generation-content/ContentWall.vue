@@ -44,9 +44,15 @@
         <div v-if="s.task_id" class="grid grid-cols-1 gap-2 border-t border-gray-100 pt-3 dark:border-dark-700">
           <div class="grid grid-cols-[minmax(0,1fr)_88px] gap-2">
             <select v-model="drafts[sampleKey(s, idx)].adoption_status" class="input h-9">
-              <option value="pending">pending</option>
-              <option value="adopted">adopted</option>
-              <option value="rejected">rejected</option>
+              <option value="pending">
+                {{ t('admin.generationContent.adoptionStatus.pending') }}
+              </option>
+              <option value="adopted">
+                {{ t('admin.generationContent.adoptionStatus.adopted') }}
+              </option>
+              <option value="rejected">
+                {{ t('admin.generationContent.adoptionStatus.rejected') }}
+              </option>
             </select>
             <input
               v-model.number="drafts[sampleKey(s, idx)].quality_score"
@@ -69,8 +75,23 @@
             :disabled="saving[sampleKey(s, idx)]"
             @click="saveAdoption(s, idx)"
           >
-            Save
+            {{
+              saving[sampleKey(s, idx)]
+                ? t('admin.generationContent.adoptionSaving')
+                : t('admin.generationContent.adoptionSave')
+            }}
           </button>
+          <p
+            v-if="feedbackMessage(s, idx)"
+            class="rounded border px-3 py-2 text-xs"
+            :class="
+              feedbackType(s, idx) === 'error'
+                ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300'
+                : 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300'
+            "
+          >
+            {{ feedbackMessage(s, idx) }}
+          </p>
         </div>
       </div>
     </div>
@@ -99,6 +120,11 @@ interface Draft {
   notes: string
 }
 
+interface Feedback {
+  type: 'warning' | 'error'
+  message: string
+}
+
 const props = defineProps<{
   samples: GenerationSample[]
   isLive: boolean
@@ -111,9 +137,18 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const drafts = reactive<Record<string, Draft>>({})
 const saving = reactive<Record<string, boolean>>({})
+const feedback = reactive<Record<string, Feedback | undefined>>({})
 
 function sampleKey(sample: GenerationSample, idx: number): string {
   return sample.task_id ? `task:${sample.task_id}` : `row:${idx}`
+}
+
+function feedbackMessage(sample: GenerationSample, idx: number): string {
+  return feedback[sampleKey(sample, idx)]?.message ?? ''
+}
+
+function feedbackType(sample: GenerationSample, idx: number): Feedback['type'] | undefined {
+  return feedback[sampleKey(sample, idx)]?.type
 }
 
 function syncDrafts() {
@@ -135,16 +170,42 @@ async function saveAdoption(sample: GenerationSample, idx: number) {
   const draft = drafts[key]
   if (!draft) return
   saving[key] = true
+  feedback[key] = undefined
   try {
-    await adminAPI.generationContent.updateAdoption(sample.task_id, {
+    const result = await adminAPI.generationContent.updateAdoption(sample.task_id, {
       adoption_status: draft.adoption_status,
       quality_score: draft.quality_score === '' ? null : draft.quality_score,
       notes: draft.notes
     })
+    if (!result.saved) {
+      feedback[key] = {
+        type: 'warning',
+        message: notSavedMessage(result.reason)
+      }
+      return
+    }
     emit('updated')
+  } catch {
+    feedback[key] = {
+      type: 'error',
+      message: t('admin.generationContent.adoptionSaveFailed')
+    }
   } finally {
     saving[key] = false
   }
+}
+
+function notSavedMessage(reason?: string): string {
+  if (reason === 'content_capture_disabled') {
+    return t('admin.generationContent.adoptionNotSaved.content_capture_disabled')
+  }
+  if (reason === 'adoption_feedback_unavailable') {
+    return t('admin.generationContent.adoptionNotSaved.adoption_feedback_unavailable')
+  }
+  if (reason === 'task_not_found') {
+    return t('admin.generationContent.adoptionNotSaved.task_not_found')
+  }
+  return t('admin.generationContent.adoptionNotSaved.default')
 }
 
 watch(() => props.samples, syncDrafts, { immediate: true })

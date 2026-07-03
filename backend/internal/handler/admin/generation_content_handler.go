@@ -155,14 +155,19 @@ func (h *GenerationContentHandler) UpdateAdoption(c *gin.Context) {
 		})
 		return
 	}
-	response.Success(c, gin.H{
+	saved := result != nil && result.Saved
+	payload := gin.H{
 		"enabled":         true,
-		"saved":           result != nil && result.Saved,
+		"saved":           saved,
 		"task_id":         taskID,
 		"adoption_status": status,
 		"quality_score":   req.QualityScore,
 		"notes":           input.Notes,
-	})
+	}
+	if !saved {
+		payload["reason"] = "task_not_found"
+	}
+	response.Success(c, payload)
 }
 
 // GetWeeklyReport handles GET /api/v1/admin/generation-content/weekly-report.

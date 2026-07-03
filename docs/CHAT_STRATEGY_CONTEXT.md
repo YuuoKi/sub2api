@@ -1,10 +1,12 @@
 # Sub2API Chat 战略上下文
 
-本文件服务新的 chat 对话，用于让老板、运营、技术管理员或后续 agent 快速获得当前真实状态，并据此做战略决策。
+更新时间：2026-07-03 Asia/Shanghai
+
+本文服务新的 chat 对话，用于让老板、运营、技术管理员或后续 agent 快速获得当前真实状态，并据此做战略决策。
 
 ## 一句话判断
 
-Sub2API 现在可以作为无界内部“AI API 与生产调度控制面”继续推进；它已经能支撑内部决策验证和演示，Phase A' tiny real 受控单次三证链路已验证，Phase B1 generation-content 账本日常化已进入内部可用 / 待复核，但后续真实付费供应商调用仍处于已冻结状态，需单独授权。
+Sub2API 现在可以作为无界内部“AI API 与生产调度控制面”继续推进；它已经能支撑内部决策验证和演示，Phase A' tiny real 受控单次三证链路已验证，Phase B1 generation-content 账本日常化已进入内部可用 / 待复核，W5 终局审查 open P0=0，但后续真实付费供应商调用仍处于已冻结状态，需单独授权。
 
 ## 它是什么
 
@@ -32,7 +34,7 @@ Sub2API 现在可以作为无界内部“AI API 与生产调度控制面”继�
 - Phase A' tiny real 受控单次三证：QCanvas task `1` 为 `succeeded`，Sub2API 入库 1 行，Admin stats 返回 `is_live=true`。
 - Phase B1 账本日常化：generation-content adoption 反馈 API、weekly report、Admin ContentWall 样本反馈入口已落地。
 - B1 复查修复：adoption `saved:false` 不再伪装成功，weekly report 局部失败不清空 stats/samples，管理端 i18n 与专项测试已补。
-- Go 测试、前端测试、typecheck、lint、build、安全扫描门禁已在本轮扫库中通过。
+- W5 扫库门禁：Go 全量测试、golangci-lint、前端 lint/typecheck/test/build、安全扫描均已通过。
 
 ## 待授权复核能力
 
@@ -46,7 +48,7 @@ Sub2API 现在可以作为无界内部“AI API 与生产调度控制面”继�
 
 新的 chat 对话应把 Sub2API 当成“内部可用的决策与调度底座”：
 
-1. 读取本文件和 `00_START_HERE.md`。
+1. 读取本文和 `00_START_HERE.md`。
 2. 读取 `docs/reviews/LATEST_REVIEW_PACKAGE.html` 获取最新验证证据。
 3. 明确本轮决策问题：模型选择、成本判断、任务调度、供应商接入或风险复核。
 4. 只在受控环境里讨论和验证，不触发真实付费供应商调用。

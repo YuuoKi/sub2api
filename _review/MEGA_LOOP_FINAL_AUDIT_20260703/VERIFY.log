@@ -1,0 +1,28 @@
+# Sub2API W5 VERIFY
+
+日期：2026-07-03 Asia/Shanghai
+
+## Git 锚点
+
+- Repo：`D:\sub2api-trunk`
+- Branch：`wujie/video-capture-moat-20260702`
+- W5 验证前 HEAD：`67830f30`
+
+## 门禁结果
+
+| 命令 | 目录 | 结果 |
+|---|---|---|
+| `go test ./...` | `backend` | exit 0 |
+| `golangci-lint run` | `backend` | exit 0；0 issues |
+| `pnpm run lint` | `frontend` | exit 0；运行后 `git status --short` 无新增修改 |
+| `pnpm run typecheck` | `frontend` | exit 0 |
+| `python tools\secret_scan.py --include-untracked` | repo root | exit 0；`secret-scan: no high-confidence tracked-plus-untracked findings` |
+| `pnpm run test:run` | `frontend` | exit 0；100 files / 592 tests passed |
+| `pnpm run build` | `frontend` | exit 0；仅输出 pnpm overrides、DEP0190、browserslist、dynamic/static imports、chunk >500KB 等警告 |
+
+## 说明
+
+- `make` 在本 Windows 环境不可用；本轮使用等价底层门禁：Go test、golangci-lint、frontend lint/typecheck/test/build、安全扫描。
+- 未读取敏感配置。
+- 未触发真实供应商调用。
+- 未 push。

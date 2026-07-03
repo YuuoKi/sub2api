@@ -17,10 +17,10 @@ import (
 )
 
 type generationContentRepoStub struct {
-	adoptionInput service.GenerationContentAdoptionInput
-	adoptionErr   error
+	adoptionInput  service.GenerationContentAdoptionInput
+	adoptionErr    error
 	adoptionResult *service.GenerationContentAdoption
-	weeklyReport  *service.GenerationContentWeeklyReport
+	weeklyReport   *service.GenerationContentWeeklyReport
 }
 
 func (s *generationContentRepoStub) Create(context.Context, *service.GenerationContent) error {

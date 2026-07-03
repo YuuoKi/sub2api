@@ -4,12 +4,13 @@
 
 ## 一句话判断
 
-Sub2API 现在可以作为无界内部“AI API 与生产调度控制面”继续推进；它已经能支撑内部决策验证和演示，Phase A' tiny real 受控单次三证链路已验证，但后续真实付费供应商调用仍处于已冻结状态，需单独授权。
+Sub2API 现在可以作为无界内部“AI API 与生产调度控制面”继续推进；它已经能支撑内部决策验证和演示，Phase A' tiny real 受控单次三证链路已验证，Phase B1 generation-content 账本日常化已进入内部可用 / 待复核，但后续真实付费供应商调用仍处于已冻结状态，需单独授权。
 
 ## 它是什么
 
 - 内部 API 管理与模型调度底座。
 - 用量、成本、任务、结果和审计证据的集中控制面。
+- generation-content 账本、adoption 反馈、weekly report 和管理员样本复核入口。
 - 给 chat 对话提供决策依据的后台系统。
 - 后续可承接“模型选择、成本边界、生产排期、供应商接入优先级、风险控制”的决策流。
 
@@ -29,6 +30,8 @@ Sub2API 现在可以作为无界内部“AI API 与生产调度控制面”继�
 - 任务状态可回传。
 - mock 结果资产可通过 HTTP 200 打开。
 - Phase A' tiny real 受控单次三证：QCanvas task `1` 为 `succeeded`，Sub2API 入库 1 行，Admin stats 返回 `is_live=true`。
+- Phase B1 账本日常化：generation-content adoption 反馈 API、weekly report、Admin ContentWall 样本反馈入口已落地。
+- B1 复查修复：adoption `saved:false` 不再伪装成功，weekly report 局部失败不清空 stats/samples，管理端 i18n 与专项测试已补。
 - Go 测试、前端测试、typecheck、lint、build、安全扫描门禁已在本轮扫库中通过。
 
 ## 待授权复核能力

@@ -3,7 +3,9 @@
 package handler
 
 import (
+	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,11 +13,17 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	dbent "github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/ent/enttest"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"entgo.io/ent/dialect"
+	entsql "entgo.io/ent/dialect/sql"
+	_ "modernc.org/sqlite"
 )
 
 func TestWriteSuccessResponse(t *testing.T) {
@@ -137,6 +145,44 @@ func TestUnknownOrderWebhookAcksWithSuccess(t *testing.T) {
 	require.Empty(t, w.Body.String(), "Stripe expects an empty body on the ack path")
 }
 
+func TestPaymentWebhookProviderLookupFailureRejectsNonWxpay(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	h := newPaymentWebhookTestHandler(t, "payment_webhook_lookup_non_wxpay")
+	router := gin.New()
+	router.POST("/webhook/alipay", h.AlipayNotify)
+
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/webhook/alipay",
+		bytes.NewBufferString("out_trade_no=sub2_missing_42&trade_status=TRADE_SUCCESS"),
+	)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	router.ServeHTTP(recorder, req)
+
+	require.Equal(t, http.StatusBadRequest, recorder.Code)
+	require.Equal(t, "verify failed", recorder.Body.String())
+}
+
+func TestPaymentWebhookProviderLookupFailureRejectsWxpay(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	h := newPaymentWebhookTestHandler(t, "payment_webhook_lookup_wxpay")
+	router := gin.New()
+	router.POST("/webhook/wxpay", h.WxpayNotify)
+
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/webhook/wxpay", bytes.NewBufferString(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+
+	router.ServeHTTP(recorder, req)
+
+	require.Equal(t, http.StatusBadRequest, recorder.Code)
+	require.Equal(t, "verify failed", recorder.Body.String())
+}
+
 func TestWebhookConstants(t *testing.T) {
 	t.Run("maxWebhookBodySize is 1MB", func(t *testing.T) {
 		assert.Equal(t, int64(1<<20), int64(maxWebhookBodySize))
@@ -252,4 +298,23 @@ func (p webhookHandlerProviderStub) VerifyNotification(context.Context, string, 
 }
 func (p webhookHandlerProviderStub) Refund(context.Context, payment.RefundRequest) (*payment.RefundResponse, error) {
 	panic("unexpected call")
+}
+
+func newPaymentWebhookTestHandler(t *testing.T, dbName string) *PaymentWebhookHandler {
+	t.Helper()
+
+	db, err := sql.Open("sqlite", fmt.Sprintf("file:%s?mode=memory&cache=shared", dbName))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	_, err = db.Exec("PRAGMA foreign_keys = ON")
+	require.NoError(t, err)
+
+	drv := entsql.OpenDB(dialect.SQLite, db)
+	client := enttest.NewClient(t, enttest.WithOptions(dbent.Driver(drv)))
+	t.Cleanup(func() { _ = client.Close() })
+
+	registry := payment.NewRegistry()
+	paymentSvc := service.NewPaymentService(client, registry, nil, nil, nil, nil, nil, nil, nil)
+	return NewPaymentWebhookHandler(paymentSvc, registry)
 }

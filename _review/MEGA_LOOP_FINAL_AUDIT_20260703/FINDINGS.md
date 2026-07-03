@@ -29,6 +29,11 @@ Sub2API 包内质量门禁全绿；Phase A' tiny real 三证与 B1 generation-co
 | W4-P1-003 | P1 | 待后续授权修复 | payment webhook 在非 wxpay provider lookup error 场景可能返回 2xx 成功，存在真实支付回调被上游认为已处理的语义风险。当前未触发真实支付链路，不构成 W5 P0。 |
 | W4-P2-001 | P2 | 待后续优化 | weekly report 窗口仅校验 start < end；当前为 admin-only 且索引可控。 |
 
+## B2 update 2026-07-04
+
+- W4-P1-003 已修复待复核：`PaymentWebhookHandler.handleNotify` 在 `GetWebhookProviders` lookup failure 时统一返回 `400 verify failed`，不再对非 wxpay provider ack 2xx；保留 `ErrOrderNotFound` 2xx ack 语义。
+- 已新增 unit 覆盖：非 wxpay lookup failure、wxpay lookup failure；未知订单 ack 仍由 `TestUnknownOrderWebhookAcksWithSuccess` 锁定。
+
 ## 边界
 
 - 未读取 `.env`、key、token、cookie。

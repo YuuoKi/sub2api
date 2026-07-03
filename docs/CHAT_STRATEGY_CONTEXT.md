@@ -1,63 +1,61 @@
-# Sub2API Chat 战略上下文
+# Sub2API Chat Strategy Context
 
-更新时间：2026-07-03 Asia/Shanghai
+Updated: 2026-07-04 Asia/Shanghai
 
-本文服务新的 chat 对话，用于让老板、运营、技术管理员或后续 agent 快速获得当前真实状态，并据此做战略决策。
+This file gives new chats and follow-up agents the current strategy context for Sub2API.
 
-## 一句话判断
+## One-line Judgment
 
-Sub2API 现在可以作为无界内部“AI API 与生产调度控制面”继续推进；它已经能支撑内部决策验证和演示，Phase A' tiny real 受控单次三证链路已验证，Phase B1 generation-content 账本日常化已进入内部可用 / 待复核，W5 终局审查 open P0=0，但后续真实付费供应商调用仍处于已冻结状态，需单独授权。
+Sub2API can continue as Wujie internal AI API and production-scheduling evidence infrastructure. B2 fixed a payment webhook P1 issue and connected the QCanvas mock/dev adoption feedback bridge, but real paid provider operation remains `已冻结` unless separately authorized.
 
-## 它是什么
+## What Sub2API Is
 
-- 内部 API 管理与模型调度底座。
-- 用量、成本、任务、结果和审计证据的集中控制面。
-- generation-content 账本、adoption 反馈、weekly report 和管理员样本复核入口。
-- 给 chat 对话提供决策依据的后台系统。
-- 后续可承接“模型选择、成本边界、生产排期、供应商接入优先级、风险控制”的决策流。
+- Internal API management and model scheduling substrate.
+- Central evidence surface for usage, cost, tasks, generation-content ledger, weekly reports, and Admin review.
+- Server-side owner of provider credentials and admin ledger APIs.
+- The target that QCanvas can proxy to through hono-api for controlled adoption feedback.
 
-## 它不是什么
+## What Sub2API Is Not
 
-- 现在不是公开商业平台可用。
-- 现在不是已验证的真实 Seedance/Kling 生产交付系统。
-- 现在不是可以直接外放给真实客户使用的生产入口。
-- 现在不是只为单个视频 mock demo 存在的临时页面。
+- Not a public commercial platform ready for external users.
+- Not a blanket authorization for real Seedance/Kling paid provider production.
+- Not a place for QCanvas web clients to hold admin keys.
 
-## 已验证能力
+## Verified Capabilities
 
-- 本地受控环境可启动并通过健康检查。
-- 管理后台可登录。
-- 视频 mock 任务可创建。
-- 后台 worker 可处理任务。
-- 任务状态可回传。
-- mock 结果资产可通过 HTTP 200 打开。
-- Phase A' tiny real 受控单次三证：QCanvas task `1` 为 `succeeded`，Sub2API 入库 1 行，Admin stats 返回 `is_live=true`。
-- Phase B1 账本日常化：generation-content adoption 反馈 API、weekly report、Admin ContentWall 样本反馈入口已落地。
-- B1 复查修复：adoption `saved:false` 不再伪装成功，weekly report 局部失败不清空 stats/samples，管理端 i18n 与专项测试已补。
-- W5 扫库门禁：Go 全量测试、golangci-lint、前端 lint/typecheck/test/build、安全扫描均已通过。
+- Payment webhook P1: commit `628ddd10` rejects provider lookup failures with `400 verify failed`; unknown order ack remains 2xx.
+- B2 final-audit log: commit `4b1cf24b` appended B2 records to tracked `_review/MEGA_LOOP_FINAL_AUDIT_20260703/VERIFY.log`.
+- Backend gates recorded in B2: PaymentWebhook unit test, full `go test ./...`, and `golangci-lint run` exit 0.
+- Frontend gates recorded in B2: lint, typecheck, test:run exit 0.
+- Secret scan recorded in B2: bundled Python run exit 0.
+- QCanvas B2 proxy: `POST /sub2api/v1/generation-content/:task_id/adoption` is reached through QCanvas hono-api, not from web to Sub2API admin directly.
 
-## 待授权复核能力
+## QCanvas Bridge Contract
 
-- 后续真实 Seedance/Kling 等供应商调用。
-- 真实付费 API 任务的生产闭环。
-- 真实 S3/对象存储资产交付闭环。
-- 对外公开部署和公网访问。
-- 真实用户或客户数据路径。
+QCanvas web sends user-authenticated adoption feedback to QCanvas hono-api:
 
-## 下一轮 chat 的建议主路径
+`POST /sub2api/v1/generation-content/:task_id/adoption`
 
-新的 chat 对话应把 Sub2API 当成“内部可用的决策与调度底座”：
+QCanvas hono-api validates JWT/user context, then uses server-side Sub2API credentials to call:
 
-1. 读取本文和 `00_START_HERE.md`。
-2. 读取 `docs/reviews/LATEST_REVIEW_PACKAGE.html` 获取最新验证证据。
-3. 明确本轮决策问题：模型选择、成本判断、任务调度、供应商接入或风险复核。
-4. 只在受控环境里讨论和验证，不触发真实付费供应商调用。
-5. 输出结论时区分“已验证”“待授权复核”“已阻塞”。
+`POST /api/v1/admin/generation-content/:task_id/adoption`
 
-## 禁止误判
+Sub2API `saved:false` responses remain meaningful and must be shown by QCanvas rather than converted to generic success. Required reasons covered by B2 are:
 
-- 不要把 `_archive/` 或 `_review/` 里的旧阶段结论当作当前状态。
-- 不要把 mock 任务成功等同于真实供应商生产日常可用。
-- 不要把 `resultUrlPresent=true` 等同于真实资产已交付。
-- 不要读取、打印或传播密钥、token、cookie、账号或供应商凭证。
-- 不要私自 push、部署、清理历史文件或触发真实付费 API。
+- `content_capture_disabled`
+- `adoption_feedback_unavailable`
+- `task_not_found`
+
+## Pending / Blocked
+
+- Real paid provider calls: `已冻结`.
+- Public deployment / external access: `已冻结`.
+- AUTH redesign: outside B2.
+- QCanvas root pnpm: `已阻塞`.
+
+## Recommended Next Chat Path
+
+1. Read this file and `00_START_HERE.md`.
+2. Read `_review/B2_webhook_fix_20260704/SUMMARY.md` and `VERIFY.md`.
+3. If validating the cross-repo loop, read QCanvas `docs/reviews/B2_adoption_20260704/`.
+4. Stay in mock/dev unless the operator explicitly authorizes real provider use with budget and stop conditions.

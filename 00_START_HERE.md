@@ -1,39 +1,37 @@
-# Sub2API 当前入口
+# Sub2API START HERE
 
-更新时间：2026-07-03 Asia/Shanghai
+Updated: 2026-07-04 Asia/Shanghai
 
-本文是新 chat、新同事、后续执行 agent 进入本仓库时的第一入口。
+## Current Position
 
-## 当前定位
+Sub2API is the Wujie internal AI API / model scheduling / ledger middle layer. It is useful for internal decision evidence and controlled demos, not a public production platform.
 
-Sub2API 当前应按“无界内部 AI API / 模型调度 / chat 战略决策底座”理解。
+## Current Status
 
-它的价值不是先对外宣称生产公开平台 ready，而是为内部 chat 对话提供可复核的后台证据：账号、模型路由、用量、成本、任务编排、结果回收和审计留痕。
+- Overall status: `内部可用 / 待复核` for controlled internal mock/dev ledger work.
+- Phase A' tiny real: `内部可用 / 可演示` for one controlled single-call evidence path only.
+- B1 generation-content ledger: `内部可用 / 待复核`; adoption feedback, weekly report, and Admin ContentWall sample review path exist.
+- B2 webhook P1: fixed in commit `628ddd10`; provider lookup failure no longer returns 2xx success, while unknown order ack semantics are preserved.
+- B2 VERIFY.log: appended and tracked in commit `4b1cf24b`; `_review/MEGA_LOOP_FINAL_AUDIT_20260703/VERIFY.log` remains the final-audit log.
+- QCanvas B2 bridge: QCanvas hono-api commit `5e87e3f` proxies `POST /sub2api/v1/generation-content/:task_id/adoption`; QCanvas web commit `c0f1deb` adds Studio V2 session History and adoption UI.
 
-## 当前状态
+## Current Truth Sources
 
-- W5 终局审查：open P0 = 0；包内质量门禁通过；终局入口为 `_review/MEGA_LOOP_FINAL_AUDIT_20260703/`。
-- Phase A' tiny real：内部可用 / 可演示；仅覆盖受控单次三证链路。
-- Phase B1 账本日常化：内部可用 / 待复核；已落地 generation-content adoption 反馈、weekly report、Admin ContentWall 样本反馈入口与复查修复。
-- 后续真实供应商调用：已冻结，需单独授权。
-- 已验证链路：登录、管理后台、视频 mock 任务创建、后台处理、状态回传、结果资产 HTTP 200；Phase A' tiny real 受控单次三证链路；B1 adoption 保存与 weekly report 管理端路径。
-- Phase A' tiny real 三证：QCanvas task `1` 为 `succeeded`，`ai_generation_content` 对 task `1` 有 1 行，Admin stats 返回 `is_live=true`。
-- B1 账本证据：`docs/reviews/LATEST_REVIEW_PACKAGE.html` 指向 W5 终局入口；B1 复查修复提交锚点为 `9ebbacb9 fix(admin): harden generation content ledger review flow`。
-- 不可声明能力：真实 Seedance/Kling/S3 日常生产交付闭环、后续真实付费供应商调用自动解冻、公开商业平台可用。
+- B2 webhook package: `_review/B2_webhook_fix_20260704/VERIFY.md`, `_review/B2_webhook_fix_20260704/SUMMARY.md`
+- Final audit package: `_review/MEGA_LOOP_FINAL_AUDIT_20260703/`
+- Chat context: `docs/CHAT_STRATEGY_CONTEXT.md`
+- Phase A' success evidence: `_review/phase-a-prime-tiny-real_20260702/success_result.json`
+- QCanvas B2 package: `D:\Codex创业任务\QCanvas（无界版）\QCanvas\docs\reviews\B2_adoption_20260704\`
 
-## 当前真相源
+## Do Not Claim
 
-- 当前审查包：`docs/reviews/LATEST_REVIEW_PACKAGE.html`
-- W5 终局审查：`_review/MEGA_LOOP_FINAL_AUDIT_20260703/`
-- Chat 战略上下文：`docs/CHAT_STRATEGY_CONTEXT.md`
-- Phase A' 成功结果：`_review/phase-a-prime-tiny-real_20260702/success_result.json`
-- Phase B1 账本入口：`docs/reviews/LATEST_REVIEW_PACKAGE.html`
-- 本次早晨结果：`MORNING_RESULT_2026_06_28.md`
+- Do not claim public production readiness.
+- Do not claim real paid provider daily calls are generally authorized.
+- Do not claim QCanvas/Auth/root pnpm gates are solved.
+- Do not read or print `.env`, keys, tokens, cookies, or provider credentials.
 
-## 历史资料边界
+## Boundaries
 
-- `_archive/` 是历史归档证据，不代表当前状态。
-- `_review/` 是阶段性审查和试跑记录，不代表当前状态。
-- 旧 Seedance、旧夜跑、旧审查包只能作为背景材料，不能直接作为当前状态依据。
-
-判断当前状态时，先读本文，再读最新审查包；不要从历史目录反推当前结论。
+- No push, deploy, reset, clean, or rebase.
+- No real provider call without explicit authorization, budget, stop condition, and redaction plan.
+- Keep Sub2API admin credentials server-side. QCanvas web must call QCanvas hono-api, not Sub2API admin APIs directly.

@@ -8,7 +8,9 @@ Git root：`D:\sub2api-trunk`
 
 分支：`wujie/video-capture-moat-20260702`
 
-当前提交前 HEAD：`3c7148cb docs(review): converge entry docs for phase b1 ledger`
+验证开始 HEAD：`3c7148cb docs(review): converge entry docs for phase b1 ledger`
+
+首次 VERIFY / gofmt 提交锚点：`24479590 fix(test): format generation content ledger test`
 
 ## 直接 make 结果
 

@@ -26,3 +26,34 @@
 - 未读取敏感配置。
 - 未触发真实供应商调用。
 - 未 push。
+
+## B2 VERIFY 2026-07-04
+
+### Git anchor
+
+- Repo: `D:\sub2api-trunk`
+- Branch: `wujie/video-capture-moat-20260702`
+- B2 verification time: `2026-07-04T00:42:06+08:00`
+- B2 HEAD after Phase A webhook commit: `628ddd10`
+
+### Gate results
+
+| Command | Directory | Exit code | Notes |
+|---|---|---:|---|
+| `go test -tags unit ./internal/handler/... -run TestPaymentWebhookProviderLookupFailureRejectsNonWxpay -count=1` | `backend` | 1 | Expected red before fix: non-wxpay provider lookup failure returned 200. |
+| `go test -tags unit ./internal/handler/... -run PaymentWebhook -count=1` | `backend` | 0 | PaymentWebhook focused unit gate passed after fix. |
+| `go test ./...` | `backend` | 0 | Backend package test gate passed. |
+| `golangci-lint run` | `backend` | 0 | 0 issues. |
+| `pnpm run lint` | `frontend` | 0 | No working-tree changes left by `--fix`. |
+| `pnpm run typecheck` | `frontend` | 0 | `vue-tsc --noEmit`. |
+| `pnpm run test:run` | `frontend` | 0 | 100 files / 592 tests passed; existing stderr warnings only. |
+| `python tools\secret_scan.py --include-untracked` | repo root | 1 | Machine Python returned exit 1 with no output; rerun with bundled Python below. |
+| `C:\Users\浩臣移动工作站\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe tools\secret_scan.py --include-untracked` | repo root | 0 | `secret-scan: no high-confidence tracked-plus-untracked findings`. |
+| `git ls-files _review/MEGA_LOOP_FINAL_AUDIT_20260703/VERIFY.log` | repo root | 0 | `VERIFY.log` is tracked and present. |
+
+### Scope notes
+
+- No `.env`, key, token, or cookie was read or printed.
+- No real provider / Seedance call was triggered.
+- No AUTH contract change.
+- No push.

@@ -11,6 +11,15 @@
 | `_review/MEGA_LOOP_FINAL_AUDIT_20260703/VERIFY.log` | 已新增 | W5 命令矩阵与结果。 |
 | `_review/MEGA_LOOP_FINAL_AUDIT_20260703/RECOMMENDED_NEXT.md` | 已新增 | 后续修复与授权建议。 |
 
+## B2 update 2026-07-04
+
+| 真相源 | B2 状态 | 说明 |
+|---|---|---|
+| `_review/MEGA_LOOP_FINAL_AUDIT_20260703/VERIFY.log` | 已追加 | 只追加 B2 门禁记录；文件继续 tracked，未重建。 |
+| `_review/MEGA_LOOP_FINAL_AUDIT_20260703/FINDINGS.md` | 已追加 | W4-P1-003 标记为已修复待复核；仍需后续总收口复核。 |
+| `_review/B2_webhook_fix_20260704/VERIFY.md` | 已新增 | 记录 Phase A/B webhook 修复与门禁命令。 |
+| `_review/B2_webhook_fix_20260704/SUMMARY.md` | 已新增 | 记录本轮边界、变更和剩余风险。 |
+
 ## 状态红线
 
 - Phase A' tiny real 只代表受控单次链路内部可用 / 可演示。

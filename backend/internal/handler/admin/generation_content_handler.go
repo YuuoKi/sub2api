@@ -144,15 +144,7 @@ func (h *GenerationContentHandler) UpdateAdoption(c *gin.Context) {
 
 	result, err := h.repo.UpdateVideoTaskAdoption(c.Request.Context(), input)
 	if err != nil {
-		response.Success(c, gin.H{
-			"enabled":         true,
-			"saved":           false,
-			"reason":          "adoption_feedback_unavailable",
-			"task_id":         taskID,
-			"adoption_status": status,
-			"quality_score":   req.QualityScore,
-			"notes":           input.Notes,
-		})
+		response.Error(c, http.StatusInternalServerError, "Failed to save adoption feedback")
 		return
 	}
 	saved := result != nil && result.Saved

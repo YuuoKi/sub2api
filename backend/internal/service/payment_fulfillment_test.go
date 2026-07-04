@@ -11,6 +11,7 @@ import (
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type paymentFulfillmentTestProvider struct {
@@ -42,23 +43,24 @@ func (p paymentFulfillmentTestProvider) Refund(ctx context.Context, req payment.
 
 func TestResolveRedeemAction_CodeNotFound(t *testing.T) {
 	t.Parallel()
-	action := resolveRedeemAction(nil, nil)
-	assert.Equal(t, redeemActionCreate, action, "nil code with nil error should create")
+	action, err := resolveRedeemAction(nil, ErrRedeemCodeNotFound)
+	require.NoError(t, err)
+	assert.Equal(t, redeemActionCreate, action, "not found should create")
 }
 
 func TestResolveRedeemAction_LookupError(t *testing.T) {
 	t.Parallel()
-	action := resolveRedeemAction(nil, errors.New("db connection lost"))
-	assert.Equal(t, redeemActionCreate, action, "lookup error should fall back to create")
+	action, err := resolveRedeemAction(nil, errors.New("db connection lost"))
+	require.Error(t, err)
+	assert.Equal(t, redeemAction(0), action, "lookup error should not choose an action")
 }
 
 func TestResolveRedeemAction_LookupErrorWithNonNilCode(t *testing.T) {
 	t.Parallel()
-	// Edge case: both code and error are non-nil (shouldn't happen in practice,
-	// but the function should still treat error as authoritative)
 	code := &RedeemCode{Status: StatusUnused}
-	action := resolveRedeemAction(code, errors.New("partial error"))
-	assert.Equal(t, redeemActionCreate, action, "non-nil error should always result in create regardless of code")
+	action, err := resolveRedeemAction(code, errors.New("partial error"))
+	require.Error(t, err)
+	assert.Equal(t, redeemAction(0), action)
 }
 
 func TestResolveRedeemAction_CodeExistsAndUsed(t *testing.T) {
@@ -69,7 +71,8 @@ func TestResolveRedeemAction_CodeExistsAndUsed(t *testing.T) {
 		Type:   RedeemTypeBalance,
 		Value:  10.0,
 	}
-	action := resolveRedeemAction(code, nil)
+	action, err := resolveRedeemAction(code, nil)
+	require.NoError(t, err)
 	assert.Equal(t, redeemActionSkipCompleted, action, "used code should skip to completed")
 }
 
@@ -81,19 +84,19 @@ func TestResolveRedeemAction_CodeExistsAndUnused(t *testing.T) {
 		Type:   RedeemTypeBalance,
 		Value:  25.0,
 	}
-	action := resolveRedeemAction(code, nil)
+	action, err := resolveRedeemAction(code, nil)
+	require.NoError(t, err)
 	assert.Equal(t, redeemActionRedeem, action, "unused code should skip creation and proceed to redeem")
 }
 
 func TestResolveRedeemAction_CodeExistsWithExpiredStatus(t *testing.T) {
 	t.Parallel()
-	// A code with a non-standard status (neither "unused" nor "used")
-	// should NOT be treated as used, so it falls through to redeemActionRedeem.
 	code := &RedeemCode{
 		Code:   "expired-code",
 		Status: StatusExpired,
 	}
-	action := resolveRedeemAction(code, nil)
+	action, err := resolveRedeemAction(code, nil)
+	require.NoError(t, err)
 	assert.Equal(t, redeemActionRedeem, action, "expired-status code is not IsUsed(), should redeem")
 }
 
@@ -105,10 +108,11 @@ func TestResolveRedeemAction_Table(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name     string
-		code     *RedeemCode
-		err      error
-		expected redeemAction
+		name        string
+		code        *RedeemCode
+		err         error
+		expected    redeemAction
+		expectError bool
 	}{
 		{
 			name:     "nil code, nil error — first run",
@@ -123,10 +127,10 @@ func TestResolveRedeemAction_Table(t *testing.T) {
 			expected: redeemActionCreate,
 		},
 		{
-			name:     "nil code, generic DB error — treat as not found",
-			code:     nil,
-			err:      errors.New("connection refused"),
-			expected: redeemActionCreate,
+			name:        "nil code, generic DB error — propagate",
+			code:        nil,
+			err:         errors.New("connection refused"),
+			expectError: true,
 		},
 		{
 			name:     "code exists, used — previous run completed redeem",
@@ -141,17 +145,22 @@ func TestResolveRedeemAction_Table(t *testing.T) {
 			expected: redeemActionRedeem,
 		},
 		{
-			name:     "code exists but error also set — error takes precedence",
-			code:     &RedeemCode{Status: StatusUsed},
-			err:      errors.New("unexpected"),
-			expected: redeemActionCreate,
+			name:        "code exists but error also set — propagate error",
+			code:        &RedeemCode{Status: StatusUsed},
+			err:         errors.New("unexpected"),
+			expectError: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := resolveRedeemAction(tt.code, tt.err)
+			got, err := resolveRedeemAction(tt.code, tt.err)
+			if tt.expectError {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
 			assert.Equal(t, tt.expected, got)
 		})
 	}
@@ -182,11 +191,15 @@ func TestResolveRedeemAction_IsUsedCanUseConsistency(t *testing.T) {
 	// Verify our decision function is consistent with the domain model methods
 	assert.True(t, usedCode.IsUsed())
 	assert.False(t, usedCode.CanUse())
-	assert.Equal(t, redeemActionSkipCompleted, resolveRedeemAction(usedCode, nil))
+	action, err := resolveRedeemAction(usedCode, nil)
+	require.NoError(t, err)
+	assert.Equal(t, redeemActionSkipCompleted, action)
 
 	assert.False(t, unusedCode.IsUsed())
 	assert.True(t, unusedCode.CanUse())
-	assert.Equal(t, redeemActionRedeem, resolveRedeemAction(unusedCode, nil))
+	action, err = resolveRedeemAction(unusedCode, nil)
+	require.NoError(t, err)
+	assert.Equal(t, redeemActionRedeem, action)
 }
 
 func TestExpectedNotificationProviderKeyPrefersOrderInstanceProvider(t *testing.T) {

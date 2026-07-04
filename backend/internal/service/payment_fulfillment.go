@@ -26,6 +26,23 @@ import (
 // misconfigured to point at us, or when our orders table has been wiped).
 var ErrOrderNotFound = errors.New("payment order not found")
 
+// ErrPaymentAfterExpiry is returned when a provider reports payment success for an
+// order that is EXPIRED beyond the grace window. Webhook handlers should ack 2xx
+// (provider must not retry) while surfacing the condition for manual recovery.
+var ErrPaymentAfterExpiry = errors.New("payment success after order expiry grace period")
+
+// ErrPaymentRejected is returned for webhook notifications that fail permanent
+// validation (amount mismatch, provider mismatch, etc.). Webhook handlers should
+// ack 2xx so providers do not retry forever.
+var ErrPaymentRejected = errors.New("payment notification rejected")
+
+// ErrPaymentFulfillmentStale is returned for duplicate success notifications
+// when an order has been stuck in RECHARGING long enough that silently acking
+// the webhook would hide a paid-but-not-delivered order.
+var ErrPaymentFulfillmentStale = errors.New("payment fulfillment in progress is stale")
+
+const paymentInProgressRecoveryAfter = 2 * time.Minute
+
 // --- Payment Notification & Fulfillment ---
 
 func (s *PaymentService) HandlePaymentNotification(ctx context.Context, n *payment.PaymentNotification, pk string) error {
@@ -38,14 +55,14 @@ func (s *PaymentService) HandlePaymentNotification(ctx context.Context, n *payme
 		// Fallback only for true legacy "sub2_N" DB-ID payloads when the
 		// current out_trade_no lookup genuinely did not find an order.
 		if oid, ok := parseLegacyPaymentOrderID(n.OrderID, err); ok {
-			return s.confirmPayment(ctx, oid, n.TradeNo, n.Amount, pk, n.Metadata)
+			return s.confirmPayment(ctx, oid, n.TradeNo, n.Amount, pk, n.Metadata, n.OrderID)
 		}
 		if dbent.IsNotFound(err) {
 			return fmt.Errorf("%w: out_trade_no=%s", ErrOrderNotFound, n.OrderID)
 		}
 		return fmt.Errorf("lookup order failed for out_trade_no %s: %w", n.OrderID, err)
 	}
-	return s.confirmPayment(ctx, order.ID, n.TradeNo, n.Amount, pk, n.Metadata)
+	return s.confirmPayment(ctx, order.ID, n.TradeNo, n.Amount, pk, n.Metadata, "")
 }
 
 func parseLegacyPaymentOrderID(orderID string, lookupErr error) (int64, bool) {
@@ -67,11 +84,18 @@ func parseLegacyPaymentOrderID(orderID string, lookupErr error) (int64, bool) {
 	return oid, true
 }
 
-func (s *PaymentService) confirmPayment(ctx context.Context, oid int64, tradeNo string, paid float64, pk string, metadata map[string]string) error {
+func (s *PaymentService) confirmPayment(ctx context.Context, oid int64, tradeNo string, paid float64, pk string, metadata map[string]string, legacyWebhookOrderID string) error {
 	o, err := s.entClient.PaymentOrder.Get(ctx, oid)
 	if err != nil {
-		slog.Error("order not found", "orderID", oid)
-		return nil
+		slog.Error("order not found", "orderID", oid, "error", err)
+		if dbent.IsNotFound(err) {
+			return fmt.Errorf("%w: order_id=%d", ErrOrderNotFound, oid)
+		}
+		return fmt.Errorf("get order %d: %w", oid, err)
+	}
+	if legacyWebhookOrderID != "" && strings.TrimSpace(o.OutTradeNo) != strings.TrimSpace(legacyWebhookOrderID) {
+		return fmt.Errorf("%w: legacy order_id=%d out_trade_no mismatch (webhook=%q order=%q)",
+			ErrOrderNotFound, oid, legacyWebhookOrderID, o.OutTradeNo)
 	}
 	instanceProviderKey := ""
 	if inst, instErr := s.getOrderProviderInstance(ctx, o); instErr == nil && inst != nil {
@@ -84,14 +108,14 @@ func (s *PaymentService) confirmPayment(ctx context.Context, oid int64, tradeNo 
 			"actualProvider":   pk,
 			"tradeNo":          tradeNo,
 		})
-		return fmt.Errorf("provider mismatch: expected %s, got %s", expectedProviderKey, pk)
+		return fmt.Errorf("%w: provider mismatch: expected %s, got %s", ErrPaymentRejected, expectedProviderKey, pk)
 	}
 	if err := validateProviderNotificationMetadata(o, pk, metadata); err != nil {
 		s.writeAuditLog(ctx, o.ID, "PAYMENT_PROVIDER_METADATA_MISMATCH", pk, map[string]any{
 			"detail":  err.Error(),
 			"tradeNo": tradeNo,
 		})
-		return err
+		return fmt.Errorf("%w: %w", ErrPaymentRejected, err)
 	}
 	if !isValidProviderAmount(paid) {
 		s.writeAuditLog(ctx, o.ID, "PAYMENT_INVALID_AMOUNT", pk, map[string]any{
@@ -99,11 +123,11 @@ func (s *PaymentService) confirmPayment(ctx context.Context, oid int64, tradeNo 
 			"paid":     paid,
 			"tradeNo":  tradeNo,
 		})
-		return fmt.Errorf("invalid paid amount from provider: %v", paid)
+		return fmt.Errorf("%w: invalid paid amount from provider: %v", ErrPaymentRejected, paid)
 	}
 	if math.Abs(paid-o.PayAmount) > paymentAmountToleranceForCurrency(PaymentOrderCurrency(o)) {
 		s.writeAuditLog(ctx, o.ID, "PAYMENT_AMOUNT_MISMATCH", pk, map[string]any{"expected": o.PayAmount, "paid": paid, "tradeNo": tradeNo})
-		return fmt.Errorf("amount mismatch: expected %s, got %s", strconv.FormatFloat(o.PayAmount, 'f', -1, 64), strconv.FormatFloat(paid, 'f', -1, 64))
+		return fmt.Errorf("%w: amount mismatch: expected %s, got %s", ErrPaymentRejected, strconv.FormatFloat(o.PayAmount, 'f', -1, 64), strconv.FormatFloat(paid, 'f', -1, 64))
 	}
 	return s.toPaid(ctx, o, tradeNo, paid, pk)
 }
@@ -147,7 +171,6 @@ func (s *PaymentService) toPaid(ctx context.Context, o *dbent.PaymentOrder, trad
 		paymentorder.IDEQ(o.ID),
 		paymentorder.Or(
 			paymentorder.StatusEQ(OrderStatusPending),
-			paymentorder.StatusEQ(OrderStatusCancelled),
 			paymentorder.And(
 				paymentorder.StatusEQ(OrderStatusExpired),
 				paymentorder.UpdatedAtGTE(grace),
@@ -181,15 +204,38 @@ func (s *PaymentService) toPaid(ctx context.Context, o *dbent.PaymentOrder, trad
 func (s *PaymentService) alreadyProcessed(ctx context.Context, o *dbent.PaymentOrder) error {
 	cur, err := s.entClient.PaymentOrder.Get(ctx, o.ID)
 	if err != nil {
-		return nil
+		return fmt.Errorf("re-fetch order %d: %w", o.ID, err)
 	}
 	switch cur.Status {
 	case OrderStatusCompleted, OrderStatusRefunded:
 		return nil
 	case OrderStatusFailed:
 		return s.executeFulfillment(ctx, o.ID)
-	case OrderStatusPaid, OrderStatusRecharging:
-		return fmt.Errorf("order %d is being processed", o.ID)
+	case OrderStatusPaid:
+		slog.Info("duplicate webhook for paid order; resuming fulfillment",
+			"orderID", o.ID,
+			"status", cur.Status,
+		)
+		return s.executeFulfillment(ctx, cur.ID)
+	case OrderStatusRecharging:
+		if time.Since(cur.UpdatedAt) < paymentInProgressRecoveryAfter {
+			slog.Info("duplicate webhook for order already in progress",
+				"orderID", o.ID,
+				"status", cur.Status,
+			)
+			return nil
+		}
+		slog.Warn("duplicate webhook found stale payment fulfillment",
+			"orderID", o.ID,
+			"status", cur.Status,
+			"updatedAt", cur.UpdatedAt,
+		)
+		s.writeAuditLog(ctx, o.ID, "PAYMENT_FULFILLMENT_STALE", "system", map[string]any{
+			"status":    cur.Status,
+			"updatedAt": cur.UpdatedAt,
+			"reason":    "duplicate webhook observed stale in-progress fulfillment",
+		})
+		return fmt.Errorf("%w: order_id=%d status=%s", ErrPaymentFulfillmentStale, cur.ID, cur.Status)
 	case OrderStatusExpired:
 		slog.Warn("webhook payment success for expired order beyond grace period",
 			"orderID", o.ID,
@@ -201,7 +247,17 @@ func (s *PaymentService) alreadyProcessed(ctx context.Context, o *dbent.PaymentO
 			"updatedAt": cur.UpdatedAt,
 			"reason":    "payment arrived after expiry grace period",
 		})
-		return nil
+		return fmt.Errorf("%w: order_id=%d", ErrPaymentAfterExpiry, o.ID)
+	case OrderStatusCancelled:
+		slog.Warn("webhook payment success for cancelled order",
+			"orderID", o.ID,
+			"status", cur.Status,
+		)
+		s.writeAuditLog(ctx, o.ID, "PAYMENT_ON_CANCELLED_ORDER", "system", map[string]any{
+			"status": cur.Status,
+			"reason": "payment arrived after user cancelled order",
+		})
+		return fmt.Errorf("%w: order_id=%d status=%s", ErrPaymentRejected, o.ID, cur.Status)
 	default:
 		return nil
 	}
@@ -260,25 +316,37 @@ const (
 
 // resolveRedeemAction decides the idempotency action based on an existing redeem code lookup.
 // existing is the result of GetByCode; lookupErr is the error from that call.
-func resolveRedeemAction(existing *RedeemCode, lookupErr error) redeemAction {
-	if existing == nil || lookupErr != nil {
-		return redeemActionCreate
+func resolveRedeemAction(existing *RedeemCode, lookupErr error) (redeemAction, error) {
+	if lookupErr != nil {
+		if errors.Is(lookupErr, ErrRedeemCodeNotFound) {
+			return redeemActionCreate, nil
+		}
+		return 0, lookupErr
+	}
+	if existing == nil {
+		return redeemActionCreate, nil
 	}
 	if existing.IsUsed() {
-		return redeemActionSkipCompleted
+		return redeemActionSkipCompleted, nil
 	}
-	return redeemActionRedeem
+	return redeemActionRedeem, nil
 }
 
 func (s *PaymentService) doBalance(ctx context.Context, o *dbent.PaymentOrder) error {
 	// Idempotency: check if redeem code already exists (from a previous partial run)
 	existing, lookupErr := s.redeemService.GetByCode(ctx, o.RechargeCode)
-	action := resolveRedeemAction(existing, lookupErr)
+	action, err := resolveRedeemAction(existing, lookupErr)
+	if err != nil {
+		return fmt.Errorf("lookup redeem code: %w", err)
+	}
 
 	switch action {
 	case redeemActionSkipCompleted:
 		if err := s.applyAffiliateRebateForOrder(ctx, o); err != nil {
-			return err
+			slog.Warn("affiliate rebate failed for already-redeemed order; completing anyway",
+				"orderID", o.ID,
+				"error", err,
+			)
 		}
 		// Code already created and redeemed — just mark completed
 		return s.markCompleted(ctx, o, "RECHARGE_SUCCESS")
@@ -294,16 +362,22 @@ func (s *PaymentService) doBalance(ctx context.Context, o *dbent.PaymentOrder) e
 		return fmt.Errorf("redeem balance: %w", err)
 	}
 	if err := s.applyAffiliateRebateForOrder(ctx, o); err != nil {
-		return err
+		slog.Warn("affiliate rebate failed after balance credited; completing order anyway",
+			"orderID", o.ID,
+			"error", err,
+		)
 	}
 	return s.markCompleted(ctx, o, "RECHARGE_SUCCESS")
 }
 
 func (s *PaymentService) markCompleted(ctx context.Context, o *dbent.PaymentOrder, auditAction string) error {
 	now := time.Now()
-	_, err := s.entClient.PaymentOrder.Update().Where(paymentorder.IDEQ(o.ID), paymentorder.StatusEQ(OrderStatusRecharging)).SetStatus(OrderStatusCompleted).SetCompletedAt(now).Save(ctx)
+	affected, err := s.entClient.PaymentOrder.Update().Where(paymentorder.IDEQ(o.ID), paymentorder.StatusEQ(OrderStatusRecharging)).SetStatus(OrderStatusCompleted).SetCompletedAt(now).Save(ctx)
 	if err != nil {
 		return fmt.Errorf("mark completed: %w", err)
+	}
+	if affected == 0 {
+		return fmt.Errorf("mark completed: order %d not in RECHARGING status", o.ID)
 	}
 	s.writeAuditLog(ctx, o.ID, auditAction, "system", map[string]any{
 		"rechargeCode":   o.RechargeCode,
@@ -353,7 +427,11 @@ func (s *PaymentService) doSub(ctx context.Context, o *dbent.PaymentOrder) error
 	}
 	// Idempotency: check audit log to see if subscription was already assigned.
 	// Prevents double-extension on retry after markCompleted fails.
-	if s.hasAuditLog(ctx, o.ID, "SUBSCRIPTION_SUCCESS") {
+	hasSuccess, err := s.hasAuditLog(ctx, o.ID, "SUBSCRIPTION_SUCCESS")
+	if err != nil {
+		return fmt.Errorf("check subscription audit log: %w", err)
+	}
+	if hasSuccess {
 		slog.Info("subscription already assigned for order, skipping", "orderID", o.ID, "groupID", gid)
 		return s.markCompleted(ctx, o, "SUBSCRIPTION_SUCCESS")
 	}
@@ -365,12 +443,15 @@ func (s *PaymentService) doSub(ctx context.Context, o *dbent.PaymentOrder) error
 	return s.markCompleted(ctx, o, "SUBSCRIPTION_SUCCESS")
 }
 
-func (s *PaymentService) hasAuditLog(ctx context.Context, orderID int64, action string) bool {
+func (s *PaymentService) hasAuditLog(ctx context.Context, orderID int64, action string) (bool, error) {
 	oid := strconv.FormatInt(orderID, 10)
-	c, _ := s.entClient.PaymentAuditLog.Query().
+	c, err := s.entClient.PaymentAuditLog.Query().
 		Where(paymentauditlog.OrderIDEQ(oid), paymentauditlog.ActionEQ(action)).
 		Limit(1).Count(ctx)
-	return c > 0
+	if err != nil {
+		return false, fmt.Errorf("count audit log: %w", err)
+	}
+	return c > 0, nil
 }
 
 func (s *PaymentService) applyAffiliateRebateForOrder(ctx context.Context, o *dbent.PaymentOrder) error {

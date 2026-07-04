@@ -64,6 +64,9 @@ func (s *PaymentService) GetWebhookProviders(ctx context.Context, providerKey, o
 			}
 			return []payment.Provider{prov}, nil
 		}
+		if !dbent.IsNotFound(err) {
+			return nil, fmt.Errorf("lookup order for webhook provider: %w", err)
+		}
 	}
 
 	if strings.TrimSpace(providerKey) == payment.TypeWxpay {

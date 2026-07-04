@@ -193,7 +193,7 @@ func TestGenerationContentHandlerUpdateAdoptionFlagOffFailOpen(t *testing.T) {
 	require.Contains(t, rec.Body.String(), `"saved":false`)
 }
 
-func TestGenerationContentHandlerUpdateAdoptionRepoErrorFailOpen(t *testing.T) {
+func TestGenerationContentHandlerUpdateAdoptionRepoErrorReturns500(t *testing.T) {
 	repo := &generationContentRepoStub{adoptionErr: errors.New("db temporarily unavailable")}
 	router := setupGenerationContentRouter(repo, &config.Config{
 		Gateway: config.GatewayConfig{ContentCapture: config.ContentCaptureConfig{Enabled: true}},
@@ -204,9 +204,7 @@ func TestGenerationContentHandlerUpdateAdoptionRepoErrorFailOpen(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(rec, req)
 
-	require.Equal(t, http.StatusOK, rec.Code)
-	require.Contains(t, rec.Body.String(), `"saved":false`)
-	require.Contains(t, rec.Body.String(), `"reason":"adoption_feedback_unavailable"`)
+	require.Equal(t, http.StatusInternalServerError, rec.Code)
 }
 
 func TestGenerationContentHandlerWeeklyReportReturnsMarkdown(t *testing.T) {

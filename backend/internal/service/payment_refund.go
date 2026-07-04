@@ -284,7 +284,12 @@ func (s *PaymentService) ExecuteRefund(ctx context.Context, p *RefundPlan) (*Ref
 	if p.DeductionType == payment.DeductionTypeBalance && p.BalanceToDeduct > 0 {
 		// Skip balance deduction on retry if previous attempt already deducted
 		// but failed to roll back (REFUND_ROLLBACK_FAILED in audit log).
-		if !s.hasAuditLog(ctx, p.OrderID, "REFUND_ROLLBACK_FAILED") {
+		hasRollbackFailed, err := s.hasAuditLog(ctx, p.OrderID, "REFUND_ROLLBACK_FAILED")
+		if err != nil {
+			s.restoreStatus(ctx, p)
+			return nil, fmt.Errorf("check refund rollback audit: %w", err)
+		}
+		if !hasRollbackFailed {
 			if err := s.userRepo.DeductBalance(ctx, p.Order.UserID, p.BalanceToDeduct); err != nil {
 				s.restoreStatus(ctx, p)
 				return nil, fmt.Errorf("deduction: %w", err)
@@ -295,7 +300,12 @@ func (s *PaymentService) ExecuteRefund(ctx context.Context, p *RefundPlan) (*Ref
 		}
 	}
 	if p.DeductionType == payment.DeductionTypeSubscription && p.SubDaysToDeduct > 0 && p.SubscriptionID > 0 {
-		if !s.hasAuditLog(ctx, p.OrderID, "REFUND_ROLLBACK_FAILED") {
+		hasRollbackFailed, err := s.hasAuditLog(ctx, p.OrderID, "REFUND_ROLLBACK_FAILED")
+		if err != nil {
+			s.restoreStatus(ctx, p)
+			return nil, fmt.Errorf("check refund rollback audit: %w", err)
+		}
+		if !hasRollbackFailed {
 			_, err := s.subscriptionSvc.ExtendSubscription(ctx, p.SubscriptionID, -p.SubDaysToDeduct)
 			if err != nil {
 				if errors.Is(err, ErrAdjustWouldExpire) {

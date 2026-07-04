@@ -132,6 +132,26 @@ func (h *PaymentWebhookHandler) handleNotify(c *gin.Context, providerKey string)
 			writeSuccessResponse(c, resolvedProviderKey)
 			return
 		}
+		if errors.Is(err, service.ErrPaymentAfterExpiry) {
+			slog.Error("[Payment Webhook] payment after expiry grace period, acking to stop retries",
+				"provider", resolvedProviderKey,
+				"outTradeNo", notification.OrderID,
+				"tradeNo", notification.TradeNo,
+				"error", err,
+			)
+			writeSuccessResponse(c, resolvedProviderKey)
+			return
+		}
+		if errors.Is(err, service.ErrPaymentRejected) {
+			slog.Warn("[Payment Webhook] payment rejected, acking to stop retries",
+				"provider", resolvedProviderKey,
+				"outTradeNo", notification.OrderID,
+				"tradeNo", notification.TradeNo,
+				"error", err,
+			)
+			writeSuccessResponse(c, resolvedProviderKey)
+			return
+		}
 		slog.Error("[Payment Webhook] handle notification failed", "provider", resolvedProviderKey, "error", err)
 		c.String(http.StatusInternalServerError, "handle failed")
 		return

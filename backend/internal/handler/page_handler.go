@@ -137,21 +137,36 @@ func resolvePageImagePath(pagesDir, imagesDir, filename string) (string, bool) {
 	cleanedPagesDir := filepath.Clean(pagesDir)
 	cleanedImagesDir := filepath.Clean(imagesDir)
 	cleanedTarget := filepath.Clean(filepath.Join(cleanedImagesDir, relPath))
+	if !isPathWithinBase(cleanedImagesDir, cleanedPagesDir) {
+		return "", false
+	}
 	if !isPathWithinBase(cleanedTarget, cleanedImagesDir) {
 		return "", false
 	}
 
-	realPagesDir, err := filepath.EvalSymlinks(cleanedPagesDir)
+	hasSymlink, err := pathHasSymlinkComponent(cleanedPagesDir, cleanedImagesDir)
 	if err != nil {
 		return "", false
 	}
-	realImagesDir, err := filepath.EvalSymlinks(cleanedImagesDir)
-	if err != nil || !isPathWithinBase(realImagesDir, realPagesDir) {
-		return "", false
+	if !hasSymlink {
+		hasSymlink, err = pathHasSymlinkComponent(cleanedImagesDir, cleanedTarget)
+		if err != nil {
+			return "", false
+		}
 	}
-	realTarget, err := filepath.EvalSymlinks(cleanedTarget)
-	if err != nil || !isPathWithinBase(realTarget, realImagesDir) {
-		return "", false
+	if hasSymlink {
+		realPagesDir, err := filepath.EvalSymlinks(cleanedPagesDir)
+		if err != nil {
+			return "", false
+		}
+		realImagesDir, err := filepath.EvalSymlinks(cleanedImagesDir)
+		if err != nil || !isPathWithinBase(realImagesDir, realPagesDir) {
+			return "", false
+		}
+		realTarget, err := filepath.EvalSymlinks(cleanedTarget)
+		if err != nil || !isPathWithinBase(realTarget, realImagesDir) {
+			return "", false
+		}
 	}
 	return cleanedTarget, true
 }
@@ -199,6 +214,35 @@ func isPathWithinBase(path, base string) bool {
 		return false
 	}
 	return rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+func pathHasSymlinkComponent(root, path string) (bool, error) {
+	rel, err := filepath.Rel(filepath.Clean(root), filepath.Clean(path))
+	if err != nil {
+		return false, err
+	}
+	if rel == "." {
+		return false, nil
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return false, os.ErrPermission
+	}
+
+	current := filepath.Clean(root)
+	for _, part := range strings.Split(rel, string(filepath.Separator)) {
+		if part == "" || part == "." {
+			continue
+		}
+		current = filepath.Join(current, part)
+		info, err := os.Lstat(current)
+		if err != nil {
+			return false, err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // findSlugVisibility looks up the slug in custom_menu_items and returns (visibility, found).

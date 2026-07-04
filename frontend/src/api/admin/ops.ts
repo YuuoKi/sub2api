@@ -510,9 +510,8 @@ export async function getRealtimeTrafficSummary(
 /**
  * Subscribe to realtime QPS updates via WebSocket.
  *
- * Note: browsers cannot set Authorization headers for WebSockets.
- * We authenticate via Sec-WebSocket-Protocol using a prefixed token item:
- *   ["sub2api-admin", "jwt.<token>"]
+ * Browsers cannot set Authorization on WebSocket upgrades. Request a single-use
+ * ticket over HTTPS (POST /admin/ops/ws/ticket) and pass it as ?ticket=... .
  */
 export interface SubscribeQPSOptions {
   token?: string | null
@@ -559,6 +558,15 @@ export const OPS_WS_CLOSE_CODES = {
 } as const
 
 const OPS_WS_BASE_PROTOCOL = 'sub2api-admin'
+
+async function issueOpsWSTicket(authToken: string): Promise<string> {
+  const { data } = await apiClient.post<{ ticket: string }>(
+    '/admin/ops/ws/ticket',
+    {},
+    { headers: { Authorization: `Bearer ${authToken}` } },
+  )
+  return String(data?.ticket ?? '').trim()
+}
 
 export function subscribeQPS(onMessage: (data: any) => void, options: SubscribeQPSOptions = {}): () => void {
   let ws: WebSocket | null = null
@@ -641,7 +649,7 @@ export function subscribeQPS(onMessage: (data: any) => void, options: SubscribeQ
     setStatus('offline')
   }
 
-  const connect = () => {
+  const connect = async () => {
     if (!shouldReconnect) return
     if (isConnecting) return
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return
@@ -653,14 +661,38 @@ export function subscribeQPS(onMessage: (data: any) => void, options: SubscribeQ
     const wsBaseUrl = options.wsBaseUrl || import.meta.env.VITE_WS_BASE_URL || window.location.host
     const wsURL = new URL(`${protocol}//${wsBaseUrl}/api/v1/admin/ops/ws/qps`)
 
-    // Do NOT put admin JWT in the URL query string (it can leak via access logs, proxies, etc).
-    // Browsers cannot set Authorization headers for WebSockets, so we pass the token via
-    // Sec-WebSocket-Protocol (subprotocol list): ["sub2api-admin", "jwt.<token>"].
     const rawToken = String(options.token ?? localStorage.getItem('auth_token') ?? '').trim()
-    const protocols: string[] = [OPS_WS_BASE_PROTOCOL]
-    if (rawToken) protocols.push(`jwt.${rawToken}`)
+    if (!rawToken) {
+      isConnecting = false
+      setStatus('offline')
+      return
+    }
 
-    ws = new WebSocket(wsURL.toString(), protocols)
+    try {
+      const ticket = await issueOpsWSTicket(rawToken)
+      if (!shouldReconnect) {
+        isConnecting = false
+        return
+      }
+      if (!ticket) {
+        isConnecting = false
+        setStatus('offline')
+        scheduleReconnect()
+        return
+      }
+      wsURL.searchParams.set('ticket', ticket)
+    } catch {
+      if (!shouldReconnect) {
+        isConnecting = false
+        return
+      }
+      isConnecting = false
+      setStatus('offline')
+      scheduleReconnect()
+      return
+    }
+
+    ws = new WebSocket(wsURL.toString(), [OPS_WS_BASE_PROTOCOL])
 
     ws.onopen = () => {
       reconnectAttempts = 0

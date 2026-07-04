@@ -435,6 +435,14 @@ func (s *userHandlerRefreshTokenCacheStub) IsTokenInFamily(context.Context, stri
 	return false, nil
 }
 
+func (s *userHandlerRefreshTokenCacheStub) RecordRotatedRefreshToken(context.Context, string, string, time.Duration) error {
+	return nil
+}
+
+func (s *userHandlerRefreshTokenCacheStub) GetRotatedRefreshTokenFamily(context.Context, string) (string, error) {
+	return "", service.ErrRefreshTokenNotFound
+}
+
 func (s *userHandlerEmailCacheStub) GetVerificationCode(context.Context, string) (*service.VerificationCodeData, error) {
 	return s.data, nil
 }

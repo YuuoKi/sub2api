@@ -1653,7 +1653,7 @@ func TestBindOIDCOAuthLoginRejectsInvalidPasswordWithoutConsumingSession(t *test
 	require.Nil(t, storedSession.ConsumedAt)
 }
 
-func TestBindOIDCOAuthLoginReclaimsIdentityOwnedBySoftDeletedUser(t *testing.T) {
+func TestBindOIDCOAuthLoginRejectsIdentityOwnedBySoftDeletedUser(t *testing.T) {
 	handler, client := newOAuthPendingFlowTestHandler(t, false)
 	ctx := context.Background()
 
@@ -1720,11 +1720,11 @@ func TestBindOIDCOAuthLoginReclaimsIdentityOwnedBySoftDeletedUser(t *testing.T) 
 
 	handler.BindOIDCOAuthLogin(ginCtx)
 
-	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, http.StatusConflict, recorder.Code)
 
 	identity, err = client.AuthIdentity.Get(ctx, identity.ID)
 	require.NoError(t, err)
-	require.Equal(t, newOwner.ID, identity.UserID)
+	require.Equal(t, oldOwner.ID, identity.UserID)
 }
 
 func TestBindOIDCOAuthLoginAppliesFirstBindGrantOnce(t *testing.T) {
@@ -2417,6 +2417,14 @@ func (s *oauthPendingFlowRefreshTokenCacheStub) GetFamilyTokenHashes(context.Con
 
 func (s *oauthPendingFlowRefreshTokenCacheStub) IsTokenInFamily(context.Context, string, string) (bool, error) {
 	return false, nil
+}
+
+func (s *oauthPendingFlowRefreshTokenCacheStub) RecordRotatedRefreshToken(context.Context, string, string, time.Duration) error {
+	return nil
+}
+
+func (s *oauthPendingFlowRefreshTokenCacheStub) GetRotatedRefreshTokenFamily(context.Context, string) (string, error) {
+	return "", service.ErrRefreshTokenNotFound
 }
 
 type oauthPendingFlowRedeemCodeRepo struct {

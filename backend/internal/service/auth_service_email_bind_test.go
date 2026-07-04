@@ -717,6 +717,14 @@ func (s *emailBindRefreshTokenCacheStub) IsTokenInFamily(_ context.Context, fami
 	return ok, nil
 }
 
+func (s *emailBindRefreshTokenCacheStub) RecordRotatedRefreshToken(context.Context, string, string, time.Duration) error {
+	return nil
+}
+
+func (s *emailBindRefreshTokenCacheStub) GetRotatedRefreshTokenFamily(context.Context, string) (string, error) {
+	return "", service.ErrRefreshTokenNotFound
+}
+
 type emailBindUserRepoStub struct {
 	mu           sync.Mutex
 	usersByID    map[int64]*service.User

@@ -123,6 +123,14 @@ func (s *refreshTokenCacheStub) IsTokenInFamily(context.Context, string, string)
 	return false, nil
 }
 
+func (s *refreshTokenCacheStub) RecordRotatedRefreshToken(context.Context, string, string, time.Duration) error {
+	return nil
+}
+
+func (s *refreshTokenCacheStub) GetRotatedRefreshTokenFamily(context.Context, string) (string, error) {
+	return "", ErrRefreshTokenNotFound
+}
+
 func (s *emailCacheStub) GetVerificationCode(ctx context.Context, email string) (*VerificationCodeData, error) {
 	if s.err != nil {
 		return nil, s.err

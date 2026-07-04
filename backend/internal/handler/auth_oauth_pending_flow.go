@@ -714,15 +714,7 @@ func ensurePendingOAuthRegistrationIdentityAvailable(ctx context.Context, client
 	if identity == nil || identity.UserID <= 0 {
 		return nil
 	}
-
-	activeOwner, err := findActiveUserByID(ctx, client, identity.UserID)
-	if err != nil {
-		return err
-	}
-	if activeOwner != nil {
-		return infraerrors.Conflict("AUTH_IDENTITY_OWNERSHIP_CONFLICT", "auth identity already belongs to another user")
-	}
-	return nil
+	return infraerrors.Conflict("AUTH_IDENTITY_OWNERSHIP_CONFLICT", "auth identity already belongs to another user")
 }
 
 func oauthIdentityIssuer(session *dbent.PendingAuthSession) *string {
@@ -766,16 +758,7 @@ func ensurePendingOAuthIdentityForUser(ctx context.Context, tx *dbent.Tx, sessio
 	}
 	if identity != nil {
 		if identity.UserID != userID {
-			activeOwner, err := findActiveUserByID(ctx, client, identity.UserID)
-			if err != nil {
-				return nil, err
-			}
-			if activeOwner != nil {
-				return nil, infraerrors.Conflict("AUTH_IDENTITY_OWNERSHIP_CONFLICT", "auth identity already belongs to another user")
-			}
-			return client.AuthIdentity.UpdateOneID(identity.ID).
-				SetUserID(userID).
-				Save(ctx)
+			return nil, infraerrors.Conflict("AUTH_IDENTITY_OWNERSHIP_CONFLICT", "auth identity already belongs to another user")
 		}
 		return identity, nil
 	}
@@ -838,11 +821,11 @@ func ensurePendingWeChatOAuthIdentityForUser(ctx context.Context, tx *dbent.Tx, 
 
 	switch {
 	case identity != nil:
+		if identity.UserID != userID {
+			return nil, infraerrors.Conflict("AUTH_IDENTITY_OWNERSHIP_CONFLICT", "auth identity already belongs to another user")
+		}
 		update := client.AuthIdentity.UpdateOneID(identity.ID).
 			SetMetadata(mergeOAuthMetadata(identity.Metadata, metadata))
-		if identity.UserID != userID {
-			update = update.SetUserID(userID)
-		}
 		if !strings.EqualFold(strings.TrimSpace(identity.ProviderKey), providerKey) && !hasCanonicalKey {
 			update = update.SetProviderKey(providerKey)
 		}
@@ -941,13 +924,7 @@ func chooseWeChatIdentityForUser(ctx context.Context, client *dbent.Client, reco
 			continue
 		}
 		if record.UserID != userID {
-			activeOwner, err := findActiveUserByID(ctx, client, record.UserID)
-			if err != nil {
-				return nil, false, err
-			}
-			if activeOwner != nil {
-				return nil, false, infraerrors.Conflict("AUTH_IDENTITY_OWNERSHIP_CONFLICT", "auth identity already belongs to another user")
-			}
+			return nil, false, infraerrors.Conflict("AUTH_IDENTITY_OWNERSHIP_CONFLICT", "auth identity already belongs to another user")
 		}
 		if strings.EqualFold(strings.TrimSpace(record.ProviderKey), preferredProviderKey) {
 			hasCanonicalKey = true
@@ -975,13 +952,7 @@ func chooseWeChatChannelForUser(ctx context.Context, client *dbent.Client, recor
 			continue
 		}
 		if record.Edges.Identity != nil && record.Edges.Identity.UserID != userID {
-			activeOwner, err := findActiveUserByID(ctx, client, record.Edges.Identity.UserID)
-			if err != nil {
-				return nil, false, err
-			}
-			if activeOwner != nil {
-				return nil, false, infraerrors.Conflict("AUTH_IDENTITY_CHANNEL_OWNERSHIP_CONFLICT", "auth identity channel already belongs to another user")
-			}
+			return nil, false, infraerrors.Conflict("AUTH_IDENTITY_CHANNEL_OWNERSHIP_CONFLICT", "auth identity channel already belongs to another user")
 		}
 		if strings.EqualFold(strings.TrimSpace(record.ProviderKey), preferredProviderKey) {
 			hasCanonicalKey = true

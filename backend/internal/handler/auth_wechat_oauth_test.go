@@ -1496,3 +1496,11 @@ func (s *wechatOAuthRefreshTokenCacheStub) GetFamilyTokenHashes(context.Context,
 func (s *wechatOAuthRefreshTokenCacheStub) IsTokenInFamily(context.Context, string, string) (bool, error) {
 	return false, nil
 }
+
+func (s *wechatOAuthRefreshTokenCacheStub) RecordRotatedRefreshToken(context.Context, string, string, time.Duration) error {
+	return nil
+}
+
+func (s *wechatOAuthRefreshTokenCacheStub) GetRotatedRefreshTokenFamily(context.Context, string) (string, error) {
+	return "", service.ErrRefreshTokenNotFound
+}

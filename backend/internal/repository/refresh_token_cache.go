@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -11,9 +12,10 @@ import (
 )
 
 const (
-	refreshTokenKeyPrefix   = "refresh_token:"
-	userRefreshTokensPrefix = "user_refresh_tokens:"
-	tokenFamilyPrefix       = "token_family:"
+	refreshTokenKeyPrefix        = "refresh_token:"
+	userRefreshTokensPrefix      = "user_refresh_tokens:"
+	tokenFamilyPrefix            = "token_family:"
+	rotatedRefreshTokenKeyPrefix = "refresh_token_rotated:"
 )
 
 // refreshTokenKey generates the Redis key for a refresh token.
@@ -29,6 +31,10 @@ func userRefreshTokensKey(userID int64) string {
 // tokenFamilyKey generates the Redis key for token family set.
 func tokenFamilyKey(familyID string) string {
 	return tokenFamilyPrefix + familyID
+}
+
+func rotatedRefreshTokenKey(tokenHash string) string {
+	return rotatedRefreshTokenKeyPrefix + tokenHash
 }
 
 type refreshTokenCache struct {
@@ -155,4 +161,22 @@ func (c *refreshTokenCache) GetFamilyTokenHashes(ctx context.Context, familyID s
 func (c *refreshTokenCache) IsTokenInFamily(ctx context.Context, familyID string, tokenHash string) (bool, error) {
 	key := tokenFamilyKey(familyID)
 	return c.rdb.SIsMember(ctx, key, tokenHash).Result()
+}
+
+func (c *refreshTokenCache) RecordRotatedRefreshToken(ctx context.Context, tokenHash string, familyID string, ttl time.Duration) error {
+	if strings.TrimSpace(tokenHash) == "" || strings.TrimSpace(familyID) == "" {
+		return nil
+	}
+	return c.rdb.Set(ctx, rotatedRefreshTokenKey(tokenHash), familyID, ttl).Err()
+}
+
+func (c *refreshTokenCache) GetRotatedRefreshTokenFamily(ctx context.Context, tokenHash string) (string, error) {
+	val, err := c.rdb.Get(ctx, rotatedRefreshTokenKey(tokenHash)).Result()
+	if err != nil {
+		if err == redis.Nil {
+			return "", service.ErrRefreshTokenNotFound
+		}
+		return "", err
+	}
+	return val, nil
 }

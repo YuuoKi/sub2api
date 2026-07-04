@@ -70,4 +70,10 @@ type RefreshTokenCache interface {
 	// IsTokenInFamily 检查Token是否属于指定家族
 	// 用于验证Token家族关系
 	IsTokenInFamily(ctx context.Context, familyID string, tokenHash string) (bool, error)
+
+	// RecordRotatedRefreshToken records a consumed refresh token hash so reuse can revoke the family.
+	RecordRotatedRefreshToken(ctx context.Context, tokenHash string, familyID string, ttl time.Duration) error
+
+	// GetRotatedRefreshTokenFamily returns the family ID for a previously rotated-out refresh token.
+	GetRotatedRefreshTokenFamily(ctx context.Context, tokenHash string) (string, error)
 }

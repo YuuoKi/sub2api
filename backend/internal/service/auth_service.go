@@ -1444,7 +1444,11 @@ func (s *AuthService) RefreshTokenPair(ctx context.Context, refreshToken string)
 	data, err := s.refreshTokenCache.GetRefreshToken(ctx, tokenHash)
 	if err != nil {
 		if errors.Is(err, ErrRefreshTokenNotFound) {
-			// Token不存在，可能是已被使用（Token轮转）或已过期
+			if familyID, famErr := s.refreshTokenCache.GetRotatedRefreshTokenFamily(ctx, tokenHash); famErr == nil && strings.TrimSpace(familyID) != "" {
+				logger.LegacyPrintf("service.auth", "[Auth] Refresh token reuse detected, revoking family %s", familyID)
+				_ = s.refreshTokenCache.DeleteTokenFamily(ctx, familyID)
+				return nil, ErrRefreshTokenReused
+			}
 			logger.LegacyPrintf("service.auth", "[Auth] Refresh token not found, possible reuse attack")
 			return nil, ErrRefreshTokenInvalid
 		}
@@ -1486,6 +1490,10 @@ func (s *AuthService) RefreshTokenPair(ctx context.Context, refreshToken string)
 	}
 
 	// Token轮转：立即使旧Token失效
+	rotationTTL := time.Duration(s.cfg.JWT.RefreshTokenExpireDays) * 24 * time.Hour
+	if err := s.refreshTokenCache.RecordRotatedRefreshToken(ctx, tokenHash, data.FamilyID, rotationTTL); err != nil {
+		logger.LegacyPrintf("service.auth", "[Auth] Failed to record rotated refresh token: %v", err)
+	}
 	if err := s.refreshTokenCache.DeleteRefreshToken(ctx, tokenHash); err != nil {
 		logger.LegacyPrintf("service.auth", "[Auth] Failed to delete old refresh token: %v", err)
 		// 继续处理，不影响主流程

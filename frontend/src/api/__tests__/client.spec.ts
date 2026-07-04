@@ -44,6 +44,26 @@ describe('API Client', () => {
       expect(config.headers.get('Authorization')).toBe('Bearer my-jwt-token')
     })
 
+    it('不覆盖调用方显式传入的 Authorization 头', async () => {
+      localStorage.setItem('auth_token', 'stored-token')
+
+      const adapter = vi.fn().mockResolvedValue({
+        status: 200,
+        data: { code: 0, data: {} },
+        headers: {},
+        config: {},
+        statusText: 'OK',
+      })
+      apiClient.defaults.adapter = adapter
+
+      await apiClient.post('/test', {}, {
+        headers: { Authorization: 'Bearer explicit-token' },
+      })
+
+      const config = adapter.mock.calls[0][0]
+      expect(config.headers.get('Authorization')).toBe('Bearer explicit-token')
+    })
+
     it('无 token 时不附加 Authorization 头', async () => {
       const adapter = vi.fn().mockResolvedValue({
         status: 200,

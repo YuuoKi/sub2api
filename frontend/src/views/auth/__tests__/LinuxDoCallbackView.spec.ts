@@ -96,12 +96,12 @@ describe('LinuxDoCallbackView', () => {
     sessionStorage.clear()
   })
 
-  it('accepts the legacy fragment token success callback without pending-session exchange', async () => {
+  it('rejects the legacy fragment token success callback without accepting tokens', async () => {
     window.location.hash =
       '#access_token=legacy-access-token&refresh_token=legacy-refresh-token&expires_in=3600&token_type=Bearer&redirect=%2Flegacy-dashboard'
     setToken.mockResolvedValue({})
 
-    mount(LinuxDoCallbackView, {
+    const wrapper = mount(LinuxDoCallbackView, {
       global: {
         stubs: {
           AuthLayout: { template: '<div><slot /></div>' },
@@ -115,11 +115,12 @@ describe('LinuxDoCallbackView', () => {
     await flushPromises()
 
     expect(exchangePendingOAuthCompletion).not.toHaveBeenCalled()
-    expect(setToken).toHaveBeenCalledWith('legacy-access-token')
-    expect(localStorage.getItem('refresh_token')).toBe('legacy-refresh-token')
-    expect(localStorage.getItem('token_expires_at')).not.toBeNull()
-    expect(showSuccess).toHaveBeenCalledWith('auth.loginSuccess')
-    expect(replace).toHaveBeenCalledWith('/legacy-dashboard')
+    expect(setToken).not.toHaveBeenCalled()
+    expect(localStorage.getItem('refresh_token')).toBeNull()
+    expect(localStorage.getItem('token_expires_at')).toBeNull()
+    expect(showSuccess).not.toHaveBeenCalled()
+    expect(replace).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('auth.oauthFragmentRejected')
   })
 
   it('accepts the legacy pending oauth invitation fragment without pending-session exchange', async () => {

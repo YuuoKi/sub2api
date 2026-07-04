@@ -281,7 +281,7 @@ describe('WechatCallbackView', () => {
     expect(locationState.current.href).toContain('mode=open')
   })
 
-  it('accepts the legacy fragment token success callback without pending-session exchange', async () => {
+  it('rejects the legacy fragment token success callback without accepting tokens', async () => {
     locationState.current.hash =
       '#access_token=legacy-access-token&refresh_token=legacy-refresh-token&expires_in=3600&token_type=Bearer&redirect=%2Flegacy-dashboard'
     Object.defineProperty(window, 'location', {
@@ -290,7 +290,7 @@ describe('WechatCallbackView', () => {
     })
     setTokenMock.mockResolvedValue({})
 
-    mount(WechatCallbackView, {
+    const wrapper = mount(WechatCallbackView, {
       global: {
         stubs: {
           AuthLayout: { template: '<div><slot /></div>' },
@@ -304,11 +304,12 @@ describe('WechatCallbackView', () => {
     await flushPromises()
 
     expect(exchangePendingOAuthCompletionMock).not.toHaveBeenCalled()
-    expect(setTokenMock).toHaveBeenCalledWith('legacy-access-token')
-    expect(localStorage.getItem('refresh_token')).toBe('legacy-refresh-token')
-    expect(localStorage.getItem('token_expires_at')).not.toBeNull()
-    expect(showSuccessMock).toHaveBeenCalledWith('Login success')
-    expect(replaceMock).toHaveBeenCalledWith('/legacy-dashboard')
+    expect(setTokenMock).not.toHaveBeenCalled()
+    expect(localStorage.getItem('refresh_token')).toBeNull()
+    expect(localStorage.getItem('token_expires_at')).toBeNull()
+    expect(showSuccessMock).not.toHaveBeenCalled()
+    expect(replaceMock).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('auth.oauthFragmentRejected')
   })
 
   it('accepts the legacy pending oauth invitation fragment without pending-session exchange', async () => {

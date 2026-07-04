@@ -14,6 +14,10 @@
         </p>
       </div>
 
+      <p v-if="errorMessage" class="text-center text-sm text-red-600 dark:text-red-400">
+        {{ errorMessage }}
+      </p>
+
       <transition name="fade">
         <div
           v-if="
@@ -269,7 +273,7 @@ import {
   loadOAuthAffiliateCode,
   oauthAffiliatePayload
 } from '@/utils/oauthAffiliate'
-
+import { stripUrlFragment } from '@/utils/oauthFragment'
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
@@ -776,11 +780,9 @@ onMounted(async () => {
 
   try {
     if (legacyLogin) {
-      persistOAuthTokenContext(legacyLogin)
-      await authStore.setToken(legacyLogin.access_token)
-      clearAllAffiliateReferralCodes()
-      appStore.showSuccess(t('auth.loginSuccess'))
-      await router.replace(redirect)
+      stripUrlFragment()
+      errorMessage.value = t('auth.oauthFragmentRejected')
+      isProcessing.value = false
       return
     }
 

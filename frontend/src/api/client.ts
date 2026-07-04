@@ -55,9 +55,14 @@ const getUserTimezone = (): string => {
 
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    // Attach token from localStorage
+    // Attach token from localStorage unless the caller supplied an explicit Authorization header.
     const token = localStorage.getItem('auth_token')
-    if (token && config.headers) {
+    const hasAuthorizationHeader = config.headers
+      ? typeof config.headers.get === 'function'
+        ? !!(config.headers.get('Authorization') || config.headers.get('authorization'))
+        : !!((config.headers as Record<string, unknown>).Authorization || (config.headers as Record<string, unknown>).authorization)
+      : false
+    if (token && config.headers && !hasAuthorizationHeader) {
       config.headers.Authorization = `Bearer ${token}`
     }
 

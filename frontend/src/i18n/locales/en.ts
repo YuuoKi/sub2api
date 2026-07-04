@@ -440,6 +440,7 @@ export default {
     passwordRequired: 'Password is required',
     passwordMinLength: 'Password must be at least 6 characters',
     loginFailed: 'Login failed. Please check your credentials and try again.',
+    oauthFragmentRejected: 'URL fragment tokens are no longer accepted. Please sign in again using the authorization code flow.',
     errors: {
       USER_NOT_ACTIVE: 'Account has been disabled.',
     },

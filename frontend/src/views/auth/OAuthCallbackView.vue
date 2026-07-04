@@ -162,6 +162,7 @@ import {
   loadOAuthAffiliateCode,
   oauthAffiliatePayload
 } from '@/utils/oauthAffiliate'
+import { stripUrlFragment } from '@/utils/oauthFragment'
 
 const route = useRoute()
 const router = useRouter()
@@ -375,6 +376,11 @@ onMounted(async () => {
     appStore.showError(fragmentErrorDescription || fragmentError)
     return
   }
+  if (tokenResponse) {
+    stripUrlFragment()
+    appStore.showError(t('auth.oauthFragmentRejected'))
+    return
+  }
   if (!tokenResponse) {
     if (route.path === '/auth/oauth/callback') {
       const pendingEmailOAuthProvider = readPendingEmailOAuthProvider()
@@ -385,15 +391,6 @@ onMounted(async () => {
       await resumePendingEmailOAuth()
     }
     return
-  }
-
-  isProcessing.value = true
-  try {
-    await finalizeTokenResponse(tokenResponse, params.get('redirect') || '/dashboard')
-  } catch (error: unknown) {
-    const message = (error as { message?: string })?.message || t('auth.loginFailed')
-    appStore.showError(message)
-    isProcessing.value = false
   }
 })
 

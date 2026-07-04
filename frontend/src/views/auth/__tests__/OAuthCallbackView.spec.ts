@@ -95,6 +95,7 @@ describe('OAuthCallbackView', () => {
     copyToClipboardMock.mockReset()
     exchangePendingOAuthCompletionMock.mockReset()
     apiPostMock.mockReset()
+    window.localStorage.clear()
     window.sessionStorage.clear()
   })
 
@@ -136,6 +137,21 @@ describe('OAuthCallbackView', () => {
     expect(wrapper.text()).toContain('auth.oauth.invalidCallbackTitle')
     expect(wrapper.text()).toContain('auth.oauth.invalidCallbackHint')
     expect(wrapper.find('input[readonly]').exists()).toBe(false)
+  })
+
+  it('rejects legacy access_token fragments without persisting tokens', async () => {
+    locationState.current.href = 'http://localhost/auth/callback#access_token=legacy-token&refresh_token=legacy-refresh&expires_in=3600'
+    locationState.current.hash = '#access_token=legacy-token&refresh_token=legacy-refresh&expires_in=3600'
+
+    mount(OAuthCallbackView)
+    await vi.dynamicImportSettled()
+
+    expect(setTokenMock).not.toHaveBeenCalled()
+    expect(showSuccessMock).not.toHaveBeenCalled()
+    expect(showErrorMock).toHaveBeenCalledWith('auth.oauthFragmentRejected')
+    expect(routerReplaceMock).not.toHaveBeenCalled()
+    expect(window.localStorage.getItem('refresh_token')).toBeNull()
+    expect(window.localStorage.getItem('token_expires_at')).toBeNull()
   })
 
   it('forwards frontend email oauth provider callbacks back to the backend callback endpoint', async () => {

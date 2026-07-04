@@ -420,6 +420,7 @@ export default {
     passwordRequired: '请输入密码',
     passwordMinLength: '密码至少需要 6 个字符',
     loginFailed: '登录失败，请检查您的凭据后重试。',
+    oauthFragmentRejected: '不再接受 URL fragment 中的令牌，请使用授权码流程重新登录。',
     errors: {
       USER_NOT_ACTIVE: '账号已被禁用',
     },

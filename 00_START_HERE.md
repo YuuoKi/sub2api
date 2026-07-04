@@ -13,10 +13,12 @@ Sub2API is the Wujie internal AI API / model scheduling / ledger middle layer. I
 - B1 generation-content ledger: `内部可用 / 待复核`; adoption feedback, weekly report, and Admin ContentWall sample review path exist.
 - B2 webhook P1: fixed in commit `628ddd10`; provider lookup failure no longer returns 2xx success, while unknown order ack semantics are preserved.
 - B2 VERIFY.log: appended and tracked in commit `4b1cf24b`; `_review/MEGA_LOOP_FINAL_AUDIT_20260703/VERIFY.log` remains the final-audit log.
+- LOOP bug audit + fix wave (2026-07-04): 25-round adversarial audit recorded in `_review/LOOP_BUG_AUDIT_20260704/`; fixes committed as 10 grouped commits (`17112f8b`..`f176c256`) covering all 7 P0 and ~24 of 32 P1 findings. Remaining known gaps: P1-019/020 (video billing brake, blocked before real Seedance), P1-027 (atomic quota reservation). Verification: `_review/BUG_FIX_STATUS_20260704/VERIFY.md`.
 - QCanvas B2 bridge: QCanvas hono-api commit `5e87e3f` proxies `POST /sub2api/v1/generation-content/:task_id/adoption`; QCanvas web commit `c0f1deb` adds Studio V2 session History and adoption UI.
 
 ## Current Truth Sources
 
+- Bug audit + fix package (latest): `_review/LOOP_BUG_AUDIT_20260704/FINDINGS.md`, `_review/BUG_FIX_STATUS_20260704/VERIFY.md`
 - B2 webhook package: `_review/B2_webhook_fix_20260704/VERIFY.md`, `_review/B2_webhook_fix_20260704/SUMMARY.md`
 - Final audit package: `_review/MEGA_LOOP_FINAL_AUDIT_20260703/`
 - Chat context: `docs/CHAT_STRATEGY_CONTEXT.md`

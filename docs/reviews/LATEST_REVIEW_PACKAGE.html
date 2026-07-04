@@ -3,65 +3,207 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Sub2API 最新审查包 - W5 终局审查</title>
+  <title>Sub2API 最新审查包 - 2026-07-04 脏树清理与残留 Bug 复查</title>
   <style>
-    body { font-family: Arial, "Microsoft YaHei", sans-serif; margin: 32px; line-height: 1.6; color: #171717; background: #fafafa; }
-    main { max-width: 980px; margin: 0 auto; background: #fff; padding: 28px; border: 1px solid #ddd; }
-    h1, h2 { line-height: 1.25; }
-    code { background: #f3f3f3; padding: 2px 5px; }
-    table { width: 100%; border-collapse: collapse; margin: 14px 0 24px; }
-    th, td { border: 1px solid #ddd; padding: 8px; vertical-align: top; }
-    th { background: #f4f4f4; text-align: left; }
-    .ok { color: #126b2f; font-weight: 700; }
-    .warn { color: #9a5b00; font-weight: 700; }
+    body { margin: 0; font-family: Arial, "Microsoft YaHei", sans-serif; line-height: 1.62; color: #171717; background: #f6f7f8; }
+    main { max-width: 1100px; margin: 0 auto; padding: 28px; background: #fff; border-left: 1px solid #ddd; border-right: 1px solid #ddd; }
+    h1, h2, h3 { line-height: 1.25; }
+    h1 { margin-top: 0; }
+    code { background: #f2f3f5; padding: 2px 5px; border-radius: 3px; }
+    pre { white-space: pre-wrap; background: #f8f8f8; border: 1px solid #ddd; padding: 12px; overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0 22px; }
+    th, td { border: 1px solid #d7d7d7; padding: 8px; vertical-align: top; }
+    th { background: #f1f2f4; text-align: left; }
+    .status { padding: 12px; border: 1px solid #c9d7c9; background: #f3faf3; }
+    .warn { color: #8a5a00; font-weight: 700; }
     .blocked { color: #8a1f1f; font-weight: 700; }
+    .ok { color: #156b2f; font-weight: 700; }
   </style>
 </head>
 <body>
 <main>
-  <h1>Sub2API 最新审查包：W5 终局审查</h1>
-  <p>更新时间：2026-07-03 Asia/Shanghai</p>
+  <section class="status">
+    <h2>2026-07-04 最终复查附录（以本节为准）</h2>
+    <p><strong>当前状态：内部可用（仅本地测试层面）/ 待复核；本地分组提交已阻塞。</strong> 本审查包覆盖当前 dirty-tree 修复、验证、分组提交准备与多智能体复查结论；不声明产品 READY。</p>
+    <p><strong>硬边界：</strong>未 push，未部署，未访问真实 provider，未读取 .env、token、cookie 或 API key 明文，未 reset/clean/rebase，未删除历史审计材料。</p>
+    <p><strong>历史审计材料：</strong><code>_review/LOOP_BUG_AUDIT_20260704/</code> 保留为历史审计输入；其中 “7 P0 open” 仅代表当时审计状态，不能直接等同当前状态。</p>
+  </section>
 
-  <h2>结论</h2>
-  <p class="ok">终局 open P0 = 0。Sub2API 包内质量门禁全绿；Phase A' 三证与 B1 账本未回归。</p>
-  <p>当前允许状态：Phase A' tiny real 为“内部可用 / 可演示”，B1 账本为“内部可用 / 待复核”。后续真实供应商调用仍为“已冻结”。</p>
-
-  <h2>入口文件</h2>
+  <h2>最终执行摘要</h2>
   <table>
-    <tr><th>文件</th><th>用途</th></tr>
-    <tr><td><code>_review/MEGA_LOOP_FINAL_AUDIT_20260703/FINDINGS.md</code></td><td>终局 FINDINGS，open P0=0。</td></tr>
-    <tr><td><code>_review/MEGA_LOOP_FINAL_AUDIT_20260703/VERIFY.log</code></td><td>W5 验证命令与结果。</td></tr>
-    <tr><td><code>_review/MEGA_LOOP_FINAL_AUDIT_20260703/TRUTH_MATRIX.md</code></td><td>入口真相源与 HEAD 一致性矩阵。</td></tr>
-    <tr><td><code>_review/MEGA_LOOP_FINAL_AUDIT_20260703/RECOMMENDED_NEXT.md</code></td><td>后续授权与修复建议。</td></tr>
+    <tr><th>项目</th><th>结论</th></tr>
+    <tr><td>执行目录</td><td><code>D:\sub2api-trunk</code>，分支 <code>wujie/video-capture-moat-20260702</code>，Git root <code>D:/sub2api-trunk</code>。</td></tr>
+    <tr><td>范围</td><td>payment、video、auth、admin ops websocket、API key / billing、repository consistency、review docs。</td></tr>
+    <tr><td>提交策略</td><td>按主题本地提交；<code>docs/reviews/BUG_AUDIT_FIX_STATUS_20260704.md</code> 被 <code>docs/*</code> 忽略，提交时必须使用 <code>git add -f</code>。</td></tr>
+    <tr><td>提交阻塞</td><td><code>git add</code> 尝试写 linked worktree 的外部 Git index 时失败：<code>index.lock: Permission denied</code>。随后为本地 staging 申请提升权限，但系统因当前用量限制拒绝审批。因此截至本包刷新时，未能完成本地分组提交。</td></tr>
+    <tr><td>截图</td><td>本轮未启动浏览器、前端 dev server 或真实 provider；未新增截图。前端用户路径用 vitest、typecheck、lint、build 验证。</td></tr>
+    <tr><td>状态口径</td><td>本地验证通过后可称“内部可用（仅本地测试层面）”，真实 provider、生产配置、并发 admission 和 P2/P3 backlog 仍为“待复核”。</td></tr>
   </table>
 
-  <h2>验证摘要</h2>
+  <h2>P0 收口矩阵</h2>
   <table>
-    <tr><th>门禁</th><th>结果</th></tr>
-    <tr><td><code>go test ./...</code></td><td class="ok">exit 0</td></tr>
-    <tr><td><code>golangci-lint run</code></td><td class="ok">exit 0；0 issues</td></tr>
-    <tr><td><code>pnpm run lint</code></td><td class="ok">exit 0；运行后工作区无新增修改</td></tr>
-    <tr><td><code>pnpm run typecheck</code></td><td class="ok">exit 0</td></tr>
-    <tr><td><code>python tools\secret_scan.py --include-untracked</code></td><td class="ok">exit 0；无 high-confidence findings</td></tr>
-    <tr><td><code>pnpm run test:run</code></td><td class="ok">exit 0；100 files / 592 tests passed</td></tr>
-    <tr><td><code>pnpm run build</code></td><td class="ok">exit 0；仅有构建警告</td></tr>
+    <tr><th>历史编号</th><th>当前处理</th><th>证据</th><th>状态</th></tr>
+    <tr><td>LBA-P0-001 Payment webhook / recovery</td><td>补强 webhook 履约、重复/卡住订单处理；前端 clientSecret 仅从 sessionStorage 恢复，清理同步清 <code>payment.secret.session</code>。</td><td><code>payment_fulfillment_p0_regression_test.go</code>、payment vitest group、后端 service/handler tests。</td><td>本地待复核</td></tr>
+    <tr><td>LBA-P0-002 JWT video / safe demo</td><td>约束 JWT 视频创建与 safe-demo routing，worker submit 保留 lease，测试 stub 补齐 <code>ClaimTaskForSubmit</code>。</td><td><code>api_key_video_gateway_test.go</code>、video gateway worker tests、后端 routes/service tests。</td><td>本地待复核</td></tr>
+    <tr><td>LBA-P0-003 OAuth takeover / redirect</td><td>拒绝 legacy <code>#access_token</code> fragment，修复 callback 错误展示和 OIDC <code>route</code> 运行时缺失。</td><td>OAuth/LinuxDo/OIDC/Wechat/EmailVerify vitest group，auth service tests。</td><td>本地待复核</td></tr>
+    <tr><td>LBA-P0-004 Ops WebSocket JWT subprotocol</td><td>改为一次性 ticket，前端不再把 JWT 放入 WS subprotocol；取消订阅时阻止 in-flight ticket 后继续建连。</td><td><code>ops_ws_ticket.go</code>、<code>ops.spec.ts</code>、admin middleware/handler tests。</td><td>本地待复核</td></tr>
+    <tr><td>LBA-P0-005 API key quota / RPM / scope</td><td>补 fresh quota、RPM fail-closed、非活跃 group 拦截和 Gemini/Antigravity model scope 检查。</td><td><code>group_model_scope_test.go</code>、<code>gemini_v1beta_handler_test.go</code>、api_key middleware/billing tests。</td><td>本地待复核</td></tr>
+    <tr><td>LBA-P0-006 Affiliate / idempotency / promo</td><td>补 affiliate ledger 幂等、实际 capped amount 返回、idempotency 状态守卫和 promo 使用次数 CAS。</td><td><code>affiliate_repo_integration_test.go</code>、repository tests、migration <code>148_user_affiliate_ledger_accrue_unique.sql</code>。</td><td>本地待复核</td></tr>
+    <tr><td>LBA-P0-007 Evidence contradiction</td><td>保留 loop audit 为历史输入，刷新当前状态文档和本审查包，不把历史 open 直接写成当前 open。</td><td><code>docs/reviews/BUG_AUDIT_FIX_STATUS_20260704.md</code>、<code>_review/BUG_FIX_STATUS_20260704/VERIFY.md</code>、本文件。</td><td>本地待复核</td></tr>
   </table>
 
-  <h2>非 P0 风险</h2>
+  <h2>多智能体复查结论</h2>
+  <table>
+    <tr><th>Reviewer</th><th>结论</th><th>已处理项</th></tr>
+    <tr><td>Git / evidence reviewer</td><td>未发现 P0；指出 docs/reviews 被忽略、审查包范围需扩展、loop audit 应保留历史语义。</td><td>已在状态文档和本审查包注明 <code>git add -f</code> 与历史输入口径。</td></tr>
+    <tr><td>Backend reviewer</td><td>未发现 P0；指出 Gemini native model scope、video submit lease、重复 webhook ack、affiliate capped amount 返回值风险。</td><td>已补 handler/service/repository 修复与对应单测/集成测。</td></tr>
+    <tr><td>Frontend reviewer</td><td>未发现 P0；指出 legacy clientSecret fallback、Ops WS in-flight 取消、axios Authorization 覆盖、OAuth 通用 fragment 测试缺口。</td><td>已补 sessionStorage-only 恢复、WS ticket 取消守卫、axios 显式 Authorization 保留、OAuthCallback 测试。</td></tr>
+    <tr><td>Final reviewer</td><td>未发现 P0；要求补 P0 closure matrix、exit-code evidence、diff 规模、rollback 与状态限定。</td><td>已在本附录、<code>BUG_AUDIT_FIX_STATUS_20260704.md</code> 和 <code>VERIFY.md</code> 补齐。</td></tr>
+  </table>
+
+  <h2>最终验证命令与结果</h2>
+  <table>
+    <tr><th>命令</th><th>结果</th></tr>
+    <tr><td><code>git -c core.quotepath=false status --short</code> / <code>git branch --show-current</code> / <code>git rev-parse --show-toplevel</code></td><td class="ok">exit 0；确认 dirty tree、分支 <code>wujie/video-capture-moat-20260702</code>、Git root <code>D:/sub2api-trunk</code>。</td></tr>
+    <tr><td><code>git diff --check</code></td><td class="ok">exit 0；仅提示 <code>docs/reviews/LATEST_REVIEW_PACKAGE.html</code> 后续可能 LF -> CRLF，无 whitespace error。</td></tr>
+    <tr><td><code>go test ./cmd/server ./internal/service ./internal/handler ./internal/repository ./internal/server/middleware ./internal/server/routes -count=1</code></td><td class="ok">exit 0；指定后端包回归通过。</td></tr>
+    <tr><td><code>go test -tags=unit ./internal/service/ ./internal/handler/ ./internal/repository/ ./internal/server/middleware/</code></td><td class="ok">exit 0；指定 unit 包通过。</td></tr>
+    <tr><td><code>go test -tags=integration ./internal/repository -run TestAffiliateRepository_AccrueQuota_SourceOrderDuplicateDoesNotDoubleCredit -count=1</code></td><td class="ok">exit 0；重复 source_order_id 不重复加额。</td></tr>
+    <tr><td><code>vitest</code> payment group + ops/api client tests</td><td class="ok">exit 0；7 files / 49 tests，通过。含 paymentFlow、Stripe、Airwallex、PaymentResult、sanitizeRedirectPath、ops WS ticket、api client。</td></tr>
+    <tr><td><code>vitest</code> auth callback group</td><td class="ok">exit 0；5 files / 71 tests，通过。含 OAuth、LinuxDo、OIDC、Wechat、EmailVerify。</td></tr>
+    <tr><td><code>node_modules\.bin\vue-tsc.cmd --noEmit</code></td><td class="ok">exit 0。</td></tr>
+    <tr><td><code>node_modules\.bin\eslint.cmd . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts</code></td><td class="ok">exit 0。</td></tr>
+    <tr><td><code>pnpm run build:fast</code></td><td class="ok">exit 0；有非阻断警告：pnpm overrides 位置、Node DEP0190、Browserslist 过期、Vite dynamic/static import 与 chunk size。</td></tr>
+    <tr><td><code>python tools/secret_scan.py --include-untracked</code></td><td class="warn">系统 <code>python</code> 不在 PATH；随后使用 Codex 捆绑 Python 运行同脚本。</td></tr>
+    <tr><td><code>&lt;codex-bundled-python&gt; tools\secret_scan.py --include-untracked</code></td><td class="ok">exit 0；<code>secret-scan: no high-confidence tracked-plus-untracked findings</code>。</td></tr>
+    <tr><td><code>git -c core.quotepath=false check-ignore -v docs/reviews/BUG_AUDIT_FIX_STATUS_20260704.md</code></td><td class="warn">exit 0；确认被 <code>.gitignore:138:docs/*</code> 忽略，需 <code>git add -f</code>。</td></tr>
+    <tr><td><code>git add -- payment group paths</code></td><td class="blocked">exit 1；linked worktree 外部 Git index 无权限创建 <code>index.lock</code>，本地提交阶段已阻塞。</td></tr>
+  </table>
+
+  <h2>残余风险</h2>
   <ul>
-    <li><span class="warn">P1</span> payment webhook 非 wxpay provider lookup error 场景可能 2xx ack，建议下一轮授权修复。</li>
-    <li><span class="warn">P2</span> weekly report 窗口仅校验 start &lt; end，当前为 admin-only，不构成 P0。</li>
+    <li class="warn">P1-027 phase 2 仍需请求前 quota reservation / optimistic admission；fresh DB read 与 cache invalidation 不等于并发 admission 原子保护。</li>
+    <li class="warn">P1-019 属于生产成本刹车配置风险；本轮未验证真实 provider 与生产配置默认值，不得进入公开或生产验证。</li>
+    <li class="warn">P1-020 真实 charge 仍属后续阶段；本轮未关闭，也未做真实支付/provider 调用。</li>
+    <li class="warn">P2/P3 历史审计项仍需拆 backlog，尤其 E2E、Ops WS origin、generation content repo fail-open、更多 auth 边界。</li>
+    <li class="warn">linked worktree 的 Git dir 在工作区外；若本地提交遇到权限错误，应仅为 <code>git add</code>/<code>git commit</code> 申请权限，不扩大到 push/deploy。</li>
+    <li class="blocked">当前本地分组提交已因 Git index 权限和系统用量限制阻塞；代码与文档仍停留在未提交 dirty tree。</li>
   </ul>
 
-  <h2>硬边界</h2>
+  <h2>回滚方案</h2>
+  <p>当前未完成本地提交，必要时可直接基于未提交 diff 继续处理；完成本地分组提交后，用 <code>git revert &lt;commit&gt;</code> 按主题回滚；不使用 <code>git reset --hard</code>、<code>git clean</code>、rebase 或删除历史审计材料。若 migration 已被数据库执行，需另行编写向后兼容回滚脚本并先备份。</p>
+
+  <h1>Sub2API 最新审查包：2026-07-04 脏树清理与残留 Bug 复查</h1>
+  <p>更新时间：2026-07-04 Asia/Shanghai</p>
+  <p>执行目录：<code>D:\sub2api-trunk</code></p>
+  <p>分支：<code>wujie/video-capture-moat-20260702</code></p>
+  <p>Git 根：<code>D:/sub2api-trunk</code></p>
+
+  <section class="status">
+    <h2>当前状态</h2>
+    <p><strong>内部可用 / 待复核。</strong></p>
+    <p>本审查包覆盖当前 dirty-tree 的修复、验证和残余风险，不再只覆盖 P1-022 / P1-027。未 push、未部署、未触发真实 provider、未读取密钥明文，不能声明产品 READY。</p>
+  </section>
+
+  <h2>目标</h2>
+  <p>在不删除、不 reset、不 clean、不 rebase、不 push、不部署、不访问真实 provider 的前提下，整理大量未提交修复，补齐证据口径，并对支付、视频、认证、Ops WebSocket、API key 计费和仓储一致性做残留 bug 复查。</p>
+
+  <h2>背景</h2>
+  <p><code>_review/LOOP_BUG_AUDIT_20260704/</code> 是历史审计输入，必须保留原貌。历史报告里的 open P0/P1 是当时审计状态，不直接代表当前 dirty tree 状态。本轮文档只基于 repo、diff、测试、secret scan、构建输出和当前源码判断。</p>
+
+  <h2>执行目录</h2>
+  <table>
+    <tr><th>项目</th><th>值</th></tr>
+    <tr><td>工作区</td><td><code>D:\sub2api-trunk</code></td></tr>
+    <tr><td>分支</td><td><code>wujie/video-capture-moat-20260702</code></td></tr>
+    <tr><td>Git root</td><td><code>D:/sub2api-trunk</code></td></tr>
+    <tr><td>Git dir</td><td><code>D:/Codex创业任务/企业 API 管理后台项目/02_source/sub2api/.git/worktrees/objective-goldstine-b9bf89</code></td></tr>
+  </table>
+
+  <h2>变更清单</h2>
+  <table>
+    <tr><th>主题</th><th>主要文件</th><th>说明</th></tr>
+    <tr><td>Payment</td><td><code>payment_fulfillment.go</code>, <code>payment_webhook_handler.go</code>, <code>paymentFlow.ts</code>, <code>PaymentResultView.vue</code></td><td>收紧 webhook 履约、恢复链路和支付密钥存储；恢复时显式使用 sessionStorage，清理时同步清理敏感 session key。</td></tr>
+    <tr><td>Video</td><td><code>video_handler.go</code>, <code>video_gateway_service.go</code>, <code>video_gateway_worker.go</code>, <code>video_gateway_repo.go</code></td><td>约束 JWT 创建真实视频、safe-demo 路由、worker submit CAS，并补齐测试 stub。</td></tr>
+    <tr><td>Auth</td><td><code>sanitizeRedirectPath.ts</code>, <code>oauthFragment.ts</code>, <code>*CallbackView.vue</code>, auth service tests</td><td>拒绝 legacy <code>#access_token</code> fragment，修复 callback 可见错误和 redirect sanitize。</td></tr>
+    <tr><td>Admin Ops WS</td><td><code>ops_ws_ticket.go</code>, <code>ops_ws_handler.go</code>, <code>frontend/src/api/admin/ops.ts</code></td><td>用一次性 ticket 替换 WebSocket JWT subprotocol，前后端同组变更。</td></tr>
+    <tr><td>API key / billing</td><td><code>api_key_auth.go</code>, <code>api_key_service.go</code>, <code>billing_cache_service.go</code>, <code>group_model_scope.go</code></td><td>fresh quota 复核、RPM fail-closed、model scope 和非活跃 group 拦截。</td></tr>
+    <tr><td>Repository</td><td><code>affiliate_repo.go</code>, <code>idempotency_repo.go</code>, <code>promo_code_repo.go</code>, <code>148_user_affiliate_ledger_accrue_unique.sql</code></td><td>补 affiliate ledger 幂等、idempotency 状态守卫、promo 使用次数 CAS。</td></tr>
+    <tr><td>Review docs</td><td><code>docs/reviews/BUG_AUDIT_FIX_STATUS_20260704.md</code>, <code>docs/reviews/LATEST_REVIEW_PACKAGE.html</code>, <code>_review/BUG_FIX_STATUS_20260704/VERIFY.md</code></td><td>刷新当前证据口径，保留 LOOP 审计材料为历史输入。</td></tr>
+  </table>
+
+  <h2>实现细节</h2>
   <ul>
-    <li class="blocked">未读取 key / .env / token / cookie。</li>
-    <li class="blocked">未触发真实 provider，未真实出片。</li>
-    <li class="blocked">未 push。</li>
+    <li>PaymentResult 恢复和清理路径现在都显式传入 <code>window.sessionStorage</code>，避免 clientSecret 只存在 sessionStorage 时恢复失败或清理不完整。</li>
+    <li>Airwallex 测试改为本地快照脱敏、敏感 secret 写入 <code>payment.secret.session</code>。</li>
+    <li>OAuth callback 测试同步为拒绝 legacy fragment；LinuxDo/OIDC/Wechat 页面暴露错误文本供用户和测试确认。</li>
+    <li>OIDC callback 修复 <code>route</code> 未定义导致的运行时错误。</li>
+    <li>API key video gateway 测试 stub 补齐 <code>ClaimTaskForSubmit</code>，与 worker CAS 模型一致。</li>
+    <li><code>resolvePageImagePath</code> 改为普通路径先做语法 containment，检测到 symlink component 后再执行 realpath containment，避免 Windows 临时路径下直接文件被误拒。</li>
   </ul>
 
-  <h2>后续提示词</h2>
-  <pre>请在 D:\sub2api-trunk 复核 _review/MEGA_LOOP_FINAL_AUDIT_20260703/ 与 docs/reviews/LATEST_REVIEW_PACKAGE.html。重点确认 open P0=0、Phase A' tiny real 三证与 B1 账本未回归、以及是否授权修复 payment webhook P1。不得读取 key/.env/token/cookie，不 push，不触发真实 provider。</pre>
+  <h2>验证命令和结果</h2>
+  <table>
+    <tr><th>命令</th><th>结果</th></tr>
+    <tr><td><code>git -c core.quotepath=false status --short</code>, <code>git branch --show-current</code>, <code>git rev-parse --show-toplevel</code>, <code>git diff --check</code></td><td class="ok">通过。确认 dirty tree、分支、Git root。<code>diff --check</code> 无错误，仅提示 HTML 后续可能 LF 转 CRLF。</td></tr>
+    <tr><td><code>go test ./cmd/server ./internal/service ./internal/handler ./internal/repository ./internal/server/middleware ./internal/server/routes -count=1</code></td><td class="ok">通过。指定后端包全量回归通过。</td></tr>
+    <tr><td><code>go test -tags=unit ./internal/service/ ./internal/handler/ ./internal/repository/ ./internal/server/middleware/</code></td><td class="ok">通过。指定 unit 包通过。</td></tr>
+    <tr><td><code>go test -tags=integration ./internal/repository -run TestAffiliateRepository_AccrueQuota_SourceOrderDuplicateDoesNotDoubleCredit -count=1</code></td><td class="ok">通过。重复 source_order_id 不重复加额。</td></tr>
+    <tr><td><code>vitest payment group</code></td><td class="ok">通过。paymentFlow、Stripe、Airwallex、PaymentResult、sanitizeRedirectPath、Ops WS ticket、api client 共 49 tests。</td></tr>
+    <tr><td><code>vitest auth callback group</code></td><td class="ok">通过。OAuth、LinuxDo、OIDC、Wechat、EmailVerify 共 71 tests。</td></tr>
+    <tr><td><code>vue-tsc --noEmit</code></td><td class="ok">通过。</td></tr>
+    <tr><td><code>eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts</code></td><td class="ok">通过。</td></tr>
+    <tr><td><code>pnpm run build:fast</code></td><td class="ok">通过。存在非阻断构建警告：pnpm overrides 位置提示、Node DEP0190、Browserslist 过期、Vite chunk 和动态导入警告。</td></tr>
+    <tr><td><code>tools\secret_scan.py --include-untracked</code>，使用 Codex 捆绑 Python</td><td class="ok">通过：<code>secret-scan: no high-confidence tracked-plus-untracked findings</code>。</td></tr>
+    <tr><td><code>git check-ignore -v docs/reviews/BUG_AUDIT_FIX_STATUS_20260704.md</code></td><td class="warn">确认被 <code>.gitignore:138:docs/*</code> 忽略，提交时需要 <code>git add -f</code>。</td></tr>
+  </table>
+
+  <h2>截图 / 日志证据</h2>
+  <p>本轮没有启动浏览器、UI dev server 或真实 provider，因此没有新增前端截图。证据以本地测试、typecheck、lint、build、secret scan 和 Git 检查为主。前端用户路径覆盖在 vitest 中验证：支付恢复、clientSecret 存储、OAuth fragment 拒绝、redirect sanitize。</p>
+
+  <h2>风险</h2>
+  <ul>
+    <li class="warn">P1-027 仍未实现请求前原子 quota reservation；fresh DB read 与 cache invalidation 不等同于并发 admission 原子保护。</li>
+    <li class="warn">P1-019 仍是生产配置型风险，未证明默认配置可阻断真实高成本调用。</li>
+    <li class="warn">P1-020 真实 charge 属于后续阶段，本轮未关闭。</li>
+    <li class="warn">P2/P3 大量历史审计项仍未系统关闭，尤其 auth、generation content repo fail-open、Ops WS origin、E2E 覆盖缺口。</li>
+    <li class="warn">当前验证未覆盖真实 provider、生产数据、部署、公网访问，不能推导为产品 READY。</li>
+  </ul>
+
+  <h2>回滚方案</h2>
+  <p>本轮建议只做本地提交。需要回滚时逐组执行 <code>git revert &lt;commit&gt;</code>，不使用 <code>reset --hard</code>、<code>clean</code>、删除历史审计材料或重写分支历史。若 migration 已在数据库执行，需另行设计向后兼容回滚脚本并先备份。</p>
+
+  <h2>下一步建议</h2>
+  <ol>
+    <li>按主题完成本地提交，确保 docs/reviews 被忽略文件用 <code>git add -f</code> 纳入 docs commit。</li>
+    <li>继续设计 P1-027 phase 2：请求前 quota reservation / optimistic admission，并覆盖标准 API key 与 Google/Gemini middleware。</li>
+    <li>为 P1-019 明确生产成本刹车配置和启动门禁，再决定是否进入真实 provider 受控验证。</li>
+    <li>把 P2/P3 历史审计项拆成可执行 backlog，不把历史 open 项混写成当前已修复。</li>
+  </ol>
+
+  <h2>文件索引</h2>
+  <pre>_review/LOOP_BUG_AUDIT_20260704/
+_review/BUG_FIX_STATUS_20260704/VERIFY.md
+docs/reviews/BUG_AUDIT_FIX_STATUS_20260704.md
+docs/reviews/LATEST_REVIEW_PACKAGE.html
+backend/internal/service/payment_fulfillment.go
+backend/internal/service/payment_fulfillment_p0_regression_test.go
+backend/internal/service/video_gateway_worker.go
+backend/internal/service/group_model_scope.go
+backend/internal/service/ops_ws_ticket.go
+backend/internal/server/middleware/api_key_auth.go
+backend/internal/handler/admin/ops_ws_handler.go
+backend/internal/repository/affiliate_repo.go
+backend/migrations/148_user_affiliate_ledger_accrue_unique.sql
+frontend/src/components/payment/paymentFlow.ts
+frontend/src/views/user/PaymentResultView.vue
+frontend/src/views/user/AirwallexPaymentView.vue
+frontend/src/utils/oauthFragment.ts
+frontend/src/utils/sanitizeRedirectPath.ts
+frontend/src/api/admin/ops.ts</pre>
+
+  <h2>可复制后续提示词</h2>
+  <pre>请在 D:\sub2api-trunk 继续 Sub2API 残留 bug 收口。先读取 git status、docs/reviews/LATEST_REVIEW_PACKAGE.html、docs/reviews/BUG_AUDIT_FIX_STATUS_20260704.md 和 _review/BUG_FIX_STATUS_20260704/VERIFY.md。不要 push、部署、读取 .env/key/token/cookie、触发真实 provider、reset、clean、rebase 或删除历史审计材料。优先处理 P1-027 phase 2：请求前 API key quota reservation / optimistic admission，并覆盖标准 API key middleware 与 Google/Gemini middleware；保留 P1-019、P1-020、P2/P3 为待复核或已阻塞，不得写成产品 READY。</pre>
 </main>
 </body>
 </html>

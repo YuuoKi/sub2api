@@ -102,7 +102,7 @@ import { paymentAPI } from '@/api/payment'
 import { extractI18nErrorMessage } from '@/utils/apiError'
 import { isMobileDevice } from '@/utils/device'
 import { formatPaymentAmount, normalizePaymentCurrency } from '@/components/payment/currency'
-import { PAYMENT_RECOVERY_STORAGE_KEY, readPaymentRecoverySnapshot } from '@/components/payment/paymentFlow'
+import { PAYMENT_RECOVERY_STORAGE_KEY, readPaymentRecoverySnapshot, readPaymentSecretSession } from '@/components/payment/paymentFlow'
 import type { PaymentOrder } from '@/types/payment'
 import type { Stripe, StripeElements } from '@stripe/stripe-js'
 import AppLayout from '@/components/layout/AppLayout.vue'
@@ -135,9 +135,12 @@ let redirectTimer: ReturnType<typeof setTimeout> | null = null
 
 onMounted(async () => {
   const orderId = Number(route.query.order_id)
-  const clientSecret = String(route.query.client_secret || '')
   const method = String(route.query.method || '')
   const resumeToken = typeof route.query.resume_token === 'string' ? route.query.resume_token : undefined
+  const secretSession = typeof window !== 'undefined'
+    ? readPaymentSecretSession(window.sessionStorage, orderId, resumeToken)
+    : null
+  const clientSecret = secretSession?.clientSecret || ''
 
   if (!orderId || !clientSecret) {
     loading.value = false
@@ -149,7 +152,7 @@ onMounted(async () => {
     if (typeof window !== 'undefined') {
       const restored = readPaymentRecoverySnapshot(
         window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY),
-        { resumeToken },
+        { resumeToken, sessionStorage: window.sessionStorage },
       )
       if (restored?.orderId === orderId) {
         currency.value = normalizePaymentCurrency(restored.currency)

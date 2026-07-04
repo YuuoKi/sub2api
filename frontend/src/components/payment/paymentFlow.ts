@@ -8,6 +8,15 @@ import type {
 } from '@/types/payment'
 
 export const PAYMENT_RECOVERY_STORAGE_KEY = 'payment.recovery.current'
+export const PAYMENT_SECRET_SESSION_KEY = 'payment.secret.session'
+
+export interface PaymentSecretSession {
+  orderId: number
+  clientSecret: string
+  intentId: string
+  resumeToken: string
+  createdAt: number
+}
 
 const VISIBLE_METHOD_ALIASES = {
   alipay: 'alipay',
@@ -226,24 +235,95 @@ export function createPaymentRecoverySnapshot(
   }
 }
 
+export function writePaymentSecretSession(
+  sessionStorage: StorageWriter | undefined,
+  snapshot: Pick<PaymentRecoverySnapshot, 'orderId' | 'clientSecret' | 'intentId' | 'resumeToken'>,
+): void {
+  const clientSecret = snapshot.clientSecret.trim()
+  if (!sessionStorage || !clientSecret || snapshot.orderId <= 0) {
+    return
+  }
+  const payload: PaymentSecretSession = {
+    orderId: snapshot.orderId,
+    clientSecret,
+    intentId: snapshot.intentId || '',
+    resumeToken: snapshot.resumeToken || '',
+    createdAt: Date.now(),
+  }
+  sessionStorage.setItem(PAYMENT_SECRET_SESSION_KEY, JSON.stringify(payload))
+}
+
+export function readPaymentSecretSession(
+  sessionStorage: Pick<Storage, 'getItem'> | undefined,
+  orderId: number,
+  resumeToken?: string,
+): PaymentSecretSession | null {
+  if (!sessionStorage || orderId <= 0) {
+    return null
+  }
+  const raw = sessionStorage.getItem(PAYMENT_SECRET_SESSION_KEY)
+  if (!raw) {
+    return null
+  }
+  try {
+    const parsed = JSON.parse(raw) as Partial<PaymentSecretSession>
+    if (
+      typeof parsed.orderId !== 'number'
+      || typeof parsed.clientSecret !== 'string'
+      || parsed.clientSecret.trim() === ''
+      || typeof parsed.resumeToken !== 'string'
+      || typeof parsed.createdAt !== 'number'
+    ) {
+      return null
+    }
+    if (parsed.orderId !== orderId) {
+      return null
+    }
+    if (resumeToken && parsed.resumeToken !== resumeToken) {
+      return null
+    }
+    return {
+      orderId: parsed.orderId,
+      clientSecret: parsed.clientSecret,
+      intentId: typeof parsed.intentId === 'string' ? parsed.intentId : '',
+      resumeToken: parsed.resumeToken,
+      createdAt: parsed.createdAt,
+    }
+  } catch {
+    return null
+  }
+}
+
+export function clearPaymentSecretSession(sessionStorage: Pick<Storage, 'removeItem'> | undefined): void {
+  sessionStorage?.removeItem(PAYMENT_SECRET_SESSION_KEY)
+}
+
 export function writePaymentRecoverySnapshot(
   storage: StorageWriter,
   snapshot: PaymentRecoverySnapshot,
   key = PAYMENT_RECOVERY_STORAGE_KEY,
+  sessionStorage?: StorageWriter,
 ): void {
-  storage.setItem(key, JSON.stringify(snapshot))
+  writePaymentSecretSession(sessionStorage, snapshot)
+  const redacted: PaymentRecoverySnapshot = {
+    ...snapshot,
+    clientSecret: '',
+  }
+  storage.setItem(key, JSON.stringify(redacted))
 }
 
 export function clearPaymentRecoverySnapshot(
   storage: Pick<Storage, 'removeItem'>,
   key = PAYMENT_RECOVERY_STORAGE_KEY,
+  sessionStorage?: Pick<Storage, 'removeItem'>,
 ): void {
   storage.removeItem(key)
+  clearPaymentSecretSession(sessionStorage)
 }
 
 export function readPaymentRecoverySnapshot(
   raw: string | null | undefined,
-  options: { now?: number; resumeToken?: string } = {},
+  options: { now?: number; resumeToken?: string; sessionStorage?: Pick<Storage, 'getItem'> } = {},
 ): PaymentRecoverySnapshot | null {
   if (!raw) return null
 
@@ -279,6 +359,12 @@ export function readPaymentRecoverySnapshot(
       return null
     }
 
+    const secretSession = readPaymentSecretSession(
+      options.sessionStorage,
+      parsed.orderId,
+      options.resumeToken,
+    )
+
     return {
       orderId: parsed.orderId,
       amount: parsed.amount,
@@ -287,8 +373,8 @@ export function readPaymentRecoverySnapshot(
       paymentType: parsed.paymentType,
       payUrl: parsed.payUrl,
       outTradeNo: parsed.outTradeNo || '',
-      clientSecret: parsed.clientSecret,
-      intentId: parsed.intentId || '',
+      clientSecret: secretSession?.clientSecret || '',
+      intentId: secretSession?.intentId || parsed.intentId || '',
       currency: parsed.currency || '',
       countryCode: parsed.countryCode || '',
       paymentEnv: parsed.paymentEnv || '',

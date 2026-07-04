@@ -5,6 +5,9 @@ import {
   decidePaymentLaunch,
   getVisibleMethods,
   readPaymentRecoverySnapshot,
+  readPaymentSecretSession,
+  writePaymentRecoverySnapshot,
+  PAYMENT_RECOVERY_STORAGE_KEY,
   type PaymentRecoverySnapshot,
 } from '@/components/payment/paymentFlow'
 
@@ -372,9 +375,74 @@ describe('readPaymentRecoverySnapshot', () => {
     })
 
     expect(restored?.orderId).toBe(45)
+    expect(restored?.clientSecret).toBe('')
     expect(restored?.intentId).toBe('')
     expect(restored?.currency).toBe('')
     expect(restored?.countryCode).toBe('')
     expect(restored?.paymentEnv).toBe('')
+  })
+
+  it('does not restore legacy localStorage-only client secrets', () => {
+    const restored = readPaymentRecoverySnapshot(JSON.stringify({
+      orderId: 46,
+      amount: 28,
+      qrCode: '',
+      expiresAt: '2099-01-01T00:10:00.000Z',
+      paymentType: 'airwallex',
+      payUrl: '/payment/airwallex?order_id=46',
+      outTradeNo: 'sub2_46',
+      clientSecret: 'legacy_local_secret',
+      intentId: 'int_46',
+      payAmount: 28,
+      orderType: 'balance',
+      paymentMode: '',
+      resumeToken: 'resume-46',
+      createdAt: Date.UTC(2099, 0, 1, 0, 0, 0),
+    }), {
+      now: Date.UTC(2099, 0, 1, 0, 1, 0),
+      resumeToken: 'resume-46',
+    })
+
+    expect(restored?.orderId).toBe(46)
+    expect(restored?.clientSecret).toBe('')
+    expect(restored?.intentId).toBe('int_46')
+  })
+
+  it('hydrates client secrets from sessionStorage instead of localStorage', () => {
+    const storage = {
+      data: {} as Record<string, string>,
+      setItem(key: string, value: string) { this.data[key] = value },
+      getItem(key: string) { return this.data[key] ?? null },
+      removeItem(key: string) { delete this.data[key] },
+    }
+    const snapshot: PaymentRecoverySnapshot = {
+      orderId: 77,
+      amount: 20,
+      qrCode: '',
+      expiresAt: '2099-01-01T00:10:00.000Z',
+      paymentType: 'stripe',
+      payUrl: '/payment/stripe?order_id=77',
+      outTradeNo: 'sub2_77',
+      clientSecret: 'cs_live_secret',
+      intentId: 'pi_77',
+      currency: 'CNY',
+      countryCode: 'CN',
+      paymentEnv: 'prod',
+      payAmount: 20,
+      orderType: 'balance',
+      paymentMode: '',
+      resumeToken: 'resume-77',
+      createdAt: Date.UTC(2099, 0, 1, 0, 0, 0),
+    }
+
+    writePaymentRecoverySnapshot(storage, snapshot, PAYMENT_RECOVERY_STORAGE_KEY, storage)
+    expect(JSON.parse(storage.data[PAYMENT_RECOVERY_STORAGE_KEY]).clientSecret).toBe('')
+
+    const restored = readPaymentRecoverySnapshot(storage.data[PAYMENT_RECOVERY_STORAGE_KEY], {
+      resumeToken: 'resume-77',
+      sessionStorage: storage,
+    })
+    expect(restored?.clientSecret).toBe('cs_live_secret')
+    expect(readPaymentSecretSession(storage, 77, 'resume-77')?.clientSecret).toBe('cs_live_secret')
   })
 })

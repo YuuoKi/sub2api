@@ -71,7 +71,7 @@ function restoreAirwallexSnapshot(): PaymentRecoverySnapshot | null {
   const resumeToken = queryString('resume_token')
   const snapshot = readPaymentRecoverySnapshot(
     window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY),
-    resumeToken ? { resumeToken } : {},
+    resumeToken ? { resumeToken, sessionStorage: window.sessionStorage } : { sessionStorage: window.sessionStorage },
   )
 
   if (!snapshot || snapshot.paymentType !== 'airwallex') {

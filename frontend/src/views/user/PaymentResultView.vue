@@ -233,6 +233,7 @@ function restoreRecoverySnapshot(context: {
   if (context.resumeToken) {
     return readPaymentRecoverySnapshot(rawSnapshot, {
       resumeToken: context.resumeToken,
+      sessionStorage: window.sessionStorage,
     })
   }
 
@@ -240,7 +241,9 @@ function restoreRecoverySnapshot(context: {
     return null
   }
 
-  const restored = readPaymentRecoverySnapshot(rawSnapshot)
+  const restored = readPaymentRecoverySnapshot(rawSnapshot, {
+    sessionStorage: window.sessionStorage,
+  })
   if (!restored) {
     return null
   }
@@ -283,7 +286,7 @@ function clearStatusRefreshTimer(): void {
 
 function clearRecoverySnapshot(): void {
   if (typeof window === 'undefined') return
-  clearPaymentRecoverySnapshot(window.localStorage, PAYMENT_RECOVERY_STORAGE_KEY)
+  clearPaymentRecoverySnapshot(window.localStorage, PAYMENT_RECOVERY_STORAGE_KEY, window.sessionStorage)
 }
 
 function clearRecoverySnapshotForTerminalStatus(status: string | null | undefined): void {

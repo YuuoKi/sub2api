@@ -98,8 +98,14 @@ describe('StripePaymentView', () => {
   beforeEach(() => {
     routeState.query = {
       order_id: '42',
-      client_secret: 'pi_secret_42',
     }
+    window.sessionStorage.setItem('payment.secret.session', JSON.stringify({
+      orderId: 42,
+      clientSecret: 'pi_secret_42',
+      intentId: '',
+      resumeToken: '',
+      createdAt: Date.now(),
+    }))
     routerPush.mockReset()
     getOrder.mockReset()
     paymentStore.config = { stripe_publishable_key: 'pk_test' }
@@ -115,7 +121,6 @@ describe('StripePaymentView', () => {
     stripeInstance.confirmPayment.mockReset()
     stripeInstance.confirmAlipayPayment.mockReset()
     stripeInstance.confirmWechatPayPayment.mockReset()
-    window.localStorage.clear()
   })
 
   it('本地恢复快照缺失时使用订单接口返回的 Stripe 币种展示金额', async () => {

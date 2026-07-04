@@ -3,6 +3,7 @@ import { flushPromises, shallowMount } from '@vue/test-utils'
 import AirwallexPaymentView from '../AirwallexPaymentView.vue'
 import {
   PAYMENT_RECOVERY_STORAGE_KEY,
+  PAYMENT_SECRET_SESSION_KEY,
   type PaymentRecoverySnapshot,
 } from '@/components/payment/paymentFlow'
 
@@ -82,6 +83,7 @@ describe('AirwallexPaymentView', () => {
     })
     redirectToCheckout.mockReset()
     window.localStorage.clear()
+    window.sessionStorage.clear()
   })
 
   it('从本地恢复快照读取支付参数，避免在 URL 中暴露 client_secret', async () => {
@@ -92,7 +94,17 @@ describe('AirwallexPaymentView', () => {
     }
     window.localStorage.setItem(
       PAYMENT_RECOVERY_STORAGE_KEY,
-      JSON.stringify(airwallexSnapshot()),
+      JSON.stringify(airwallexSnapshot({ clientSecret: '' })),
+    )
+    window.sessionStorage.setItem(
+      PAYMENT_SECRET_SESSION_KEY,
+      JSON.stringify({
+        orderId: 101,
+        clientSecret: 'awx_client_secret',
+        intentId: 'int_awx_101',
+        resumeToken: 'resume-awx',
+        createdAt: Date.UTC(2099, 0, 1, 0, 0, 0),
+      }),
     )
 
     mountView()

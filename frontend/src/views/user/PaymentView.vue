@@ -386,12 +386,21 @@ const paymentState = ref<PaymentRecoverySnapshot>(emptyPaymentState())
 
 function persistRecoverySnapshot(snapshot: PaymentRecoverySnapshot) {
   if (typeof window === 'undefined' || !snapshot.orderId) return
-  writePaymentRecoverySnapshot(window.localStorage, snapshot, PAYMENT_RECOVERY_STORAGE_KEY)
+  writePaymentRecoverySnapshot(
+    window.localStorage,
+    snapshot,
+    PAYMENT_RECOVERY_STORAGE_KEY,
+    window.sessionStorage,
+  )
 }
 
 function removeRecoverySnapshot() {
   if (typeof window === 'undefined') return
-  clearPaymentRecoverySnapshot(window.localStorage, PAYMENT_RECOVERY_STORAGE_KEY)
+  clearPaymentRecoverySnapshot(
+    window.localStorage,
+    PAYMENT_RECOVERY_STORAGE_KEY,
+    window.sessionStorage,
+  )
 }
 
 function resetPayment() {
@@ -724,7 +733,6 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
         path: '/payment/stripe',
         query: {
           order_id: String(result.order_id),
-          client_secret: result.client_secret,
           method: stripeMethod || undefined,
           resume_token: result.resume_token || undefined,
         },
@@ -930,7 +938,6 @@ async function attemptMobileQrFallback(err: unknown, context: MobileQrFallbackCo
         path: '/payment/stripe',
         query: {
           order_id: String(result.order_id),
-          client_secret: result.client_secret,
           method: stripeMethod,
           resume_token: result.resume_token || undefined,
         },
@@ -1036,7 +1043,7 @@ onMounted(async () => {
           : undefined
       const restored = readPaymentRecoverySnapshot(
         window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY),
-        { resumeToken: routeResumeToken },
+        { resumeToken: routeResumeToken, sessionStorage: window.sessionStorage },
       )
       if (restored) {
         paymentState.value = restored

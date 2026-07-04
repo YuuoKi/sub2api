@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -47,8 +48,8 @@ var upgrader = websocket.Upgrader{
 		return isAllowedOpsWSOrigin(r)
 	},
 	// Subprotocol negotiation:
-	// - The frontend passes ["sub2api-admin", "jwt.<token>"].
-	// - We always select "sub2api-admin" so the token is never echoed back in the handshake response.
+	// - The frontend passes ["sub2api-admin"] only; auth uses ?ticket= from POST /admin/ops/ws/ticket.
+	// - We always select "sub2api-admin" so credentials are never echoed in the handshake response.
 	Subprotocols: []string{"sub2api-admin"},
 }
 
@@ -308,6 +309,29 @@ func closeWS(conn *websocket.Conn, code int, reason string) {
 	msg := websocket.FormatCloseMessage(code, reason)
 	_ = conn.WriteControl(websocket.CloseMessage, msg, time.Now().Add(qpsWSWriteTimeout))
 	_ = conn.Close()
+}
+
+// IssueWSAuthTicket issues a single-use short-lived ticket for ops WebSocket auth.
+// POST /api/v1/admin/ops/ws/ticket
+func (h *OpsHandler) IssueWSAuthTicket(c *gin.Context) {
+	if h == nil || h.opsWSTicketCache == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "ops websocket ticket service not initialized"})
+		return
+	}
+	subject, ok := middleware.GetAuthSubjectFromContext(c)
+	if !ok || subject.UserID <= 0 {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	ticket, ttl, err := service.IssueOpsWSTicket(c.Request.Context(), h.opsWSTicketCache, subject.UserID)
+	if err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "failed to issue websocket ticket"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"ticket":     ticket,
+		"expires_in": int(ttl.Seconds()),
+	})
 }
 
 // QPSWSHandler handles realtime QPS push via WebSocket.

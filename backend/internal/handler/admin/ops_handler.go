@@ -16,7 +16,12 @@ import (
 )
 
 type OpsHandler struct {
-	opsService *service.OpsService
+	opsService       *service.OpsService
+	opsWSTicketCache service.OpsWSTicketCache
+}
+
+func NewOpsHandler(opsService *service.OpsService, opsWSTicketCache service.OpsWSTicketCache) *OpsHandler {
+	return &OpsHandler{opsService: opsService, opsWSTicketCache: opsWSTicketCache}
 }
 
 // GetErrorLogByID returns ops error log detail.
@@ -68,10 +73,6 @@ func parseOpsViewParam(c *gin.Context) string {
 	default:
 		return opsListViewErrors
 	}
-}
-
-func NewOpsHandler(opsService *service.OpsService) *OpsHandler {
-	return &OpsHandler{opsService: opsService}
 }
 
 // GetErrorLogs lists ops error logs.

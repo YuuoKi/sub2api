@@ -42,8 +42,10 @@ func TestAdminAuthJWTValidatesTokenVersion(t *testing.T) {
 	}
 	userService := service.NewUserService(userRepo, nil, nil, nil)
 
+	ticketCache := newStubOpsWSTicketCache()
+
 	router := gin.New()
-	router.Use(gin.HandlerFunc(NewAdminAuthMiddleware(authService, userService, nil)))
+	router.Use(gin.HandlerFunc(NewAdminAuthMiddleware(authService, userService, nil, ticketCache)))
 	router.GET("/t", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	})
@@ -83,40 +85,26 @@ func TestAdminAuthJWTValidatesTokenVersion(t *testing.T) {
 		require.Equal(t, http.StatusOK, w.Code)
 	})
 
-	t.Run("websocket_token_version_mismatch_rejected", func(t *testing.T) {
-		token, err := authService.GenerateToken(&service.User{
-			ID:           admin.ID,
-			Email:        admin.Email,
-			Role:         admin.Role,
-			TokenVersion: admin.TokenVersion - 1,
-		})
-		require.NoError(t, err)
-
+	t.Run("websocket_ticket_invalid_rejected", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/t", nil)
+		req := httptest.NewRequest(http.MethodGet, "/t?ticket=invalid", nil)
 		req.Header.Set("Upgrade", "websocket")
 		req.Header.Set("Connection", "Upgrade")
-		req.Header.Set("Sec-WebSocket-Protocol", "sub2api-admin, jwt."+token)
+		req.Header.Set("Sec-WebSocket-Protocol", "sub2api-admin")
 		router.ServeHTTP(w, req)
 
 		require.Equal(t, http.StatusUnauthorized, w.Code)
-		require.Contains(t, w.Body.String(), "TOKEN_REVOKED")
+		require.Contains(t, w.Body.String(), "INVALID_WS_TICKET")
 	})
 
-	t.Run("websocket_token_version_match_allows", func(t *testing.T) {
-		token, err := authService.GenerateToken(&service.User{
-			ID:           admin.ID,
-			Email:        admin.Email,
-			Role:         admin.Role,
-			TokenVersion: admin.TokenVersion,
-		})
-		require.NoError(t, err)
+	t.Run("websocket_ticket_allows", func(t *testing.T) {
+		require.NoError(t, ticketCache.StoreTicket(context.Background(), "valid-ticket", admin.ID, service.OpsWSTicketTTL))
 
 		w := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/t", nil)
+		req := httptest.NewRequest(http.MethodGet, "/t?ticket=valid-ticket", nil)
 		req.Header.Set("Upgrade", "websocket")
 		req.Header.Set("Connection", "Upgrade")
-		req.Header.Set("Sec-WebSocket-Protocol", "sub2api-admin, jwt."+token)
+		req.Header.Set("Sec-WebSocket-Protocol", "sub2api-admin")
 		router.ServeHTTP(w, req)
 
 		require.Equal(t, http.StatusOK, w.Code)

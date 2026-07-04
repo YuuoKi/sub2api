@@ -533,7 +533,7 @@ var ProviderSet = wire.NewSet(
 // that turns the phase-2A interception primitive into a live brake.
 func ProvideVideoGatewayService(repo VideoGatewayRepository, encryptor VideoKeyEncryptor, cfg *config.Config) *VideoGatewayService {
 	svc := NewVideoGatewayService(repo, encryptor, cfg)
-	if cfg != nil && cfg.VideoGateway.PerCallBudget > 0 {
+	if cfg != nil && cfg.VideoGateway.PerCallBudget > 0 && cfg.VideoGateway.CostPerSecond > 0 {
 		svc.SetBudgetGuard(NewStaticBudgetGuard(cfg.VideoGateway.PerCallBudget))
 	}
 	return svc

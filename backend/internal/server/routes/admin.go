@@ -188,6 +188,7 @@ func registerOpsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		// WebSocket realtime (QPS/TPS)
 		ws := ops.Group("/ws")
 		{
+			ws.POST("/ticket", h.Admin.Ops.IssueWSAuthTicket)
 			ws.GET("/qps", h.Admin.Ops.QPSWSHandler)
 		}
 

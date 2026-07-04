@@ -109,6 +109,11 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 			return
 		}
 
+		if apiKey.Group != nil && !apiKey.Group.IsActive() {
+			AbortWithError(c, 403, "GROUP_INACTIVE", "API key group is not active")
+			return
+		}
+
 		// ── 4. SimpleMode → early return ─────────────────────────────
 
 		if cfg.RunMode == config.RunModeSimple {
@@ -152,6 +157,22 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 		// ── 6. 计费执行（skipBilling 时整块跳过） ────────────────────
 
 		if !skipBilling {
+			if freshAPIKey, freshErr := apiKeyService.CheckAPIKeyQuotaAndExpiryFresh(c.Request.Context(), apiKey); freshErr != nil {
+				switch {
+				case errors.Is(freshErr, service.ErrAPIKeyQuotaExhausted):
+					AbortWithError(c, 429, "API_KEY_QUOTA_EXHAUSTED", "API key 额度已用完")
+				case errors.Is(freshErr, service.ErrAPIKeyExpired):
+					AbortWithError(c, 403, "API_KEY_EXPIRED", "API key 已过期")
+				case errors.Is(freshErr, service.ErrAPIKeyNotFound):
+					AbortWithError(c, 401, "INVALID_API_KEY", "Invalid API key")
+				default:
+					AbortWithError(c, 500, "INTERNAL_ERROR", "Failed to validate API key")
+				}
+				return
+			} else if freshAPIKey != nil {
+				apiKey = freshAPIKey
+			}
+
 			// Key 状态检查
 			switch apiKey.Status {
 			case service.StatusAPIKeyQuotaExhausted:

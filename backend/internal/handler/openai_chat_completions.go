@@ -81,6 +81,11 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 	setOpsRequestContext(c, reqModel, reqStream, body)
 	setOpsEndpointContext(c, "", int16(service.RequestTypeFromLegacy(reqStream, false)))
 
+	if !service.GroupAllowsModelScope(apiKey.Group, reqModel, service.IsImageGenerationIntent("/v1/chat/completions", reqModel, body)) {
+		h.errorResponse(c, http.StatusForbidden, "permission_error", service.GroupModelScopePermissionMessage())
+		return
+	}
+
 	if decision := h.checkContentModeration(c, reqLog, apiKey, subject, service.ContentModerationProtocolOpenAIChat, reqModel, body); decision != nil && decision.Blocked {
 		h.errorResponse(c, contentModerationStatus(decision), contentModerationErrorCode(decision), decision.Message)
 		return

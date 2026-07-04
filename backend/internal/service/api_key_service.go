@@ -822,6 +822,47 @@ func (s *APIKeyService) CheckAPIKeyQuotaAndExpiry(apiKey *APIKey) error {
 	return nil
 }
 
+func (s *APIKeyService) CheckAPIKeyQuotaAndExpiryFresh(ctx context.Context, apiKey *APIKey) (*APIKey, error) {
+	if apiKey == nil {
+		return nil, ErrAPIKeyNotFound
+	}
+	if !requiresFreshAPIKeyQuotaCheck(apiKey) {
+		return apiKey, s.CheckAPIKeyQuotaAndExpiry(apiKey)
+	}
+	if s == nil || s.apiKeyRepo == nil {
+		return apiKey, s.CheckAPIKeyQuotaAndExpiry(apiKey)
+	}
+
+	fresh, err := s.apiKeyRepo.GetByID(ctx, apiKey.ID)
+	if err != nil {
+		return nil, fmt.Errorf("get api key quota state: %w", err)
+	}
+	if fresh == nil {
+		return nil, ErrAPIKeyNotFound
+	}
+	if strings.TrimSpace(fresh.Key) == "" {
+		fresh.Key = apiKey.Key
+	}
+	s.compileAPIKeyIPRules(fresh)
+	if err := s.CheckAPIKeyQuotaAndExpiry(fresh); err != nil {
+		if strings.TrimSpace(fresh.Key) != "" {
+			s.InvalidateAuthCacheByKey(ctx, fresh.Key)
+		}
+		return fresh, err
+	}
+	return fresh, nil
+}
+
+func requiresFreshAPIKeyQuotaCheck(apiKey *APIKey) bool {
+	if apiKey == nil {
+		return false
+	}
+	return apiKey.Quota > 0 ||
+		apiKey.ExpiresAt != nil ||
+		apiKey.Status == StatusAPIKeyQuotaExhausted ||
+		apiKey.Status == StatusAPIKeyExpired
+}
+
 // UpdateQuotaUsed updates the quota_used field after a request
 // Also checks if quota is exhausted and updates status accordingly
 func (s *APIKeyService) UpdateQuotaUsed(ctx context.Context, apiKeyID int64, cost float64) error {
@@ -838,7 +879,7 @@ func (s *APIKeyService) UpdateQuotaUsed(ctx context.Context, apiKeyID int64, cos
 		if err != nil {
 			return fmt.Errorf("increment quota used: %w", err)
 		}
-		if state != nil && state.Status == StatusAPIKeyQuotaExhausted && strings.TrimSpace(state.Key) != "" {
+		if state != nil && strings.TrimSpace(state.Key) != "" {
 			s.InvalidateAuthCacheByKey(ctx, state.Key)
 		}
 		return nil
@@ -862,9 +903,8 @@ func (s *APIKeyService) UpdateQuotaUsed(ctx context.Context, apiKeyID int64, cos
 		if err := s.apiKeyRepo.Update(ctx, apiKey); err != nil {
 			return nil // Don't fail the request
 		}
-		// Invalidate cache so next request sees the new status
-		s.InvalidateAuthCacheByKey(ctx, apiKey.Key)
 	}
+	s.InvalidateAuthCacheByKey(ctx, apiKey.Key)
 
 	return nil
 }

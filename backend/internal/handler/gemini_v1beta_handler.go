@@ -182,6 +182,11 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		return
 	}
 
+	if !geminiNativeGroupAllowsModelScope(apiKey.Group, modelName, body) {
+		googleError(c, http.StatusForbidden, service.GroupModelScopePermissionMessage())
+		return
+	}
+
 	setOpsRequestContext(c, modelName, stream, body)
 	setOpsEndpointContext(c, "", int16(service.RequestTypeFromLegacy(stream, false)))
 
@@ -557,6 +562,10 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		)
 		return
 	}
+}
+
+func geminiNativeGroupAllowsModelScope(group *service.Group, modelName string, body []byte) bool {
+	return service.GroupAllowsModelScope(group, modelName, service.IsImageGenerationIntent("/v1beta/models", modelName, body))
 }
 
 func parseGeminiModelAction(rest string) (model string, action string, err error) {

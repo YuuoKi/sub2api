@@ -167,3 +167,26 @@ func TestShouldFallbackGeminiModel_DelegatesScopeFallback(t *testing.T) {
 	}
 	require.True(t, shouldFallbackGeminiModel("gemini-future-model", res))
 }
+
+func TestGeminiNativeGroupAllowsModelScope_RejectsDisallowedAntigravityGemini(t *testing.T) {
+	t.Parallel()
+
+	group := &service.Group{
+		Platform:             service.PlatformAntigravity,
+		SupportedModelScopes: []string{service.GroupModelScopeClaude},
+	}
+
+	require.False(t, geminiNativeGroupAllowsModelScope(group, "gemini-2.5-pro", []byte(`{"contents":[]}`)))
+}
+
+func TestGeminiNativeGroupAllowsModelScope_AllowsConfiguredGeminiText(t *testing.T) {
+	t.Parallel()
+
+	group := &service.Group{
+		Platform:             service.PlatformAntigravity,
+		SupportedModelScopes: []string{service.GroupModelScopeGeminiText},
+	}
+
+	require.True(t, geminiNativeGroupAllowsModelScope(group, "gemini-2.5-pro", []byte(`{"contents":[]}`)))
+	require.False(t, geminiNativeGroupAllowsModelScope(group, "gemini-2.5-flash-image", []byte(`{"contents":[]}`)))
+}

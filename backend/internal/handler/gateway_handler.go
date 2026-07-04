@@ -192,6 +192,11 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		return
 	}
 
+	if !service.GroupAllowsModelScope(apiKey.Group, reqModel, service.IsImageGenerationIntent("/v1/messages", reqModel, body)) {
+		h.errorResponse(c, http.StatusForbidden, "permission_error", service.GroupModelScopePermissionMessage())
+		return
+	}
+
 	if decision := h.checkContentModeration(c, reqLog, apiKey, subject, service.ContentModerationProtocolAnthropicMessages, reqModel, body); decision != nil && decision.Blocked {
 		h.errorResponse(c, contentModerationStatus(decision), contentModerationErrorCode(decision), decision.Message)
 		return

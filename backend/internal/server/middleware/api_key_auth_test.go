@@ -492,6 +492,59 @@ func TestAPIKeyAuthTouchesLastUsedInStandardMode(t *testing.T) {
 	require.Equal(t, 1, touchCalls)
 }
 
+func TestAPIKeyAuthRechecksQuotaLimitedKeyAgainstRepositoryState(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	user := &service.User{
+		ID:          17,
+		Role:        service.RoleUser,
+		Status:      service.StatusActive,
+		Balance:     10,
+		Concurrency: 3,
+	}
+	cachedKey := &service.APIKey{
+		ID:        220,
+		UserID:    user.ID,
+		Key:       "quota-stale",
+		Status:    service.StatusActive,
+		Quota:     10,
+		QuotaUsed: 9,
+		User:      user,
+	}
+	liveKey := *cachedKey
+	liveKey.Status = service.StatusAPIKeyQuotaExhausted
+	liveKey.QuotaUsed = 10
+
+	apiKeyRepo := &stubApiKeyRepo{
+		getByKey: func(ctx context.Context, key string) (*service.APIKey, error) {
+			if key != cachedKey.Key {
+				return nil, service.ErrAPIKeyNotFound
+			}
+			clone := *cachedKey
+			return &clone, nil
+		},
+		getByID: func(ctx context.Context, id int64) (*service.APIKey, error) {
+			if id != liveKey.ID {
+				return nil, service.ErrAPIKeyNotFound
+			}
+			clone := liveKey
+			return &clone, nil
+		},
+	}
+
+	cfg := &config.Config{RunMode: config.RunModeStandard}
+	apiKeyService := service.NewAPIKeyService(apiKeyRepo, nil, nil, nil, nil, nil, cfg)
+	router := newAuthTestRouter(apiKeyService, nil, cfg)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/t", nil)
+	req.Header.Set("x-api-key", cachedKey.Key)
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusTooManyRequests, w.Code)
+	require.Contains(t, w.Body.String(), "API_KEY_QUOTA_EXHAUSTED")
+}
+
 func newAuthTestRouter(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, cfg *config.Config) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, subscriptionService, cfg)))
@@ -503,6 +556,7 @@ func newAuthTestRouter(apiKeyService *service.APIKeyService, subscriptionService
 
 type stubApiKeyRepo struct {
 	getByKey       func(ctx context.Context, key string) (*service.APIKey, error)
+	getByID        func(ctx context.Context, id int64) (*service.APIKey, error)
 	updateLastUsed func(ctx context.Context, id int64, usedAt time.Time) error
 }
 
@@ -511,6 +565,9 @@ func (r *stubApiKeyRepo) Create(ctx context.Context, key *service.APIKey) error 
 }
 
 func (r *stubApiKeyRepo) GetByID(ctx context.Context, id int64) (*service.APIKey, error) {
+	if r.getByID != nil {
+		return r.getByID(ctx, id)
+	}
 	return nil, errors.New("not implemented")
 }
 

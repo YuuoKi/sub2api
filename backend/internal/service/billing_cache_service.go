@@ -529,14 +529,17 @@ func (s *BillingCacheService) InvalidateAPIKeyRateLimit(ctx context.Context, key
 // resets expired windows in-memory and triggers async DB reset,
 // and returns an error if any window limit is exceeded.
 func (s *BillingCacheService) checkAPIKeyRateLimits(ctx context.Context, apiKey *APIKey) error {
+	hasConfiguredLimits := apiKey != nil && (apiKey.RateLimit5h > 0 || apiKey.RateLimit1d > 0 || apiKey.RateLimit7d > 0)
 	if s.cache == nil {
-		// No cache: fall back to reading from DB directly
-		if s.apiKeyRateLimitLoader == nil {
+		if !hasConfiguredLimits {
 			return nil
+		}
+		if s.apiKeyRateLimitLoader == nil {
+			return ErrBillingServiceUnavailable
 		}
 		data, err := s.apiKeyRateLimitLoader.GetRateLimitData(ctx, apiKey.ID)
 		if err != nil {
-			return nil // Don't block requests on DB errors
+			return ErrBillingServiceUnavailable.WithCause(err)
 		}
 		return s.evaluateRateLimits(ctx, apiKey, data.Usage5h, data.Usage1d, data.Usage7d,
 			data.Window5hStart, data.Window1dStart, data.Window7dStart)
@@ -544,13 +547,15 @@ func (s *BillingCacheService) checkAPIKeyRateLimits(ctx context.Context, apiKey 
 
 	cacheData, err := s.cache.GetAPIKeyRateLimit(ctx, apiKey.ID)
 	if err != nil {
-		// Cache miss: load from DB and populate cache
-		if s.apiKeyRateLimitLoader == nil {
+		if !hasConfiguredLimits {
 			return nil
+		}
+		if s.apiKeyRateLimitLoader == nil {
+			return ErrBillingServiceUnavailable.WithCause(err)
 		}
 		dbData, dbErr := s.apiKeyRateLimitLoader.GetRateLimitData(ctx, apiKey.ID)
 		if dbErr != nil {
-			return nil // Don't block requests on DB errors
+			return ErrBillingServiceUnavailable.WithCause(dbErr)
 		}
 		// Build cache entry from DB data
 		cacheEntry := &APIKeyRateLimitCacheData{
@@ -707,7 +712,7 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 //  3. user.rpm_limit                  — 用户级全局硬上限：无论 override/group 如何配置，始终生效。
 //
 // 与旧版"级联互斥"设计不同，新版确保 user.rpm_limit 作为全局天花板不会被 group 或 override 覆盖。
-// Redis 故障一律 fail-open（打 warning，不阻塞业务）。
+// 已配置限流时 Redis/DB 故障一律 fail-closed（P1-028），避免限流失效。
 func (s *BillingCacheService) checkRPM(ctx context.Context, user *User, group *Group) error {
 	if s == nil || s.userRPMCache == nil || user == nil {
 		return nil
@@ -742,7 +747,7 @@ func (s *BillingCacheService) checkRPM(ctx context.Context, user *User, group *G
 						"Warning: rpm increment (override) failed for user=%d group=%d: %v",
 						user.ID, group.ID, incErr,
 					)
-					// fail-open
+					return ErrBillingServiceUnavailable.WithCause(incErr)
 				} else if count > *override {
 					return ErrGroupRPMExceeded
 				}
@@ -757,7 +762,7 @@ func (s *BillingCacheService) checkRPM(ctx context.Context, user *User, group *G
 					"Warning: rpm increment (group) failed for user=%d group=%d: %v",
 					user.ID, group.ID, err,
 				)
-				// fail-open
+				return ErrBillingServiceUnavailable.WithCause(err)
 			} else if count > group.RPMLimit {
 				return ErrGroupRPMExceeded
 			}
@@ -773,7 +778,7 @@ func (s *BillingCacheService) checkRPM(ctx context.Context, user *User, group *G
 				"Warning: rpm increment (user) failed for user=%d: %v",
 				user.ID, err,
 			)
-			return nil // fail-open
+			return ErrBillingServiceUnavailable.WithCause(err)
 		}
 		if count > user.RPMLimit {
 			return ErrUserRPMExceeded

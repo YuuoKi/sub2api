@@ -192,12 +192,17 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	setOpsRequestContext(c, reqModel, reqStream, body)
 	setOpsEndpointContext(c, "", int16(service.RequestTypeFromLegacy(reqStream, false)))
 
+	imageIntent := service.IsImageGenerationIntent("/v1/responses", reqModel, body)
+	if !service.GroupAllowsModelScope(apiKey.Group, reqModel, imageIntent) {
+		h.errorResponse(c, http.StatusForbidden, "permission_error", service.GroupModelScopePermissionMessage())
+		return
+	}
+
 	if decision := h.checkContentModeration(c, reqLog, apiKey, subject, service.ContentModerationProtocolOpenAIResponses, reqModel, body); decision != nil && decision.Blocked {
 		h.errorResponse(c, contentModerationStatus(decision), contentModerationErrorCode(decision), decision.Message)
 		return
 	}
 
-	imageIntent := service.IsImageGenerationIntent("/v1/responses", reqModel, body)
 	if imageIntent && !service.GroupAllowsImageGeneration(apiKey.Group) {
 		h.errorResponse(c, http.StatusForbidden, "permission_error", service.ImageGenerationPermissionMessage())
 		return
@@ -606,6 +611,11 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 
 	setOpsRequestContext(c, reqModel, reqStream, body)
 	setOpsEndpointContext(c, "", int16(service.RequestTypeFromLegacy(reqStream, false)))
+
+	if !service.GroupAllowsModelScope(apiKey.Group, reqModel, service.IsImageGenerationIntent("/v1/messages", reqModel, body)) {
+		h.anthropicErrorResponse(c, http.StatusForbidden, "permission_error", service.GroupModelScopePermissionMessage())
+		return
+	}
 
 	if decision := h.checkContentModeration(c, reqLog, apiKey, subject, service.ContentModerationProtocolAnthropicMessages, reqModel, body); decision != nil && decision.Blocked {
 		h.anthropicErrorResponse(c, contentModerationStatus(decision), contentModerationErrorCode(decision), decision.Message)

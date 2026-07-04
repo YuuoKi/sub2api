@@ -114,13 +114,61 @@ func (r *affiliateRepository) BindInviter(ctx context.Context, userID, inviterID
 	return bound, nil
 }
 
-func (r *affiliateRepository) AccrueQuota(ctx context.Context, inviterID, inviteeUserID int64, amount float64, freezeHours int, sourceOrderID *int64) (bool, error) {
+func (r *affiliateRepository) AccrueQuota(ctx context.Context, inviterID, inviteeUserID int64, amount float64, freezeHours int, sourceOrderID *int64, perInviteeCap float64) (float64, error) {
 	if amount <= 0 {
-		return false, nil
+		return 0, nil
 	}
 
-	var applied bool
+	var appliedAmount float64
 	err := r.withTx(ctx, func(txCtx context.Context, txClient *dbent.Client) error {
+		locked, err := lockAffiliateProfile(txCtx, txClient, inviterID)
+		if err != nil {
+			return err
+		}
+		if !locked {
+			appliedAmount = 0
+			return nil
+		}
+		if perInviteeCap > 0 {
+			var accrued float64
+			rows, err := txClient.QueryContext(txCtx, `
+SELECT COALESCE(SUM(amount), 0)::double precision
+FROM user_affiliate_ledger
+WHERE user_id = $1 AND source_user_id = $2 AND action = 'accrue'`, inviterID, inviteeUserID)
+			if err != nil {
+				return fmt.Errorf("sum accrued rebate from invitee: %w", err)
+			}
+			if rows.Next() {
+				if err := rows.Scan(&accrued); err != nil {
+					_ = rows.Close()
+					return err
+				}
+			}
+			if err := rows.Close(); err != nil {
+				return err
+			}
+			if accrued >= perInviteeCap {
+				appliedAmount = 0
+				return nil
+			}
+			if remaining := perInviteeCap - accrued; amount > remaining {
+				amount = remaining
+			}
+			if amount <= 0 {
+				appliedAmount = 0
+				return nil
+			}
+		}
+
+		inserted, err := insertAffiliateAccrueLedger(txCtx, txClient, inviterID, inviteeUserID, amount, freezeHours, sourceOrderID)
+		if err != nil {
+			return err
+		}
+		if !inserted {
+			appliedAmount = 0
+			return nil
+		}
+
 		// freezeHours > 0: add to frozen quota; == 0: add to available quota directly
 		var updateSQL string
 		if freezeHours > 0 {
@@ -134,32 +182,81 @@ func (r *affiliateRepository) AccrueQuota(ctx context.Context, inviterID, invite
 		}
 		affected, _ := res.RowsAffected()
 		if affected == 0 {
-			applied = false
+			appliedAmount = 0
 			return nil
 		}
 
-		if freezeHours > 0 {
-			if _, err = txClient.ExecContext(txCtx, `
-INSERT INTO user_affiliate_ledger (user_id, action, amount, source_user_id, source_order_id, frozen_until, created_at, updated_at)
-VALUES ($1, 'accrue', $2, $3, $4, NOW() + make_interval(hours => $5), NOW(), NOW())`,
-				inviterID, amount, inviteeUserID, nullableInt64Arg(sourceOrderID), freezeHours); err != nil {
-				return fmt.Errorf("insert affiliate accrue ledger: %w", err)
-			}
-		} else {
-			if _, err = txClient.ExecContext(txCtx, `
-INSERT INTO user_affiliate_ledger (user_id, action, amount, source_user_id, source_order_id, created_at, updated_at)
-VALUES ($1, 'accrue', $2, $3, $4, NOW(), NOW())`, inviterID, amount, inviteeUserID, nullableInt64Arg(sourceOrderID)); err != nil {
-				return fmt.Errorf("insert affiliate accrue ledger: %w", err)
-			}
-		}
-
-		applied = true
+		appliedAmount = amount
 		return nil
 	})
 	if err != nil {
+		return 0, err
+	}
+	return appliedAmount, nil
+}
+
+func lockAffiliateProfile(ctx context.Context, client *dbent.Client, userID int64) (bool, error) {
+	rows, err := client.QueryContext(ctx, `SELECT user_id FROM user_affiliates WHERE user_id = $1 FOR UPDATE`, userID)
+	if err != nil {
+		return false, fmt.Errorf("lock inviter affiliate row: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	return rows.Next(), rows.Err()
+}
+
+func insertAffiliateAccrueLedger(ctx context.Context, client *dbent.Client, inviterID, inviteeUserID int64, amount float64, freezeHours int, sourceOrderID *int64) (bool, error) {
+	if sourceOrderID == nil {
+		return insertAffiliateAccrueLedgerWithoutSourceOrder(ctx, client, inviterID, inviteeUserID, amount, freezeHours)
+	}
+
+	var rows *sql.Rows
+	var err error
+	if freezeHours > 0 {
+		rows, err = client.QueryContext(ctx, `
+INSERT INTO user_affiliate_ledger (user_id, action, amount, source_user_id, source_order_id, frozen_until, created_at, updated_at)
+VALUES ($1, 'accrue', $2, $3, $4, NOW() + make_interval(hours => $5), NOW(), NOW())
+ON CONFLICT (user_id, source_order_id)
+WHERE action = 'accrue' AND source_order_id IS NOT NULL
+DO NOTHING
+RETURNING id`, inviterID, amount, inviteeUserID, *sourceOrderID, freezeHours)
+	} else {
+		rows, err = client.QueryContext(ctx, `
+INSERT INTO user_affiliate_ledger (user_id, action, amount, source_user_id, source_order_id, created_at, updated_at)
+VALUES ($1, 'accrue', $2, $3, $4, NOW(), NOW())
+ON CONFLICT (user_id, source_order_id)
+WHERE action = 'accrue' AND source_order_id IS NOT NULL
+DO NOTHING
+RETURNING id`, inviterID, amount, inviteeUserID, *sourceOrderID)
+	}
+	if err != nil {
+		return false, fmt.Errorf("insert affiliate accrue ledger: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	inserted := rows.Next()
+	if err := rows.Err(); err != nil {
 		return false, err
 	}
-	return applied, nil
+	if err := rows.Close(); err != nil {
+		return false, err
+	}
+	return inserted, nil
+}
+
+func insertAffiliateAccrueLedgerWithoutSourceOrder(ctx context.Context, client *dbent.Client, inviterID, inviteeUserID int64, amount float64, freezeHours int) (bool, error) {
+	var err error
+	if freezeHours > 0 {
+		_, err = client.ExecContext(ctx, `
+INSERT INTO user_affiliate_ledger (user_id, action, amount, source_user_id, source_order_id, frozen_until, created_at, updated_at)
+VALUES ($1, 'accrue', $2, $3, NULL, NOW() + make_interval(hours => $4), NOW(), NOW())`, inviterID, amount, inviteeUserID, freezeHours)
+	} else {
+		_, err = client.ExecContext(ctx, `
+INSERT INTO user_affiliate_ledger (user_id, action, amount, source_user_id, source_order_id, created_at, updated_at)
+VALUES ($1, 'accrue', $2, $3, NULL, NOW(), NOW())`, inviterID, amount, inviteeUserID)
+	}
+	if err != nil {
+		return false, fmt.Errorf("insert affiliate accrue ledger: %w", err)
+	}
+	return true, nil
 }
 
 func (r *affiliateRepository) GetAccruedRebateFromInvitee(ctx context.Context, inviterID, inviteeUserID int64) (float64, error) {
@@ -1110,13 +1207,6 @@ WHERE user_id = ANY($2)`, nullableArg(ratePercent), pq.Array(userIDs))
 // nullableArg unwraps a *float64 into an interface{} suitable for SQL parameter
 // binding: nil pointer → SQL NULL, non-nil → the float value.
 func nullableArg(v *float64) any {
-	if v == nil {
-		return nil
-	}
-	return *v
-}
-
-func nullableInt64Arg(v *int64) any {
 	if v == nil {
 		return nil
 	}

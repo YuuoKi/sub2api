@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
@@ -182,16 +183,27 @@ func (r *idempotencyRepository) MarkSucceeded(ctx context.Context, id int64, res
 			locked_until = NULL,
 			expires_at = $5,
 			updated_at = NOW()
-		WHERE id = $1
+		WHERE id = $1 AND status = $6
 	`
-	_, err := r.sql.ExecContext(ctx, query,
+	result, err := r.sql.ExecContext(ctx, query,
 		id,
 		service.IdempotencyStatusSucceeded,
 		responseStatus,
 		responseBody,
 		expiresAt,
+		service.IdempotencyStatusProcessing,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return fmt.Errorf("idempotency record %d is not processing", id)
+	}
+	return nil
 }
 
 func (r *idempotencyRepository) MarkFailedRetryable(ctx context.Context, id int64, errorReason string, lockedUntil, expiresAt time.Time) error {
@@ -202,16 +214,27 @@ func (r *idempotencyRepository) MarkFailedRetryable(ctx context.Context, id int6
 			locked_until = $4,
 			expires_at = $5,
 			updated_at = NOW()
-		WHERE id = $1
+		WHERE id = $1 AND status = $6
 	`
-	_, err := r.sql.ExecContext(ctx, query,
+	result, err := r.sql.ExecContext(ctx, query,
 		id,
 		service.IdempotencyStatusFailedRetryable,
 		errorReason,
 		lockedUntil,
 		expiresAt,
+		service.IdempotencyStatusProcessing,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return fmt.Errorf("idempotency record %d is not processing", id)
+	}
+	return nil
 }
 
 func (r *idempotencyRepository) DeleteExpired(ctx context.Context, now time.Time, limit int) (int64, error) {
@@ -223,13 +246,14 @@ func (r *idempotencyRepository) DeleteExpired(ctx context.Context, now time.Time
 			SELECT id
 			FROM idempotency_records
 			WHERE expires_at <= $1
+			  AND status IN ($3, $4)
 			ORDER BY expires_at ASC
 			LIMIT $2
 		)
 		DELETE FROM idempotency_records
 		WHERE id IN (SELECT id FROM victims)
 	`
-	res, err := r.sql.ExecContext(ctx, query, now, limit)
+	res, err := r.sql.ExecContext(ctx, query, now, limit, service.IdempotencyStatusSucceeded, service.IdempotencyStatusFailedRetryable)
 	if err != nil {
 		return 0, err
 	}

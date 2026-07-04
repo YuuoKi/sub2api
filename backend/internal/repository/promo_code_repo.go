@@ -241,10 +241,21 @@ func (r *promoCodeRepository) ListUsagesByPromoCode(ctx context.Context, promoCo
 
 func (r *promoCodeRepository) IncrementUsedCount(ctx context.Context, id int64) error {
 	client := clientFromContext(ctx, r.client)
-	_, err := client.PromoCode.UpdateOneID(id).
-		AddUsedCount(1).
-		Save(ctx)
-	return err
+	res, err := client.ExecContext(ctx, `
+UPDATE promo_codes
+SET used_count = used_count + 1, updated_at = NOW()
+WHERE id = $1 AND (max_uses = 0 OR used_count < max_uses)`, id)
+	if err != nil {
+		return err
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return service.ErrPromoCodeMaxUsed
+	}
+	return nil
 }
 
 // Entity to Service conversions

@@ -145,9 +145,9 @@ func TestAffiliateRepository_AccrueQuota_ReusesOuterTransaction(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, bound, "invitee must bind to inviter")
 
-	applied, err := repo.AccrueQuota(txCtx, inviter.ID, invitee.ID, 3.5, 0, nil)
+	applied, err := repo.AccrueQuota(txCtx, inviter.ID, invitee.ID, 3.5, 0, nil, 0)
 	require.NoError(t, err)
-	require.True(t, applied, "AccrueQuota must report applied=true")
+	require.InDelta(t, 3.5, applied, 1e-9, "AccrueQuota must report the applied amount")
 
 	// Visible inside the outer tx.
 	innerQuota := querySingleFloat(t, txCtx, client,
@@ -168,6 +168,125 @@ func TestAffiliateRepository_AccrueQuota_ReusesOuterTransaction(t *testing.T) {
 	require.NoError(t, rows.Scan(&postRollbackCount))
 	require.Equal(t, 0, postRollbackCount,
 		"AccrueQuota must propagate the outer tx — found persisted rows after rollback")
+}
+
+func TestAffiliateRepository_AccrueQuota_SourceOrderDuplicateDoesNotDoubleCredit(t *testing.T) {
+	ctx := context.Background()
+	tx := testEntTx(t)
+	txCtx := dbent.NewTxContext(ctx, tx)
+	client := tx.Client()
+
+	repo := NewAffiliateRepository(client, integrationDB)
+	inviter := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("affiliate-dup-inviter-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+		Role:         service.RoleUser,
+		Status:       service.StatusActive,
+		Concurrency:  5,
+	})
+	invitee := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("affiliate-dup-invitee-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+		Role:         service.RoleUser,
+		Status:       service.StatusActive,
+		Concurrency:  5,
+	})
+
+	_, err := repo.EnsureUserAffiliate(txCtx, inviter.ID)
+	require.NoError(t, err)
+	_, err = repo.EnsureUserAffiliate(txCtx, invitee.ID)
+	require.NoError(t, err)
+	bound, err := repo.BindInviter(txCtx, invitee.ID, inviter.ID)
+	require.NoError(t, err)
+	require.True(t, bound)
+
+	order, err := client.PaymentOrder.Create().
+		SetUserID(invitee.ID).
+		SetUserEmail(invitee.Email).
+		SetUserName("invitee").
+		SetAmount(100).
+		SetPayAmount(100).
+		SetRechargeCode(fmt.Sprintf("AFFDUP%09d", time.Now().UnixNano()%1_000_000_000)).
+		SetOutTradeNo(fmt.Sprintf("aff-dup-%d", time.Now().UnixNano())).
+		SetPaymentType("test").
+		SetPaymentTradeNo(fmt.Sprintf("trade-%d", time.Now().UnixNano())).
+		SetOrderType("balance").
+		SetStatus("COMPLETED").
+		SetExpiresAt(time.Now().Add(time.Hour)).
+		Save(txCtx)
+	require.NoError(t, err)
+
+	sourceOrderID := order.ID
+	applied, err := repo.AccrueQuota(txCtx, inviter.ID, invitee.ID, 7, 0, &sourceOrderID, 0)
+	require.NoError(t, err)
+	require.InDelta(t, 7.0, applied, 1e-9)
+
+	duplicateApplied, err := repo.AccrueQuota(txCtx, inviter.ID, invitee.ID, 7, 0, &sourceOrderID, 0)
+	require.NoError(t, err)
+	require.InDelta(t, 0.0, duplicateApplied, 1e-9, "duplicate source_order_id must not report a new accrual")
+
+	quota := querySingleFloat(t, txCtx, client,
+		"SELECT aff_quota::double precision FROM user_affiliates WHERE user_id = $1", inviter.ID)
+	require.InDelta(t, 7.0, quota, 1e-9)
+
+	historyQuota := querySingleFloat(t, txCtx, client,
+		"SELECT aff_history_quota::double precision FROM user_affiliates WHERE user_id = $1", inviter.ID)
+	require.InDelta(t, 7.0, historyQuota, 1e-9)
+
+	ledgerCount := querySingleInt(t, txCtx, client, `
+SELECT COUNT(*)
+FROM user_affiliate_ledger
+WHERE user_id = $1 AND source_order_id = $2 AND action = 'accrue'`, inviter.ID, sourceOrderID)
+	require.Equal(t, 1, ledgerCount)
+}
+
+func TestAffiliateRepository_AccrueQuota_ReturnsCappedAppliedAmount(t *testing.T) {
+	ctx := context.Background()
+	tx := testEntTx(t)
+	txCtx := dbent.NewTxContext(ctx, tx)
+	client := tx.Client()
+
+	repo := NewAffiliateRepository(client, integrationDB)
+	inviter := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("affiliate-cap-inviter-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+		Role:         service.RoleUser,
+		Status:       service.StatusActive,
+		Concurrency:  5,
+	})
+	invitee := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("affiliate-cap-invitee-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+		Role:         service.RoleUser,
+		Status:       service.StatusActive,
+		Concurrency:  5,
+	})
+
+	_, err := repo.EnsureUserAffiliate(txCtx, inviter.ID)
+	require.NoError(t, err)
+	_, err = repo.EnsureUserAffiliate(txCtx, invitee.ID)
+	require.NoError(t, err)
+	bound, err := repo.BindInviter(txCtx, invitee.ID, inviter.ID)
+	require.NoError(t, err)
+	require.True(t, bound)
+
+	applied, err := repo.AccrueQuota(txCtx, inviter.ID, invitee.ID, 8, 0, nil, 10)
+	require.NoError(t, err)
+	require.InDelta(t, 8.0, applied, 1e-9)
+
+	capped, err := repo.AccrueQuota(txCtx, inviter.ID, invitee.ID, 8, 0, nil, 10)
+	require.NoError(t, err)
+	require.InDelta(t, 2.0, capped, 1e-9)
+
+	quota := querySingleFloat(t, txCtx, client,
+		"SELECT aff_quota::double precision FROM user_affiliates WHERE user_id = $1", inviter.ID)
+	require.InDelta(t, 10.0, quota, 1e-9)
+
+	ledgerTotal := querySingleFloat(t, txCtx, client, `
+SELECT COALESCE(SUM(amount), 0)::double precision
+FROM user_affiliate_ledger
+WHERE user_id = $1 AND source_user_id = $2 AND action = 'accrue'`, inviter.ID, invitee.ID)
+	require.InDelta(t, 10.0, ledgerTotal, 1e-9)
 }
 
 func TestAffiliateRepository_TransferQuotaToBalance_EmptyQuota(t *testing.T) {

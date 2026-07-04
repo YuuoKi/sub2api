@@ -173,6 +173,18 @@ func (r *apiKeyVideoGatewayMemoryRepo) ListRunnableTasks(_ context.Context, limi
 	return out, nil
 }
 
+func (r *apiKeyVideoGatewayMemoryRepo) ClaimTaskForSubmit(_ context.Context, taskID int64) (bool, error) {
+	task, ok := r.tasks[taskID]
+	if !ok || task.Status != service.VideoStatusQueued {
+		return false, nil
+	}
+	updated := cloneAPIKeyVideoTask(task)
+	updated.Status = service.VideoStatusSubmitted
+	updated.UpdatedAt = time.Now().UTC()
+	r.tasks[taskID] = updated
+	return true, nil
+}
+
 func (r *apiKeyVideoGatewayMemoryRepo) UpdateTask(_ context.Context, task *service.VideoTask) error {
 	if _, ok := r.tasks[task.ID]; !ok {
 		return service.ErrVideoTaskNotFound
@@ -432,6 +444,7 @@ func TestAPIKeyVideoGatewayBlocksKling(t *testing.T) {
 }
 
 func TestAPIKeyVideoGatewaySeedanceTrialBlockedWithoutGate(t *testing.T) {
+	setEnv(t, "SUB2API_VIDEO_REAL_SMOKE_ENABLED", "")
 	repo := newAPIKeyVideoGatewayMemoryRepo()
 	repo.seedProvider(service.VideoProviderMock, true, map[string]any{"key_status": "normal", "health_status": "healthy"})
 	repo.seedProvider(service.VideoProviderSeedance, true, map[string]any{
@@ -458,7 +471,8 @@ func TestAPIKeyVideoGatewaySeedanceTrialBlockedWithoutGate(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
 	require.Equal(t, "VIDEO_TRIAL_BLOCKED", body.Reason)
-	require.Contains(t, body.Metadata["blocked_reasons"], "SUB2API_VIDEO_REAL_SMOKE_ENABLED")
+	require.Contains(t, body.Metadata["blocked_reasons"], "redacted event log path is missing")
+	require.Contains(t, body.Metadata["blocked_reasons"], "media url allowlist (SUB2API_VIDEO_URL_ALLOWLIST) is missing")
 	require.Equal(t, 0, repo.realProviderTaskCount())
 }
 

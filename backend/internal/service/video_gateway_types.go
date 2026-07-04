@@ -230,17 +230,19 @@ type VideoProviderTestResult struct {
 }
 
 type VideoTaskCreateParams struct {
-	ProviderAccountID int64
-	TaskType          string
-	Model             string
-	Prompt            string
-	NegativePrompt    string
-	ReferenceImageURL string
-	ReferenceVideoURL string
-	AspectRatio       string
-	Duration          int
-	Resolution        string
-	CreatedBy         int64
+	ProviderAccountID        int64
+	TaskType                 string
+	Model                    string
+	Prompt                   string
+	NegativePrompt           string
+	ReferenceImageURL        string
+	ReferenceVideoURL        string
+	AspectRatio              string
+	Duration                 int
+	Resolution               string
+	CreatedBy                int64
+	EnforceRealProviderTrial bool // JWT user paths: seedance requires daily trial + smoke gate
+	SafeDemoOnly             bool // Drama safe demo: route only to mock provider
 }
 
 type VideoTaskListParams struct {
@@ -263,6 +265,7 @@ type VideoGatewayRepository interface {
 	GetTask(ctx context.Context, id int64) (*VideoTask, error)
 	ListTasks(ctx context.Context, params VideoTaskListParams) ([]*VideoTask, int64, error)
 	ListRunnableTasks(ctx context.Context, limit int) ([]*VideoTask, error)
+	ClaimTaskForSubmit(ctx context.Context, taskID int64) (bool, error)
 	UpdateTask(ctx context.Context, task *VideoTask) error
 
 	AddTaskEvent(ctx context.Context, event *VideoTaskEvent) error

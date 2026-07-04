@@ -321,6 +321,7 @@ func (s *VideoGatewayService) CreateDramaTask(ctx context.Context, p DramaTaskCr
 		Duration:          defaultVideoDuration(p.DurationSeconds),
 		Resolution:        "1080p",
 		CreatedBy:         p.CreatedBy,
+		SafeDemoOnly:      recommendation.SafeDemoMode,
 	})
 	if err != nil {
 		return nil, err

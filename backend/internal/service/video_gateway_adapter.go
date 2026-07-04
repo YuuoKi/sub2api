@@ -572,9 +572,6 @@ func seedancePreArmRedactionSelfCheck(account *VideoProviderAccount) error {
 
 func seedanceSmokeGateBlockedReasons(account *VideoProviderAccount, task *VideoTask) []string {
 	reasons := []string{}
-	if strings.TrimSpace(os.Getenv("SUB2API_VIDEO_REAL_SMOKE_ENABLED")) != "1" {
-		reasons = append(reasons, "SUB2API_VIDEO_REAL_SMOKE_ENABLED is not 1")
-	}
 	if !metadataBool(account.Metadata, "single_smoke_authorized") && !metadataBool(account.Metadata, "real_smoke_authorized") {
 		reasons = append(reasons, "provider metadata does not record single smoke authorization")
 	}

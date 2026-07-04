@@ -329,6 +329,15 @@ func (s *VideoGatewayService) terminateVideoTask(ctx context.Context, task *Vide
 }
 
 func (s *VideoGatewayService) submitTask(ctx context.Context, adapter VideoAdapter, account *VideoProviderAccount, task *VideoTask) error {
+	claimed, err := s.repo.ClaimTaskForSubmit(ctx, task.ID)
+	if err != nil {
+		return err
+	}
+	if !claimed {
+		return nil
+	}
+	task.Status = VideoStatusSubmitted
+
 	result, err := adapter.CreateTask(ctx, account, task)
 	if err != nil {
 		return err

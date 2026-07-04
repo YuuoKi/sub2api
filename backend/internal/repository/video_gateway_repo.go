@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -322,6 +323,27 @@ func (r *videoGatewayRepository) ListRunnableTasks(ctx context.Context, limit in
 	}
 	defer func() { _ = rows.Close() }()
 	return scanVideoTaskRows(rows)
+}
+
+func (r *videoGatewayRepository) ClaimTaskForSubmit(ctx context.Context, taskID int64) (bool, error) {
+	const q = `
+		UPDATE video_tasks
+		SET status = $2,
+		    updated_at = NOW(),
+		    worker_claimed_at = COALESCE(worker_claimed_at, NOW()),
+		    worker_claimed_until = NOW() + ($4::int * INTERVAL '1 second')
+		WHERE id = $1 AND status = $3
+		RETURNING id
+	`
+	var claimedID int64
+	err := r.db.QueryRowContext(ctx, q, taskID, service.VideoStatusSubmitted, service.VideoStatusQueued, videoTaskClaimLeaseSeconds).Scan(&claimedID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return claimedID > 0, nil
 }
 
 func (r *videoGatewayRepository) UpdateTask(ctx context.Context, task *service.VideoTask) error {

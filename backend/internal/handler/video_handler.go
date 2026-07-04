@@ -188,19 +188,24 @@ func (h *VideoHandler) CreateTask(c *gin.Context) {
 		return
 	}
 	subject, _ := middleware2.GetAuthSubjectFromContext(c)
-	task, err := h.video.CreateTask(c.Request.Context(), service.VideoTaskCreateParams{
-		ProviderAccountID: req.ProviderAccountID,
-		TaskType:          req.TaskType,
-		Model:             req.Model,
-		Prompt:            req.Prompt,
-		NegativePrompt:    req.NegativePrompt,
-		ReferenceImageURL: req.ReferenceImageURL,
-		ReferenceVideoURL: req.ReferenceVideoURL,
-		AspectRatio:       req.AspectRatio,
-		Duration:          req.Duration,
-		Resolution:        req.Resolution,
-		CreatedBy:         subject.UserID,
-	})
+	role, _ := middleware2.GetUserRoleFromContext(c)
+	params := service.VideoTaskCreateParams{
+		TaskType:                 req.TaskType,
+		Model:                    req.Model,
+		Prompt:                   req.Prompt,
+		NegativePrompt:           req.NegativePrompt,
+		ReferenceImageURL:        req.ReferenceImageURL,
+		ReferenceVideoURL:        req.ReferenceVideoURL,
+		AspectRatio:              req.AspectRatio,
+		Duration:                 req.Duration,
+		Resolution:               req.Resolution,
+		CreatedBy:                subject.UserID,
+		EnforceRealProviderTrial: true,
+	}
+	if role == "admin" {
+		params.ProviderAccountID = req.ProviderAccountID
+	}
+	task, err := h.video.CreateTask(c.Request.Context(), params)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return

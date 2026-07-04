@@ -589,6 +589,13 @@ func (s *VideoGatewayService) CreateTask(ctx context.Context, p VideoTaskCreateP
 	if strings.TrimSpace(p.Prompt) == "" {
 		return nil, ErrVideoMissingPrompt
 	}
+	if p.SafeDemoOnly {
+		mock, err := s.resolveAPIKeyMockOnlyRoute(ctx)
+		if err != nil {
+			return nil, err
+		}
+		p.ProviderAccountID = mock.ID
+	}
 	route, err := s.resolveVideoRoute(ctx, p.ProviderAccountID)
 	if err != nil {
 		return nil, err
@@ -597,7 +604,44 @@ func (s *VideoGatewayService) CreateTask(ctx context.Context, p VideoTaskCreateP
 	if _, err := s.adapterFor(account.Provider); err != nil {
 		return nil, err
 	}
-	return s.createTaskWithRoute(ctx, p, route, s.repo.CreateTask)
+	createFn := s.repo.CreateTask
+	if p.EnforceRealProviderTrial {
+		switch account.Provider {
+		case VideoProviderMock:
+			// allowed without trial reservation
+		case VideoProviderSeedance:
+			dummyTask := &VideoTask{
+				Provider: account.Provider,
+				Model:    firstNonEmptyVideo(strings.TrimSpace(p.Model), account.DefaultModel, defaultVideoModel(VideoProviderSeedance)),
+				TaskType: p.TaskType,
+				Prompt:   strings.TrimSpace(p.Prompt),
+				Duration: defaultVideoDuration(p.Duration),
+			}
+			if blockedReasons := seedanceSmokeGateBlockedReasons(account, dummyTask); len(blockedReasons) > 0 {
+				return nil, infraerrors.Forbidden("VIDEO_TRIAL_BLOCKED", "seedance trial blocked by gate").WithMetadata(map[string]string{
+					"provider":        VideoProviderSeedance,
+					"blocked_reasons": strings.Join(blockedReasons, "; "),
+				})
+			}
+			createFn = func(ctx context.Context, task *VideoTask) error {
+				reserved, err := s.repo.CreateDailyTrialTask(ctx, task, VideoProviderSeedance, task.CreatedBy, timezone.Today())
+				if err != nil {
+					return err
+				}
+				if !reserved {
+					return infraerrors.Forbidden("VIDEO_TRIAL_LIMIT_EXCEEDED", "seedance trial limited to 1 call per day per user").WithMetadata(map[string]string{
+						"provider": VideoProviderSeedance,
+					})
+				}
+				return nil
+			}
+		default:
+			return nil, infraerrors.Forbidden("VIDEO_REAL_PROVIDER_BLOCKED", "real provider requires API key trial path").WithMetadata(map[string]string{
+				"provider": account.Provider,
+			})
+		}
+	}
+	return s.createTaskWithRoute(ctx, p, route, createFn)
 }
 
 func (s *VideoGatewayService) createTaskWithRoute(ctx context.Context, p VideoTaskCreateParams, route *videoRouteDecision, create func(context.Context, *VideoTask) error) (*VideoTask, error) {

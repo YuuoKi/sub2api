@@ -155,6 +155,18 @@ func (r *memoryVideoGatewayRepo) ListRunnableTasks(_ context.Context, limit int)
 	return out, nil
 }
 
+func (r *memoryVideoGatewayRepo) ClaimTaskForSubmit(_ context.Context, taskID int64) (bool, error) {
+	task, ok := r.tasks[taskID]
+	if !ok || task.Status != VideoStatusQueued {
+		return false, nil
+	}
+	updated := cloneVideoTask(task)
+	updated.Status = VideoStatusSubmitted
+	updated.UpdatedAt = time.Now().UTC()
+	r.tasks[taskID] = updated
+	return true, nil
+}
+
 func (r *memoryVideoGatewayRepo) UpdateTask(_ context.Context, task *VideoTask) error {
 	task.UpdatedAt = time.Now().UTC()
 	r.tasks[task.ID] = cloneVideoTask(task)

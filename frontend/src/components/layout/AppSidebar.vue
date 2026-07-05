@@ -675,7 +675,7 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
     return [
       { path: '/admin/video/create', label: '试跑任务', icon: TicketIcon },
       { path: '/admin/video/tasks', label: '任务记录', icon: OrderListIcon },
-      { path: '/keys', label: '外部工具接入', icon: KeyIcon },
+      { path: '/keys', label: '我的卡片', icon: KeyIcon },
       { path: '/admin/video/system-check', label: '系统检查', icon: ShieldIcon },
     ]
   }
@@ -736,10 +736,21 @@ const adminNavItems = computed((): NavItem[] => {
   const videoItems: NavItem[] = isVideoGatewayDemoMode
     ? [
         { path: '/admin/video/dashboard', label: '总览', icon: ChartIcon },
-        { path: '/admin/video/create', label: '试跑任务', icon: TicketIcon },
+        { path: '/admin/console/key-vault', label: '密钥库', icon: KeyIcon },
+        // P0-3：外部工具并入成员与开卡（工具账号），不再提供挂在管理员名下的 /keys 入口
+        { path: '/admin/console/staff', label: '成员与开卡', icon: UsersIcon },
         { path: '/admin/video/tasks', label: '任务记录', icon: OrderListIcon },
-        { path: '/keys', label: '外部工具接入', icon: KeyIcon },
-        { path: '/admin/video/system-check', label: '系统检查', icon: ShieldIcon },
+        {
+          path: '/admin/console/system',
+          label: '系统',
+          icon: CogIcon,
+          expandOnly: true,
+          children: [
+            { path: '/admin/video/create', label: '试跑任务', icon: TicketIcon },
+            { path: '/admin/video/providers', label: '生成通道', icon: ServerIcon },
+            { path: '/admin/video/system-check', label: '系统检查', icon: ShieldIcon },
+          ],
+        },
       ]
     : [
         { path: '/admin/video/dashboard', label: '视频总览', icon: ChartIcon },

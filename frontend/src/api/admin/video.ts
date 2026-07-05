@@ -63,6 +63,7 @@ export interface VideoTaskSummary {
   result_url: string
   error_message: string
   cost_estimate: number
+  currency?: string // 'CNY' = Seedance 真实计费；'USD' = 其他（旧后端可能缺失）
   created_by: number
   created_by_email: string
   created_by_name: string

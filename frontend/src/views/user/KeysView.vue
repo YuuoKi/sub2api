@@ -1455,7 +1455,8 @@ const editKey = (key: ApiKey) => {
   formData.value = {
     name: key.name,
     group_id: key.group_id,
-    status: key.status === 'quota_exhausted' || key.status === 'expired' ? 'inactive' : key.status,
+    // 用户端接口只接受 active/inactive；后端可能返回 disabled，编辑时归一为 inactive
+    status: key.status === 'active' ? 'active' : 'inactive',
     use_custom_key: false,
     custom_key: '',
     enable_ip_restriction: hasIPRestriction,

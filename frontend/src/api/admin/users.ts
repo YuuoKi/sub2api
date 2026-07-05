@@ -115,6 +115,9 @@ export async function getById(id: number): Promise<AdminUser> {
 export async function create(userData: {
   email: string
   password: string
+  username?: string
+  notes?: string
+  member_type?: 'human' | 'tool' // tool = 外部工具账号（n8n、脚本等）
   balance?: number
   concurrency?: number
   allowed_groups?: number[] | null

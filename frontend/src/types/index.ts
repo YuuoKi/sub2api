@@ -102,6 +102,8 @@ export interface User {
 export interface AdminUser extends User {
   // 管理员备注（普通用户接口不返回）
   notes: string
+  // P0-3：human=员工，tool=外部工具账号（后端按 notes [工具] 前缀派生）
+  member_type?: 'human' | 'tool'
   last_used_at?: string | null
   // 用户专属分组倍率配置 (group_id -> rate_multiplier)
   group_rates?: Record<number, number>
@@ -558,7 +560,8 @@ export interface ApiKey {
   key: string
   name: string
   group_id: number | null
-  status: 'active' | 'inactive' | 'quota_exhausted' | 'expired'
+  // 后端实际返回 disabled（service.StatusAPIKeyDisabled）；inactive 为旧用户端契约保留
+  status: 'active' | 'inactive' | 'disabled' | 'quota_exhausted' | 'expired'
   ip_whitelist: string[]
   ip_blacklist: string[]
   last_used_at: string | null
@@ -1184,6 +1187,10 @@ export interface UsageLog {
   total_cost: number
   actual_cost: number
   rate_multiplier: number
+  // V-3 对账字段（旧后端可能缺失）
+  currency?: string
+  pricing_source?: string
+  pricing_version?: string
   billing_type: number
 
   request_type?: UsageRequestType
@@ -1195,6 +1202,7 @@ export interface UsageLog {
   // 图片生成字段
   image_count: number
   image_size: string | null
+  media_type?: string | null // 'image' = 图片生成（V-1 起写入）
 
   // User-Agent
   user_agent: string | null
@@ -1345,6 +1353,20 @@ export interface DashboardStats {
   // 性能指标
   rpm: number // 近5分钟平均每分钟请求数
   tpm: number // 近5分钟平均每分钟Token数
+
+  // V-4 视频花费归总（USD 折算，字段可能在旧后端缺失）
+  video_total_cost?: number
+  today_video_cost?: number
+  unified_total_actual_cost?: number // LLM + 视频统一总花费
+  unified_today_actual_cost?: number
+  cost_currency?: string // 归总展示币种（当前恒为 USD）
+  video_spend_by_provider?: VideoSpendByProvider[]
+}
+
+export interface VideoSpendByProvider {
+  provider: string
+  count: number
+  cost: number // USD 折算
 }
 
 export interface UsageStatsResponse {
@@ -1429,9 +1451,13 @@ export interface UserUsageTrendPoint {
 export interface UserSpendingRankingItem {
   user_id: number
   email: string
+  username?: string
+  user_notes?: string
+  member_type?: 'human' | 'tool'
   actual_cost: number
   requests: number
   tokens: number
+  video_cost?: number // 同期视频花费（USD 折算）
 }
 
 export interface UserSpendingRankingResponse {
@@ -1439,6 +1465,8 @@ export interface UserSpendingRankingResponse {
   total_actual_cost: number
   total_requests: number
   total_tokens: number
+  total_video_cost?: number
+  total_combined_actual_cost?: number
   start_date: string
   end_date: string
 }

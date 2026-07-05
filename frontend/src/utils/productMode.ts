@@ -16,6 +16,7 @@ export const isVideoGatewayDemoMode = import.meta.env.VITE_PRODUCT_MODE !== 'sta
 const demoRoutePrefixes = [
   '/internal-pilot',
   '/admin/video',
+  '/admin/console',
   '/admin/generation-content',
   '/keys',
   '/login',

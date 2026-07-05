@@ -20,6 +20,19 @@
         </div>
       </div>
 
+      <!-- 演示模式：视频任务 / AI 调用记录 切换 -->
+      <div v-if="isVideoGatewayDemoMode && authStore.isAdmin" class="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5 dark:border-dark-700 dark:bg-dark-800">
+        <span class="rounded-md bg-white px-4 py-1.5 text-sm font-medium text-gray-900 shadow-sm dark:bg-dark-700 dark:text-white">
+          视频任务
+        </span>
+        <RouterLink
+          to="/admin/console/ai-records"
+          class="rounded-md px-4 py-1.5 text-sm font-medium text-gray-500 transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+        >
+          AI 调用记录
+        </RouterLink>
+      </div>
+
       <section class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-800">
         <div class="grid gap-3 lg:grid-cols-[1fr_220px_auto] lg:items-center">
           <div class="flex flex-wrap gap-2">
@@ -57,6 +70,7 @@
                 <th class="px-5 py-3 font-medium">{{ isVideoGatewayDemoMode ? '任务来源' : '通道' }}</th>
                 <th class="px-5 py-3 font-medium">{{ isVideoGatewayDemoMode ? '处理账号' : '系统调度账号' }}</th>
                 <th class="px-5 py-3 font-medium">当前状态</th>
+                <th class="px-5 py-3 font-medium">花费</th>
                 <th class="px-5 py-3 font-medium">结果 / 失败原因</th>
                 <th class="px-5 py-3 font-medium">创建时间</th>
                 <th class="px-5 py-3 font-medium">操作</th>
@@ -88,6 +102,9 @@
                     {{ statusLabel(task.status) }}
                   </span>
                 </td>
+                <td class="px-5 py-3 tabular-nums text-teal-600 dark:text-teal-300">
+                  {{ formatTaskCost(task) }}
+                </td>
                 <td class="px-5 py-3">
                   <a v-if="task.result_url" class="inline-flex items-center gap-1 text-primary-600 hover:text-primary-700 dark:text-primary-300" :href="task.result_url" target="_blank" rel="noreferrer">
                     <Icon name="externalLink" size="xs" />
@@ -113,7 +130,7 @@
                 </td>
               </tr>
               <tr v-if="!loading && !tasks.length">
-                <td :colspan="authStore.isAdmin ? 8 : 7" class="px-5 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                <td :colspan="authStore.isAdmin ? 9 : 8" class="px-5 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
                   <div class="space-y-3">
                     <div>{{ isVideoGatewayDemoMode ? '当前还没有任务记录。你可以先试跑一条任务，检查系统是否能正常接收、处理和记录。' : '没有任务。可以先创建一个演示任务验证流转。' }}</div>
                     <RouterLink class="btn btn-sm btn-outline" to="/admin/video/create">{{ isVideoGatewayDemoMode ? '试跑一条任务' : '创建一个演示任务' }}</RouterLink>
@@ -174,6 +191,13 @@ const visibleProviderOptions = computed(() => (
     ? providerOptions.filter((provider) => provider.value === 'mock')
     : providerOptions
 ))
+// Seedance 真实计费为人民币（V-2/V-3），其余按美元展示
+function formatTaskCost(task: VideoTask): string {
+  if (task.cost_estimate <= 0) return '—'
+  const symbol = task.currency === 'CNY' ? '¥' : '$'
+  return `${symbol}${task.cost_estimate.toFixed(2)}`
+}
+
 const quickStatusFilters: Array<{ label: string; status: '' | VideoTaskStatus }> = [
   { label: '全部', status: '' },
   { label: '已完成', status: 'succeeded' },

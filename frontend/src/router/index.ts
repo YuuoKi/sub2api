@@ -452,11 +452,45 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/admin/video/dashboard',
     name: 'AdminVideoDashboard',
-    component: () => import('@/views/admin/video/VideoDashboardView.vue'),
+    // 演示模式下总览是老板经营看板；标准模式仍是视频网关总览
+    component: () =>
+      isVideoGatewayDemoMode
+        ? import('@/views/admin/console/BossOverviewView.vue')
+        : import('@/views/admin/video/VideoDashboardView.vue'),
     meta: {
       requiresAuth: true,
       requiresAdmin: true,
       title: isVideoGatewayDemoMode ? '总览' : 'AI 视频网关'
+    }
+  },
+  {
+    path: '/admin/console/key-vault',
+    name: 'AdminConsoleKeyVault',
+    component: () => import('@/views/admin/console/KeyVaultView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: '密钥库'
+    }
+  },
+  {
+    path: '/admin/console/staff',
+    name: 'AdminConsoleStaff',
+    component: () => import('@/views/admin/console/StaffView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: '员工与开卡'
+    }
+  },
+  {
+    path: '/admin/console/ai-records',
+    name: 'AdminConsoleAiRecords',
+    component: () => import('@/views/admin/console/AiRecordsView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'AI 调用记录'
     }
   },
   {

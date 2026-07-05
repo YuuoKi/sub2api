@@ -1,6 +1,11 @@
 # Sub2API START HERE
 
-Updated: 2026-07-04 Asia/Shanghai
+Updated: 2026-07-05 Asia/Shanghai
+
+## North Star (唯一总规划真相源)
+
+跨仓总规划请先读：`D:\Codex创业任务\QCanvas（无界版）\北极星\北极星V5.0_无界智能画布_无界AI管理中台_总规划_最终版_20260705.html`  
+分工：Fable 5 规划 · Codex 后端执行 · Composer 2.5 前端/走查。本仓任务书：`docs/superpowers/codex-handoff/CODEX_START_HERE.md`。
 
 ## Current Position
 

@@ -149,3 +149,7 @@ docs/*
 frontend/coverage/
 aicodex
 output/
+
+# R2 smoke secrets (never commit)
+tools/r2a-patch-provider.json
+tools/r2a-login.json

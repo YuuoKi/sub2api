@@ -2,8 +2,9 @@
   "provider": "seedance",
   "task_type": "text_to_video",
   "model": "doubao-seedance-2-0-260128",
-  "prompt": "R2 gate probe",
-  "duration": 10,
-  "aspect_ratio": "9:16",
-  "resolution": "720p"
+  "prompt": "R2 production verify: a small cube slowly rotating on a plain neutral background",
+  "duration": 5,
+  "aspect_ratio": "16:9",
+  "resolution": "720p",
+  "generate_audio": false
 }

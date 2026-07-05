@@ -7,7 +7,9 @@
 
 ---
 
-> **2026-07-05 R2（下一批）**：控制台 v2 + R1 已合并到分支 `wujie/video-capture-moat-20260702`。请执行 **[CODEX_TASK_PRODUCTION_VERIFY.md](./CODEX_TASK_PRODUCTION_VERIFY.md)**（正式 Seedance 冒烟、图片回归、计费对账抽检）。交付 `deliverables/YYYY-MM-DD-R2-*-review.md`。
+> **2026-07-05 R2（收尾）**：R2-A **blocked**（dev 无 `SEEDANCE_API_KEY`）；gate/脚本/审查包已就绪。见 [deliverables/2026-07-05-R2-closeout-summary.md](./deliverables/2026-07-05-R2-closeout-summary.md)。Key 到位后跑 `tools/r2a-bootstrap.ps1` + `tools/r2a-smoke-probe.ps1`。
+>
+> **2026-07-05 R2（执行中）**：见 **[CODEX_TASK_PRODUCTION_VERIFY.md](./CODEX_TASK_PRODUCTION_VERIFY.md)**。
 >
 > **2026-07-05 R1（已完成）**：见 [CODEX_TASK_R1.md](./CODEX_TASK_R1.md) 与 `deliverables/2026-07-05-R1-backend-review.md`。
 

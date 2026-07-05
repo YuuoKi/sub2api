@@ -21,24 +21,19 @@ func NewVideoGatewayRepository(db *sql.DB) service.VideoGatewayRepository {
 }
 
 const insertVideoUsageLogSQL = `
-	WITH usage_log_insert_lock AS (
-		SELECT pg_advisory_xact_lock($1)
-	)
-	INSERT INTO video_usage_logs (video_task_id, provider, model, status, cost_estimate, duration)
-	SELECT $1,$2,$3,$4,$5,$6
-	FROM usage_log_insert_lock
-	WHERE NOT EXISTS (
-		SELECT 1
-		FROM video_usage_logs
-		WHERE video_task_id = $1
-	)
+	INSERT INTO video_usage_logs (video_task_id, provider, model, status, cost_estimate, duration, currency, pricing_source, pricing_version)
+	VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+	ON CONFLICT (video_task_id) DO NOTHING
 `
 
 const videoTaskClaimLeaseSeconds = 120
 
 const videoTaskSelectColumns = `
 		vt.id, vt.provider_account_id, vt.provider, vt.model, vt.task_type, vt.prompt, vt.negative_prompt,
-		vt.reference_image_url, vt.reference_video_url, vt.aspect_ratio, vt.duration, vt.resolution,
+		vt.reference_image_url, vt.reference_video_url, vt.content_json, vt.has_video_input,
+		vt.aspect_ratio, vt.duration, vt.resolution,
+		vt.generate_audio, vt.watermark, vt.camera_fixed, vt.return_last_frame,
+		vt.usage_total_tokens, vt.actual_resolution, vt.actual_duration, vt.last_frame_url,
 		vt.status, vt.upstream_task_id, vt.result_url, vt.error_message, vt.cost_estimate, vt.poll_count,
 		vt.created_by, vt.created_at, vt.updated_at, vt.completed_at,
 		COALESCE(vpa.display_name, ''), COALESCE(u.email, ''), COALESCE(u.username, '')
@@ -53,9 +48,10 @@ const videoTaskJoinSQL = `
 const createVideoTaskSQL = `
 	INSERT INTO video_tasks (
 		provider_account_id, provider, model, task_type, prompt, negative_prompt,
-		reference_image_url, reference_video_url, aspect_ratio, duration, resolution,
-		status, created_by
-	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+		reference_image_url, reference_video_url, content_json, has_video_input,
+		aspect_ratio, duration, resolution, generate_audio, watermark, camera_fixed,
+		return_last_frame, status, created_by
+	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
 	RETURNING id, created_at, updated_at
 `
 
@@ -164,6 +160,10 @@ func (r *videoGatewayRepository) UpdateProviderAccount(ctx context.Context, acco
 }
 
 func (r *videoGatewayRepository) CreateTask(ctx context.Context, task *service.VideoTask) error {
+	contentJSON, err := marshalVideoTaskContent(task.Content)
+	if err != nil {
+		return err
+	}
 	return scanCreatedVideoTask(r.db.QueryRowContext(ctx, createVideoTaskSQL,
 		task.ProviderAccountID,
 		task.Provider,
@@ -173,9 +173,15 @@ func (r *videoGatewayRepository) CreateTask(ctx context.Context, task *service.V
 		task.NegativePrompt,
 		task.ReferenceImageURL,
 		task.ReferenceVideoURL,
+		string(contentJSON),
+		task.HasVideoInput,
 		task.AspectRatio,
 		task.Duration,
 		task.Resolution,
+		nullableBoolValue(task.GenerateAudio),
+		nullableBoolValue(task.Watermark),
+		nullableBoolValue(task.CameraFixed),
+		nullableBoolValue(task.ReturnLastFrame),
 		task.Status,
 		task.CreatedBy,
 	), task)
@@ -202,6 +208,10 @@ func (r *videoGatewayRepository) CreateDailyTrialTask(ctx context.Context, task 
 		return false, err
 	}
 
+	contentJSON, err := marshalVideoTaskContent(task.Content)
+	if err != nil {
+		return false, err
+	}
 	if err := scanCreatedVideoTask(tx.QueryRowContext(ctx, createVideoTaskSQL,
 		task.ProviderAccountID,
 		task.Provider,
@@ -211,9 +221,15 @@ func (r *videoGatewayRepository) CreateDailyTrialTask(ctx context.Context, task 
 		task.NegativePrompt,
 		task.ReferenceImageURL,
 		task.ReferenceVideoURL,
+		string(contentJSON),
+		task.HasVideoInput,
 		task.AspectRatio,
 		task.Duration,
 		task.Resolution,
+		nullableBoolValue(task.GenerateAudio),
+		nullableBoolValue(task.Watermark),
+		nullableBoolValue(task.CameraFixed),
+		nullableBoolValue(task.ReturnLastFrame),
 		task.Status,
 		task.CreatedBy,
 	), task); err != nil {
@@ -354,11 +370,15 @@ func (r *videoGatewayRepository) UpdateTask(ctx context.Context, task *service.V
 		    result_url = $4,
 		    error_message = $5,
 		    cost_estimate = $6,
+		    completed_at = $7,
 		    poll_count = $8,
+		    usage_total_tokens = $9,
+		    actual_resolution = $10,
+		    actual_duration = $11,
+		    last_frame_url = $12,
 		    worker_claimed_at = NULL,
 		    worker_claimed_until = NULL,
-		    updated_at = NOW(),
-		    completed_at = $7
+		    updated_at = NOW()
 		WHERE id = $1
 		RETURNING updated_at
 	`
@@ -375,6 +395,10 @@ func (r *videoGatewayRepository) UpdateTask(ctx context.Context, task *service.V
 		task.CostEstimate,
 		completedAt,
 		task.PollCount,
+		nullableInt64Ptr(task.UsageTotalTokens),
+		nullableNonEmptyString(task.ActualResolution),
+		nullableVideoIntPtr(task.ActualDuration),
+		nullableNonEmptyString(task.LastFrameURL),
 	).Scan(&task.UpdatedAt); err != nil {
 		return translatePersistenceError(err, service.ErrVideoTaskNotFound, nil)
 	}
@@ -429,6 +453,13 @@ func (r *videoGatewayRepository) ListTaskEvents(ctx context.Context, taskID int6
 }
 
 func (r *videoGatewayRepository) InsertUsageLog(ctx context.Context, task *service.VideoTask) error {
+	currency := service.NormalizeBillingCurrency(task.Currency)
+	pricingSource := service.NormalizeBillingPricingSource(task.PricingSource)
+	pricingVersion := service.NormalizeBillingPricingVersion(task.PricingVersion)
+	var pricingVersionArg any
+	if pricingVersion != "" {
+		pricingVersionArg = pricingVersion
+	}
 	_, err := r.db.ExecContext(ctx, insertVideoUsageLogSQL,
 		task.ID,
 		task.Provider,
@@ -436,8 +467,29 @@ func (r *videoGatewayRepository) InsertUsageLog(ctx context.Context, task *servi
 		task.Status,
 		task.CostEstimate,
 		task.Duration,
+		currency,
+		pricingSource,
+		pricingVersionArg,
 	)
 	return err
+}
+
+func (r *videoGatewayRepository) ClaimVideoBalanceCharge(ctx context.Context, taskID int64) (bool, error) {
+	const q = `
+		UPDATE video_tasks
+		SET balance_charged_at = NOW(),
+		    updated_at = NOW()
+		WHERE id = $1 AND balance_charged_at IS NULL
+	`
+	result, err := r.db.ExecContext(ctx, q, taskID)
+	if err != nil {
+		return false, err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return rows > 0, nil
 }
 
 func (r *videoGatewayRepository) CountTasksSince(ctx context.Context, since time.Time) (map[string]int64, error) {
@@ -634,6 +686,11 @@ func scanVideoTaskRows(rows *sql.Rows) ([]*service.VideoTask, error) {
 func scanVideoTask(row scanner) (*service.VideoTask, error) {
 	task := &service.VideoTask{}
 	var completed sql.NullTime
+	var contentJSON []byte
+	var generateAudio, watermark, cameraFixed, returnLastFrame sql.NullBool
+	var usageTotalTokens sql.NullInt64
+	var actualResolution, lastFrameURL sql.NullString
+	var actualDuration sql.NullInt64
 	err := row.Scan(
 		&task.ID,
 		&task.ProviderAccountID,
@@ -644,9 +701,19 @@ func scanVideoTask(row scanner) (*service.VideoTask, error) {
 		&task.NegativePrompt,
 		&task.ReferenceImageURL,
 		&task.ReferenceVideoURL,
+		&contentJSON,
+		&task.HasVideoInput,
 		&task.AspectRatio,
 		&task.Duration,
 		&task.Resolution,
+		&generateAudio,
+		&watermark,
+		&cameraFixed,
+		&returnLastFrame,
+		&usageTotalTokens,
+		&actualResolution,
+		&actualDuration,
+		&lastFrameURL,
 		&task.Status,
 		&task.UpstreamTaskID,
 		&task.ResultURL,
@@ -667,7 +734,90 @@ func scanVideoTask(row scanner) (*service.VideoTask, error) {
 	if completed.Valid {
 		task.CompletedAt = &completed.Time
 	}
+	task.Content = unmarshalVideoTaskContent(contentJSON)
+	task.GenerateAudio = boolPtrFromNull(generateAudio)
+	task.Watermark = boolPtrFromNull(watermark)
+	task.CameraFixed = boolPtrFromNull(cameraFixed)
+	task.ReturnLastFrame = boolPtrFromNull(returnLastFrame)
+	task.UsageTotalTokens = int64PtrFromNull(usageTotalTokens)
+	if actualResolution.Valid {
+		task.ActualResolution = actualResolution.String
+	}
+	task.ActualDuration = intPtrFromNullInt64(actualDuration)
+	if lastFrameURL.Valid {
+		task.LastFrameURL = lastFrameURL.String
+	}
 	return task, nil
+}
+
+func marshalVideoTaskContent(in []service.VideoTaskContentItem) ([]byte, error) {
+	if in == nil {
+		in = []service.VideoTaskContentItem{}
+	}
+	return json.Marshal(in)
+}
+
+func unmarshalVideoTaskContent(data []byte) []service.VideoTaskContentItem {
+	if len(data) == 0 {
+		return nil
+	}
+	out := []service.VideoTaskContentItem{}
+	if err := json.Unmarshal(data, &out); err != nil {
+		return nil
+	}
+	return out
+}
+
+func nullableBoolValue(v *bool) any {
+	if v == nil {
+		return nil
+	}
+	return *v
+}
+
+func boolPtrFromNull(v sql.NullBool) *bool {
+	if !v.Valid {
+		return nil
+	}
+	out := v.Bool
+	return &out
+}
+
+func nullableInt64Ptr(v *int64) any {
+	if v == nil {
+		return nil
+	}
+	return *v
+}
+
+func nullableVideoIntPtr(v *int) any {
+	if v == nil {
+		return nil
+	}
+	return *v
+}
+
+func nullableNonEmptyString(v string) any {
+	if strings.TrimSpace(v) == "" {
+		return nil
+	}
+	return v
+}
+
+func int64PtrFromNull(v sql.NullInt64) *int64 {
+	if !v.Valid {
+		return nil
+	}
+	out := v.Int64
+	return &out
+}
+
+func intPtrFromNullInt64(v sql.NullInt64) *int {
+	if !v.Valid {
+		return nil
+	}
+	out := int(v.Int64)
+	return &out
 }
 
 func marshalJSONMap(in map[string]any) ([]byte, error) {

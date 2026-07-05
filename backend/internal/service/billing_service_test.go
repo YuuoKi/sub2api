@@ -82,8 +82,12 @@ func TestGetModelPricing_FallbackMatchesByFamily(t *testing.T) {
 		{"claude-3-opus-20240229", 15e-6},
 		{"claude-sonnet-4-20250514", 3e-6},
 		{"claude-3-5-sonnet-20241022", 3e-6},
-		{"claude-3-5-haiku-20241022", 1e-6},
+		{"claude-3-5-haiku-20241022", 0.8e-6},
 		{"claude-3-haiku-20240307", 0.25e-6},
+		{"claude-opus-4.8-20260705", 5e-6},
+		{"claude-fable-5-20260705", 10e-6},
+		{"claude-mythos-5-20260705", 10e-6},
+		{"claude-sonnet-5-20260705", 3e-6},
 	}
 
 	for _, tt := range tests {
@@ -208,7 +212,11 @@ func TestGetFallbackPricing_FamilyMatching(t *testing.T) {
 	}{
 		{name: "empty model", model: "   ", expectNilPricing: true},
 		{name: "claude opus 4.6", model: "claude-opus-4.6-20260201", expectedInput: 5e-6},
+		{name: "claude opus 4.8", model: "claude-opus-4-8-20260705", expectedInput: 5e-6},
 		{name: "claude opus 4.5 alt separator", model: "claude-opus-4-5-20260101", expectedInput: 5e-6},
+		{name: "claude fable 5", model: "claude-fable-5-20260705", expectedInput: 10e-6},
+		{name: "claude mythos 5", model: "claude-mythos-5-20260705", expectedInput: 10e-6},
+		{name: "claude sonnet 5", model: "claude-sonnet-5-20260705", expectedInput: 3e-6},
 		{name: "claude generic model fallback sonnet", model: "claude-foo-bar", expectedInput: 3e-6},
 		{name: "gemini explicit fallback", model: "gemini-3-1-pro", expectedInput: 2e-6},
 		{name: "gemini unknown no fallback", model: "gemini-2.0-pro", expectNilPricing: true},
@@ -235,6 +243,36 @@ func TestGetFallbackPricing_FamilyMatching(t *testing.T) {
 		})
 	}
 }
+
+func TestGetModelPricing_ClaudeFallbackBillingV5Prices(t *testing.T) {
+	svc := newTestBillingService()
+
+	tests := []struct {
+		model      string
+		input      float64
+		output     float64
+		cacheWrite float64
+		cacheRead  float64
+	}{
+		{model: "claude-3-5-haiku-20241022", input: 0.8e-6, output: 4e-6, cacheWrite: 1.0e-6, cacheRead: 0.08e-6},
+		{model: "claude-opus-4.8-20260705", input: 5e-6, output: 25e-6, cacheWrite: 6.25e-6, cacheRead: 0.5e-6},
+		{model: "claude-fable-5-20260705", input: 10e-6, output: 50e-6, cacheWrite: 12.5e-6, cacheRead: 1.0e-6},
+		{model: "claude-mythos-5-20260705", input: 10e-6, output: 50e-6, cacheWrite: 12.5e-6, cacheRead: 1.0e-6},
+		{model: "claude-sonnet-5-20260705", input: 3e-6, output: 15e-6, cacheWrite: 3.75e-6, cacheRead: 0.3e-6},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.model, func(t *testing.T) {
+			pricing, err := svc.GetModelPricing(tt.model)
+			require.NoError(t, err)
+			require.InDelta(t, tt.input, pricing.InputPricePerToken, 1e-12)
+			require.InDelta(t, tt.output, pricing.OutputPricePerToken, 1e-12)
+			require.InDelta(t, tt.cacheWrite, pricing.CacheCreationPricePerToken, 1e-12)
+			require.InDelta(t, tt.cacheRead, pricing.CacheReadPricePerToken, 1e-12)
+		})
+	}
+}
+
 func TestCalculateCostWithLongContext_BelowThreshold(t *testing.T) {
 	svc := newTestBillingService()
 

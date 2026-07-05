@@ -210,6 +210,7 @@ const (
 	// 默认配置
 	SettingKeyDefaultConcurrency   = "default_concurrency"    // 新用户默认并发量
 	SettingKeyDefaultBalance       = "default_balance"        // 新用户默认余额
+	SettingKeyUSDCNYRate           = "usd_cny_rate"           // USD/CNY 计费归总换算汇率
 	SettingKeyDefaultSubscriptions = "default_subscriptions"  // 新用户默认订阅列表（JSON）
 	SettingKeyDefaultUserRPMLimit  = "default_user_rpm_limit" // 新用户默认 RPM 限制（0 = 不限制）
 

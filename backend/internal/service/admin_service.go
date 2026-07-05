@@ -120,6 +120,7 @@ type CreateUserInput struct {
 	Password      string
 	Username      string
 	Notes         string
+	MemberType    string
 	Balance       float64
 	Concurrency   int
 	RPMLimit      int
@@ -131,6 +132,7 @@ type UpdateUserInput struct {
 	Password      string
 	Username      *string
 	Notes         *string
+	MemberType    *string
 	Balance       *float64 // 使用指针区分"未提供"和"设置为0"
 	Concurrency   *int     // 使用指针区分"未提供"和"设置为0"
 	RPMLimit      *int     // 使用指针区分"未提供"和"设置为0"
@@ -661,10 +663,14 @@ func (s *adminServiceImpl) GetUser(ctx context.Context, id int64) (*User, error)
 }
 
 func (s *adminServiceImpl) CreateUser(ctx context.Context, input *CreateUserInput) (*User, error) {
+	notes, err := ApplyUserMemberTypeToNotes(input.Notes, input.MemberType)
+	if err != nil {
+		return nil, err
+	}
 	user := &User{
 		Email:         input.Email,
 		Username:      input.Username,
-		Notes:         input.Notes,
+		Notes:         notes,
 		Role:          RoleUser, // Always create as regular user, never admin
 		Balance:       input.Balance,
 		Concurrency:   input.Concurrency,
@@ -738,6 +744,13 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 	}
 	if input.Notes != nil {
 		user.Notes = *input.Notes
+	}
+	if input.MemberType != nil {
+		notes, err := ApplyUserMemberTypeToNotes(user.Notes, *input.MemberType)
+		if err != nil {
+			return nil, err
+		}
+		user.Notes = notes
 	}
 
 	if input.Status != "" {

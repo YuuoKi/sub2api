@@ -39,6 +39,7 @@ type apiKeyVideoGatewayMemoryRepo struct {
 	tasks          map[int64]*service.VideoTask
 	events         map[int64][]*service.VideoTaskEvent
 	usage          []*service.VideoTask
+	balanceClaims  map[int64]time.Time
 	dailyTrials    map[string]struct{}
 }
 
@@ -50,6 +51,7 @@ func newAPIKeyVideoGatewayMemoryRepo() *apiKeyVideoGatewayMemoryRepo {
 		providers:      make(map[int64]*service.VideoProviderAccount),
 		tasks:          make(map[int64]*service.VideoTask),
 		events:         make(map[int64][]*service.VideoTaskEvent),
+		balanceClaims:  make(map[int64]time.Time),
 		dailyTrials:    make(map[string]struct{}),
 	}
 }
@@ -217,6 +219,17 @@ func (r *apiKeyVideoGatewayMemoryRepo) ListTaskEvents(_ context.Context, taskID 
 func (r *apiKeyVideoGatewayMemoryRepo) InsertUsageLog(_ context.Context, task *service.VideoTask) error {
 	r.usage = append(r.usage, cloneAPIKeyVideoTask(task))
 	return nil
+}
+
+func (r *apiKeyVideoGatewayMemoryRepo) ClaimVideoBalanceCharge(_ context.Context, taskID int64) (bool, error) {
+	if _, ok := r.balanceClaims[taskID]; ok {
+		return false, nil
+	}
+	if _, ok := r.tasks[taskID]; !ok {
+		return false, nil
+	}
+	r.balanceClaims[taskID] = time.Now().UTC()
+	return true, nil
 }
 
 func (r *apiKeyVideoGatewayMemoryRepo) CountTasksSince(context.Context, time.Time) (map[string]int64, error) {
@@ -459,7 +472,7 @@ func TestAPIKeyVideoGatewaySeedanceTrialBlockedWithoutGate(t *testing.T) {
 		"trial_mode":"tiny_real",
 		"task_type":"text_to_video",
 		"prompt":"must stay blocked",
-		"duration":3
+		"duration":5
 	}`))
 
 	require.Equal(t, http.StatusForbidden, rec.Code, rec.Body.String())
@@ -472,7 +485,7 @@ func TestAPIKeyVideoGatewaySeedanceTrialBlockedWithoutGate(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
 	require.Equal(t, "VIDEO_TRIAL_BLOCKED", body.Reason)
 	require.Contains(t, body.Metadata["blocked_reasons"], "redacted event log path is missing")
-	require.Contains(t, body.Metadata["blocked_reasons"], "media url allowlist (SUB2API_VIDEO_URL_ALLOWLIST) is missing")
+	require.Contains(t, body.Metadata["blocked_reasons"], "media url allowlist (SUB2API_MEDIA_URL_ALLOWLIST or SUB2API_VIDEO_URL_ALLOWLIST) is missing")
 	require.Equal(t, 0, repo.realProviderTaskCount())
 }
 
@@ -493,7 +506,7 @@ func TestAPIKeyVideoGatewaySeedanceTrialBlockedDurationTooLong(t *testing.T) {
 		"trial_mode":"tiny_real",
 		"task_type":"text_to_video",
 		"prompt":"duration too long",
-		"duration":10
+		"duration":16
 	}`))
 
 	require.Equal(t, http.StatusForbidden, rec.Code, rec.Body.String())
@@ -525,7 +538,7 @@ func TestAPIKeyVideoGatewaySeedanceTrialBlockedMissingAuthorization(t *testing.T
 		"trial_mode":"tiny_real",
 		"task_type":"text_to_video",
 		"prompt":"missing auth",
-		"duration":3
+		"duration":5
 	}`))
 
 	require.Equal(t, http.StatusForbidden, rec.Code, rec.Body.String())
@@ -557,7 +570,7 @@ func TestAPIKeyVideoGatewaySeedanceTrialBlockedMissingEventLog(t *testing.T) {
 		"trial_mode":"tiny_real",
 		"task_type":"text_to_video",
 		"prompt":"missing event log",
-		"duration":3
+		"duration":5
 	}`))
 
 	require.Equal(t, http.StatusForbidden, rec.Code, rec.Body.String())
@@ -592,7 +605,7 @@ func TestAPIKeyVideoGatewaySeedanceTrialBlocksRouteUnavailableAccountWithKey(t *
 		"trial_mode":"tiny_real",
 		"task_type":"text_to_video",
 		"prompt":"route unavailable account must stay blocked",
-		"duration":3
+		"duration":5
 	}`))
 
 	require.Equal(t, http.StatusForbidden, rec.Code, rec.Body.String())
@@ -628,7 +641,7 @@ func TestAPIKeyVideoGatewaySeedanceTrialSuccess(t *testing.T) {
 		"trial_mode":"tiny_real",
 		"task_type":"text_to_video",
 		"prompt":"successful tiny real trial",
-		"duration":3
+		"duration":5
 	}`))
 
 	require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
@@ -646,7 +659,7 @@ func TestAPIKeyVideoGatewaySeedanceTrialSuccess(t *testing.T) {
 		"trial_mode":"tiny_real",
 		"task_type":"text_to_video",
 		"prompt":"second tiny real trial must stay blocked",
-		"duration":3
+		"duration":5
 	}`))
 	require.Equal(t, http.StatusForbidden, secondRec.Code, secondRec.Body.String())
 	var secondBody struct {
@@ -808,6 +821,33 @@ func cloneAPIKeyVideoTask(in *service.VideoTask) *service.VideoTask {
 		return nil
 	}
 	out := *in
+	if in.Content != nil {
+		out.Content = append([]service.VideoTaskContentItem(nil), in.Content...)
+	}
+	if in.GenerateAudio != nil {
+		v := *in.GenerateAudio
+		out.GenerateAudio = &v
+	}
+	if in.Watermark != nil {
+		v := *in.Watermark
+		out.Watermark = &v
+	}
+	if in.CameraFixed != nil {
+		v := *in.CameraFixed
+		out.CameraFixed = &v
+	}
+	if in.ReturnLastFrame != nil {
+		v := *in.ReturnLastFrame
+		out.ReturnLastFrame = &v
+	}
+	if in.UsageTotalTokens != nil {
+		v := *in.UsageTotalTokens
+		out.UsageTotalTokens = &v
+	}
+	if in.ActualDuration != nil {
+		v := *in.ActualDuration
+		out.ActualDuration = &v
+	}
 	if in.CompletedAt != nil {
 		t := *in.CompletedAt
 		out.CompletedAt = &t

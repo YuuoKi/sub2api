@@ -16,12 +16,111 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func setupAPIKeyHandler(adminSvc service.AdminService) *gin.Engine {
+// stubAPIKeyManager is an in-memory apiKeyManager implementation for handler tests.
+type stubAPIKeyManager struct {
+	keys      map[int64]*service.APIKey
+	nextID    int64
+	createErr error
+	updateErr error
+	deleteErr error
+
+	lastCreateUserID int64
+	lastCreateReq    service.CreateAPIKeyRequest
+	deletedIDs       []int64
+}
+
+func newStubAPIKeyManager(keys ...*service.APIKey) *stubAPIKeyManager {
+	m := &stubAPIKeyManager{keys: map[int64]*service.APIKey{}, nextID: 100}
+	for _, k := range keys {
+		m.keys[k.ID] = k
+	}
+	return m
+}
+
+func (m *stubAPIKeyManager) Create(_ context.Context, userID int64, req service.CreateAPIKeyRequest) (*service.APIKey, error) {
+	if m.createErr != nil {
+		return nil, m.createErr
+	}
+	m.lastCreateUserID = userID
+	m.lastCreateReq = req
+	m.nextID++
+	key := &service.APIKey{
+		ID:     m.nextID,
+		UserID: userID,
+		Key:    "sk-test-generated-key",
+		Name:   req.Name,
+		Status: service.StatusActive,
+		Quota:  req.Quota,
+	}
+	m.keys[key.ID] = key
+	return key, nil
+}
+
+func (m *stubAPIKeyManager) Update(_ context.Context, id int64, userID int64, req service.UpdateAPIKeyRequest) (*service.APIKey, error) {
+	if m.updateErr != nil {
+		return nil, m.updateErr
+	}
+	key, ok := m.keys[id]
+	if !ok {
+		return nil, service.ErrAPIKeyNotFound
+	}
+	if key.UserID != userID {
+		return nil, service.ErrInsufficientPerms
+	}
+	if req.Name != nil {
+		key.Name = *req.Name
+	}
+	if req.Status != nil {
+		key.Status = *req.Status
+	}
+	if req.Quota != nil {
+		key.Quota = *req.Quota
+	}
+	key.IPWhitelist = req.IPWhitelist
+	key.IPBlacklist = req.IPBlacklist
+	return key, nil
+}
+
+func (m *stubAPIKeyManager) Delete(_ context.Context, id int64, userID int64) error {
+	if m.deleteErr != nil {
+		return m.deleteErr
+	}
+	key, ok := m.keys[id]
+	if !ok {
+		return service.ErrAPIKeyNotFound
+	}
+	if key.UserID != userID {
+		return service.ErrInsufficientPerms
+	}
+	delete(m.keys, id)
+	m.deletedIDs = append(m.deletedIDs, id)
+	return nil
+}
+
+func (m *stubAPIKeyManager) GetByID(_ context.Context, id int64) (*service.APIKey, error) {
+	key, ok := m.keys[id]
+	if !ok {
+		return nil, service.ErrAPIKeyNotFound
+	}
+	return key, nil
+}
+
+func newAPIKeyHandlerForTest(adminSvc service.AdminService, manager apiKeyManager) *AdminAPIKeyHandler {
+	return &AdminAPIKeyHandler{adminService: adminSvc, apiKeys: manager}
+}
+
+func setupAPIKeyHandlerWithManager(adminSvc service.AdminService, manager apiKeyManager) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	h := NewAdminAPIKeyHandler(adminSvc)
+	h := newAPIKeyHandlerForTest(adminSvc, manager)
 	router.PUT("/api/v1/admin/api-keys/:id", h.UpdateGroup)
+	router.DELETE("/api/v1/admin/api-keys/:id", h.Delete)
+	router.POST("/api/v1/admin/users/:id/api-keys", h.CreateForUser)
 	return router
+}
+
+func setupAPIKeyHandler(adminSvc service.AdminService) *gin.Engine {
+	return setupAPIKeyHandlerWithManager(adminSvc, newStubAPIKeyManager())
 }
 
 func TestAdminAPIKeyHandler_UpdateGroup_InvalidID(t *testing.T) {
@@ -239,4 +338,175 @@ type failingUpdateGroupService struct {
 
 func (f *failingUpdateGroupService) AdminUpdateAPIKeyGroupID(_ context.Context, _ int64, _ *int64) (*service.AdminUpdateAPIKeyGroupIDResult, error) {
 	return nil, f.err
+}
+
+// ---- CreateForUser (admin 替员工开卡) ----
+
+func TestAdminAPIKeyHandler_CreateForUser_Success(t *testing.T) {
+	manager := newStubAPIKeyManager()
+	router := setupAPIKeyHandlerWithManager(newStubAdminService(), manager)
+
+	body := `{"name":"员工卡","quota":10.5}`
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/users/42/api-keys", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, int64(42), manager.lastCreateUserID)
+	require.Equal(t, "员工卡", manager.lastCreateReq.Name)
+	require.Equal(t, 10.5, manager.lastCreateReq.Quota)
+
+	var resp struct {
+		Code int `json:"code"`
+		Data struct {
+			ID     int64  `json:"id"`
+			UserID int64  `json:"user_id"`
+			Key    string `json:"key"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Equal(t, 0, resp.Code)
+	require.Equal(t, int64(42), resp.Data.UserID)
+	require.NotEmpty(t, resp.Data.Key)
+}
+
+func TestAdminAPIKeyHandler_CreateForUser_InvalidUserID(t *testing.T) {
+	router := setupAPIKeyHandler(newStubAdminService())
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/users/abc/api-keys", bytes.NewBufferString(`{"name":"k"}`))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	require.Contains(t, rec.Body.String(), "Invalid user ID")
+}
+
+func TestAdminAPIKeyHandler_CreateForUser_MissingName(t *testing.T) {
+	router := setupAPIKeyHandler(newStubAdminService())
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/users/42/api-keys", bytes.NewBufferString(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestAdminAPIKeyHandler_CreateForUser_UserNotFound(t *testing.T) {
+	manager := newStubAPIKeyManager()
+	manager.createErr = infraerrors.NotFound("USER_NOT_FOUND", "user not found")
+	router := setupAPIKeyHandlerWithManager(newStubAdminService(), manager)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/users/999/api-keys", bytes.NewBufferString(`{"name":"k"}`))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+// ---- Delete ----
+
+func TestAdminAPIKeyHandler_Delete_Success(t *testing.T) {
+	manager := newStubAPIKeyManager(&service.APIKey{ID: 10, UserID: 42, Key: "sk-old", Status: service.StatusActive})
+	router := setupAPIKeyHandlerWithManager(newStubAdminService(), manager)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/api-keys/10", nil)
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, []int64{10}, manager.deletedIDs)
+}
+
+func TestAdminAPIKeyHandler_Delete_NotFound(t *testing.T) {
+	router := setupAPIKeyHandler(newStubAdminService())
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/api-keys/999", nil)
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestAdminAPIKeyHandler_Delete_InvalidID(t *testing.T) {
+	router := setupAPIKeyHandler(newStubAdminService())
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/api-keys/abc", nil)
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	require.Contains(t, rec.Body.String(), "Invalid API key ID")
+}
+
+// ---- Update: name/status/quota 字段更新 ----
+
+func TestAdminAPIKeyHandler_Update_StatusAndName(t *testing.T) {
+	manager := newStubAPIKeyManager(&service.APIKey{
+		ID: 10, UserID: 42, Key: "sk-old", Name: "旧名字", Status: service.StatusActive,
+		IPWhitelist: []string{"10.0.0.1"},
+	})
+	router := setupAPIKeyHandlerWithManager(newStubAdminService(), manager)
+
+	body := `{"name":"新名字","status":"disabled"}`
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/admin/api-keys/10", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, "新名字", manager.keys[10].Name)
+	require.Equal(t, "disabled", manager.keys[10].Status)
+	// 管理员字段更新不应清空原有 IP 白名单
+	require.Equal(t, []string{"10.0.0.1"}, manager.keys[10].IPWhitelist)
+
+	var resp struct {
+		Data struct {
+			APIKey struct {
+				Name   string `json:"name"`
+				Status string `json:"status"`
+			} `json:"api_key"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Equal(t, "新名字", resp.Data.APIKey.Name)
+	require.Equal(t, "disabled", resp.Data.APIKey.Status)
+}
+
+func TestAdminAPIKeyHandler_Update_InvalidStatus(t *testing.T) {
+	router := setupAPIKeyHandler(newStubAdminService())
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/admin/api-keys/10", bytes.NewBufferString(`{"status":"bogus"}`))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestAdminAPIKeyHandler_Update_InvalidExpiresAt(t *testing.T) {
+	manager := newStubAPIKeyManager(&service.APIKey{ID: 10, UserID: 42, Key: "sk-old", Status: service.StatusActive})
+	router := setupAPIKeyHandlerWithManager(newStubAdminService(), manager)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/admin/api-keys/10", bytes.NewBufferString(`{"expires_at":"not-a-date"}`))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	require.Contains(t, rec.Body.String(), "Invalid expires_at format")
+}
+
+func TestAdminAPIKeyHandler_Update_FieldUpdateKeyNotFound(t *testing.T) {
+	router := setupAPIKeyHandler(newStubAdminService())
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/admin/api-keys/999", bytes.NewBufferString(`{"name":"x"}`))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusNotFound, rec.Code)
 }

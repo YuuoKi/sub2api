@@ -570,6 +570,24 @@ func NewSettingService(settingRepo SettingRepository, cfg *config.Config) *Setti
 	}
 }
 
+// GetUSDCNYRate returns the USD/CNY billing conversion rate. It intentionally reads
+// only the narrow setting key needed by video billing and falls back to 7.20 when
+// the setting is absent or malformed.
+func (s *SettingService) GetUSDCNYRate(ctx context.Context) float64 {
+	if s == nil || s.settingRepo == nil {
+		return DefaultUSDCNYRate
+	}
+	raw, err := s.settingRepo.GetValue(ctx, SettingKeyUSDCNYRate)
+	if err != nil {
+		return DefaultUSDCNYRate
+	}
+	rate, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
+	if err != nil || rate <= 0 || math.IsNaN(rate) || math.IsInf(rate, 0) {
+		return DefaultUSDCNYRate
+	}
+	return rate
+}
+
 // SetDefaultSubscriptionGroupReader injects an optional group reader for default subscription validation.
 func (s *SettingService) SetDefaultSubscriptionGroupReader(reader DefaultSubscriptionGroupReader) {
 	s.defaultSubGroupReader = reader
@@ -1596,6 +1614,10 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	// 默认配置
 	updates[SettingKeyDefaultConcurrency] = strconv.Itoa(settings.DefaultConcurrency)
 	updates[SettingKeyDefaultBalance] = strconv.FormatFloat(settings.DefaultBalance, 'f', 8, 64)
+	if settings.USDCNYRate <= 0 {
+		settings.USDCNYRate = DefaultUSDCNYRate
+	}
+	updates[SettingKeyUSDCNYRate] = strconv.FormatFloat(settings.USDCNYRate, 'f', 8, 64)
 	settings.AffiliateRebateRate = clampAffiliateRebateRate(settings.AffiliateRebateRate)
 	updates[SettingKeyAffiliateRebateRate] = strconv.FormatFloat(settings.AffiliateRebateRate, 'f', 8, 64)
 	if settings.AffiliateRebateFreezeHours < 0 {
@@ -2407,6 +2429,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyOIDCConnectUserInfoUsernamePath:          "",
 		SettingKeyDefaultConcurrency:                       strconv.Itoa(s.cfg.Default.UserConcurrency),
 		SettingKeyDefaultBalance:                           strconv.FormatFloat(s.cfg.Default.UserBalance, 'f', 8, 64),
+		SettingKeyUSDCNYRate:                               strconv.FormatFloat(DefaultUSDCNYRate, 'f', 2, 64),
 		SettingKeyAffiliateRebateRate:                      strconv.FormatFloat(AffiliateRebateRateDefault, 'f', 8, 64),
 		SettingKeyAffiliateRebateFreezeHours:               strconv.Itoa(AffiliateRebateFreezeHoursDefault),
 		SettingKeyAffiliateRebateDurationDays:              strconv.Itoa(AffiliateRebateDurationDaysDefault),
@@ -2565,6 +2588,11 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		result.DefaultBalance = balance
 	} else {
 		result.DefaultBalance = s.cfg.Default.UserBalance
+	}
+	if rate, err := strconv.ParseFloat(settings[SettingKeyUSDCNYRate], 64); err == nil && rate > 0 {
+		result.USDCNYRate = rate
+	} else {
+		result.USDCNYRate = DefaultUSDCNYRate
 	}
 	if rebateRate, err := strconv.ParseFloat(settings[SettingKeyAffiliateRebateRate], 64); err == nil {
 		result.AffiliateRebateRate = clampAffiliateRebateRate(rebateRate)

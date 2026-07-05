@@ -218,6 +218,18 @@ func TestValidateExternalVideoURLAllowlist(t *testing.T) {
 	}
 }
 
+func TestValidateExternalVideoURLMediaAllowlistOverridesLegacyVideoAllowlist(t *testing.T) {
+	t.Setenv("SUB2API_MEDIA_URL_ALLOWLIST", "media.example.com")
+	t.Setenv("SUB2API_VIDEO_URL_ALLOWLIST", "volces.com")
+
+	if err := validateExternalVideoURL("https://cdn.media.example.com/a.mp4"); err != nil {
+		t.Fatalf("media allowlisted host should pass: %v", err)
+	}
+	if err := validateExternalVideoURL("https://ark-content.cn-beijing.volces.com/a.mp4"); err == nil {
+		t.Fatalf("legacy video allowlist must not apply when media allowlist is set")
+	}
+}
+
 // --- B1c: PlainAPIKey never rendered by fmt / slog --------------------------
 
 func TestVideoProviderAccountRedactsPlainKey(t *testing.T) {

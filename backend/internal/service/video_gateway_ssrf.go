@@ -10,6 +10,11 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/util/urlvalidator"
 )
 
+const (
+	mediaURLAllowlistEnv       = "SUB2API_MEDIA_URL_ALLOWLIST"
+	legacyVideoURLAllowlistEnv = "SUB2API_VIDEO_URL_ALLOWLIST"
+)
+
 // validateExternalVideoURL enforces a hard SSRF/open-proxy guard on the two
 // externally-controlled URLs in the seedance path:
 //
@@ -25,7 +30,7 @@ import (
 //     loopback/link-local hosts, optional host allowlist with *.domain
 //     wildcards, port range) to the shared, tested internal/util/urlvalidator.
 //  2. The seedance smoke gate (seedanceSmokeGateBlockedReasons) REQUIRES
-//     SUB2API_VIDEO_URL_ALLOWLIST to be configured before any real call, so the
+//     SUB2API_MEDIA_URL_ALLOWLIST or legacy SUB2API_VIDEO_URL_ALLOWLIST before any real call, so the
 //     production path always runs the strict allowlist branch (fail-closed) —
 //     a domain allowlist inherently rejects decimal/hex/octal/CGNAT hosts since
 //     they cannot match a domain suffix.
@@ -81,7 +86,7 @@ func validateExternalVideoURL(rawURL string) error {
 	}
 
 	opts := urlvalidator.ValidationOptions{}
-	if allow := strings.TrimSpace(os.Getenv("SUB2API_VIDEO_URL_ALLOWLIST")); allow != "" {
+	if allow := configuredMediaURLAllowlist(); allow != "" {
 		opts.AllowedHosts = videoURLAllowlistHosts(allow)
 		opts.RequireAllowlist = true
 	}
@@ -182,8 +187,19 @@ func onlyDigitsAndDots(s string) bool {
 	return true
 }
 
+func configuredMediaURLAllowlist() string {
+	if allow := strings.TrimSpace(os.Getenv(mediaURLAllowlistEnv)); allow != "" {
+		return allow
+	}
+	return strings.TrimSpace(os.Getenv(legacyVideoURLAllowlistEnv))
+}
+
+func mediaURLAllowlistMissingReason() string {
+	return "media url allowlist (SUB2API_MEDIA_URL_ALLOWLIST or SUB2API_VIDEO_URL_ALLOWLIST) is missing"
+}
+
 // videoURLAllowlistHosts converts a comma-separated suffix list (e.g.
-// "volces.com, volccdn.com" from SUB2API_VIDEO_URL_ALLOWLIST) into urlvalidator
+// "volces.com, volccdn.com" from SUB2API_MEDIA_URL_ALLOWLIST) into urlvalidator
 // host entries that match both the apex and any subdomain — "volces.com" plus
 // "*.volces.com".
 func videoURLAllowlistHosts(allow string) []string {

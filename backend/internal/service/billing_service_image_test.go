@@ -22,6 +22,47 @@ func TestCalculateImageCost_DefaultPricing(t *testing.T) {
 	require.InDelta(t, 0.603, cost.TotalCost, 0.0001)
 }
 
+func TestCalculateImageCost_NanoBanana2OfficialFallbackTiers(t *testing.T) {
+	svc := &BillingService{} // pricingService 为 nil，NB2 仍应走官方四档兜底价
+
+	tests := []struct {
+		name string
+		size string
+		want float64
+	}{
+		{name: "0.5K", size: "0.5K", want: 0.045},
+		{name: "512px alias", size: "512px", want: 0.045},
+		{name: "1K", size: "1K", want: 0.067},
+		{name: "1024 square alias", size: "1024x1024", want: 0.067},
+		{name: "2K", size: "2K", want: 0.101},
+		{name: "4K", size: "4K", want: 0.151},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cost := svc.CalculateImageCost("gemini-3.1-flash-image-preview", tc.size, 1, nil, 1.0)
+			require.InDelta(t, tc.want, cost.TotalCost, 1e-12)
+			require.InDelta(t, tc.want, cost.ActualCost, 1e-12)
+		})
+	}
+}
+
+func TestCalculateImageCost_UsesPricingServiceImagePriceBySize(t *testing.T) {
+	pricingSvc := &PricingService{
+		pricingData: map[string]*LiteLLMModelPricing{
+			"custom-image-model": {
+				OutputCostPerImage:       0.10,
+				OutputCostPerImageBySize: map[string]float64{"0.5K": 0.03, "1K": 0.06, "2K": 0.09, "4K": 0.12},
+			},
+		},
+	}
+	svc := &BillingService{pricingService: pricingSvc}
+
+	cost := svc.CalculateImageCost("custom-image-model", "2048px", 2, nil, 1.0)
+	require.InDelta(t, 0.18, cost.TotalCost, 1e-12)
+	require.InDelta(t, 0.18, cost.ActualCost, 1e-12)
+}
+
 // TestCalculateImageCost_GroupCustomPricing 测试分组自定义价格
 func TestCalculateImageCost_GroupCustomPricing(t *testing.T) {
 	svc := &BillingService{}

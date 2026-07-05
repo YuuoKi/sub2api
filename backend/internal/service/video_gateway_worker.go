@@ -324,6 +324,7 @@ func (s *VideoGatewayService) terminateVideoTask(ctx context.Context, task *Vide
 		Message:     message,
 		Payload:     payload,
 	})
+	s.applyVideoBillingMetadata(task)
 	_ = s.repo.InsertUsageLog(ctx, task)
 	return nil
 }
@@ -377,6 +378,20 @@ func (s *VideoGatewayService) pollTask(ctx context.Context, adapter VideoAdapter
 	if result.ResultURL != "" {
 		task.ResultURL = result.ResultURL
 	}
+	if result.UsageTotalTokens != nil {
+		v := *result.UsageTotalTokens
+		task.UsageTotalTokens = &v
+	}
+	if result.ActualResolution != "" {
+		task.ActualResolution = result.ActualResolution
+	}
+	if result.ActualDuration != nil {
+		v := *result.ActualDuration
+		task.ActualDuration = &v
+	}
+	if result.LastFrameURL != "" {
+		task.LastFrameURL = result.LastFrameURL
+	}
 	if result.ErrorMessage != "" {
 		task.ErrorMessage = result.ErrorMessage
 	}
@@ -384,6 +399,13 @@ func (s *VideoGatewayService) pollTask(ctx context.Context, adapter VideoAdapter
 		task.CostEstimate = result.CostEstimate
 	}
 	if IsTerminalVideoStatus(status) {
+		if status == VideoStatusSucceeded {
+			if actualCost := s.calculateVideoActualCost(task); actualCost > 0 {
+				task.CostEstimate = actualCost
+			}
+		} else {
+			task.CostEstimate = 0
+		}
 		now := time.Now().UTC()
 		task.CompletedAt = &now
 	}
@@ -407,6 +429,7 @@ func (s *VideoGatewayService) pollTask(ctx context.Context, adapter VideoAdapter
 		return err
 	}
 	if IsTerminalVideoStatus(status) {
+		s.applyVideoBillingMetadata(task)
 		_ = s.repo.InsertUsageLog(ctx, task)
 		// VA1 billing: deduct only on a delivered (succeeded) generation.
 		if status == VideoStatusSucceeded {
@@ -433,6 +456,7 @@ func (s *VideoGatewayService) failTask(ctx context.Context, task *VideoTask, mes
 	}); err != nil {
 		return err
 	}
+	s.applyVideoBillingMetadata(task)
 	_ = s.repo.InsertUsageLog(ctx, task)
 	return nil
 }

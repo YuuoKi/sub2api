@@ -42,6 +42,22 @@ func TestAdminService_CreateUser_Success(t *testing.T) {
 	require.Equal(t, user, repo.created[0])
 }
 
+func TestAdminService_CreateUser_ToolMemberPrefixesNotes(t *testing.T) {
+	repo := &userRepoStub{nextID: 11}
+	svc := &adminServiceImpl{userRepo: repo}
+
+	user, err := svc.CreateUser(context.Background(), &CreateUserInput{
+		Email:      "n8n-runner@test.com",
+		Password:   "strong-pass",
+		Username:   "n8n runner",
+		Notes:      "nightly storyboard flow",
+		MemberType: "tool",
+	})
+	require.NoError(t, err)
+	require.Equal(t, "[工具] nightly storyboard flow", user.Notes)
+	require.Equal(t, user.Notes, repo.created[0].Notes)
+}
+
 func TestAdminService_CreateUser_EmailExists(t *testing.T) {
 	repo := &userRepoStub{createErr: ErrEmailExists}
 	svc := &adminServiceImpl{userRepo: repo}

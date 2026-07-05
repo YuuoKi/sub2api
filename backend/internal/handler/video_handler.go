@@ -22,61 +22,85 @@ func NewVideoHandler(video *service.VideoGatewayService) *VideoHandler {
 }
 
 type videoTaskCreateRequest struct {
-	ProviderAccountID int64  `json:"provider_account_id" binding:"omitempty,min=0"`
-	TaskType          string `json:"task_type" binding:"required,oneof=text_to_video image_to_video reference_to_video"`
-	Model             string `json:"model" binding:"omitempty,max=200"`
-	Prompt            string `json:"prompt" binding:"required,max=8000"`
-	NegativePrompt    string `json:"negative_prompt" binding:"omitempty,max=4000"`
-	ReferenceImageURL string `json:"reference_image_url" binding:"omitempty,max=1000"`
-	ReferenceVideoURL string `json:"reference_video_url" binding:"omitempty,max=1000"`
-	AspectRatio       string `json:"aspect_ratio" binding:"omitempty,max=20"`
-	Duration          int    `json:"duration" binding:"omitempty,min=1,max=60"`
-	Resolution        string `json:"resolution" binding:"omitempty,max=20"`
+	ProviderAccountID int64                          `json:"provider_account_id" binding:"omitempty,min=0"`
+	TaskType          string                         `json:"task_type" binding:"required,oneof=text_to_video image_to_video reference_to_video"`
+	Model             string                         `json:"model" binding:"omitempty,max=200"`
+	Prompt            string                         `json:"prompt" binding:"required,max=8000"`
+	NegativePrompt    string                         `json:"negative_prompt" binding:"omitempty,max=4000"`
+	ReferenceImageURL string                         `json:"reference_image_url" binding:"omitempty,max=1000"`
+	ReferenceVideoURL string                         `json:"reference_video_url" binding:"omitempty,max=1000"`
+	Content           []service.VideoTaskContentItem `json:"content" binding:"omitempty,dive"`
+	AspectRatio       string                         `json:"aspect_ratio" binding:"omitempty,max=20"`
+	Duration          int                            `json:"duration" binding:"omitempty"`
+	Resolution        string                         `json:"resolution" binding:"omitempty,max=20"`
+	GenerateAudio     *bool                          `json:"generate_audio" binding:"omitempty"`
+	Watermark         *bool                          `json:"watermark" binding:"omitempty"`
+	CameraFixed       *bool                          `json:"camera_fixed" binding:"omitempty"`
+	ReturnLastFrame   *bool                          `json:"return_last_frame" binding:"omitempty"`
 }
 
 type apiKeyVideoTaskCreateRequest struct {
-	Provider          string `json:"provider" binding:"omitempty,oneof=mock seedance kling"`
-	TrialMode         string `json:"trial_mode" binding:"omitempty,oneof=tiny_real"`
-	TaskType          string `json:"task_type" binding:"required,oneof=text_to_video image_to_video reference_to_video"`
-	Model             string `json:"model" binding:"omitempty,max=200"`
-	Prompt            string `json:"prompt" binding:"required,max=8000"`
-	NegativePrompt    string `json:"negative_prompt" binding:"omitempty,max=4000"`
-	ReferenceImageURL string `json:"reference_image_url" binding:"omitempty,max=1000"`
-	ReferenceVideoURL string `json:"reference_video_url" binding:"omitempty,max=1000"`
-	AspectRatio       string `json:"aspect_ratio" binding:"omitempty,max=20"`
-	Duration          int    `json:"duration" binding:"omitempty,min=1,max=60"`
-	Resolution        string `json:"resolution" binding:"omitempty,max=20"`
+	Provider          string                         `json:"provider" binding:"omitempty,oneof=mock seedance kling"`
+	TrialMode         string                         `json:"trial_mode" binding:"omitempty,oneof=tiny_real"`
+	TaskType          string                         `json:"task_type" binding:"required,oneof=text_to_video image_to_video reference_to_video"`
+	Model             string                         `json:"model" binding:"omitempty,max=200"`
+	Prompt            string                         `json:"prompt" binding:"required,max=8000"`
+	NegativePrompt    string                         `json:"negative_prompt" binding:"omitempty,max=4000"`
+	ReferenceImageURL string                         `json:"reference_image_url" binding:"omitempty,max=1000"`
+	ReferenceVideoURL string                         `json:"reference_video_url" binding:"omitempty,max=1000"`
+	Content           []service.VideoTaskContentItem `json:"content" binding:"omitempty,dive"`
+	AspectRatio       string                         `json:"aspect_ratio" binding:"omitempty,max=20"`
+	Duration          int                            `json:"duration" binding:"omitempty"`
+	Resolution        string                         `json:"resolution" binding:"omitempty,max=20"`
+	GenerateAudio     *bool                          `json:"generate_audio" binding:"omitempty"`
+	Watermark         *bool                          `json:"watermark" binding:"omitempty"`
+	CameraFixed       *bool                          `json:"camera_fixed" binding:"omitempty"`
+	ReturnLastFrame   *bool                          `json:"return_last_frame" binding:"omitempty"`
 }
 
 type videoTaskResponse struct {
-	ID                  int64                    `json:"id"`
-	ProviderAccountID   int64                    `json:"provider_account_id"`
-	ProviderAccountName string                   `json:"provider_account_name"`
-	Provider            string                   `json:"provider"`
-	Model               string                   `json:"model"`
-	TaskType            string                   `json:"task_type"`
-	Prompt              string                   `json:"prompt"`
-	NegativePrompt      string                   `json:"negative_prompt"`
-	ReferenceImageURL   string                   `json:"reference_image_url"`
-	ReferenceVideoURL   string                   `json:"reference_video_url"`
-	AspectRatio         string                   `json:"aspect_ratio"`
-	Duration            int                      `json:"duration"`
-	Resolution          string                   `json:"resolution"`
-	Status              string                   `json:"status"`
-	UpstreamTaskID      string                   `json:"upstream_task_id"`
-	ResultURL           string                   `json:"result_url"`
-	ErrorMessage        string                   `json:"error_message"`
-	CostEstimate        float64                  `json:"cost_estimate"`
-	CreatedBy           int64                    `json:"created_by"`
-	CreatedByEmail      string                   `json:"created_by_email"`
-	CreatedByName       string                   `json:"created_by_name"`
-	CreatedByLabel      string                   `json:"created_by_label"`
-	RoutingStrategy     string                   `json:"routing_strategy"`
-	RoutingReason       string                   `json:"routing_reason"`
-	CreatedAt           string                   `json:"created_at"`
-	UpdatedAt           string                   `json:"updated_at"`
-	CompletedAt         *string                  `json:"completed_at"`
-	Events              []videoTaskEventResponse `json:"events,omitempty"`
+	ID                  int64                          `json:"id"`
+	ProviderAccountID   int64                          `json:"provider_account_id"`
+	ProviderAccountName string                         `json:"provider_account_name"`
+	Provider            string                         `json:"provider"`
+	Model               string                         `json:"model"`
+	TaskType            string                         `json:"task_type"`
+	Prompt              string                         `json:"prompt"`
+	NegativePrompt      string                         `json:"negative_prompt"`
+	ReferenceImageURL   string                         `json:"reference_image_url"`
+	ReferenceVideoURL   string                         `json:"reference_video_url"`
+	Content             []service.VideoTaskContentItem `json:"content,omitempty"`
+	HasVideoInput       bool                           `json:"has_video_input"`
+	AspectRatio         string                         `json:"aspect_ratio"`
+	Duration            int                            `json:"duration"`
+	Resolution          string                         `json:"resolution"`
+	GenerateAudio       *bool                          `json:"generate_audio,omitempty"`
+	Watermark           *bool                          `json:"watermark,omitempty"`
+	CameraFixed         *bool                          `json:"camera_fixed,omitempty"`
+	ReturnLastFrame     *bool                          `json:"return_last_frame,omitempty"`
+	Status              string                         `json:"status"`
+	UpstreamTaskID      string                         `json:"upstream_task_id"`
+	ResultURL           string                         `json:"result_url"`
+	Usage               videoTaskUsageResponse         `json:"usage"`
+	ActualResolution    string                         `json:"actual_resolution"`
+	ActualDuration      *int                           `json:"actual_duration"`
+	LastFrameURL        string                         `json:"last_frame_url"`
+	ErrorMessage        string                         `json:"error_message"`
+	CostEstimate        float64                        `json:"cost_estimate"`
+	CreatedBy           int64                          `json:"created_by"`
+	CreatedByEmail      string                         `json:"created_by_email"`
+	CreatedByName       string                         `json:"created_by_name"`
+	CreatedByLabel      string                         `json:"created_by_label"`
+	RoutingStrategy     string                         `json:"routing_strategy"`
+	RoutingReason       string                         `json:"routing_reason"`
+	CreatedAt           string                         `json:"created_at"`
+	UpdatedAt           string                         `json:"updated_at"`
+	CompletedAt         *string                        `json:"completed_at"`
+	Events              []videoTaskEventResponse       `json:"events,omitempty"`
+}
+
+type videoTaskUsageResponse struct {
+	TotalTokens int64 `json:"total_tokens"`
 }
 
 type apiKeyVideoTaskResponse struct {
@@ -84,7 +108,6 @@ type apiKeyVideoTaskResponse struct {
 	MockOnly                  bool   `json:"mock_only"`
 	ProviderBoundary          string `json:"provider_boundary"`
 	RealProviderDispatchCount int    `json:"real_provider_dispatch_count"`
-	ResultURLPascal           string `json:"ResultURL,omitempty"`
 	TrialMode                 string `json:"trial_mode,omitempty"`
 	BlockedReason             string `json:"blocked_reason,omitempty"`
 	TrialGateResult           string `json:"trial_gate_result,omitempty"`
@@ -196,9 +219,14 @@ func (h *VideoHandler) CreateTask(c *gin.Context) {
 		NegativePrompt:           req.NegativePrompt,
 		ReferenceImageURL:        req.ReferenceImageURL,
 		ReferenceVideoURL:        req.ReferenceVideoURL,
+		Content:                  req.Content,
 		AspectRatio:              req.AspectRatio,
 		Duration:                 req.Duration,
 		Resolution:               req.Resolution,
+		GenerateAudio:            req.GenerateAudio,
+		Watermark:                req.Watermark,
+		CameraFixed:              req.CameraFixed,
+		ReturnLastFrame:          req.ReturnLastFrame,
 		CreatedBy:                subject.UserID,
 		EnforceRealProviderTrial: true,
 	}
@@ -265,9 +293,14 @@ func (h *VideoHandler) CreateAPIKeyVideoTask(c *gin.Context) {
 			NegativePrompt:    req.NegativePrompt,
 			ReferenceImageURL: req.ReferenceImageURL,
 			ReferenceVideoURL: req.ReferenceVideoURL,
+			Content:           req.Content,
 			AspectRatio:       req.AspectRatio,
 			Duration:          req.Duration,
 			Resolution:        req.Resolution,
+			GenerateAudio:     req.GenerateAudio,
+			Watermark:         req.Watermark,
+			CameraFixed:       req.CameraFixed,
+			ReturnLastFrame:   req.ReturnLastFrame,
 			CreatedBy:         subject.UserID,
 		})
 	} else if provider == service.VideoProviderSeedance && req.TrialMode == "tiny_real" {
@@ -278,9 +311,32 @@ func (h *VideoHandler) CreateAPIKeyVideoTask(c *gin.Context) {
 			NegativePrompt:    req.NegativePrompt,
 			ReferenceImageURL: req.ReferenceImageURL,
 			ReferenceVideoURL: req.ReferenceVideoURL,
+			Content:           req.Content,
 			AspectRatio:       req.AspectRatio,
 			Duration:          req.Duration,
 			Resolution:        req.Resolution,
+			GenerateAudio:     req.GenerateAudio,
+			Watermark:         req.Watermark,
+			CameraFixed:       req.CameraFixed,
+			ReturnLastFrame:   req.ReturnLastFrame,
+			CreatedBy:         subject.UserID,
+		})
+	} else if provider == service.VideoProviderSeedance {
+		task, err = h.video.CreateAPIKeySeedanceProductionTask(c.Request.Context(), req.Provider, service.VideoTaskCreateParams{
+			TaskType:          req.TaskType,
+			Model:             req.Model,
+			Prompt:            req.Prompt,
+			NegativePrompt:    req.NegativePrompt,
+			ReferenceImageURL: req.ReferenceImageURL,
+			ReferenceVideoURL: req.ReferenceVideoURL,
+			Content:           req.Content,
+			AspectRatio:       req.AspectRatio,
+			Duration:          req.Duration,
+			Resolution:        req.Resolution,
+			GenerateAudio:     req.GenerateAudio,
+			Watermark:         req.Watermark,
+			CameraFixed:       req.CameraFixed,
+			ReturnLastFrame:   req.ReturnLastFrame,
 			CreatedBy:         subject.UserID,
 		})
 	} else {
@@ -469,6 +525,15 @@ func videoTaskToResponse(task *service.VideoTask, events []*service.VideoTaskEve
 	}
 	routingStrategy := videoTaskEventPayloadString(events, "routed", "strategy")
 	routingReason := videoTaskEventPayloadString(events, "routed", "reason")
+	totalTokens := int64(0)
+	if task.UsageTotalTokens != nil {
+		totalTokens = *task.UsageTotalTokens
+	}
+	var actualDuration *int
+	if task.ActualDuration != nil {
+		v := *task.ActualDuration
+		actualDuration = &v
+	}
 	return videoTaskResponse{
 		ID:                  task.ID,
 		ProviderAccountID:   task.ProviderAccountID,
@@ -480,12 +545,22 @@ func videoTaskToResponse(task *service.VideoTask, events []*service.VideoTaskEve
 		NegativePrompt:      task.NegativePrompt,
 		ReferenceImageURL:   task.ReferenceImageURL,
 		ReferenceVideoURL:   task.ReferenceVideoURL,
+		Content:             task.Content,
+		HasVideoInput:       task.HasVideoInput,
 		AspectRatio:         task.AspectRatio,
 		Duration:            task.Duration,
 		Resolution:          task.Resolution,
+		GenerateAudio:       task.GenerateAudio,
+		Watermark:           task.Watermark,
+		CameraFixed:         task.CameraFixed,
+		ReturnLastFrame:     task.ReturnLastFrame,
 		Status:              task.Status,
 		UpstreamTaskID:      task.UpstreamTaskID,
 		ResultURL:           task.ResultURL,
+		Usage:               videoTaskUsageResponse{TotalTokens: totalTokens},
+		ActualResolution:    task.ActualResolution,
+		ActualDuration:      actualDuration,
+		LastFrameURL:        task.LastFrameURL,
 		ErrorMessage:        task.ErrorMessage,
 		CostEstimate:        task.CostEstimate,
 		CreatedBy:           task.CreatedBy,
@@ -512,10 +587,6 @@ func apiKeyVideoTaskToResponse(task *service.VideoTask, events []*service.VideoT
 	if task != nil && task.Provider == service.VideoProviderSeedance {
 		boundary = "api-key-video-seedance-tiny-trial"
 	}
-	resultURLPascal := ""
-	if task != nil {
-		resultURLPascal = task.ResultURL
-	}
 
 	for _, ev := range events {
 		if task != nil && task.Provider != service.VideoProviderMock && ev != nil && ev.EventType == service.VideoStatusSubmitted {
@@ -539,7 +610,6 @@ func apiKeyVideoTaskToResponse(task *service.VideoTask, events []*service.VideoT
 		MockOnly:                  mockOnly,
 		ProviderBoundary:          boundary,
 		RealProviderDispatchCount: realDispatchCount,
-		ResultURLPascal:           resultURLPascal,
 		TrialMode:                 trialMode,
 		BlockedReason:             blockedReason,
 		TrialGateResult:           trialGateResult,

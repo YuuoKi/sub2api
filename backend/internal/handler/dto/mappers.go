@@ -68,6 +68,7 @@ func UserFromServiceAdmin(u *service.User) *AdminUser {
 	return &AdminUser{
 		User:       *base,
 		Notes:      u.Notes,
+		MemberType: service.UserMemberTypeFromNotes(u.Notes),
 		LastUsedAt: u.LastUsedAt,
 		GroupRates: u.GroupRates,
 	}
@@ -592,6 +593,9 @@ func usageLogFromServiceUser(l *service.UsageLog) UsageLog {
 		TotalCost:             l.TotalCost,
 		ActualCost:            l.ActualCost,
 		RateMultiplier:        l.RateMultiplier,
+		Currency:              l.Currency,
+		PricingSource:         l.PricingSource,
+		PricingVersion:        l.PricingVersion,
 		BillingType:           l.BillingType,
 		RequestType:           requestType.String(),
 		Stream:                stream,

@@ -29,6 +29,7 @@ type memoryVideoGatewayRepo struct {
 	tasks          map[int64]*VideoTask
 	events         []*VideoTaskEvent
 	usage          []*VideoTask
+	balanceClaims  map[int64]time.Time
 	dailyTrials    map[string]struct{}
 }
 
@@ -39,6 +40,7 @@ func newMemoryVideoGatewayRepo() *memoryVideoGatewayRepo {
 		nextEventID:    1,
 		providers:      make(map[int64]*VideoProviderAccount),
 		tasks:          make(map[int64]*VideoTask),
+		balanceClaims:  make(map[int64]time.Time),
 		dailyTrials:    make(map[string]struct{}),
 	}
 }
@@ -196,6 +198,20 @@ func (r *memoryVideoGatewayRepo) InsertUsageLog(_ context.Context, task *VideoTa
 	return nil
 }
 
+func (r *memoryVideoGatewayRepo) ClaimVideoBalanceCharge(_ context.Context, taskID int64) (bool, error) {
+	if _, ok := r.balanceClaims[taskID]; ok {
+		return false, nil
+	}
+	task, ok := r.tasks[taskID]
+	if !ok {
+		return false, nil
+	}
+	r.balanceClaims[taskID] = time.Now().UTC()
+	updated := cloneVideoTask(task)
+	r.tasks[taskID] = updated
+	return true, nil
+}
+
 func (r *memoryVideoGatewayRepo) CountTasksSince(_ context.Context, _ time.Time) (map[string]int64, error) {
 	return map[string]int64{}, nil
 }
@@ -298,6 +314,64 @@ func TestVideoGatewayMockWorkerSuccessAndFailure(t *testing.T) {
 	}
 	if len(repo.usage) != 2 {
 		t.Fatalf("expected usage logs for terminal tasks, got %d", len(repo.usage))
+	}
+}
+
+func TestVideoGatewayWorkerPersistsPollResponseDetails(t *testing.T) {
+	ctx := context.Background()
+	repo := newMemoryVideoGatewayRepo()
+	providerID := repo.seedMockProvider()
+	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, nil)
+	tokens := int64(987654)
+	actualDuration := 12
+	svc.adapters[VideoProviderMock] = &fakeVideoAdapter{
+		pollsUntilSucceed: 1,
+		pollResult: &VideoAdapterResult{
+			Status:           VideoStatusSucceeded,
+			ResultURL:        "https://mock.sub2api.local/video/fake.mp4",
+			UsageTotalTokens: &tokens,
+			ActualResolution: "1080p",
+			ActualDuration:   &actualDuration,
+			LastFrameURL:     "https://mock.sub2api.local/video/last.png",
+		},
+	}
+
+	task, err := svc.CreateTask(ctx, VideoTaskCreateParams{
+		ProviderAccountID: providerID,
+		TaskType:          VideoTaskTypeTextToVideo,
+		Prompt:            "persist poll response details",
+		CreatedBy:         7,
+	})
+	if err != nil {
+		t.Fatalf("create task: %v", err)
+	}
+	for range 2 {
+		if err := svc.ProcessRunnableTasks(ctx, 10, time.Minute); err != nil {
+			t.Fatalf("process task: %v", err)
+		}
+	}
+
+	task, _, err = svc.GetTask(ctx, task.ID, 7, false)
+	if err != nil {
+		t.Fatalf("get task: %v", err)
+	}
+	if task.UsageTotalTokens == nil || *task.UsageTotalTokens != tokens {
+		t.Fatalf("usage_total_tokens = %+v, want %d", task.UsageTotalTokens, tokens)
+	}
+	if task.ActualResolution != "1080p" {
+		t.Fatalf("actual_resolution = %q", task.ActualResolution)
+	}
+	if task.ActualDuration == nil || *task.ActualDuration != actualDuration {
+		t.Fatalf("actual_duration = %+v, want %d", task.ActualDuration, actualDuration)
+	}
+	if task.LastFrameURL != "https://mock.sub2api.local/video/last.png" {
+		t.Fatalf("last_frame_url = %q", task.LastFrameURL)
+	}
+	if len(repo.usage) != 1 {
+		t.Fatalf("expected one usage log, got %d", len(repo.usage))
+	}
+	if repo.usage[0].UsageTotalTokens == nil || *repo.usage[0].UsageTotalTokens != tokens {
+		t.Fatalf("usage log tokens = %+v", repo.usage[0].UsageTotalTokens)
 	}
 }
 
@@ -883,6 +957,33 @@ func cloneVideoTask(in *VideoTask) *VideoTask {
 		return nil
 	}
 	out := *in
+	if in.Content != nil {
+		out.Content = append([]VideoTaskContentItem(nil), in.Content...)
+	}
+	if in.GenerateAudio != nil {
+		v := *in.GenerateAudio
+		out.GenerateAudio = &v
+	}
+	if in.Watermark != nil {
+		v := *in.Watermark
+		out.Watermark = &v
+	}
+	if in.CameraFixed != nil {
+		v := *in.CameraFixed
+		out.CameraFixed = &v
+	}
+	if in.ReturnLastFrame != nil {
+		v := *in.ReturnLastFrame
+		out.ReturnLastFrame = &v
+	}
+	if in.UsageTotalTokens != nil {
+		v := *in.UsageTotalTokens
+		out.UsageTotalTokens = &v
+	}
+	if in.ActualDuration != nil {
+		v := *in.ActualDuration
+		out.ActualDuration = &v
+	}
 	if in.CompletedAt != nil {
 		completed := *in.CompletedAt
 		out.CompletedAt = &completed

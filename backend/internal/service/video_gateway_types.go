@@ -115,14 +115,27 @@ type VideoTask struct {
 	NegativePrompt      string
 	ReferenceImageURL   string
 	ReferenceVideoURL   string
+	Content             []VideoTaskContentItem
+	HasVideoInput       bool
 	AspectRatio         string
 	Duration            int
 	Resolution          string
+	GenerateAudio       *bool
+	Watermark           *bool
+	CameraFixed         *bool
+	ReturnLastFrame     *bool
 	Status              string
 	UpstreamTaskID      string
 	ResultURL           string
+	UsageTotalTokens    *int64
+	ActualResolution    string
+	ActualDuration      *int
+	LastFrameURL        string
 	ErrorMessage        string
 	CostEstimate        float64
+	Currency            string
+	PricingSource       string
+	PricingVersion      string
 	PollCount           int
 	CreatedBy           int64
 	CreatedByEmail      string
@@ -130,6 +143,13 @@ type VideoTask struct {
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
 	CompletedAt         *time.Time
+}
+
+type VideoTaskContentItem struct {
+	Type string `json:"type"`
+	Role string `json:"role,omitempty"`
+	URL  string `json:"url,omitempty"`
+	Text string `json:"text,omitempty"`
 }
 
 type VideoTaskEvent struct {
@@ -237,9 +257,14 @@ type VideoTaskCreateParams struct {
 	NegativePrompt           string
 	ReferenceImageURL        string
 	ReferenceVideoURL        string
+	Content                  []VideoTaskContentItem
 	AspectRatio              string
 	Duration                 int
 	Resolution               string
+	GenerateAudio            *bool
+	Watermark                *bool
+	CameraFixed              *bool
+	ReturnLastFrame          *bool
 	CreatedBy                int64
 	EnforceRealProviderTrial bool // JWT user paths: seedance requires daily trial + smoke gate
 	SafeDemoOnly             bool // Drama safe demo: route only to mock provider
@@ -271,6 +296,7 @@ type VideoGatewayRepository interface {
 	AddTaskEvent(ctx context.Context, event *VideoTaskEvent) error
 	ListTaskEvents(ctx context.Context, taskID int64, limit int) ([]*VideoTaskEvent, error)
 	InsertUsageLog(ctx context.Context, task *VideoTask) error
+	ClaimVideoBalanceCharge(ctx context.Context, taskID int64) (bool, error)
 
 	CountTasksSince(ctx context.Context, since time.Time) (map[string]int64, error)
 	CountProviderTasksSince(ctx context.Context, since time.Time) (map[string]map[string]int64, error)

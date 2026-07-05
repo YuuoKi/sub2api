@@ -108,6 +108,9 @@ type CostBreakdown struct {
 	TotalCost         float64
 	ActualCost        float64 // 应用倍率后的实际费用
 	BillingMode       string  // 计费模式（"token"/"per_request"/"image"），由 CalculateCostUnified 填充
+	Currency          string
+	PricingSource     string
+	PricingVersion    string
 }
 
 // ErrModelPricingUnavailable indicates that none of the configured pricing
@@ -167,10 +170,10 @@ func (s *BillingService) initFallbackPricing() {
 
 	// Claude 3.5 Haiku
 	s.fallbackPrices["claude-3-5-haiku"] = &ModelPricing{
-		InputPricePerToken:         1e-6,    // $1 per MTok
-		OutputPricePerToken:        5e-6,    // $5 per MTok
-		CacheCreationPricePerToken: 1.25e-6, // $1.25 per MTok
-		CacheReadPricePerToken:     0.1e-6,  // $0.10 per MTok
+		InputPricePerToken:         0.8e-6,  // $0.80 per MTok
+		OutputPricePerToken:        4e-6,    // $4 per MTok
+		CacheCreationPricePerToken: 1.0e-6,  // $1.00 per MTok
+		CacheReadPricePerToken:     0.08e-6, // $0.08 per MTok
 		SupportsCacheBreakdown:     false,
 	}
 
@@ -197,6 +200,29 @@ func (s *BillingService) initFallbackPricing() {
 
 	// Claude 4.7 Opus (暂与4.6同价，待官方定价更新)
 	s.fallbackPrices["claude-opus-4.7"] = s.fallbackPrices["claude-opus-4.6"]
+
+	// Claude 4.8 Opus (与 4.5 同价)
+	s.fallbackPrices["claude-opus-4.8"] = s.fallbackPrices["claude-opus-4.5"]
+
+	// Claude Fable 5 / Mythos 5
+	s.fallbackPrices["claude-fable-5"] = &ModelPricing{
+		InputPricePerToken:         10e-6,   // $10 per MTok
+		OutputPricePerToken:        50e-6,   // $50 per MTok
+		CacheCreationPricePerToken: 12.5e-6, // $12.50 per MTok
+		CacheReadPricePerToken:     1.0e-6,  // $1 per MTok
+		SupportsCacheBreakdown:     false,
+	}
+	s.fallbackPrices["claude-mythos-5"] = s.fallbackPrices["claude-fable-5"]
+
+	// Claude Sonnet 5. Official 2026-08-31 and earlier price is $2/$10;
+	// fallback uses the 2026-09-01 standard price required by the billing task.
+	s.fallbackPrices["claude-sonnet-5"] = &ModelPricing{
+		InputPricePerToken:         3e-6,    // $3 per MTok
+		OutputPricePerToken:        15e-6,   // $15 per MTok
+		CacheCreationPricePerToken: 3.75e-6, // $3.75 per MTok
+		CacheReadPricePerToken:     0.3e-6,  // $0.30 per MTok
+		SupportsCacheBreakdown:     false,
+	}
 
 	// Gemini 3.1 Pro
 	s.fallbackPrices["gemini-3.1-pro"] = &ModelPricing{
@@ -265,7 +291,16 @@ func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 	modelLower := strings.ToLower(model)
 
 	// 按模型系列匹配
+	if strings.Contains(modelLower, "fable") {
+		return s.fallbackPrices["claude-fable-5"]
+	}
+	if strings.Contains(modelLower, "mythos") {
+		return s.fallbackPrices["claude-mythos-5"]
+	}
 	if strings.Contains(modelLower, "opus") {
+		if strings.Contains(modelLower, "4.8") || strings.Contains(modelLower, "4-8") {
+			return s.fallbackPrices["claude-opus-4.8"]
+		}
 		if strings.Contains(modelLower, "4.7") || strings.Contains(modelLower, "4-7") {
 			return s.fallbackPrices["claude-opus-4.7"]
 		}
@@ -278,6 +313,9 @@ func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 		return s.fallbackPrices["claude-3-opus"]
 	}
 	if strings.Contains(modelLower, "sonnet") {
+		if strings.Contains(modelLower, "5") {
+			return s.fallbackPrices["claude-sonnet-5"]
+		}
 		if strings.Contains(modelLower, "4") && !strings.Contains(modelLower, "3") {
 			return s.fallbackPrices["claude-sonnet-4"]
 		}
@@ -320,6 +358,11 @@ func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 
 // GetModelPricing 获取模型价格配置
 func (s *BillingService) GetModelPricing(model string) (*ModelPricing, error) {
+	pricing, _, err := s.getModelPricingWithSource(model)
+	return pricing, err
+}
+
+func (s *BillingService) getModelPricingWithSource(model string) (*ModelPricing, string, error) {
 	// 标准化模型名称（转小写）
 	model = strings.ToLower(model)
 
@@ -348,7 +391,7 @@ func (s *BillingService) GetModelPricing(model string) (*ModelPricing, error) {
 				LongContextInputMultiplier:     litellmPricing.LongContextInputCostMultiplier,
 				LongContextOutputMultiplier:    litellmPricing.LongContextOutputCostMultiplier,
 				ImageOutputPricePerToken:       litellmPricing.OutputCostPerImageToken,
-			}), nil
+			}), PricingSourceLiteLLM, nil
 		}
 	}
 
@@ -356,10 +399,10 @@ func (s *BillingService) GetModelPricing(model string) (*ModelPricing, error) {
 	fallback := s.getFallbackPricing(model)
 	if fallback != nil {
 		log.Printf("[Billing] Using fallback pricing for model: %s", model)
-		return s.applyModelSpecificPricingPolicy(model, fallback), nil
+		return s.applyModelSpecificPricingPolicy(model, fallback), PricingSourceFallback, nil
 	}
 
-	return nil, fmt.Errorf("%w for model: %s", ErrModelPricingUnavailable, model)
+	return nil, PricingSourceFallback, fmt.Errorf("%w for model: %s", ErrModelPricingUnavailable, model)
 }
 
 // GetModelPricingWithChannel 获取模型定价，渠道配置的价格覆盖默认值
@@ -446,6 +489,7 @@ func (s *BillingService) CalculateCostUnified(input CostInput) (*CostBreakdown, 
 		if breakdown.BillingMode == "" {
 			breakdown.BillingMode = string(BillingModeToken)
 		}
+		ApplyCostBillingMetadata(breakdown, BillingCurrencyUSD, resolved.Source, "")
 	}
 	return breakdown, err
 }
@@ -598,18 +642,20 @@ func (s *BillingService) CalculateCostWithServiceTier(model string, tokens Usage
 
 func (s *BillingService) calculateCostInternal(model string, tokens UsageTokens, rateMultiplier float64, serviceTier string, channelPricing *ChannelModelPricing) (*CostBreakdown, error) {
 	var pricing *ModelPricing
+	var source string
 	var err error
 	if channelPricing != nil {
 		pricing, err = s.GetModelPricingWithChannel(model, channelPricing)
+		source = PricingSourceChannel
 	} else {
-		pricing, err = s.GetModelPricing(model)
+		pricing, source, err = s.getModelPricingWithSource(model)
 	}
 	if err != nil {
 		return nil, err
 	}
 
 	// 旧路径始终检查长上下文定价（无区间定价概念）
-	return s.computeTokenBreakdown(pricing, tokens, rateMultiplier, serviceTier, true), nil
+	return ApplyCostBillingMetadata(s.computeTokenBreakdown(pricing, tokens, rateMultiplier, serviceTier, true), BillingCurrencyUSD, source, ""), nil
 }
 
 func (s *BillingService) applyModelSpecificPricingPolicy(model string, pricing *ModelPricing) *ModelPricing {
@@ -726,7 +772,7 @@ func (s *BillingService) CalculateCostWithLongContext(model string, tokens Usage
 	}
 
 	// 合并成本
-	return &CostBreakdown{
+	merged := &CostBreakdown{
 		InputCost:         inRangeCost.InputCost + outRangeCost.InputCost,
 		OutputCost:        inRangeCost.OutputCost,
 		ImageOutputCost:   inRangeCost.ImageOutputCost,
@@ -734,7 +780,9 @@ func (s *BillingService) CalculateCostWithLongContext(model string, tokens Usage
 		CacheReadCost:     inRangeCost.CacheReadCost + outRangeCost.CacheReadCost,
 		TotalCost:         inRangeCost.TotalCost + outRangeCost.TotalCost,
 		ActualCost:        inRangeCost.ActualCost + outRangeCost.ActualCost,
-	}, nil
+		BillingMode:       inRangeCost.BillingMode,
+	}
+	return ApplyCostBillingMetadata(merged, inRangeCost.Currency, inRangeCost.PricingSource, inRangeCost.PricingVersion), nil
 }
 
 // ListSupportedModels 列出所有支持的模型（现在总是返回true，因为有模糊匹配）
@@ -799,9 +847,18 @@ type ImagePriceConfig struct {
 	Price4K *float64 // 4K 尺寸价格（nil 表示使用默认值）
 }
 
+const nanoBanana2ImageModel = "gemini-3.1-flash-image-preview"
+
+var nanoBanana2ImagePricesBySize = map[string]float64{
+	"0.5K": 0.045,
+	"1K":   0.067,
+	"2K":   0.101,
+	"4K":   0.151,
+}
+
 // CalculateImageCost 计算图片生成费用
 // model: 请求的模型名称（用于获取 LiteLLM 默认价格）
-// imageSize: 图片尺寸 "1K", "2K", "4K"
+// imageSize: 图片尺寸 "0.5K", "1K", "2K", "4K"
 // imageCount: 生成的图片数量
 // groupConfig: 分组配置的价格（可能为 nil，表示使用默认值）
 // rateMultiplier: 费率倍数
@@ -811,7 +868,7 @@ func (s *BillingService) CalculateImageCost(model string, imageSize string, imag
 	}
 
 	// 获取单价
-	unitPrice := s.getImageUnitPrice(model, imageSize, groupConfig)
+	unitPrice, pricingSource, pricingVersion := s.getImageUnitPriceWithMetadata(model, imageSize, groupConfig)
 
 	// 计算总费用
 	totalCost := unitPrice * float64(imageCount)
@@ -823,46 +880,63 @@ func (s *BillingService) CalculateImageCost(model string, imageSize string, imag
 	actualCost := totalCost * rateMultiplier
 
 	return &CostBreakdown{
-		TotalCost:   totalCost,
-		ActualCost:  actualCost,
-		BillingMode: string(BillingModeImage),
+		TotalCost:      totalCost,
+		ActualCost:     actualCost,
+		BillingMode:    string(BillingModeImage),
+		Currency:       BillingCurrencyUSD,
+		PricingSource:  pricingSource,
+		PricingVersion: pricingVersion,
 	}
 }
 
-// getImageUnitPrice 获取图片单价
-func (s *BillingService) getImageUnitPrice(model string, imageSize string, groupConfig *ImagePriceConfig) float64 {
+func (s *BillingService) getImageUnitPriceWithMetadata(model string, imageSize string, groupConfig *ImagePriceConfig) (float64, string, string) {
+	sizeTier := normalizeBillingImageSizeTier(imageSize)
+
 	// 优先使用分组配置的价格
 	if groupConfig != nil {
-		switch imageSize {
+		switch sizeTier {
 		case "1K":
 			if groupConfig.Price1K != nil {
-				return *groupConfig.Price1K
+				return *groupConfig.Price1K, PricingSourceChannel, PricingVersionChannel
 			}
 		case "2K":
 			if groupConfig.Price2K != nil {
-				return *groupConfig.Price2K
+				return *groupConfig.Price2K, PricingSourceChannel, PricingVersionChannel
 			}
 		case "4K":
 			if groupConfig.Price4K != nil {
-				return *groupConfig.Price4K
+				return *groupConfig.Price4K, PricingSourceChannel, PricingVersionChannel
 			}
 		}
 	}
 
 	// 回退到 LiteLLM 默认价格
-	return s.getDefaultImagePrice(model, imageSize)
+	return s.getDefaultImagePriceWithMetadata(model, imageSize)
 }
 
-// getDefaultImagePrice 获取 LiteLLM 默认图片价格
-func (s *BillingService) getDefaultImagePrice(model string, imageSize string) float64 {
+func (s *BillingService) getDefaultImagePriceWithMetadata(model string, imageSize string) (float64, string, string) {
+	sizeTier := normalizeBillingImageSizeTier(imageSize)
 	basePrice := 0.0
+	source := PricingSourceFallback
+	version := PricingVersionFallback20260705
 
 	// 从 PricingService 获取 output_cost_per_image
 	if s.pricingService != nil {
 		pricing := s.pricingService.GetModelPricing(model)
-		if pricing != nil && pricing.OutputCostPerImage > 0 {
-			basePrice = pricing.OutputCostPerImage
+		if pricing != nil {
+			if price := lookupImagePriceBySize(pricing.OutputCostPerImageBySize, sizeTier); price > 0 {
+				return price, PricingSourceLiteLLM, PricingVersionModelPricing20260705
+			}
+			if pricing.OutputCostPerImage > 0 {
+				basePrice = pricing.OutputCostPerImage
+				source = PricingSourceLiteLLM
+				version = PricingVersionModelPricing20260705
+			}
 		}
+	}
+
+	if price := nanoBanana2FallbackImagePrice(model, sizeTier); price > 0 {
+		return price, PricingSourceFallback, PricingVersionFallback20260705
 	}
 
 	// 如果没有找到价格，使用硬编码默认值（$0.134，来自 gemini-3-pro-image-preview）
@@ -871,12 +945,58 @@ func (s *BillingService) getDefaultImagePrice(model string, imageSize string) fl
 	}
 
 	// 2K 尺寸 1.5 倍，4K 尺寸翻倍
-	if imageSize == "2K" {
-		return basePrice * 1.5
+	if sizeTier == "2K" {
+		return basePrice * 1.5, source, version
 	}
-	if imageSize == "4K" {
-		return basePrice * 2
+	if sizeTier == "4K" {
+		return basePrice * 2, source, version
 	}
 
-	return basePrice
+	return basePrice, source, version
+}
+
+func nanoBanana2FallbackImagePrice(model string, sizeTier string) float64 {
+	modelLower := strings.ToLower(strings.TrimSpace(model))
+	if modelLower != nanoBanana2ImageModel && !strings.Contains(modelLower, "gemini-3-1-flash-image") {
+		return 0
+	}
+	if price, ok := nanoBanana2ImagePricesBySize[sizeTier]; ok {
+		return price
+	}
+	return nanoBanana2ImagePricesBySize["1K"]
+}
+
+func lookupImagePriceBySize(prices map[string]float64, sizeTier string) float64 {
+	if len(prices) == 0 {
+		return 0
+	}
+	if price, ok := prices[sizeTier]; ok {
+		return price
+	}
+	for key, price := range prices {
+		if normalizeBillingImageSizeTier(key) == sizeTier {
+			return price
+		}
+	}
+	return 0
+}
+
+func normalizeBillingImageSizeTier(imageSize string) string {
+	normalized := strings.ToLower(strings.TrimSpace(imageSize))
+	normalized = strings.ReplaceAll(normalized, " ", "")
+	normalized = strings.ReplaceAll(normalized, "_", "")
+	normalized = strings.ReplaceAll(normalized, "-", "")
+
+	switch normalized {
+	case "0.5k", "0.5", "512", "512px", "512x512":
+		return "0.5K"
+	case "1k", "1024", "1024px", "1024x1024":
+		return "1K"
+	case "2k", "2048", "2048px", "2048x2048":
+		return "2K"
+	case "4k", "4096", "4096px", "4096x4096":
+		return "4K"
+	default:
+		return strings.ToUpper(strings.TrimSpace(imageSize))
+	}
 }

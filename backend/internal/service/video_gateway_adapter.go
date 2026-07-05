@@ -24,12 +24,16 @@ type VideoAdapter interface {
 }
 
 type VideoAdapterResult struct {
-	UpstreamTaskID string
-	Status         string
-	ResultURL      string
-	ErrorMessage   string
-	CostEstimate   float64
-	Payload        map[string]any
+	UpstreamTaskID   string
+	Status           string
+	ResultURL        string
+	UsageTotalTokens *int64
+	ActualResolution string
+	ActualDuration   *int
+	LastFrameURL     string
+	ErrorMessage     string
+	CostEstimate     float64
+	Payload          map[string]any
 }
 
 func NewVideoAdapterRegistry() map[string]VideoAdapter {
@@ -118,6 +122,8 @@ func (a *mockVideoAdapter) BuildCreatePayload(_ *VideoProviderAccount, task *Vid
 		"negative_prompt":     task.NegativePrompt,
 		"reference_image_url": task.ReferenceImageURL,
 		"reference_video_url": task.ReferenceVideoURL,
+		"content":             task.Content,
+		"has_video_input":     task.HasVideoInput,
 		"aspect_ratio":        task.AspectRatio,
 		"duration":            task.Duration,
 		"resolution":          task.Resolution,
@@ -128,7 +134,7 @@ func mockShouldFail(prompt string) bool {
 	lower := strings.ToLower(prompt)
 	return strings.Contains(lower, "[fail]") ||
 		strings.Contains(lower, "mock:fail") ||
-		strings.Contains(prompt, "失败")
+		strings.Contains(prompt, "\u5931\u8d25")
 }
 
 type seedanceVideoAdapter struct{}
@@ -150,7 +156,7 @@ func (a *seedanceVideoAdapter) CreateTask(ctx context.Context, account *VideoPro
 		})
 	}
 	// PRE-ARM redaction self-check (fail-closed). Runs at the adapter chokepoint so it
-	// guards EVERY real call — the Form A worker path AND the direct Form B path — before
+	// guards EVERY real call 闁?the Form A worker path AND the direct Form B path 闁?before
 	// any socket is opened. Aborts with no network call if the configured key would
 	// survive into any echo channel. (Closes B-0 gap-4: the worker path previously had
 	// no pre-arm self-check; only the Form B test did.)
@@ -169,6 +175,7 @@ func (a *seedanceVideoAdapter) CreateTask(ctx context.Context, account *VideoPro
 	}
 
 	content := []map[string]any{{"type": "text", "text": task.Prompt}}
+	var err error
 	if task.ReferenceImageURL != "" {
 		if err := validateExternalVideoURL(task.ReferenceImageURL); err != nil {
 			// The validator error echoes the rejected URL; redact (key-aware) before it
@@ -183,33 +190,35 @@ func (a *seedanceVideoAdapter) CreateTask(ctx context.Context, account *VideoPro
 			return nil, infraerrors.BadRequest("VIDEO_UNSAFE_REFERENCE_URL",
 				"reference_video_url failed SSRF/allowlist validation: "+seedanceRedactBody(account, err.Error()))
 		}
-		// B3 (video-to-video / 换皮): attach the reference video to the content array,
-		// mirroring the image_url shape + the same SSRF/allowlist gate. NOTE: the exact
-		// Ark content field name for a VIDEO reference is UNVERIFIED — `video_url` is
-		// inferred from the proven image_url pattern and MUST be confirmed against Ark
-		// docs / a real v2v call before being relied upon (tracked on the 待授权 list).
-		// Construction is asserted by a contract test; no real call is made here.
+		// Attach the reference video to the content array, mirroring the image_url
+		// shape + the same SSRF/allowlist gate. The `video_url` request shape is
+		// covered by local contract tests; a paid v2v confirmation is still tracked
+		// outside this backend patch before broad production rollout.
 		content = append(content, map[string]any{"type": "video_url", "video_url": map[string]string{"url": task.ReferenceVideoURL}})
+	}
+	if len(task.Content) > 0 {
+		content, err = buildSeedanceCreateContent(account, task)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	payload := map[string]any{
 		"model":   model,
 		"content": content,
 	}
+	applySeedanceBoolOption(payload, "generate_audio", task.GenerateAudio)
+	applySeedanceBoolOption(payload, "watermark", task.Watermark)
+	applySeedanceBoolOption(payload, "camera_fixed", task.CameraFixed)
+	applySeedanceBoolOption(payload, "return_last_frame", task.ReturnLastFrame)
 	if task.NegativePrompt != "" {
 		payload["negative_prompt"] = task.NegativePrompt
 	}
-	// Explicitly send generation parameters so the smoke-gate duration cap
-	// (1-5s, enforced in seedanceSmokeGateBlockedReasons) is actually applied
-	// upstream instead of silently relying on Ark's default duration — which
-	// would decouple the real billed time from the §3 cost model.
-	// NOTE: duration/resolution request field NAMES remain UNVERIFIED against a real
-	// create (only echoed back in the real smoke RESPONSE); confirm before relying on
-	// them. The aspect field IS resolved (B1): Ark's create field is `ratio` (the real
-	// smoke response echoes `ratio`, never `aspect_ratio`). Sending `aspect_ratio` was
-	// silently ignored by Ark → it defaulted to 16:9, so portrait (9:16) could never be
-	// produced — the root cause of "竖屏做不出". Whether `ratio:9:16` actually yields a
-	// portrait clip still needs one real paid confirmation (tracked on the 待授权 list).
+	// Explicitly send generation parameters so the smoke/production gate duration
+	// is applied upstream instead of relying on Ark defaults. The create payload
+	// field names (`duration`, `resolution`, `ratio`) are covered by local snapshot
+	// tests and archived Ark-shaped fixtures; whether `ratio:9:16` yields the
+	// intended portrait clip still needs one real paid confirmation.
 	if task.Duration > 0 {
 		payload["duration"] = task.Duration
 	}
@@ -252,7 +261,7 @@ func (a *seedanceVideoAdapter) CreateTask(ctx context.Context, account *VideoPro
 		return nil, infraerrorsUnavailable("SEEDANCE_AUDIT_LOG_FAILED", "Seedance create: redacted audit log unavailable: "+auditErr.Error())
 	}
 
-	// Fail-closed if the upstream echoed our configured key ANYWHERE in the body — including a
+	// Fail-closed if the upstream echoed our configured key ANYWHERE in the body 闁?including a
 	// STRUCTURAL field (e.g. {"id":"<key>"}) that would otherwise be stored raw as
 	// upstream_task_id / event payload, bypassing the body redactor. Audited (redacted) above
 	// first, so evidence is kept; the returned error carries no key.
@@ -308,6 +317,61 @@ func (a *seedanceVideoAdapter) CreateTask(ctx context.Context, account *VideoPro
 	}, nil
 }
 
+func buildSeedanceCreateContent(account *VideoProviderAccount, task *VideoTask) ([]map[string]any, error) {
+	items := task.Content
+	if len(items) == 0 {
+		items = []VideoTaskContentItem{{Type: VideoContentTypeText, Text: task.Prompt}}
+	}
+	content := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		switch item.Type {
+		case VideoContentTypeText:
+			text := strings.TrimSpace(item.Text)
+			if text == "" {
+				text = task.Prompt
+			}
+			content = append(content, map[string]any{"type": "text", "text": text})
+		case VideoContentTypeImageURL:
+			if err := validateExternalVideoURL(item.URL); err != nil {
+				return nil, infraerrors.BadRequest("VIDEO_UNSAFE_REFERENCE_URL",
+					"content.image_url failed SSRF/allowlist validation: "+seedanceRedactBody(account, err.Error()))
+			}
+			content = append(content, seedanceURLContentItem("image_url", "image_url", item.Role, item.URL))
+		case VideoContentTypeVideoURL:
+			if err := validateExternalVideoURL(item.URL); err != nil {
+				return nil, infraerrors.BadRequest("VIDEO_UNSAFE_REFERENCE_URL",
+					"content.video_url failed SSRF/allowlist validation: "+seedanceRedactBody(account, err.Error()))
+			}
+			content = append(content, seedanceURLContentItem("video_url", "video_url", item.Role, item.URL))
+		case VideoContentTypeAudioURL:
+			if err := validateExternalVideoURL(item.URL); err != nil {
+				return nil, infraerrors.BadRequest("VIDEO_UNSAFE_REFERENCE_URL",
+					"content.audio_url failed SSRF/allowlist validation: "+seedanceRedactBody(account, err.Error()))
+			}
+			content = append(content, seedanceURLContentItem("audio_url", "audio_url", item.Role, item.URL))
+		}
+	}
+	return content, nil
+}
+
+func seedanceURLContentItem(contentType, urlField, role, rawURL string) map[string]any {
+	item := map[string]any{
+		"type":   contentType,
+		urlField: map[string]string{"url": rawURL},
+	}
+	if strings.TrimSpace(role) != "" {
+		item["role"] = strings.TrimSpace(role)
+	}
+	return item
+}
+
+func applySeedanceBoolOption(payload map[string]any, key string, value *bool) {
+	if value == nil {
+		return
+	}
+	payload[key] = *value
+}
+
 func (a *seedanceVideoAdapter) PollTask(ctx context.Context, account *VideoProviderAccount, task *VideoTask) (*VideoAdapterResult, error) {
 	if !account.APIKeyConfigured || strings.TrimSpace(account.PlainAPIKey) == "" {
 		return nil, ErrVideoProviderDisabled.WithMetadata(map[string]string{
@@ -322,7 +386,7 @@ func (a *seedanceVideoAdapter) PollTask(ctx context.Context, account *VideoProvi
 			"real_call_executed": "false",
 		})
 	}
-	// PRE-ARM redaction self-check (fail-closed) — poll also sends Authorization:
+	// PRE-ARM redaction self-check (fail-closed) 闁?poll also sends Authorization:
 	// Bearer <key> and a 401/403 poll body can echo it, so the same guard applies here.
 	if err := seedancePreArmRedactionSelfCheck(account); err != nil {
 		return nil, err
@@ -359,9 +423,7 @@ func (a *seedanceVideoAdapter) PollTask(ctx context.Context, account *VideoProvi
 		return nil, infraerrorsUnavailable("SEEDANCE_AUDIT_LOG_FAILED", "Seedance poll: redacted audit log unavailable: "+auditErr.Error())
 	}
 
-	// Fail-closed if the upstream echoed our configured key anywhere in the poll body —
-	// including the structural `id` (→ upstream_task_id) or a result-url path segment (→
-	// result_url) that would be stored raw, bypassing the body redactor.
+	// Fail-closed if the upstream echoed our configured key anywhere in the poll body 闁?	// including the structural `id` (闁?upstream_task_id) or a result-url path segment (闁?	// result_url) that would be stored raw, bypassing the body redactor.
 	if seedanceUpstreamEchoedKey(account, string(respBody)) {
 		return nil, infraerrorsUnavailable("SEEDANCE_UPSTREAM_ECHOED_CREDENTIAL",
 			"Seedance poll aborted: upstream response echoed the configured credential in a stored field; refusing to persist it (key value intentionally not included)")
@@ -375,12 +437,29 @@ func (a *seedanceVideoAdapter) PollTask(ctx context.Context, account *VideoProvi
 	}
 
 	var parsed struct {
-		ID      string `json:"id"`
-		Status  string `json:"status"`
-		Ratio   string `json:"ratio"` // Module C: Ark returns the aspect ratio as "ratio" (e.g. "16:9"), NOT "aspect_ratio"
+		ID               string `json:"id"`
+		Status           string `json:"status"`
+		Ratio            string `json:"ratio"` // Module C: Ark returns the aspect ratio as "ratio" (e.g. "16:9"), NOT "aspect_ratio"
+		Resolution       string `json:"resolution"`
+		ActualResolution string `json:"actual_resolution"`
+		Duration         *int   `json:"duration"`
+		ActualDuration   *int   `json:"actual_duration"`
+		LastFrameURL     string `json:"last_frame_url"`
+		Usage            struct {
+			TotalTokens *int64 `json:"total_tokens"`
+		} `json:"usage"`
 		Content struct {
-			VideoURL string `json:"video_url"`
-			Ratio    string `json:"ratio"` // tolerate the nested shape too — exact nesting is unconfirmed by a gold sample
+			VideoURL         string `json:"video_url"`
+			Ratio            string `json:"ratio"` // tolerate nested shape too until a paid sample confirms nesting
+			Resolution       string `json:"resolution"`
+			ActualResolution string `json:"actual_resolution"`
+			Duration         *int   `json:"duration"`
+			ActualDuration   *int   `json:"actual_duration"`
+			LastFrameURL     string `json:"last_frame_url"`
+			LastFrame        struct {
+				URL      string `json:"url"`
+				ImageURL string `json:"image_url"`
+			} `json:"last_frame"`
 		} `json:"content"`
 		Error struct {
 			Message string `json:"message"`
@@ -392,9 +471,12 @@ func (a *seedanceVideoAdapter) PollTask(ctx context.Context, account *VideoProvi
 	// Escape-proof structural-field guard: parsed.ID is stored raw as upstream_task_id and
 	// parsed.Content.VideoURL as result_url. A JSON-escaped key in either decodes back to the
 	// key past the raw-body check; check the DECODED fields and refuse them.
-	if seedanceUpstreamEchoedKey(account, parsed.ID) || seedanceUpstreamEchoedKey(account, parsed.Content.VideoURL) {
+	lastFrameURL := firstNonEmptyVideo(parsed.LastFrameURL, parsed.Content.LastFrameURL, parsed.Content.LastFrame.URL, parsed.Content.LastFrame.ImageURL)
+	if seedanceUpstreamEchoedKey(account, parsed.ID) ||
+		seedanceUpstreamEchoedKey(account, parsed.Content.VideoURL) ||
+		seedanceUpstreamEchoedKey(account, lastFrameURL) {
 		return nil, infraerrorsUnavailable("SEEDANCE_UPSTREAM_ECHOED_CREDENTIAL",
-			"Seedance poll aborted: upstream id/result_url echoed the configured credential; refusing to persist it (key value intentionally not included)")
+			"Seedance poll aborted: upstream id/result_url/last_frame_url echoed the configured credential; refusing to persist it (key value intentionally not included)")
 	}
 
 	result := &VideoAdapterResult{
@@ -409,15 +491,28 @@ func (a *seedanceVideoAdapter) PollTask(ctx context.Context, account *VideoProvi
 		},
 	}
 
-	// Module C — response field alignment: Volcengine Ark returns the aspect ratio
-	// as "ratio" (e.g. "16:9"), which the adapter previously dropped. Surface it into
-	// the result payload. The exact nesting (top-level vs content.ratio) is not pinned
-	// by a captured gold sample, so accept either and prefer the non-empty one. This
-	// is response-parse alignment; the request side now also sends `ratio` (B1).
-	// Gate on a strict "W:H" shape so an unexpected/oversized upstream value cannot
-	// smuggle un-redacted content into the persisted event payload / API response.
+	// Module C response field alignment: Ark poll fixtures expose top-level `ratio`;
+	// the parser also tolerates nested content.ratio until a paid sample confirms
+	// the exact upstream nesting. The request side now sends `ratio` too.
+	// Gate on a strict "W:H" shape so unexpected upstream text cannot enter
+	// persisted event payloads or API responses.
 	if ratio := firstNonEmptyVideo(parsed.Ratio, parsed.Content.Ratio); looksLikeAspectRatio(ratio) {
 		result.Payload["ratio"] = ratio
+	}
+	if parsed.Usage.TotalTokens != nil && *parsed.Usage.TotalTokens >= 0 {
+		v := *parsed.Usage.TotalTokens
+		result.UsageTotalTokens = &v
+		result.Payload["usage"] = map[string]any{"total_tokens": v}
+		result.Payload["usage_total_tokens"] = v
+	}
+	if resolution := firstNonEmptyVideo(parsed.ActualResolution, parsed.Resolution, parsed.Content.ActualResolution, parsed.Content.Resolution); looksLikeVideoResolution(resolution) {
+		result.ActualResolution = strings.ToLower(strings.TrimSpace(resolution))
+		result.Payload["actual_resolution"] = result.ActualResolution
+	}
+	if duration := firstNonNilInt(parsed.ActualDuration, parsed.Duration, parsed.Content.ActualDuration, parsed.Content.Duration); duration != nil && looksLikeActualVideoDuration(*duration) {
+		v := *duration
+		result.ActualDuration = &v
+		result.Payload["actual_duration"] = v
 	}
 
 	// Do not trust the upstream-returned result_url blindly: validate scheme and
@@ -434,6 +529,16 @@ func (a *seedanceVideoAdapter) PollTask(ctx context.Context, account *VideoProvi
 			return result, nil
 		}
 		result.ResultURL = parsed.Content.VideoURL
+	}
+	if lastFrameURL != "" {
+		if err := validateExternalVideoURL(lastFrameURL); err != nil {
+			result.Status = VideoStatusFailed
+			result.ErrorMessage = "upstream last_frame_url failed validation: " + seedanceRedactBody(account, err.Error())
+			result.Payload["last_frame_url_rejected"] = true
+			return result, nil
+		}
+		result.LastFrameURL = lastFrameURL
+		result.Payload["last_frame_url"] = lastFrameURL
 	}
 
 	if parsed.Error.Message != "" {
@@ -472,18 +577,14 @@ func (a *seedanceVideoAdapter) NormalizeStatus(upstream string) string {
 }
 
 func (a *seedanceVideoAdapter) BuildCreatePayload(account *VideoProviderAccount, task *VideoTask) map[string]any {
-	content := []map[string]any{{"type": "text", "text": task.Prompt}}
-	if task.ReferenceImageURL != "" {
-		content = append(content, map[string]any{"type": "image_url", "image_url": task.ReferenceImageURL})
-	}
-	if task.ReferenceVideoURL != "" {
-		content = append(content, map[string]any{"type": "video_url", "video_url": task.ReferenceVideoURL})
-	}
-	return map[string]any{
-		"base_url":        account.BaseURL,
-		"model":           task.Model,
-		"content":         content,
-		"negative_prompt": task.NegativePrompt,
+	content := buildSeedancePayloadPreviewContent(task)
+	payload := map[string]any{
+		"base_url":         account.BaseURL,
+		"model":            task.Model,
+		"content":          content,
+		"content_contract": task.Content,
+		"has_video_input":  task.HasVideoInput,
+		"negative_prompt":  task.NegativePrompt,
 		// B1: Ark's create field is `ratio` (16:9 / 9:16 / 1:1), NOT `aspect_ratio`.
 		"ratio":                       normalizeSeedanceRatio(task.AspectRatio),
 		"duration":                    task.Duration,
@@ -496,12 +597,51 @@ func (a *seedanceVideoAdapter) BuildCreatePayload(account *VideoProviderAccount,
 		"redacted_event_log_required": true,
 		"source_docs":                 "https://www.volcengine.com/docs/82379/1520757?lang=zh",
 	}
+	applySeedanceBoolOption(payload, "generate_audio", task.GenerateAudio)
+	applySeedanceBoolOption(payload, "watermark", task.Watermark)
+	applySeedanceBoolOption(payload, "camera_fixed", task.CameraFixed)
+	applySeedanceBoolOption(payload, "return_last_frame", task.ReturnLastFrame)
+	return payload
+}
+
+func buildSeedancePayloadPreviewContent(task *VideoTask) []map[string]any {
+	if task == nil {
+		return nil
+	}
+	items := task.Content
+	if len(items) == 0 {
+		items = []VideoTaskContentItem{{Type: VideoContentTypeText, Text: task.Prompt}}
+		if task.ReferenceImageURL != "" {
+			items = append(items, VideoTaskContentItem{Type: VideoContentTypeImageURL, Role: VideoContentRoleReferenceImage, URL: task.ReferenceImageURL})
+		}
+		if task.ReferenceVideoURL != "" {
+			items = append(items, VideoTaskContentItem{Type: VideoContentTypeVideoURL, Role: VideoContentRoleReferenceVideo, URL: task.ReferenceVideoURL})
+		}
+	}
+	content := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		switch item.Type {
+		case VideoContentTypeText:
+			text := strings.TrimSpace(item.Text)
+			if text == "" {
+				text = task.Prompt
+			}
+			content = append(content, map[string]any{"type": "text", "text": text})
+		case VideoContentTypeImageURL:
+			content = append(content, seedanceURLContentItem("image_url", "image_url", item.Role, item.URL))
+		case VideoContentTypeVideoURL:
+			content = append(content, seedanceURLContentItem("video_url", "video_url", item.Role, item.URL))
+		case VideoContentTypeAudioURL:
+			content = append(content, seedanceURLContentItem("audio_url", "audio_url", item.Role, item.URL))
+		}
+	}
+	return content
 }
 
 // seedanceRedactBody is the real-call redaction chokepoint. It strips the account's
 // configured key (shape-agnostic, via stripKnownVideoSecret) and then the shared/
 // pattern secrets, so the configured key can never survive into the DB, an API error,
-// or the audit log — regardless of whether its shape falls in a pattern blind spot
+// or the audit log 闁?regardless of whether its shape falls in a pattern blind spot
 // (12-19 chars / pure-letter / pure-digit). Every adapter path that turns an upstream
 // body or message into stored/returned text goes through here.
 func seedanceRedactBody(account *VideoProviderAccount, s string) string {
@@ -514,9 +654,9 @@ func seedanceRedactBody(account *VideoProviderAccount, s string) string {
 
 // seedanceUpstreamEchoedKey reports whether the raw upstream body contains the configured
 // key verbatim. A legitimate provider response NEVER echoes your own API key; its presence
-// — whether in a free-text message OR in a STRUCTURAL field the adapter stores raw (the task
-// `id` → upstream_task_id and the create/poll payload `upstream_id`, a result-url path
-// segment, etc.) — signals a hostile or broken upstream. The body/message redactor only
+// 闁?whether in a free-text message OR in a STRUCTURAL field the adapter stores raw (the task
+// `id` 闁?upstream_task_id and the create/poll payload `upstream_id`, a result-url path
+// segment, etc.) 闁?signals a hostile or broken upstream. The body/message redactor only
 // covers error STRINGS, not parsed structural fields, so this is the fail-closed backstop
 // that stops the key from ever being PERSISTED via a structural field. (A key shorter than
 // the floor cannot reach here: the pre-arm self-check already aborted such a key.)
@@ -542,8 +682,8 @@ func seedanceUpstreamEchoedKey(account *VideoProviderAccount, rawBody string) bo
 //
 // With key-aware redaction (seedanceRedactBody) this passes for any credible key
 // (length >= videoKnownSecretMinLen, any charset). It still fails-closed for the one
-// genuinely dangerous case the pattern passes alone cannot cover — a sub-floor key
-// that also lands in a pattern blind spot — rather than billing a call whose echo
+// genuinely dangerous case the pattern passes alone cannot cover 闁?a sub-floor key
+// that also lands in a pattern blind spot 闁?rather than billing a call whose echo
 // could leak it.
 func seedancePreArmRedactionSelfCheck(account *VideoProviderAccount) error {
 	if account == nil {
@@ -572,25 +712,45 @@ func seedancePreArmRedactionSelfCheck(account *VideoProviderAccount) error {
 
 func seedanceSmokeGateBlockedReasons(account *VideoProviderAccount, task *VideoTask) []string {
 	reasons := []string{}
-	if !metadataBool(account.Metadata, "single_smoke_authorized") && !metadataBool(account.Metadata, "real_smoke_authorized") {
-		reasons = append(reasons, "provider metadata does not record single smoke authorization")
+	productionAuthorized := seedanceProductionAuthorized(account)
+	if strings.TrimSpace(os.Getenv("SUB2API_VIDEO_REAL_SMOKE_ENABLED")) != "1" {
+		reasons = append(reasons, "SUB2API_VIDEO_REAL_SMOKE_ENABLED is not 1")
+	}
+	if !seedanceRealCallAuthorized(account) {
+		reasons = append(reasons, "provider metadata does not record single smoke authorization or production authorization")
 	}
 	if strings.TrimSpace(os.Getenv("SUB2API_VIDEO_REDACTED_EVENT_LOG")) == "" {
 		reasons = append(reasons, "redacted event log path is missing")
 	}
-	if strings.TrimSpace(os.Getenv("SUB2API_VIDEO_URL_ALLOWLIST")) == "" {
+	if configuredMediaURLAllowlist() == "" {
 		// Fail-closed SSRF posture: the real path must not run with the loose
 		// (no-allowlist) URL validation branch. Operators must pin the trusted
 		// media domains (Ark result CDN + permitted reference-image hosts).
-		reasons = append(reasons, "media url allowlist (SUB2API_VIDEO_URL_ALLOWLIST) is missing")
+		reasons = append(reasons, mediaURLAllowlistMissingReason())
 	}
 	if strings.TrimSpace(task.Model) == "" || !strings.Contains(strings.ToLower(task.Model), "seedance") {
 		reasons = append(reasons, "seedance model is not explicit")
 	}
-	if task.Duration <= 0 || task.Duration > 5 {
+	if !productionAuthorized && (task.Duration <= 0 || task.Duration > 5) {
 		reasons = append(reasons, "single smoke duration must be between 1 and 5 seconds")
 	}
 	return reasons
+}
+
+func seedanceRealCallAuthorized(account *VideoProviderAccount) bool {
+	if account == nil {
+		return false
+	}
+	return metadataBool(account.Metadata, "single_smoke_authorized") ||
+		metadataBool(account.Metadata, "real_smoke_authorized") ||
+		seedanceProductionAuthorized(account)
+}
+
+func seedanceProductionAuthorized(account *VideoProviderAccount) bool {
+	if account == nil {
+		return false
+	}
+	return metadataBool(account.Metadata, "production_authorized")
 }
 
 func metadataBool(metadata map[string]any, key string) bool {
@@ -708,6 +868,8 @@ func (a *klingVideoAdapter) BuildCreatePayload(account *VideoProviderAccount, ta
 		"aspect_ratio":    task.AspectRatio,
 		"duration":        task.Duration,
 		"resolution":      task.Resolution,
+		"content":         task.Content,
+		"has_video_input": task.HasVideoInput,
 		"source_docs":     "https://app.klingai.com/cn/dev/document-api/apiReference/updateNotice",
 	}
 	if task.ReferenceImageURL != "" {
@@ -740,7 +902,7 @@ func normalizeVideoStatus(status string) string {
 
 // normalizeSeedanceRatio maps a requested aspect/orientation to Ark's create-side
 // `ratio` field value (16:9 / 9:16 / 1:1). It accepts logical orientation keywords
-// (portrait/landscape/square and 中文 竖屏/横屏/方形) AND already-valid "W:H" ratios
+// (portrait/landscape/square and 濞戞搩鍘介弸?缂佹梹鐗曢惈?婵☆垼浜滈惈?闁哄倻鎳撻懜? AND already-valid "W:H" ratios
 // (passed through verbatim so non-mapped-but-valid ratios still reach Ark unchanged).
 // Empty input yields "" so the caller omits the field. This is the B1 fix: the field
 // name is `ratio` (not `aspect_ratio`) and portrait now resolves to 9:16.
@@ -748,17 +910,17 @@ func normalizeSeedanceRatio(input string) string {
 	switch strings.ToLower(strings.TrimSpace(input)) {
 	case "":
 		return ""
-	case "9:16", "portrait", "vertical", "竖屏", "竖版", "竖":
+	case "9:16", "portrait", "vertical", "\u7ad6\u5c4f", "\u7ad6\u7248", "\u7ed4\u6827\u7746":
 		return "9:16"
-	case "16:9", "landscape", "horizontal", "横屏", "横版", "横":
+	case "16:9", "landscape", "horizontal", "\u6a2a\u5c4f", "\u6a2a\u7248", "\u59af\ue044\u7746":
 		return "16:9"
-	case "1:1", "square", "方形", "正方形":
+	case "1:1", "square", "\u65b9\u5f62", "\u6b63\u65b9\u5f62", "\u93c2\u7470\u8230":
 		return "1:1"
 	default:
 		// Pass through only shape-valid "W:H" ratios (same gate as the response-side
 		// looksLikeAspectRatio), so a non-canonical-but-valid ratio (e.g. "4:3") still
-		// reaches Ark while arbitrary text ("banana", "16x9") is dropped → field omitted
-		// → Ark default. Keeps the request side from forwarding unvalidated input.
+		// reaches Ark while arbitrary text ("banana", "16x9") is dropped 闁?field omitted
+		// 闁?Ark default. Keeps the request side from forwarding unvalidated input.
 		if v := strings.TrimSpace(input); looksLikeAspectRatio(v) {
 			return v
 		}
@@ -789,6 +951,28 @@ func looksLikeAspectRatio(s string) bool {
 		}
 	}
 	return true
+}
+
+func looksLikeVideoResolution(s string) bool {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "480p", "720p", "1080p":
+		return true
+	default:
+		return false
+	}
+}
+
+func firstNonNilInt(values ...*int) *int {
+	for _, value := range values {
+		if value != nil {
+			return value
+		}
+	}
+	return nil
+}
+
+func looksLikeActualVideoDuration(v int) bool {
+	return v > 0 && v <= 3600
 }
 
 func infraerrorsUnavailable(reason, message string) error {

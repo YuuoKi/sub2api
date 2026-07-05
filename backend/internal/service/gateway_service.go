@@ -8674,6 +8674,8 @@ func (s *GatewayService) buildRecordUsageLog(
 	}
 	if result.ImageCount > 0 {
 		usageLog.RateMultiplier = imageMultiplier
+		mediaType := "image"
+		usageLog.MediaType = &mediaType
 	}
 	if cost != nil {
 		usageLog.InputCost = cost.InputCost
@@ -8683,6 +8685,9 @@ func (s *GatewayService) buildRecordUsageLog(
 		usageLog.CacheReadCost = cost.CacheReadCost
 		usageLog.TotalCost = cost.TotalCost
 		usageLog.ActualCost = cost.ActualCost
+		usageLog.Currency = cost.Currency
+		usageLog.PricingSource = cost.PricingSource
+		usageLog.PricingVersion = cost.PricingVersion
 	}
 
 	return usageLog

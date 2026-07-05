@@ -216,3 +216,35 @@ func TestParsePricingData_PreservesServiceTierPriorityFields(t *testing.T) {
 	require.InDelta(t, 0.0000005, pricing.CacheReadInputTokenCostPriority, 1e-12)
 	require.True(t, pricing.SupportsServiceTier)
 }
+
+func TestParsePricingData_PreservesImageOutputPriceBySize(t *testing.T) {
+	svc := &PricingService{}
+	pricingData, err := svc.parsePricingData([]byte(`{
+		"gemini-3.1-flash-image-preview": {
+			"input_cost_per_token": 0.0000005,
+			"output_cost_per_token": 0.000003,
+			"output_cost_per_image": 0.067,
+			"output_cost_per_image_token": 0.00006,
+			"output_cost_per_image_by_size": {
+				"0.5K": 0.045,
+				"1K": 0.067,
+				"2K": 0.101,
+				"4K": 0.151
+			},
+			"litellm_provider": "vertex_ai-language-models",
+			"mode": "image_generation"
+		}
+	}`))
+	require.NoError(t, err)
+
+	pricing := pricingData["gemini-3.1-flash-image-preview"]
+	require.NotNil(t, pricing)
+	require.InDelta(t, 0.067, pricing.OutputCostPerImage, 1e-12)
+	require.InDelta(t, 0.00006, pricing.OutputCostPerImageToken, 1e-12)
+	require.Equal(t, map[string]float64{
+		"0.5K": 0.045,
+		"1K":   0.067,
+		"2K":   0.101,
+		"4K":   0.151,
+	}, pricing.OutputCostPerImageBySize)
+}

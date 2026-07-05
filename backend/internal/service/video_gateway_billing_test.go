@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"math"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -38,6 +40,389 @@ func approxEqual(a, b float64) bool { return math.Abs(a-b) < 1e-9 }
 
 func cfgWithCostPerSecond(rate float64) *config.Config {
 	return &config.Config{VideoGateway: config.VideoGatewayConfig{CostPerSecond: rate}}
+}
+
+type billingSeedanceAdapter struct {
+	result *VideoAdapterResult
+}
+
+func (a *billingSeedanceAdapter) Provider() string { return VideoProviderSeedance }
+
+func (a *billingSeedanceAdapter) CreateTask(_ context.Context, _ *VideoProviderAccount, task *VideoTask) (*VideoAdapterResult, error) {
+	return &VideoAdapterResult{UpstreamTaskID: "seedance-billing-" + strconv.FormatInt(task.ID, 10), Status: VideoStatusSubmitted}, nil
+}
+
+func (a *billingSeedanceAdapter) PollTask(_ context.Context, _ *VideoProviderAccount, _ *VideoTask) (*VideoAdapterResult, error) {
+	return cloneVideoAdapterResult(a.result), nil
+}
+
+func (a *billingSeedanceAdapter) CancelTask(_ context.Context, _ *VideoProviderAccount, _ *VideoTask) (*VideoAdapterResult, error) {
+	return &VideoAdapterResult{Status: VideoStatusCancelled}, nil
+}
+
+func (a *billingSeedanceAdapter) NormalizeStatus(upstream string) string {
+	return normalizeVideoStatus(upstream)
+}
+
+func (a *billingSeedanceAdapter) BuildCreatePayload(_ *VideoProviderAccount, _ *VideoTask) map[string]any {
+	return map[string]any{}
+}
+
+type videoBillingDeductCall struct {
+	userID int64
+	amount float64
+}
+
+type recordingVideoBillingUserRepo struct {
+	UserRepository
+	calls []videoBillingDeductCall
+	err   error
+}
+
+func (r *recordingVideoBillingUserRepo) DeductBalance(_ context.Context, userID int64, amount float64) error {
+	r.calls = append(r.calls, videoBillingDeductCall{userID: userID, amount: amount})
+	return r.err
+}
+
+type videoBillingSettingRepo struct {
+	values map[string]string
+}
+
+func (r *videoBillingSettingRepo) Get(_ context.Context, key string) (*Setting, error) {
+	if v, ok := r.values[key]; ok {
+		return &Setting{Key: key, Value: v}, nil
+	}
+	return nil, ErrSettingNotFound
+}
+
+func (r *videoBillingSettingRepo) GetValue(_ context.Context, key string) (string, error) {
+	if v, ok := r.values[key]; ok {
+		return v, nil
+	}
+	return "", ErrSettingNotFound
+}
+
+func (r *videoBillingSettingRepo) Set(_ context.Context, key, value string) error {
+	if r.values == nil {
+		r.values = map[string]string{}
+	}
+	r.values[key] = value
+	return nil
+}
+
+func (r *videoBillingSettingRepo) GetMultiple(_ context.Context, keys []string) (map[string]string, error) {
+	out := map[string]string{}
+	for _, key := range keys {
+		if v, ok := r.values[key]; ok {
+			out[key] = v
+		}
+	}
+	return out, nil
+}
+
+func (r *videoBillingSettingRepo) SetMultiple(_ context.Context, settings map[string]string) error {
+	if r.values == nil {
+		r.values = map[string]string{}
+	}
+	for key, value := range settings {
+		r.values[key] = value
+	}
+	return nil
+}
+
+func (r *videoBillingSettingRepo) GetAll(_ context.Context) (map[string]string, error) {
+	out := map[string]string{}
+	for key, value := range r.values {
+		out[key] = value
+	}
+	return out, nil
+}
+
+func (r *videoBillingSettingRepo) Delete(_ context.Context, key string) error {
+	delete(r.values, key)
+	return nil
+}
+
+type recordingVideoBillingCache struct {
+	billingCacheWorkerStub
+	mu    sync.Mutex
+	calls []videoBillingDeductCall
+}
+
+func (c *recordingVideoBillingCache) DeductUserBalance(_ context.Context, userID int64, amount float64) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.calls = append(c.calls, videoBillingDeductCall{userID: userID, amount: amount})
+	return nil
+}
+
+func (c *recordingVideoBillingCache) deductCalls() []videoBillingDeductCall {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]videoBillingDeductCall(nil), c.calls...)
+}
+
+func newVideoBalanceBillingDeps() (*recordingVideoBillingUserRepo, *recordingVideoBillingCache, *SettingService, *BillingCacheService) {
+	userRepo := &recordingVideoBillingUserRepo{}
+	cache := &recordingVideoBillingCache{}
+	settingSvc := NewSettingService(&videoBillingSettingRepo{values: map[string]string{
+		SettingKeyUSDCNYRate: "7.20",
+	}}, &config.Config{})
+	cacheSvc := NewBillingCacheService(cache, nil, nil, nil, nil, nil, &config.Config{})
+	return userRepo, cache, settingSvc, cacheSvc
+}
+
+func TestSeedanceActualCostUsesProviderUsageTokens(t *testing.T) {
+	ctx := context.Background()
+	repo := newMemoryVideoGatewayRepo()
+	providerID := seedSmokeAuthorizedSeedanceProvider(repo, "seedance-billing-test-key", "https://ark.example.test")
+	tokens := int64(102960)
+	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, nil)
+	svc.adapters[VideoProviderSeedance] = &billingSeedanceAdapter{result: &VideoAdapterResult{
+		Status:           VideoStatusSucceeded,
+		ResultURL:        "https://ark-content.cn-beijing.volces.com/v/ok.mp4",
+		UsageTotalTokens: &tokens,
+		ActualResolution: "720p",
+	}}
+	guard := &mockBudgetGuard{}
+	svc.SetBudgetGuard(guard)
+
+	task, err := svc.CreateTask(ctx, VideoTaskCreateParams{
+		ProviderAccountID: providerID,
+		TaskType:          VideoTaskTypeTextToVideo,
+		Model:             "doubao-seedance-2-0-260128",
+		Prompt:            "bill by tokens",
+		Duration:          5,
+		Resolution:        "720p",
+		CreatedBy:         8,
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	for range 2 {
+		if err := svc.ProcessRunnableTasks(ctx, 10, time.Minute); err != nil {
+			t.Fatalf("process: %v", err)
+		}
+	}
+	got, _, err := svc.GetTask(ctx, task.ID, 8, false)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	want := 46.0 * 0.10296
+	if !approxEqual(got.CostEstimate, want) {
+		t.Fatalf("actual cost = %.8f, want %.8f", got.CostEstimate, want)
+	}
+	if len(repo.usage) != 1 || !approxEqual(repo.usage[0].CostEstimate, want) {
+		t.Fatalf("usage log cost = %#v, want %.8f", repo.usage, want)
+	}
+	if len(guard.chargeCalls) != 1 || !approxEqual(guard.chargeCalls[0].cost, want) {
+		t.Fatalf("charge calls = %#v, want cost %.8f", guard.chargeCalls, want)
+	}
+}
+
+func TestSeedanceSucceededTaskDeductsUserBalanceInUSDAndQueuesCache(t *testing.T) {
+	ctx := context.Background()
+	repo := newMemoryVideoGatewayRepo()
+	providerID := seedSmokeAuthorizedSeedanceProvider(repo, "seedance-billing-test-key", "https://ark.example.test")
+	tokens := int64(102960)
+	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, nil)
+	svc.adapters[VideoProviderSeedance] = &billingSeedanceAdapter{result: &VideoAdapterResult{
+		Status:           VideoStatusSucceeded,
+		ResultURL:        "https://ark-content.cn-beijing.volces.com/v/ok.mp4",
+		UsageTotalTokens: &tokens,
+		ActualResolution: "720p",
+	}}
+	userRepo, cache, settingSvc, cacheSvc := newVideoBalanceBillingDeps()
+	defer cacheSvc.Stop()
+	svc.userRepo = userRepo
+	svc.settingService = settingSvc
+	svc.billingCacheService = cacheSvc
+
+	task, err := svc.CreateTask(ctx, VideoTaskCreateParams{
+		ProviderAccountID: providerID,
+		TaskType:          VideoTaskTypeTextToVideo,
+		Model:             "doubao-seedance-2-0-260128",
+		Prompt:            "deduct balance by tokens",
+		Duration:          5,
+		Resolution:        "720p",
+		CreatedBy:         8,
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	for range 2 {
+		if err := svc.ProcessRunnableTasks(ctx, 10, time.Minute); err != nil {
+			t.Fatalf("process: %v", err)
+		}
+	}
+	cacheSvc.Stop()
+
+	wantUSD := (46.0 * 0.10296) / 7.20
+	if len(userRepo.calls) != 1 || userRepo.calls[0].userID != 8 || !approxEqual(userRepo.calls[0].amount, wantUSD) {
+		t.Fatalf("DeductBalance calls = %#v, want user=8 amount %.8f", userRepo.calls, wantUSD)
+	}
+	cacheCalls := cache.deductCalls()
+	if len(cacheCalls) != 1 || cacheCalls[0].userID != 8 || !approxEqual(cacheCalls[0].amount, wantUSD) {
+		t.Fatalf("QueueDeductBalance cache calls = %#v, want user=8 amount %.8f", cacheCalls, wantUSD)
+	}
+	if _, ok := repo.balanceClaims[task.ID]; !ok {
+		t.Fatalf("expected task %d balance charge to be claimed", task.ID)
+	}
+}
+
+func TestSeedanceBalanceChargeIsIdempotentOnWorkerRetry(t *testing.T) {
+	ctx := context.Background()
+	repo := newMemoryVideoGatewayRepo()
+	task := &VideoTask{
+		ID:               42,
+		Provider:         VideoProviderSeedance,
+		Model:            "doubao-seedance-2-0-260128",
+		Status:           VideoStatusSucceeded,
+		UsageTotalTokens: videoInt64Ptr(102960),
+		Currency:         BillingCurrencyCNY,
+		CreatedBy:        8,
+	}
+	repo.tasks[task.ID] = cloneVideoTask(task)
+	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, nil)
+	userRepo, cache, settingSvc, cacheSvc := newVideoBalanceBillingDeps()
+	defer cacheSvc.Stop()
+	svc.userRepo = userRepo
+	svc.settingService = settingSvc
+	svc.billingCacheService = cacheSvc
+
+	svc.chargeForVideo(ctx, task)
+	svc.chargeForVideo(ctx, task)
+	cacheSvc.Stop()
+
+	if len(userRepo.calls) != 1 {
+		t.Fatalf("DeductBalance must be idempotent, calls=%#v", userRepo.calls)
+	}
+	if cacheCalls := cache.deductCalls(); len(cacheCalls) != 1 {
+		t.Fatalf("cache balance deduction must be idempotent, calls=%#v", cacheCalls)
+	}
+}
+
+func TestSeedanceFailedTaskDoesNotDeductBalance(t *testing.T) {
+	ctx := context.Background()
+	repo := newMemoryVideoGatewayRepo()
+	task := &VideoTask{
+		ID:               43,
+		Provider:         VideoProviderSeedance,
+		Model:            "doubao-seedance-2-0-260128",
+		Status:           VideoStatusFailed,
+		UsageTotalTokens: videoInt64Ptr(102960),
+		Currency:         BillingCurrencyCNY,
+		CreatedBy:        8,
+	}
+	repo.tasks[task.ID] = cloneVideoTask(task)
+	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, nil)
+	userRepo, cache, settingSvc, cacheSvc := newVideoBalanceBillingDeps()
+	defer cacheSvc.Stop()
+	svc.userRepo = userRepo
+	svc.settingService = settingSvc
+	svc.billingCacheService = cacheSvc
+
+	svc.chargeForVideo(ctx, task)
+	cacheSvc.Stop()
+
+	if len(userRepo.calls) != 0 {
+		t.Fatalf("failed task must not deduct user balance, calls=%#v", userRepo.calls)
+	}
+	if cacheCalls := cache.deductCalls(); len(cacheCalls) != 0 {
+		t.Fatalf("failed task must not deduct balance cache, calls=%#v", cacheCalls)
+	}
+	if _, ok := repo.balanceClaims[task.ID]; ok {
+		t.Fatalf("failed task must not claim balance charge")
+	}
+}
+
+func TestSeedanceActualCostSelectsVideoInputRate(t *testing.T) {
+	tokens := int64(102960)
+	svc := NewVideoGatewayService(newMemoryVideoGatewayRepo(), noopVideoKeyEncryptor{}, nil)
+	cost := svc.calculateVideoActualCost(&VideoTask{
+		Provider:         VideoProviderSeedance,
+		Model:            "doubao-seedance-2-0-260128",
+		Status:           VideoStatusSucceeded,
+		UsageTotalTokens: &tokens,
+		HasVideoInput:    true,
+	})
+	want := 28.0 * 0.10296
+	if !approxEqual(cost, want) {
+		t.Fatalf("video-input cost = %.8f, want %.8f", cost, want)
+	}
+}
+
+func videoInt64Ptr(v int64) *int64 {
+	return &v
+}
+
+func TestSeedanceFailedTaskCostsZeroEvenWithUsageTokens(t *testing.T) {
+	ctx := context.Background()
+	repo := newMemoryVideoGatewayRepo()
+	providerID := seedSmokeAuthorizedSeedanceProvider(repo, "seedance-billing-test-key", "https://ark.example.test")
+	tokens := int64(102960)
+	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, nil)
+	svc.adapters[VideoProviderSeedance] = &billingSeedanceAdapter{result: &VideoAdapterResult{
+		Status:           VideoStatusFailed,
+		ErrorMessage:     "provider failed",
+		UsageTotalTokens: &tokens,
+		CostEstimate:     99,
+	}}
+	guard := &mockBudgetGuard{}
+	svc.SetBudgetGuard(guard)
+
+	task, err := svc.CreateTask(ctx, VideoTaskCreateParams{
+		ProviderAccountID: providerID,
+		TaskType:          VideoTaskTypeTextToVideo,
+		Model:             "doubao-seedance-2-0-260128",
+		Prompt:            "failed task is free",
+		Duration:          5,
+		Resolution:        "720p",
+		CreatedBy:         8,
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	for range 2 {
+		if err := svc.ProcessRunnableTasks(ctx, 10, time.Minute); err != nil {
+			t.Fatalf("process: %v", err)
+		}
+	}
+	got, _, err := svc.GetTask(ctx, task.ID, 8, false)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if got.Status != VideoStatusFailed || got.CostEstimate != 0 {
+		t.Fatalf("failed task status/cost = %s/%.4f, want failed/0", got.Status, got.CostEstimate)
+	}
+	if len(repo.usage) != 1 || repo.usage[0].CostEstimate != 0 {
+		t.Fatalf("usage log cost = %#v, want zero", repo.usage)
+	}
+	if len(guard.chargeCalls) != 0 {
+		t.Fatalf("failed task must not charge, got %#v", guard.chargeCalls)
+	}
+}
+
+func TestSeedanceBudgetEstimateUsesReferenceTableWhenConfigRateUnset(t *testing.T) {
+	svc := NewVideoGatewayService(newMemoryVideoGatewayRepo(), noopVideoKeyEncryptor{}, nil)
+	cost := svc.estimateVideoCost(&VideoTask{
+		Provider:   VideoProviderSeedance,
+		Model:      "doubao-seedance-2-0-260128",
+		Duration:   5,
+		Resolution: "720p",
+	})
+	if !approxEqual(cost, 5.0) {
+		t.Fatalf("720p 5s estimate = %.4f, want 5.0", cost)
+	}
+	fastCost := svc.estimateVideoCost(&VideoTask{
+		Provider:   VideoProviderSeedance,
+		Model:      "doubao-seedance-2-0-fast",
+		Duration:   5,
+		Resolution: "720p",
+	})
+	if !approxEqual(fastCost, 4.0) {
+		t.Fatalf("fast 720p 5s estimate = %.4f, want 4.0", fastCost)
+	}
 }
 
 // TestVideoBudgetGateAllowsWhenAffordable: sufficient budget => create proceeds and
@@ -263,7 +648,7 @@ func TestProvideVideoGatewayServiceArmsGuardFromConfig(t *testing.T) {
 	ctx := context.Background()
 	repo := newMemoryVideoGatewayRepo()
 	providerID := repo.seedMockProvider()
-	svc := ProvideVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfgWithVideoBudget(1.5, 2.0))
+	svc := ProvideVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfgWithVideoBudget(1.5, 2.0), nil, nil, nil)
 
 	task, err := svc.CreateTask(ctx, VideoTaskCreateParams{
 		ProviderAccountID: providerID,
@@ -294,7 +679,7 @@ func TestProvideVideoGatewayServiceUnarmedWhenBudgetZero(t *testing.T) {
 	ctx := context.Background()
 	repo := newMemoryVideoGatewayRepo()
 	providerID := repo.seedMockProvider()
-	svc := ProvideVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfgWithVideoBudget(1.5, 0))
+	svc := ProvideVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfgWithVideoBudget(1.5, 0), nil, nil, nil)
 
 	task, err := svc.CreateTask(ctx, VideoTaskCreateParams{
 		ProviderAccountID: providerID,
@@ -322,7 +707,7 @@ func TestProvideVideoGatewayServiceAdmitsNormalClipAtRealCap(t *testing.T) {
 	ctx := context.Background()
 	repo := newMemoryVideoGatewayRepo()
 	providerID := repo.seedMockProvider()
-	svc := ProvideVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfgWithVideoBudget(1.5, 30.0))
+	svc := ProvideVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfgWithVideoBudget(1.5, 30.0), nil, nil, nil)
 
 	task, err := svc.CreateTask(ctx, VideoTaskCreateParams{
 		ProviderAccountID: providerID,

@@ -219,7 +219,7 @@ func TestGeminiHandleNativeNonStreamingResponse_DebugDisabledDoesNotEmitHeaderLo
 		Body: io.NopCloser(strings.NewReader(`{"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":2}}`)),
 	}
 
-	usage, err := svc.handleNativeNonStreamingResponse(c, resp, false)
+	usage, _, err := svc.handleNativeNonStreamingResponse(c, resp, false)
 	require.NoError(t, err)
 	require.NotNil(t, usage)
 	require.False(t, logSink.ContainsMessage("[GeminiAPI]"), "debug 关闭时不应输出 Gemini 响应头日志")
@@ -306,6 +306,176 @@ func TestGeminiMessagesCompatServiceForward_NormalizesWebSearchToolForAIStudio(t
 	require.False(t, hasCamel)
 	_, hasFuncDecl := searchTool["functionDeclarations"]
 	require.False(t, hasFuncDecl)
+}
+
+func TestConvertClaudeMessagesToGeminiGenerateContent_PassesImageGenerationConfig(t *testing.T) {
+	body := []byte(`{
+		"model":"gemini-3.1-flash-image-preview",
+		"max_tokens":16,
+		"imageConfig":{"aspectRatio":"16:9","imageSize":"512"},
+		"responseModalities":["TEXT","IMAGE"],
+		"messages":[{"role":"user","content":"draw"}]
+	}`)
+
+	out, err := convertClaudeMessagesToGeminiGenerateContent(body)
+	require.NoError(t, err)
+
+	var posted map[string]any
+	require.NoError(t, json.Unmarshal(out, &posted))
+	generationConfig, ok := posted["generationConfig"].(map[string]any)
+	require.True(t, ok)
+
+	imageConfig, ok := generationConfig["imageConfig"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "16:9", imageConfig["aspectRatio"])
+	require.Equal(t, "512", imageConfig["imageSize"])
+	require.Equal(t, []any{"TEXT", "IMAGE"}, generationConfig["responseModalities"])
+}
+
+func TestConvertClaudeMessagesToGeminiGenerateContent_ConvertsImageURLSourceToFileData(t *testing.T) {
+	t.Setenv("SUB2API_VIDEO_URL_ALLOWLIST", "")
+	body := []byte(`{
+		"model":"gemini-3.1-flash-image-preview",
+		"max_tokens":16,
+		"messages":[{
+			"role":"user",
+			"content":[{
+				"type":"image",
+				"source":{"type":"url","url":"https://images.example.com/ref.png","media_type":"image/png"}
+			}]
+		}]
+	}`)
+
+	out, err := convertClaudeMessagesToGeminiGenerateContent(body)
+	require.NoError(t, err)
+
+	var posted map[string]any
+	require.NoError(t, json.Unmarshal(out, &posted))
+	contents, ok := posted["contents"].([]any)
+	require.True(t, ok)
+	require.Len(t, contents, 1)
+	content, ok := contents[0].(map[string]any)
+	require.True(t, ok)
+	parts, ok := content["parts"].([]any)
+	require.True(t, ok)
+	require.Len(t, parts, 1)
+	part, ok := parts[0].(map[string]any)
+	require.True(t, ok)
+	fileData, ok := part["fileData"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "https://images.example.com/ref.png", fileData["fileUri"])
+	require.Equal(t, "image/png", fileData["mimeType"])
+}
+
+func TestConvertClaudeMessagesToGeminiGenerateContent_RejectsUnsafeImageURLSource(t *testing.T) {
+	t.Setenv("SUB2API_VIDEO_URL_ALLOWLIST", "")
+	body := []byte(`{
+		"model":"gemini-3.1-flash-image-preview",
+		"max_tokens":16,
+		"messages":[{
+			"role":"user",
+			"content":[{
+				"type":"image",
+				"source":{"type":"url","url":"https://127.0.0.1/ref.png","media_type":"image/png"}
+			}]
+		}]
+	}`)
+
+	_, err := convertClaudeMessagesToGeminiGenerateContent(body)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "image url")
+}
+
+func TestGeminiMessagesCompatServiceExtractImageSizeSupports512(t *testing.T) {
+	svc := &GeminiMessagesCompatService{}
+
+	require.Equal(t, "0.5K", svc.extractImageSize([]byte(`{"generationConfig":{"imageConfig":{"imageSize":"512"}}}`)))
+	require.Equal(t, "0.5K", svc.extractImageSize([]byte(`{"generationConfig":{"imageConfig":{"imageSize":"512px"}}}`)))
+	require.Equal(t, "0.5K", svc.extractImageSize([]byte(`{"generationConfig":{"imageConfig":{"imageSize":"0.5K"}}}`)))
+	require.Equal(t, "2K", svc.extractImageSize([]byte(`{"generationConfig":{"imageConfig":{"imageSize":"bad-size"}}}`)))
+}
+
+func TestGeminiMessagesCompatServiceForward_CountsInlineDataImagesFromResponse(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+
+	httpStub := &geminiCompatHTTPUpstreamStub{
+		response: &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"x-request-id": []string{"gemini-img-1"}},
+			Body: io.NopCloser(strings.NewReader(`{
+				"candidates":[{"content":{"parts":[
+					{"inlineData":{"mimeType":"image/png","data":"a"}},
+					{"inlineData":{"mimeType":"image/png","data":"b"}}
+				]}}],
+				"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":5}
+			}`)),
+		},
+	}
+	svc := &GeminiMessagesCompatService{httpUpstream: httpStub, cfg: &config.Config{}}
+	account := &Account{ID: 1, Type: AccountTypeAPIKey, Credentials: map[string]any{"api_key": "test-key"}}
+	body := []byte(`{
+		"model":"gemini-3.1-flash-image-preview",
+		"max_tokens":16,
+		"imageConfig":{"imageSize":"512"},
+		"messages":[{"role":"user","content":"draw two"}]
+	}`)
+
+	result, err := svc.Forward(context.Background(), c, account, body)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Equal(t, 2, result.ImageCount)
+	require.Equal(t, "0.5K", result.ImageSize)
+}
+
+func TestGeminiMessagesCompatServiceForwardNative_CountsInlineDataImagesFromResponse(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1beta/models/gemini-3.1-flash-image-preview:generateContent", nil)
+
+	httpStub := &geminiCompatHTTPUpstreamStub{
+		response: &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"x-request-id": []string{"gemini-img-2"}},
+			Body: io.NopCloser(strings.NewReader(`{
+				"candidates":[{"content":{"parts":[
+					{"inlineData":{"mimeType":"image/png","data":"a"}},
+					{"inlineData":{"mimeType":"image/png","data":"b"}},
+					{"text":"done"}
+				]}}],
+				"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":5}
+			}`)),
+		},
+	}
+	svc := &GeminiMessagesCompatService{httpUpstream: httpStub, cfg: &config.Config{}}
+	account := &Account{ID: 1, Type: AccountTypeAPIKey, Credentials: map[string]any{"api_key": "test-key"}}
+	body := []byte(`{
+		"contents":[{"parts":[{"text":"draw two"}]}],
+		"generationConfig":{"imageConfig":{"imageSize":"1K"}}
+	}`)
+
+	result, err := svc.ForwardNative(context.Background(), c, account, "gemini-3.1-flash-image-preview", "generateContent", false, body)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Equal(t, 2, result.ImageCount)
+	require.Equal(t, "1K", result.ImageSize)
+}
+
+func TestFilterEmptyPartsFromGeminiRequest_PreservesThoughtSignature(t *testing.T) {
+	body := []byte(`{
+		"contents":[
+			{"role":"user","parts":[]},
+			{"role":"model","parts":[{"thoughtSignature":"sig-123","inlineData":{"mimeType":"image/png","data":"a"}}]}
+		]
+	}`)
+
+	out, err := filterEmptyPartsFromGeminiRequest(body)
+	require.NoError(t, err)
+	require.Contains(t, string(out), `"thoughtSignature":"sig-123"`)
+	require.NotContains(t, string(out), `"parts":[]`)
 }
 
 func TestConvertClaudeMessagesToGeminiGenerateContent_AddsThoughtSignatureForToolUse(t *testing.T) {

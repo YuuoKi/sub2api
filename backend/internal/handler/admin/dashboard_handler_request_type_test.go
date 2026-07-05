@@ -22,6 +22,7 @@ type dashboardUsageRepoCapture struct {
 	rankingLimit     int
 	ranking          []usagestats.UserSpendingRankingItem
 	rankingTotal     float64
+	videoTotal       float64
 }
 
 func (s *dashboardUsageRepoCapture) GetUsageTrendWithFilters(
@@ -59,10 +60,12 @@ func (s *dashboardUsageRepoCapture) GetUserSpendingRanking(
 ) (*usagestats.UserSpendingRankingResponse, error) {
 	s.rankingLimit = limit
 	return &usagestats.UserSpendingRankingResponse{
-		Ranking:         s.ranking,
-		TotalActualCost: s.rankingTotal,
-		TotalRequests:   44,
-		TotalTokens:     1234,
+		Ranking:                 s.ranking,
+		TotalActualCost:         s.rankingTotal,
+		TotalVideoCost:          s.videoTotal,
+		TotalCombinedActualCost: s.rankingTotal + s.videoTotal,
+		TotalRequests:           44,
+		TotalTokens:             1234,
 	}, nil
 }
 
@@ -175,9 +178,10 @@ func TestDashboardUsersRankingLimitAndCache(t *testing.T) {
 	dashboardUsersRankingCache = newSnapshotCache(5 * time.Minute)
 	repo := &dashboardUsageRepoCapture{
 		ranking: []usagestats.UserSpendingRankingItem{
-			{UserID: 7, Email: "rank@example.com", ActualCost: 10.5, Requests: 3, Tokens: 300},
+			{UserID: 7, Email: "rank@example.com", ActualCost: 10.5, VideoCost: 2.25, Requests: 3, Tokens: 300},
 		},
 		rankingTotal: 88.8,
+		videoTotal:   6.5,
 	}
 	router := newDashboardRequestTypeTestRouter(repo)
 
@@ -188,6 +192,9 @@ func TestDashboardUsersRankingLimitAndCache(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.Equal(t, 50, repo.rankingLimit)
 	require.Contains(t, rec.Body.String(), "\"total_actual_cost\":88.8")
+	require.Contains(t, rec.Body.String(), "\"total_video_cost\":6.5")
+	require.Contains(t, rec.Body.String(), "\"total_combined_actual_cost\":95.3")
+	require.Contains(t, rec.Body.String(), "\"video_cost\":2.25")
 	require.Contains(t, rec.Body.String(), "\"total_requests\":44")
 	require.Contains(t, rec.Body.String(), "\"total_tokens\":1234")
 	require.Equal(t, "miss", rec.Header().Get("X-Snapshot-Cache"))

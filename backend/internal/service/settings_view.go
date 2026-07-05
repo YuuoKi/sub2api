@@ -124,6 +124,7 @@ type SystemSettings struct {
 
 	DefaultConcurrency           int
 	DefaultBalance               float64
+	USDCNYRate                   float64
 	RiskControlEnabled           bool
 	AffiliateEnabled             bool
 	AffiliateRebateRate          float64

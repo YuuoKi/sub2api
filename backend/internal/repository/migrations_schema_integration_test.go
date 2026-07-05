@@ -44,6 +44,30 @@ func TestMigrationsRunner_IsIdempotent_AndSchemaIsUpToDate(t *testing.T) {
 	requireColumn(t, tx, "usage_logs", "billing_type", "smallint", 0, false)
 	requireColumn(t, tx, "usage_logs", "request_type", "smallint", 0, false)
 	requireColumn(t, tx, "usage_logs", "openai_ws_mode", "boolean", 0, false)
+	requireColumn(t, tx, "usage_logs", "media_type", "character varying", 16, true)
+	requireColumn(t, tx, "usage_logs", "currency", "character varying", 3, false)
+	requireColumn(t, tx, "usage_logs", "pricing_source", "character varying", 32, false)
+	requireColumn(t, tx, "usage_logs", "pricing_version", "character varying", 64, true)
+
+	// video_tasks: A-1 content contract and billing flag
+	requireColumn(t, tx, "video_tasks", "content_json", "jsonb", 0, false)
+	requireColumn(t, tx, "video_tasks", "has_video_input", "boolean", 0, false)
+	requireColumn(t, tx, "video_tasks", "generate_audio", "boolean", 0, true)
+	requireColumn(t, tx, "video_tasks", "watermark", "boolean", 0, true)
+	requireColumn(t, tx, "video_tasks", "camera_fixed", "boolean", 0, true)
+	requireColumn(t, tx, "video_tasks", "return_last_frame", "boolean", 0, true)
+	requireColumn(t, tx, "video_tasks", "usage_total_tokens", "bigint", 0, true)
+	requireColumn(t, tx, "video_tasks", "actual_resolution", "character varying", 32, true)
+	requireColumn(t, tx, "video_tasks", "actual_duration", "integer", 0, true)
+	requireColumn(t, tx, "video_tasks", "last_frame_url", "text", 0, true)
+	requireColumn(t, tx, "video_tasks", "balance_charged_at", "timestamp with time zone", 0, true)
+	requireConstraintDefinitionContains(t, tx, "video_tasks", "video_tasks_duration_check", "duration = '-1'::integer", "duration >= 0")
+
+	// video_usage_logs: V-3 billing reconciliation metadata
+	requireColumn(t, tx, "video_usage_logs", "currency", "character varying", 3, false)
+	requireColumn(t, tx, "video_usage_logs", "pricing_source", "character varying", 32, false)
+	requireColumn(t, tx, "video_usage_logs", "pricing_version", "character varying", 64, true)
+	requireIndex(t, tx, "video_usage_logs", "uq_video_usage_logs_video_task_id")
 
 	// usage_billing_dedup: billing idempotency narrow table
 	var usageBillingDedupRegclass sql.NullString

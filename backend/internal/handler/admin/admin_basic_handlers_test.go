@@ -132,6 +132,46 @@ func TestUserHandlerEndpoints(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 }
 
+func TestUserHandlerCreateAcceptsToolMemberType(t *testing.T) {
+	router, adminSvc := setupAdminRouter()
+
+	body, err := json.Marshal(map[string]any{
+		"email":       "n8n-tool@example.com",
+		"password":    "pass123",
+		"username":    "n8n",
+		"notes":       "video workflow",
+		"member_type": "tool",
+	})
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/users", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.NotNil(t, adminSvc.lastCreateUserInput)
+	require.Equal(t, "tool", adminSvc.lastCreateUserInput.MemberType)
+	require.Contains(t, rec.Body.String(), `"member_type":"tool"`)
+}
+
+func TestUserHandlerUpdateAcceptsMemberType(t *testing.T) {
+	router, adminSvc := setupAdminRouter()
+
+	body, err := json.Marshal(map[string]any{"member_type": "human"})
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/admin/users/7", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.NotNil(t, adminSvc.lastUpdateUserInput)
+	require.NotNil(t, adminSvc.lastUpdateUserInput.MemberType)
+	require.Equal(t, "human", *adminSvc.lastUpdateUserInput.MemberType)
+}
+
 func TestUserHandlerBindAuthIdentityMapsRequest(t *testing.T) {
 	router, adminSvc := setupAdminRouter()
 

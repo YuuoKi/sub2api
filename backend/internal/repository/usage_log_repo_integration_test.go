@@ -841,6 +841,94 @@ func (s *UsageLogRepoSuite) TestDashboardStatsWithRange_Fallback() {
 	s.Require().InEpsilon(150.0, stats.AverageDurationMs, 0.0001)
 }
 
+func (s *UsageLogRepoSuite) TestDashboardStatsWithRange_IncludesVideoSpendUSDNormalized() {
+	now := time.Now().UTC()
+	rangeStart := truncateToDayUTC(now)
+	rangeEnd := now.Add(1 * time.Hour)
+
+	user := mustCreateUser(s.T(), s.client, &service.User{Email: "video-spend@test.com"})
+	apiKey := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: user.ID, Key: "sk-video-spend", Name: "k-video"})
+	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-video-spend"})
+	s.createUsageLog(user, apiKey, account, 10, 20, 3.0, now)
+
+	_, err := s.tx.ExecContext(
+		s.ctx,
+		"INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
+		service.SettingKeyUSDCNYRate,
+		"7.20",
+	)
+	s.Require().NoError(err)
+
+	var providerAccountID int64
+	err = scanSingleRow(
+		s.ctx,
+		s.repo.sql,
+		`INSERT INTO video_provider_accounts (provider, display_name, enabled, default_model)
+		 VALUES ($1, $2, true, $3)
+		 RETURNING id`,
+		[]any{
+			"seedance",
+			"seedance-v4-" + uuid.NewString(),
+			"doubao-seedance-2.0",
+		},
+		&providerAccountID,
+	)
+	s.Require().NoError(err)
+
+	var taskID int64
+	err = scanSingleRow(
+		s.ctx,
+		s.repo.sql,
+		`INSERT INTO video_tasks (
+			provider_account_id, provider, model, task_type, prompt, status,
+			cost_estimate, created_by, created_at, updated_at, completed_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9, $9)
+		RETURNING id`,
+		[]any{
+			providerAccountID,
+			"seedance",
+			"doubao-seedance-2.0",
+			"text_to_video",
+			"dashboard video spend",
+			"succeeded",
+			14.4,
+			user.ID,
+			now,
+		},
+		&taskID,
+	)
+	s.Require().NoError(err)
+
+	_, err = s.tx.ExecContext(
+		s.ctx,
+		`INSERT INTO video_usage_logs (
+			video_task_id, provider, model, status, cost_estimate, duration,
+			currency, pricing_source, pricing_version, created_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+		taskID,
+		"seedance",
+		"doubao-seedance-2.0",
+		"succeeded",
+		14.4,
+		5,
+		service.BillingCurrencyCNY,
+		service.PricingSourceProviderUsage,
+		service.VideoPricingVersionSeedance202603,
+		now,
+	)
+	s.Require().NoError(err)
+
+	stats, err := s.repo.GetDashboardStatsWithRange(s.ctx, rangeStart, rangeEnd)
+	s.Require().NoError(err)
+	s.Require().Equal(service.BillingCurrencyUSD, stats.CostCurrency)
+	s.Require().InEpsilon(2.0, stats.VideoTotalCost, 0.0001)
+	s.Require().InEpsilon(5.0, stats.UnifiedTotalActualCost, 0.0001)
+	s.Require().NotEmpty(stats.VideoSpendByProvider)
+	s.Require().Equal("seedance", stats.VideoSpendByProvider[0].Provider)
+	s.Require().Equal(int64(1), stats.VideoSpendByProvider[0].Count)
+	s.Require().InEpsilon(2.0, stats.VideoSpendByProvider[0].Cost, 0.0001)
+}
+
 // --- GetUserDashboardStats ---
 
 func (s *UsageLogRepoSuite) TestGetUserDashboardStats() {

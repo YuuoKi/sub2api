@@ -22,6 +22,15 @@ func authorizedSmokeTask() *VideoTask {
 	return &VideoTask{Model: "doubao-seedance-2-0-260128", Prompt: "x", Duration: 5}
 }
 
+func smokeDurationReasonPresent(reasons []string) bool {
+	for _, r := range reasons {
+		if strings.Contains(r, "single smoke duration") {
+			return true
+		}
+	}
+	return false
+}
+
 // setSmokeGateEnv opens the three env gates so the ONLY remaining gate is the
 // single_smoke_authorized metadata under test.
 func setSmokeGateEnv(t *testing.T) {
@@ -136,5 +145,32 @@ func TestSingleSmokeAuthorizedAcceptsStringForm(t *testing.T) {
 		if metadataBool(acc.Metadata, "single_smoke_authorized") {
 			t.Fatalf("expected NOT authorized for metadata value %#v", v)
 		}
+	}
+}
+
+func TestSeedanceProductionAuthorizedSkipsSmokeDurationLimit(t *testing.T) {
+	setSmokeGateEnv(t)
+
+	acc := &VideoProviderAccount{Metadata: map[string]any{"production_authorized": true}}
+	task := &VideoTask{Model: "doubao-seedance-2-0-260128", Prompt: "x", Duration: 10}
+
+	reasons := seedanceSmokeGateBlockedReasons(acc, task)
+	if !authReasonAbsent(reasons) {
+		t.Fatalf("production_authorized account should pass authorization gate, reasons=%v", reasons)
+	}
+	if smokeDurationReasonPresent(reasons) {
+		t.Fatalf("production_authorized account should skip 1-5s smoke duration cap, reasons=%v", reasons)
+	}
+}
+
+func TestSeedanceUnapprovedProviderKeepsTinySmokeDurationLimit(t *testing.T) {
+	setSmokeGateEnv(t)
+
+	acc := &VideoProviderAccount{Metadata: map[string]any{"single_smoke_authorized": true}}
+	task := &VideoTask{Model: "doubao-seedance-2-0-260128", Prompt: "x", Duration: 10}
+
+	reasons := seedanceSmokeGateBlockedReasons(acc, task)
+	if !smokeDurationReasonPresent(reasons) {
+		t.Fatalf("single-smoke account must keep 1-5s duration cap, reasons=%v", reasons)
 	}
 }

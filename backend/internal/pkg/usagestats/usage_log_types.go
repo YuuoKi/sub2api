@@ -50,15 +50,19 @@ type DashboardStats struct {
 	OverloadAccounts  int64 `json:"overload_accounts"`  // 过载账户数
 
 	// 累计 Token 使用统计
-	TotalRequests            int64   `json:"total_requests"`
-	TotalInputTokens         int64   `json:"total_input_tokens"`
-	TotalOutputTokens        int64   `json:"total_output_tokens"`
-	TotalCacheCreationTokens int64   `json:"total_cache_creation_tokens"`
-	TotalCacheReadTokens     int64   `json:"total_cache_read_tokens"`
-	TotalTokens              int64   `json:"total_tokens"`
-	TotalCost                float64 `json:"total_cost"`         // 累计标准计费
-	TotalActualCost          float64 `json:"total_actual_cost"`  // 累计实际扣除
-	TotalAccountCost         float64 `json:"total_account_cost"` // 累计账号成本
+	TotalRequests            int64                  `json:"total_requests"`
+	TotalInputTokens         int64                  `json:"total_input_tokens"`
+	TotalOutputTokens        int64                  `json:"total_output_tokens"`
+	TotalCacheCreationTokens int64                  `json:"total_cache_creation_tokens"`
+	TotalCacheReadTokens     int64                  `json:"total_cache_read_tokens"`
+	TotalTokens              int64                  `json:"total_tokens"`
+	TotalCost                float64                `json:"total_cost"`         // 累计标准计费
+	TotalActualCost          float64                `json:"total_actual_cost"`  // 累计实际扣除
+	TotalAccountCost         float64                `json:"total_account_cost"` // 累计账号成本
+	VideoTotalCost           float64                `json:"video_total_cost"`   // 视频费用，统一折算为 USD
+	UnifiedTotalActualCost   float64                `json:"unified_total_actual_cost"`
+	CostCurrency             string                 `json:"cost_currency"`
+	VideoSpendByProvider     []VideoSpendByProvider `json:"video_spend_by_provider,omitempty"`
 
 	// 今日 Token 使用统计
 	TodayRequests            int64   `json:"today_requests"`
@@ -70,6 +74,8 @@ type DashboardStats struct {
 	TodayCost                float64 `json:"today_cost"`         // 今日标准计费
 	TodayActualCost          float64 `json:"today_actual_cost"`  // 今日实际扣除
 	TodayAccountCost         float64 `json:"today_account_cost"` // 今日账号成本
+	TodayVideoCost           float64 `json:"today_video_cost"`   // 今日视频费用，统一折算为 USD
+	UnifiedTodayActualCost   float64 `json:"unified_today_actual_cost"`
 
 	// 系统运行统计
 	AverageDurationMs float64 `json:"average_duration_ms"` // 平均响应时间
@@ -77,6 +83,13 @@ type DashboardStats struct {
 	// 性能指标
 	Rpm int64 `json:"rpm"` // 近5分钟平均每分钟请求数
 	Tpm int64 `json:"tpm"` // 近5分钟平均每分钟Token数
+}
+
+// VideoSpendByProvider represents USD-normalized video spend grouped by provider.
+type VideoSpendByProvider struct {
+	Provider string  `json:"provider"`
+	Count    int64   `json:"count"`
+	Cost     float64 `json:"cost"`
 }
 
 // TrendDataPoint represents a single point in trend data
@@ -149,17 +162,23 @@ type UserUsageTrendPoint struct {
 type UserSpendingRankingItem struct {
 	UserID     int64   `json:"user_id"`
 	Email      string  `json:"email"`
+	Username   string  `json:"username"`
+	UserNotes  string  `json:"user_notes"`
+	MemberType string  `json:"member_type"`
 	ActualCost float64 `json:"actual_cost"` // 实际扣除
+	VideoCost  float64 `json:"video_cost"`  // 视频费用，统一折算为 USD
 	Requests   int64   `json:"requests"`
 	Tokens     int64   `json:"tokens"`
 }
 
 // UserSpendingRankingResponse represents ranking rows plus total spend for the time range.
 type UserSpendingRankingResponse struct {
-	Ranking         []UserSpendingRankingItem `json:"ranking"`
-	TotalActualCost float64                   `json:"total_actual_cost"`
-	TotalRequests   int64                     `json:"total_requests"`
-	TotalTokens     int64                     `json:"total_tokens"`
+	Ranking                 []UserSpendingRankingItem `json:"ranking"`
+	TotalActualCost         float64                   `json:"total_actual_cost"`
+	TotalVideoCost          float64                   `json:"total_video_cost"`
+	TotalCombinedActualCost float64                   `json:"total_combined_actual_cost"`
+	TotalRequests           int64                     `json:"total_requests"`
+	TotalTokens             int64                     `json:"total_tokens"`
 }
 
 // UserBreakdownItem represents per-user usage breakdown within a dimension (group, model, endpoint).

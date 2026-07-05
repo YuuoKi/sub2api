@@ -39,6 +39,7 @@ type AdminUser struct {
 	User
 
 	Notes      string     `json:"notes"`
+	MemberType string     `json:"member_type"`
 	LastUsedAt *time.Time `json:"last_used_at"`
 	// GroupRates 用户专属分组倍率配置
 	// map[groupID]rateMultiplier
@@ -391,6 +392,9 @@ type UsageLog struct {
 	TotalCost         float64 `json:"total_cost"`
 	ActualCost        float64 `json:"actual_cost"`
 	RateMultiplier    float64 `json:"rate_multiplier"`
+	Currency          string  `json:"currency"`
+	PricingSource     string  `json:"pricing_source"`
+	PricingVersion    string  `json:"pricing_version,omitempty"`
 
 	BillingType  int8   `json:"billing_type"`
 	RequestType  string `json:"request_type"`

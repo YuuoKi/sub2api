@@ -1320,6 +1320,50 @@ func TestOpenAIGatewayServiceRecordUsage_ImageOnlyUsageStillPersists(t *testing.
 	require.Equal(t, string(BillingModeImage), *usageRepo.lastLog.BillingMode)
 }
 
+func TestOpenAIGatewayServiceRecordUsage_ImageNB2Official1KCostAndMediaType(t *testing.T) {
+	groupID := int64(1301)
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	svc := newOpenAIRecordUsageServiceForTest(
+		usageRepo,
+		&openAIRecordUsageUserRepoStub{},
+		&openAIRecordUsageSubRepoStub{},
+		nil,
+	)
+
+	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID:  "resp_nb2_1k_image",
+			Model:      "gemini-3.1-flash-image-preview",
+			ImageCount: 1,
+			ImageSize:  "1K",
+			Duration:   time.Second,
+		},
+		APIKey: &APIKey{
+			ID:      11301,
+			GroupID: i64p(groupID),
+			Group: &Group{
+				ID:             groupID,
+				RateMultiplier: 1.0,
+			},
+		},
+		User:    &User{ID: 21301},
+		Account: &Account{ID: 31301},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.Equal(t, 1, usageRepo.lastLog.ImageCount)
+	require.NotNil(t, usageRepo.lastLog.ImageSize)
+	require.Equal(t, "1K", *usageRepo.lastLog.ImageSize)
+	require.NotNil(t, usageRepo.lastLog.MediaType)
+	require.Equal(t, "image", *usageRepo.lastLog.MediaType)
+	require.InDelta(t, 0.067, usageRepo.lastLog.TotalCost, 1e-12)
+	require.InDelta(t, 0.067, usageRepo.lastLog.ActualCost, 1e-12)
+	require.InDelta(t, 1.0, usageRepo.lastLog.RateMultiplier, 1e-12)
+	require.NotNil(t, usageRepo.lastLog.BillingMode)
+	require.Equal(t, string(BillingModeImage), *usageRepo.lastLog.BillingMode)
+}
+
 func TestOpenAIGatewayServiceRecordUsage_ImageUsesPerImageBillingEvenWithUsageTokens(t *testing.T) {
 	imagePrice := 0.02
 	groupID := int64(12)

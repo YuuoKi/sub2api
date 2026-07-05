@@ -76,6 +76,10 @@ func TestUsageLogRepositoryCreateSyncRequestTypeAndLegacyFields(t *testing.T) {
 			sqlmock.AnyArg(), // ip_address
 			log.ImageCount,
 			sqlmock.AnyArg(), // image_size
+			sqlmock.AnyArg(), // media_type
+			service.BillingCurrencyUSD,
+			service.PricingSourceFallback,
+			sqlmock.AnyArg(), // pricing_version
 			sqlmock.AnyArg(), // service_tier
 			sqlmock.AnyArg(), // reasoning_effort
 			sqlmock.AnyArg(), // inbound_endpoint
@@ -155,6 +159,10 @@ func TestUsageLogRepositoryCreate_PersistsServiceTier(t *testing.T) {
 			sqlmock.AnyArg(),
 			log.ImageCount,
 			sqlmock.AnyArg(),
+			sqlmock.AnyArg(), // media_type
+			service.BillingCurrencyUSD,
+			service.PricingSourceFallback,
+			sqlmock.AnyArg(), // pricing_version
 			serviceTier,
 			sqlmock.AnyArg(),
 			sqlmock.AnyArg(),
@@ -191,6 +199,8 @@ func TestBuildUsageLogBestEffortInsertQuery_IncludesRequestedModelColumn(t *test
 	require.Contains(t, query, "INSERT INTO usage_logs (")
 	require.Contains(t, query, "\n\t\t\tmodel,\n\t\t\trequested_model,\n\t\t\tupstream_model,")
 	require.Contains(t, query, "\n\t\t\trequest_id,\n\t\t\tmodel,\n\t\t\trequested_model,\n\t\t\tupstream_model,")
+	require.Contains(t, query, "\n\t\t\timage_count,\n\t\t\timage_size,\n\t\t\tmedia_type,")
+	require.Contains(t, query, "\n\t\t\tcurrency,\n\t\t\tpricing_source,\n\t\t\tpricing_version,")
 	require.Len(t, args, len(prepared.args))
 	require.Equal(t, prepared.args[5], args[5])
 }
@@ -217,6 +227,8 @@ func TestExecUsageLogInsertNoResult_PersistsRequestedModel(t *testing.T) {
 }
 
 func TestPrepareUsageLogInsert_ArgCountMatchesTypes(t *testing.T) {
+	mediaType := "image"
+	pricingVersion := "model-pricing-2026-07-05"
 	prepared := prepareUsageLogInsert(&service.UsageLog{
 		UserID:         1,
 		APIKeyID:       2,
@@ -224,10 +236,38 @@ func TestPrepareUsageLogInsert_ArgCountMatchesTypes(t *testing.T) {
 		RequestID:      "req-arg-count",
 		Model:          "gpt-5",
 		RequestedModel: "gpt-5",
+		MediaType:      &mediaType,
+		Currency:       service.BillingCurrencyUSD,
+		PricingSource:  service.PricingSourceLiteLLM,
+		PricingVersion: pricingVersion,
 		CreatedAt:      time.Date(2025, 1, 5, 12, 0, 0, 0, time.UTC),
 	})
 
 	require.Len(t, prepared.args, len(usageLogInsertArgTypes))
+	require.Equal(t, sql.NullString{String: mediaType, Valid: true}, prepared.args[35])
+	require.Equal(t, service.BillingCurrencyUSD, prepared.args[36])
+	require.Equal(t, service.PricingSourceLiteLLM, prepared.args[37])
+	require.Equal(t, sql.NullString{String: pricingVersion, Valid: true}, prepared.args[38])
+	require.Contains(t, usageLogSelectColumns, "media_type")
+	require.Contains(t, usageLogSelectColumns, "currency")
+	require.Contains(t, usageLogSelectColumns, "pricing_source")
+	require.Contains(t, usageLogSelectColumns, "pricing_version")
+}
+
+func TestPrepareUsageLogInsert_DefaultsBillingMetadata(t *testing.T) {
+	prepared := prepareUsageLogInsert(&service.UsageLog{
+		UserID:         1,
+		APIKeyID:       2,
+		AccountID:      3,
+		RequestID:      "req-default-billing-metadata",
+		Model:          "gpt-5",
+		RequestedModel: "gpt-5",
+		CreatedAt:      time.Date(2025, 1, 6, 12, 0, 0, 0, time.UTC),
+	})
+
+	require.Equal(t, service.BillingCurrencyUSD, prepared.args[36])
+	require.Equal(t, service.PricingSourceFallback, prepared.args[37])
+	require.Equal(t, sql.NullString{}, prepared.args[38])
 }
 
 func TestCoalesceTrimmedString(t *testing.T) {
@@ -443,27 +483,70 @@ func TestUsageLogRepositoryGetUserSpendingRanking(t *testing.T) {
 	start := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	end := start.Add(24 * time.Hour)
 
-	rows := sqlmock.NewRows([]string{"user_id", "email", "actual_cost", "requests", "tokens", "total_actual_cost", "total_requests", "total_tokens"}).
-		AddRow(int64(2), "beta@example.com", 12.5, int64(9), int64(900), 40.0, int64(30), int64(2600)).
-		AddRow(int64(1), "alpha@example.com", 12.5, int64(8), int64(800), 40.0, int64(30), int64(2600)).
-		AddRow(int64(3), "gamma@example.com", 4.25, int64(5), int64(300), 40.0, int64(30), int64(2600))
+	rows := sqlmock.NewRows([]string{"user_id", "email", "username", "user_notes", "member_type", "actual_cost", "requests", "tokens", "total_actual_cost", "total_requests", "total_tokens"}).
+		AddRow(int64(2), "beta@example.com", "n8n", "[工具] n8n flow", "tool", 12.5, int64(9), int64(900), 40.0, int64(30), int64(2600)).
+		AddRow(int64(1), "alpha@example.com", "alpha", "editor", "human", 12.5, int64(8), int64(800), 40.0, int64(30), int64(2600)).
+		AddRow(int64(3), "gamma@example.com", "", "", "human", 4.25, int64(5), int64(300), 40.0, int64(30), int64(2600))
 
 	mock.ExpectQuery("WITH user_spend AS \\(").
 		WithArgs(start, end, 12).
 		WillReturnRows(rows)
+	videoRows := sqlmock.NewRows([]string{"user_id", "video_cost"}).
+		AddRow(int64(2), 2.0).
+		AddRow(int64(3), 1.0)
+	mock.ExpectQuery("FROM video_usage_logs vul").
+		WithArgs(start, end).
+		WillReturnRows(videoRows)
 
 	got, err := repo.GetUserSpendingRanking(context.Background(), start, end, 12)
 	require.NoError(t, err)
 	require.Equal(t, &usagestats.UserSpendingRankingResponse{
 		Ranking: []usagestats.UserSpendingRankingItem{
-			{UserID: 2, Email: "beta@example.com", ActualCost: 12.5, Requests: 9, Tokens: 900},
-			{UserID: 1, Email: "alpha@example.com", ActualCost: 12.5, Requests: 8, Tokens: 800},
-			{UserID: 3, Email: "gamma@example.com", ActualCost: 4.25, Requests: 5, Tokens: 300},
+			{UserID: 2, Email: "beta@example.com", Username: "n8n", UserNotes: "[工具] n8n flow", MemberType: "tool", ActualCost: 12.5, VideoCost: 2.0, Requests: 9, Tokens: 900},
+			{UserID: 1, Email: "alpha@example.com", Username: "alpha", UserNotes: "editor", MemberType: "human", ActualCost: 12.5, Requests: 8, Tokens: 800},
+			{UserID: 3, Email: "gamma@example.com", Username: "", UserNotes: "", MemberType: "human", ActualCost: 4.25, VideoCost: 1.0, Requests: 5, Tokens: 300},
 		},
-		TotalActualCost: 40.0,
-		TotalRequests:   30,
-		TotalTokens:     2600,
+		TotalActualCost:         40.0,
+		TotalVideoCost:          3.0,
+		TotalCombinedActualCost: 43.0,
+		TotalRequests:           30,
+		TotalTokens:             2600,
 	}, got)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestUsageLogRepositoryFillDashboardVideoSpend(t *testing.T) {
+	db, mock := newSQLMock(t)
+	repo := &usageLogRepository{sql: db}
+
+	today := time.Date(2026, 7, 5, 0, 0, 0, 0, time.UTC)
+	todayEnd := today.Add(24 * time.Hour)
+	stats := &usagestats.DashboardStats{
+		TotalActualCost: 10,
+		TodayActualCost: 1,
+	}
+
+	mock.ExpectQuery("SELECT COALESCE\\(SUM\\(CASE").
+		WillReturnRows(sqlmock.NewRows([]string{"total"}).AddRow(5.0))
+	mock.ExpectQuery("SELECT COALESCE\\(SUM\\(CASE").
+		WithArgs(today, todayEnd).
+		WillReturnRows(sqlmock.NewRows([]string{"total"}).AddRow(2.0))
+	mock.ExpectQuery("SELECT provider, COUNT").
+		WillReturnRows(sqlmock.NewRows([]string{"provider", "count", "cost"}).
+			AddRow("seedance", int64(2), 4.0).
+			AddRow("mock", int64(1), 1.0))
+
+	err := repo.fillDashboardVideoSpend(context.Background(), stats, nil, nil, today)
+	require.NoError(t, err)
+	require.Equal(t, service.BillingCurrencyUSD, stats.CostCurrency)
+	require.Equal(t, 5.0, stats.VideoTotalCost)
+	require.Equal(t, 2.0, stats.TodayVideoCost)
+	require.Equal(t, 15.0, stats.UnifiedTotalActualCost)
+	require.Equal(t, 3.0, stats.UnifiedTodayActualCost)
+	require.Equal(t, []usagestats.VideoSpendByProvider{
+		{Provider: "seedance", Count: 2, Cost: 4.0},
+		{Provider: "mock", Count: 1, Cost: 1.0},
+	}, stats.VideoSpendByProvider)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -567,6 +650,10 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{},
 			0,
 			sql.NullString{},
+			sql.NullString{Valid: true, String: "image"},
+			sql.NullString{Valid: true, String: service.BillingCurrencyUSD},
+			sql.NullString{Valid: true, String: service.PricingSourceLiteLLM},
+			sql.NullString{Valid: true, String: service.PricingVersionModelPricing20260705},
 			sql.NullString{Valid: true, String: "priority"},
 			sql.NullString{},
 			sql.NullString{},
@@ -582,6 +669,11 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, log.ServiceTier)
 		require.Equal(t, "priority", *log.ServiceTier)
+		require.NotNil(t, log.MediaType)
+		require.Equal(t, "image", *log.MediaType)
+		require.Equal(t, service.BillingCurrencyUSD, log.Currency)
+		require.Equal(t, service.PricingSourceLiteLLM, log.PricingSource)
+		require.Equal(t, service.PricingVersionModelPricing20260705, log.PricingVersion)
 		require.Equal(t, service.RequestTypeWSV2, log.RequestType)
 		require.True(t, log.Stream)
 		require.True(t, log.OpenAIWSMode)
@@ -615,6 +707,10 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{},
 			0,
 			sql.NullString{},
+			sql.NullString{},
+			sql.NullString{Valid: true, String: service.BillingCurrencyUSD},
+			sql.NullString{Valid: true, String: service.PricingSourceFallback},
+			sql.NullString{},
 			sql.NullString{Valid: true, String: "flex"},
 			sql.NullString{},
 			sql.NullString{},
@@ -630,6 +726,9 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, log.ServiceTier)
 		require.Equal(t, "flex", *log.ServiceTier)
+		require.Equal(t, service.BillingCurrencyUSD, log.Currency)
+		require.Equal(t, service.PricingSourceFallback, log.PricingSource)
+		require.Empty(t, log.PricingVersion)
 		require.Equal(t, service.RequestTypeStream, log.RequestType)
 		require.True(t, log.Stream)
 		require.False(t, log.OpenAIWSMode)
@@ -663,6 +762,10 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{},
 			0,
 			sql.NullString{},
+			sql.NullString{},
+			sql.NullString{Valid: true, String: service.BillingCurrencyCNY},
+			sql.NullString{Valid: true, String: service.PricingSourceProviderUsage},
+			sql.NullString{Valid: true, String: service.VideoPricingVersionSeedance202603},
 			sql.NullString{Valid: true, String: "priority"},
 			sql.NullString{},
 			sql.NullString{},
@@ -678,6 +781,9 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, log.ServiceTier)
 		require.Equal(t, "priority", *log.ServiceTier)
+		require.Equal(t, service.BillingCurrencyCNY, log.Currency)
+		require.Equal(t, service.PricingSourceProviderUsage, log.PricingSource)
+		require.Equal(t, service.VideoPricingVersionSeedance202603, log.PricingVersion)
 	})
 
 }

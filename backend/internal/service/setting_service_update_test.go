@@ -279,6 +279,25 @@ func TestSettingService_UpdateSettings_PaymentVisibleMethodsAndAdvancedScheduler
 	require.Equal(t, "true", repo.updates[openAIAdvancedSchedulerSettingKey])
 }
 
+func TestSettingService_UpdateSettings_USDCNYRate(t *testing.T) {
+	repo := &settingUpdateRepoStub{}
+	svc := NewSettingService(repo, &config.Config{})
+
+	err := svc.UpdateSettings(context.Background(), &SystemSettings{
+		USDCNYRate: 7.33,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "7.33000000", repo.updates[SettingKeyUSDCNYRate])
+}
+
+func TestSettingService_ParseSettings_USDCNYRateDefault(t *testing.T) {
+	svc := NewSettingService(&settingUpdateRepoStub{}, &config.Config{})
+
+	parsed := svc.parseSettings(map[string]string{})
+
+	require.Equal(t, DefaultUSDCNYRate, parsed.USDCNYRate)
+}
+
 func TestSettingService_UpdateSettings_AntigravityUserAgentVersion(t *testing.T) {
 	repo := &settingUpdateRepoStub{}
 	svc := NewSettingService(repo, &config.Config{})

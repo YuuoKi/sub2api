@@ -102,6 +102,10 @@ func (h *DashboardHandler) GetStats(c *gin.Context) {
 		"total_tokens":                stats.TotalTokens,
 		"total_cost":                  stats.TotalCost,       // 标准计费
 		"total_actual_cost":           stats.TotalActualCost, // 实际扣除
+		"video_total_cost":            stats.VideoTotalCost,
+		"unified_total_actual_cost":   stats.UnifiedTotalActualCost,
+		"cost_currency":               stats.CostCurrency,
+		"video_spend_by_provider":     stats.VideoSpendByProvider,
 
 		// 今日 Token 使用统计
 		"today_requests":              stats.TodayRequests,
@@ -112,6 +116,8 @@ func (h *DashboardHandler) GetStats(c *gin.Context) {
 		"today_tokens":                stats.TodayTokens,
 		"today_cost":                  stats.TodayCost,       // 今日标准计费
 		"today_actual_cost":           stats.TodayActualCost, // 今日实际扣除
+		"today_video_cost":            stats.TodayVideoCost,
+		"unified_today_actual_cost":   stats.UnifiedTodayActualCost,
 
 		// 系统运行统计
 		"average_duration_ms": stats.AverageDurationMs,
@@ -519,12 +525,14 @@ func (h *DashboardHandler) GetUserSpendingRanking(c *gin.Context) {
 	}
 
 	payload := gin.H{
-		"ranking":           ranking.Ranking,
-		"total_actual_cost": ranking.TotalActualCost,
-		"total_requests":    ranking.TotalRequests,
-		"total_tokens":      ranking.TotalTokens,
-		"start_date":        startTime.Format("2006-01-02"),
-		"end_date":          endTime.Add(-24 * time.Hour).Format("2006-01-02"),
+		"ranking":                    ranking.Ranking,
+		"total_actual_cost":          ranking.TotalActualCost,
+		"total_video_cost":           ranking.TotalVideoCost,
+		"total_combined_actual_cost": ranking.TotalCombinedActualCost,
+		"total_requests":             ranking.TotalRequests,
+		"total_tokens":               ranking.TotalTokens,
+		"start_date":                 startTime.Format("2006-01-02"),
+		"end_date":                   endTime.Add(-24 * time.Hour).Format("2006-01-02"),
 	}
 	dashboardUsersRankingCache.Set(cacheKey, payload)
 	c.Header("X-Snapshot-Cache", "miss")

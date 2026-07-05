@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"os"
+	"reflect"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -37,7 +38,32 @@ func TestD2ApiKeyVideoContractMatchesSnapshotV1(t *testing.T) {
 		bound.Resolution != "720p" {
 		t.Fatalf("snapshot request did not bind expected top-level fields: %+v", bound)
 	}
+	if len(bound.Content) != 4 {
+		t.Fatalf("snapshot request content length = %d, want 4", len(bound.Content))
+	}
+	if bound.Content[1].Type != "image_url" ||
+		bound.Content[1].Role != "reference_image" ||
+		bound.Content[1].URL != "https://example.invalid/ref-a.png" {
+		t.Fatalf("snapshot request did not bind expected content item: %+v", bound.Content[1])
+	}
+	if bound.Content[2].Type != "video_url" ||
+		bound.Content[2].Role != "reference_video" ||
+		bound.Content[2].URL != "https://example.invalid/ref.mp4" {
+		t.Fatalf("snapshot request did not bind expected video content item: %+v", bound.Content[2])
+	}
+	if bound.GenerateAudio == nil || *bound.GenerateAudio ||
+		bound.Watermark == nil || *bound.Watermark ||
+		bound.CameraFixed == nil || !*bound.CameraFixed ||
+		bound.ReturnLastFrame == nil || !*bound.ReturnLastFrame {
+		t.Fatalf("snapshot request did not bind expected boolean options: %+v", bound)
+	}
 
+	tokens := int64(321)
+	actualDuration := 5
+	generateAudio := false
+	watermark := false
+	cameraFixed := true
+	returnLastFrame := true
 	task := &service.VideoTask{
 		ID:                12345,
 		Provider:          service.VideoProviderMock,
@@ -45,11 +71,21 @@ func TestD2ApiKeyVideoContractMatchesSnapshotV1(t *testing.T) {
 		TaskType:          bound.TaskType,
 		Prompt:            bound.Prompt,
 		ReferenceImageURL: bound.ReferenceImageURL,
+		Content:           bound.Content,
+		HasVideoInput:     true,
 		AspectRatio:       bound.AspectRatio,
 		Duration:          bound.Duration,
 		Resolution:        bound.Resolution,
+		GenerateAudio:     &generateAudio,
+		Watermark:         &watermark,
+		CameraFixed:       &cameraFixed,
+		ReturnLastFrame:   &returnLastFrame,
 		Status:            service.VideoStatusSucceeded,
 		ResultURL:         "/api/v1/video/mock-assets/12345.svg",
+		UsageTotalTokens:  &tokens,
+		ActualResolution:  "720p",
+		ActualDuration:    &actualDuration,
+		LastFrameURL:      "/api/v1/video/mock-assets/12345-last-frame.png",
 	}
 	rawResponse, err := json.Marshal(apiKeyVideoTaskToResponse(task, nil))
 	if err != nil {
@@ -64,9 +100,12 @@ func TestD2ApiKeyVideoContractMatchesSnapshotV1(t *testing.T) {
 		if !ok {
 			t.Fatalf("response missing snapshot key %q; actual keys=%v", key, actual)
 		}
-		if got != want {
+		if !reflect.DeepEqual(got, want) {
 			t.Fatalf("response[%s]=%v (%T), want %v (%T)", key, got, got, want, want)
 		}
+	}
+	if _, ok := actual["ResultURL"]; ok {
+		t.Fatalf("api-key response must not carry PascalCase ResultURL; actual keys=%v", actual)
 	}
 }
 
@@ -118,6 +157,9 @@ func TestC1ApiKeyVideoResponseMatchesQCanvasContract(t *testing.T) {
 	}
 	if m["result_url"] != "/api/v1/video/mock-assets/12345.svg" {
 		t.Fatalf("response `result_url` = %v (QCanvas resultUrl source)", m["result_url"])
+	}
+	if _, ok := m["ResultURL"]; ok {
+		t.Fatal("response must not carry duplicate PascalCase `ResultURL`")
 	}
 	if _, ok := m["error_message"]; !ok {
 		t.Fatal("response must carry `error_message` (QCanvas errorMessage source)")

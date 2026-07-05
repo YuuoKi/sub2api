@@ -5326,6 +5326,10 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		ImageCount:          result.ImageCount,
 		ImageSize:           optionalTrimmedStringPtr(result.ImageSize),
 	}
+	if result.ImageCount > 0 {
+		mediaType := "image"
+		usageLog.MediaType = &mediaType
+	}
 	if cost != nil {
 		usageLog.InputCost = cost.InputCost
 		usageLog.OutputCost = cost.OutputCost
@@ -5334,6 +5338,9 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		usageLog.CacheReadCost = cost.CacheReadCost
 		usageLog.TotalCost = cost.TotalCost
 		usageLog.ActualCost = cost.ActualCost
+		usageLog.Currency = cost.Currency
+		usageLog.PricingSource = cost.PricingSource
+		usageLog.PricingVersion = cost.PricingVersion
 	}
 	if result.ImageCount > 0 {
 		usageLog.RateMultiplier = imageMultiplier

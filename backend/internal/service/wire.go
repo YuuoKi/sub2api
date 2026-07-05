@@ -531,8 +531,9 @@ var ProviderSet = wire.NewSet(
 // leaves the gate UNARMED — budget stays nil, so production behaviour is unchanged
 // until phase-2B explicitly sets a cap. This is the single production wiring point
 // that turns the phase-2A interception primitive into a live brake.
-func ProvideVideoGatewayService(repo VideoGatewayRepository, encryptor VideoKeyEncryptor, cfg *config.Config) *VideoGatewayService {
+func ProvideVideoGatewayService(repo VideoGatewayRepository, encryptor VideoKeyEncryptor, cfg *config.Config, userRepo UserRepository, settingService *SettingService, billingCacheService *BillingCacheService) *VideoGatewayService {
 	svc := NewVideoGatewayService(repo, encryptor, cfg)
+	svc.SetBalanceBillingDependencies(userRepo, settingService, billingCacheService)
 	if cfg != nil && cfg.VideoGateway.PerCallBudget > 0 && cfg.VideoGateway.CostPerSecond > 0 {
 		svc.SetBudgetGuard(NewStaticBudgetGuard(cfg.VideoGateway.PerCallBudget))
 	}

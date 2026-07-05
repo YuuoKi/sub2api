@@ -52,7 +52,9 @@ type stubAdminService struct {
 		sortOrder string
 		calls     int
 	}
-	lastListProxies struct {
+	lastCreateUserInput *service.CreateUserInput
+	lastUpdateUserInput *service.UpdateUserInput
+	lastListProxies     struct {
 		protocol  string
 		status    string
 		search    string
@@ -157,12 +159,29 @@ func (s *stubAdminService) GetUser(ctx context.Context, id int64) (*service.User
 }
 
 func (s *stubAdminService) CreateUser(ctx context.Context, input *service.CreateUserInput) (*service.User, error) {
-	user := service.User{ID: 100, Email: input.Email, Status: service.StatusActive}
+	s.lastCreateUserInput = input
+	notes, err := service.ApplyUserMemberTypeToNotes(input.Notes, input.MemberType)
+	if err != nil {
+		return nil, err
+	}
+	user := service.User{ID: 100, Email: input.Email, Username: input.Username, Notes: notes, Status: service.StatusActive}
 	return &user, nil
 }
 
 func (s *stubAdminService) UpdateUser(ctx context.Context, id int64, input *service.UpdateUserInput) (*service.User, error) {
-	user := service.User{ID: id, Email: "updated@example.com", Status: service.StatusActive}
+	s.lastUpdateUserInput = input
+	notes := ""
+	if input.Notes != nil {
+		notes = *input.Notes
+	}
+	if input.MemberType != nil {
+		var err error
+		notes, err = service.ApplyUserMemberTypeToNotes(notes, *input.MemberType)
+		if err != nil {
+			return nil, err
+		}
+	}
+	user := service.User{ID: id, Email: "updated@example.com", Notes: notes, Status: service.StatusActive}
 	return &user, nil
 }
 

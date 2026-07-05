@@ -67,3 +67,31 @@ func TestAdminService_UpdateUser_NoInvalidateWhenRPMLimitUnchanged(t *testing.T)
 	require.NoError(t, err)
 	require.Empty(t, invalidator.userIDs, "只改 username 不应触发认证缓存失效")
 }
+
+func TestAdminService_UpdateUser_ToolMemberTypePrefixesExistingNotes(t *testing.T) {
+	base := &userRepoStub{user: &User{ID: 42, Email: "tool@example.com", Notes: "batch cutter"}}
+	repo := &rpmUserRepoStub{userRepoStub: base}
+	svc := &adminServiceImpl{userRepo: repo, redeemCodeRepo: &redeemRepoStub{}}
+
+	memberType := "tool"
+	updated, err := svc.UpdateUser(context.Background(), 42, &UpdateUserInput{
+		MemberType: &memberType,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "[工具] batch cutter", updated.Notes)
+	require.Equal(t, "[工具] batch cutter", repo.lastUpdated.Notes)
+}
+
+func TestAdminService_UpdateUser_HumanMemberTypeStripsToolPrefix(t *testing.T) {
+	base := &userRepoStub{user: &User{ID: 42, Email: "human@example.com", Notes: "[工具] Xiao Wang"}}
+	repo := &rpmUserRepoStub{userRepoStub: base}
+	svc := &adminServiceImpl{userRepo: repo, redeemCodeRepo: &redeemRepoStub{}}
+
+	memberType := "human"
+	updated, err := svc.UpdateUser(context.Background(), 42, &UpdateUserInput{
+		MemberType: &memberType,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "Xiao Wang", updated.Notes)
+	require.Equal(t, "Xiao Wang", repo.lastUpdated.Notes)
+}

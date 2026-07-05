@@ -16,6 +16,7 @@ import (
 type fakeVideoAdapter struct {
 	pollsUntilSucceed int           // succeed on/after this poll number; <=0 => never terminal
 	pollDelay         time.Duration // optional per-poll sleep to simulate a slow provider
+	pollResult        *VideoAdapterResult
 	polls             int
 }
 
@@ -34,6 +35,9 @@ func (a *fakeVideoAdapter) PollTask(_ context.Context, _ *VideoProviderAccount, 
 	}
 	a.polls++
 	if a.pollsUntilSucceed > 0 && a.polls >= a.pollsUntilSucceed {
+		if a.pollResult != nil {
+			return cloneVideoAdapterResult(a.pollResult), nil
+		}
 		return &VideoAdapterResult{
 			Status:    VideoStatusSucceeded,
 			ResultURL: "https://mock.sub2api.local/video/fake.mp4",
@@ -52,6 +56,28 @@ func (a *fakeVideoAdapter) NormalizeStatus(upstream string) string {
 
 func (a *fakeVideoAdapter) BuildCreatePayload(_ *VideoProviderAccount, _ *VideoTask) map[string]any {
 	return map[string]any{}
+}
+
+func cloneVideoAdapterResult(in *VideoAdapterResult) *VideoAdapterResult {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	if in.UsageTotalTokens != nil {
+		v := *in.UsageTotalTokens
+		out.UsageTotalTokens = &v
+	}
+	if in.ActualDuration != nil {
+		v := *in.ActualDuration
+		out.ActualDuration = &v
+	}
+	if in.Payload != nil {
+		out.Payload = make(map[string]any, len(in.Payload))
+		for k, v := range in.Payload {
+			out.Payload[k] = v
+		}
+	}
+	return &out
 }
 
 func cfgWithMaxPolls(maxPolls int) *config.Config {

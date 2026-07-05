@@ -51,7 +51,11 @@ type VideoGatewayService struct {
 	// budget is the optional VA1 budget gate / billing hook. nil => no gate (current
 	// production default until phase-2 real billing wires a concrete guard).
 	budget              VideoBudgetGuard
+	userRepo            UserRepository
+	settingService      *SettingService
+	billingCacheService *BillingCacheService
 	generationCollector *GenerationContentCollector
+	videoPricing        *VideoPricingCatalog
 }
 
 type videoRouteDecision struct {
@@ -70,10 +74,11 @@ type videoRouteSkip struct {
 
 func NewVideoGatewayService(repo VideoGatewayRepository, encryptor VideoKeyEncryptor, cfg *config.Config) *VideoGatewayService {
 	return &VideoGatewayService{
-		repo:      repo,
-		encryptor: encryptor,
-		adapters:  NewVideoAdapterRegistry(),
-		cfg:       cfg,
+		repo:         repo,
+		encryptor:    encryptor,
+		adapters:     NewVideoAdapterRegistry(),
+		cfg:          cfg,
+		videoPricing: NewVideoPricingCatalog(nil),
 	}
 }
 
@@ -312,14 +317,14 @@ func (s *VideoGatewayService) ListAPIKeyTrialProviders(ctx context.Context) ([]*
 		if strings.TrimSpace(os.Getenv("SUB2API_VIDEO_REAL_SMOKE_ENABLED")) != "1" {
 			reasons = append(reasons, "SUB2API_VIDEO_REAL_SMOKE_ENABLED is not 1")
 		}
-		if !metadataBool(seedance.Metadata, "single_smoke_authorized") && !metadataBool(seedance.Metadata, "real_smoke_authorized") {
-			reasons = append(reasons, "provider metadata does not record single smoke authorization")
+		if !seedanceRealCallAuthorized(seedance) {
+			reasons = append(reasons, "provider metadata does not record single smoke authorization or production authorization")
 		}
 		if strings.TrimSpace(os.Getenv("SUB2API_VIDEO_REDACTED_EVENT_LOG")) == "" {
 			reasons = append(reasons, "redacted event log path is missing")
 		}
-		if strings.TrimSpace(os.Getenv("SUB2API_VIDEO_URL_ALLOWLIST")) == "" {
-			reasons = append(reasons, "media url allowlist (SUB2API_VIDEO_URL_ALLOWLIST) is missing")
+		if configuredMediaURLAllowlist() == "" {
+			reasons = append(reasons, mediaURLAllowlistMissingReason())
 		}
 		if len(reasons) > 0 {
 			seedance.RouteSkipReason = strings.Join(reasons, "; ")
@@ -473,6 +478,92 @@ func (s *VideoGatewayService) CreateAPIKeySeedanceTinyTrialTask(ctx context.Cont
 			"provider":                        VideoProviderSeedance,
 			"trial_mode":                      "tiny_real",
 			"gate_result":                     "passed",
+			"planned_provider_dispatch_count": 1,
+			"real_provider_dispatch_count":    0,
+		},
+	})
+
+	return task, nil
+}
+
+func (s *VideoGatewayService) CreateAPIKeySeedanceProductionTask(ctx context.Context, provider string, p VideoTaskCreateParams) (*VideoTask, error) {
+	provider = strings.TrimSpace(provider)
+	if provider != VideoProviderSeedance {
+		return nil, errVideoProviderBlockedMockOnly(provider)
+	}
+
+	accounts, err := s.ListProviderAccounts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var seedanceAccount *VideoProviderAccount
+	seedanceBlockedReason := ""
+	for _, acc := range accounts {
+		if acc != nil && acc.Provider == VideoProviderSeedance && acc.Enabled {
+			s.decorateProviderForResponse(acc, VideoProviderRuntimeStats{})
+			if acc.RouteAvailable && seedanceProductionAuthorized(acc) {
+				seedanceAccount = acc
+				break
+			}
+			if seedanceBlockedReason == "" {
+				if !seedanceProductionAuthorized(acc) {
+					seedanceBlockedReason = "provider metadata production_authorized is not true"
+				} else {
+					seedanceBlockedReason = strings.TrimSpace(acc.RouteSkipReason)
+				}
+			}
+		}
+	}
+	if seedanceAccount == nil {
+		metadata := map[string]string{
+			"provider":                     VideoProviderSeedance,
+			"mock_only":                    "false",
+			"real_provider_dispatch_count": "0",
+			"production_authorized":        "false",
+		}
+		if seedanceBlockedReason != "" {
+			metadata["reason"] = seedanceBlockedReason
+		}
+		return nil, infraerrors.Forbidden("VIDEO_PRODUCTION_NOT_AUTHORIZED", "seedance production is not authorized for this provider account").WithMetadata(metadata)
+	}
+
+	model := firstNonEmptyVideo(strings.TrimSpace(p.Model), seedanceAccount.DefaultModel, defaultVideoModel(VideoProviderSeedance))
+	dummyTask := &VideoTask{
+		Provider: seedanceAccount.Provider,
+		Model:    model,
+		TaskType: p.TaskType,
+		Prompt:   strings.TrimSpace(p.Prompt),
+		Duration: defaultVideoDuration(p.Duration),
+	}
+	blockedReasons := seedanceSmokeGateBlockedReasons(seedanceAccount, dummyTask)
+	if len(blockedReasons) > 0 {
+		return nil, infraerrors.Forbidden("VIDEO_PRODUCTION_BLOCKED", "seedance production blocked by gate").WithMetadata(map[string]string{
+			"provider":                     VideoProviderSeedance,
+			"blocked_reasons":              strings.Join(blockedReasons, "; "),
+			"real_provider_dispatch_count": "0",
+			"production_authorized":        "true",
+		})
+	}
+
+	p.ProviderAccountID = seedanceAccount.ID
+	route := &videoRouteDecision{
+		Account:  seedanceAccount,
+		Strategy: "api-key-seedance-production",
+		Reason:   "seedance production gate passed",
+	}
+	task, err := s.createTaskWithRoute(ctx, p, route, s.repo.CreateTask)
+	if err != nil {
+		return nil, err
+	}
+
+	_ = s.repo.AddTaskEvent(ctx, &VideoTaskEvent{
+		VideoTaskID: task.ID,
+		EventType:   "production_gate",
+		Message:     "seedance production gate passed",
+		Payload: map[string]any{
+			"provider":                        VideoProviderSeedance,
+			"gate_result":                     "passed",
+			"production_authorized":           true,
 			"planned_provider_dispatch_count": 1,
 			"real_provider_dispatch_count":    0,
 		},
@@ -649,19 +740,35 @@ func (s *VideoGatewayService) createTaskWithRoute(ctx context.Context, p VideoTa
 		return nil, ErrVideoProviderDisabled
 	}
 	account := route.Account
+	model := firstNonEmptyVideo(strings.TrimSpace(p.Model), account.DefaultModel, defaultVideoModel(account.Provider))
+	duration := defaultVideoDuration(p.Duration)
+	resolution := firstNonEmptyVideo(strings.TrimSpace(p.Resolution), "720p")
+	content, hasVideoInput, err := normalizeVideoTaskContent(p)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateVideoGenerationContract(account.Provider, model, duration, resolution); err != nil {
+		return nil, err
+	}
 	task := &VideoTask{
 		ProviderAccountID:   account.ID,
 		ProviderAccountName: account.DisplayName,
 		Provider:            account.Provider,
-		Model:               firstNonEmptyVideo(strings.TrimSpace(p.Model), account.DefaultModel, defaultVideoModel(account.Provider)),
+		Model:               model,
 		TaskType:            p.TaskType,
 		Prompt:              strings.TrimSpace(p.Prompt),
 		NegativePrompt:      strings.TrimSpace(p.NegativePrompt),
 		ReferenceImageURL:   strings.TrimSpace(p.ReferenceImageURL),
 		ReferenceVideoURL:   strings.TrimSpace(p.ReferenceVideoURL),
+		Content:             content,
+		HasVideoInput:       hasVideoInput,
 		AspectRatio:         firstNonEmptyVideo(strings.TrimSpace(p.AspectRatio), "16:9"),
-		Duration:            defaultVideoDuration(p.Duration),
-		Resolution:          firstNonEmptyVideo(strings.TrimSpace(p.Resolution), "720p"),
+		Duration:            duration,
+		Resolution:          resolution,
+		GenerateAudio:       p.GenerateAudio,
+		Watermark:           p.Watermark,
+		CameraFixed:         p.CameraFixed,
+		ReturnLastFrame:     p.ReturnLastFrame,
 		Status:              VideoStatusQueued,
 		CreatedBy:           p.CreatedBy,
 	}
@@ -781,6 +888,7 @@ func (s *VideoGatewayService) CancelTask(ctx context.Context, id, userID int64, 
 		Message:     "video task cancelled",
 		Payload:     result.Payload,
 	})
+	s.applyVideoBillingMetadata(task)
 	_ = s.repo.InsertUsageLog(ctx, task)
 	return task, nil
 }
@@ -1344,6 +1452,9 @@ func defaultVideoRateLimit(v int) int {
 }
 
 func defaultVideoDuration(v int) int {
+	if v == -1 {
+		return -1
+	}
 	if v <= 0 {
 		return 5
 	}

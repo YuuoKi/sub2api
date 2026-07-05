@@ -222,7 +222,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	errorPassthroughService := service.NewErrorPassthroughService(errorPassthroughRepository, errorPassthroughCache)
 	errorPassthroughHandler := admin.NewErrorPassthroughHandler(errorPassthroughService)
 	tlsFingerprintProfileHandler := admin.NewTLSFingerprintProfileHandler(tlsFingerprintProfileService)
-	adminAPIKeyHandler := admin.NewAdminAPIKeyHandler(adminService)
+	adminAPIKeyHandler := admin.NewAdminAPIKeyHandler(adminService, apiKeyService)
 	scheduledTestPlanRepository := repository.NewScheduledTestPlanRepository(db)
 	scheduledTestResultRepository := repository.NewScheduledTestResultRepository(db)
 	scheduledTestService := service.ProvideScheduledTestService(scheduledTestPlanRepository, scheduledTestResultRepository)
@@ -243,7 +243,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	if err != nil {
 		return nil, err
 	}
-	videoGatewayService := service.ProvideVideoGatewayService(videoGatewayRepository, videoKeyEncryptor, configConfig)
+	videoGatewayService := service.ProvideVideoGatewayService(videoGatewayRepository, videoKeyEncryptor, configConfig, userRepository, settingService, billingCacheService)
 	videoHandler := admin.NewVideoHandler(videoGatewayService)
 	// 手工补线（与 line ~188 的采集器注入同源）：只读看板的采集内容 repo + handler。
 	// 注意：本文件由 Wire 生成但已被手工维护，请勿运行 wire codegen（会抹掉手工补丁）。

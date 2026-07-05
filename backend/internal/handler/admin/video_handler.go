@@ -117,6 +117,7 @@ type videoTaskSummaryResponse struct {
 	ResultURL           string  `json:"result_url"`
 	ErrorMessage        string  `json:"error_message"`
 	CostEstimate        float64 `json:"cost_estimate"`
+	Currency            string  `json:"currency"`
 	CreatedBy           int64   `json:"created_by"`
 	CreatedByEmail      string  `json:"created_by_email"`
 	CreatedByName       string  `json:"created_by_name"`
@@ -407,6 +408,7 @@ func videoTaskSummary(task *service.VideoTask) videoTaskSummaryResponse {
 		ResultURL:           task.ResultURL,
 		ErrorMessage:        task.ErrorMessage,
 		CostEstimate:        task.CostEstimate,
+		Currency:            service.NormalizeBillingCurrency(task.Currency),
 		CreatedBy:           task.CreatedBy,
 		CreatedByEmail:      task.CreatedByEmail,
 		CreatedByName:       task.CreatedByName,

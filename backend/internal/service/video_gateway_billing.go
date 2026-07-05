@@ -3,25 +3,23 @@ package service
 import (
 	"context"
 	"log/slog"
+	"strings"
 )
 
-// VideoBudgetGuard is the VA1 per-call budget gate + post-success charge hook for
+// VideoBudgetGuard is the VA1 per-call budget cap gate for
 // the video gateway. It is intentionally a narrow interface so the gateway can
 // enforce a budget without depending on the concrete balance/credits backend.
-//
-// Phase-1 scope (this change): the gate LOGIC and its call sites are wired and
-// unit-tested with a mock. Injecting the real per-user-balance backend and a
-// non-zero cost rate into DI — i.e. real end-to-end deduction — is deferred to
-// phase 2. When no guard is injected (production default for now) the gateway
-// behaves exactly as before (no gate, no deduction).
+// Real balance deduction is wired separately through UserRepository so the static
+// guard stays a cap/interception primitive rather than a billing backend.
 type VideoBudgetGuard interface {
 	// CheckBudget is the FAIL-CLOSED pre-call gate. It MUST return a non-nil error
 	// when the subject cannot afford estimatedCost OR when affordability cannot be
 	// determined; the gateway rejects the create (no row persisted, no provider
 	// dispatch) on ANY error.
 	CheckBudget(ctx context.Context, userID int64, estimatedCost float64) error
-	// Charge deducts the actual cost after a generation reaches terminal success.
-	// An error is logged but never rolls back an already-delivered video.
+	// Charge is retained as a legacy post-success hook for tests/telemetry.
+	// StaticBudgetGuard implements it as a no-op; real balance charging must not
+	// live behind this method.
 	Charge(ctx context.Context, userID int64, cost float64, taskID int64) error
 }
 
@@ -31,8 +29,16 @@ func (s *VideoGatewayService) SetBudgetGuard(g VideoBudgetGuard) {
 	s.budget = g
 }
 
+// SetBalanceBillingDependencies wires the real user-balance billing path used
+// after terminal successful video tasks. Passing nil leaves that dependency inert.
+func (s *VideoGatewayService) SetBalanceBillingDependencies(userRepo UserRepository, settingService *SettingService, billingCacheService *BillingCacheService) {
+	s.userRepo = userRepo
+	s.settingService = settingService
+	s.billingCacheService = billingCacheService
+}
+
 // estimateVideoCost estimates a task's monetary cost for the budget gate. Seedance
-// returns no cost field, so it is duration × the configured per-second rate. With
+// returns no cost field, so it is duration 脳 the configured per-second rate. With
 // the default rate of 0 the estimate is 0 (gate inert) until a real rate is set.
 func (s *VideoGatewayService) estimateVideoCost(task *VideoTask) float64 {
 	if task == nil {
@@ -45,19 +51,132 @@ func (s *VideoGatewayService) estimateVideoCost(task *VideoTask) float64 {
 	if rate < 0 {
 		rate = 0
 	}
-	return rate * float64(task.Duration)
+	duration := task.Duration
+	if duration == -1 {
+		duration = 5
+	}
+	if rate == 0 {
+		rate = s.estimateSeedanceCostPerSecond(task)
+	}
+	return rate * float64(duration)
 }
 
-// chargeForVideo deducts the cost of a delivered video on terminal success. It
-// charges the SAME duration-based estimate the pre-call gate authorized, so VA1 is
-// internally consistent — a user is never charged more than was gated. Reconciling
-// against a real provider-reported cost (task.CostEstimate) is phase-2 scope.
+// calculateVideoActualCost converts provider-reported usage tokens to the official
+// Seedance CNY cost. Failed tasks and tasks without provider usage cost 0.
+func (s *VideoGatewayService) calculateVideoActualCost(task *VideoTask) float64 {
+	if task == nil || task.Status != VideoStatusSucceeded || task.UsageTotalTokens == nil || *task.UsageTotalTokens <= 0 {
+		return 0
+	}
+	rate, _, ok := s.videoPricingCatalog().RateCNYPerMillionTokens(task)
+	if !ok || rate <= 0 {
+		return 0
+	}
+	return float64(*task.UsageTotalTokens) / videoTokensPerMillion * rate
+}
+
+func (s *VideoGatewayService) estimateSeedanceCostPerSecond(task *VideoTask) float64 {
+	if task == nil || task.Provider != VideoProviderSeedance {
+		return 0
+	}
+	model := normalizeVideoPricingModel(task.Model)
+	resolution := strings.ToLower(strings.TrimSpace(task.Resolution))
+	if resolution == "" {
+		resolution = "720p"
+	}
+	var base float64
+	var noVideoTokenRate float64
+	var actualTokenRate float64
+	if strings.Contains(model, "seedance-2-0-fast") {
+		noVideoTokenRate = 37
+		actualTokenRate = 37
+		if task.HasVideoInput {
+			actualTokenRate = 22
+		}
+		switch resolution {
+		case "480p":
+			base = 0.4
+		case "720p", "1080p":
+			base = 0.8
+		}
+	} else if strings.Contains(model, "seedance-2-0") {
+		noVideoTokenRate = 46
+		actualTokenRate = 46
+		if task.HasVideoInput {
+			actualTokenRate = 28
+		}
+		switch resolution {
+		case "480p":
+			base = 0.5
+		case "720p":
+			base = 1.0
+		case "1080p":
+			base = 2.5
+		}
+	}
+	if base <= 0 {
+		return 0
+	}
+	if noVideoTokenRate > 0 && actualTokenRate > 0 && actualTokenRate != noVideoTokenRate {
+		base *= actualTokenRate / noVideoTokenRate
+	}
+	return base
+}
+
+func (s *VideoGatewayService) chargeableVideoCost(task *VideoTask) float64 {
+	if task == nil || task.Status != VideoStatusSucceeded {
+		return 0
+	}
+	if task.Provider == VideoProviderSeedance {
+		return s.calculateVideoActualCost(task)
+	}
+	if task.CostEstimate > 0 {
+		return task.CostEstimate
+	}
+	return s.estimateVideoCost(task)
+}
+
+// chargeForVideo deducts the USD user balance for a delivered video exactly once.
+// Seedance provider-usage prices are stored in CNY and converted through the
+// configured usd_cny_rate (default 7.20) before deducting users.balance.
 // Billing errors are logged, never fatal (the video is already delivered).
 func (s *VideoGatewayService) chargeForVideo(ctx context.Context, task *VideoTask) {
-	if s.budget == nil || task == nil {
+	if task == nil || task.Status != VideoStatusSucceeded {
 		return
 	}
-	if err := s.budget.Charge(ctx, task.CreatedBy, s.estimateVideoCost(task), task.ID); err != nil {
-		slog.Warn("video_gateway: post-success charge failed", "task_id", task.ID, "error", err)
+	cost := s.chargeableVideoCost(task)
+	if cost <= 0 {
+		return
+	}
+
+	claimed, err := s.repo.ClaimVideoBalanceCharge(ctx, task.ID)
+	if err != nil {
+		slog.Warn("video_gateway: claim balance charge failed", "task_id", task.ID, "error", err)
+		return
+	}
+	if !claimed {
+		return
+	}
+
+	if s.userRepo != nil {
+		rate := DefaultUSDCNYRate
+		if s.settingService != nil {
+			rate = s.settingService.GetUSDCNYRate(ctx)
+		}
+		amountUSD := ConvertBillingAmount(cost, task.Currency, BillingCurrencyUSD, rate)
+		if amountUSD > 0 {
+			if err := s.userRepo.DeductBalance(ctx, task.CreatedBy, amountUSD); err != nil {
+				slog.Warn("video_gateway: user balance deduction failed", "task_id", task.ID, "user_id", task.CreatedBy, "error", err)
+				return
+			}
+			if s.billingCacheService != nil {
+				s.billingCacheService.QueueDeductBalance(task.CreatedBy, amountUSD)
+			}
+		}
+	}
+
+	if s.budget != nil {
+		if err := s.budget.Charge(ctx, task.CreatedBy, cost, task.ID); err != nil {
+			slog.Warn("video_gateway: post-success budget hook failed", "task_id", task.ID, "error", err)
+		}
 	}
 }

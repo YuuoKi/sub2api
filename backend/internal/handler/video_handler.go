@@ -232,6 +232,8 @@ func (h *VideoHandler) CreateTask(c *gin.Context) {
 	}
 	if role == "admin" {
 		params.ProviderAccountID = req.ProviderAccountID
+		params.EnforceRealProviderTrial = false
+		params.RequireSeedanceProductionAuthorization = true
 	}
 	task, err := h.video.CreateTask(c.Request.Context(), params)
 	if err != nil {

@@ -163,6 +163,7 @@ import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import { isVideoGatewayDemoMode } from '@/utils/productMode'
+import { formatByCurrency } from '@/composables/useDisplayCurrency'
 import {
   errorMessageLabel,
   formatDate,
@@ -194,8 +195,7 @@ const visibleProviderOptions = computed(() => (
 // Seedance 真实计费为人民币（V-2/V-3），其余按美元展示
 function formatTaskCost(task: VideoTask): string {
   if (task.cost_estimate <= 0) return '—'
-  const symbol = task.currency === 'CNY' ? '¥' : '$'
-  return `${symbol}${task.cost_estimate.toFixed(2)}`
+  return formatByCurrency(task.cost_estimate, task.currency)
 }
 
 const quickStatusFilters: Array<{ label: string; status: '' | VideoTaskStatus }> = [

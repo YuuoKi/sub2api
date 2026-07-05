@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"strconv"
@@ -19,16 +20,25 @@ import (
 type DashboardHandler struct {
 	dashboardService   *service.DashboardService
 	aggregationService *service.DashboardAggregationService
+	settingService     *service.SettingService
 	startTime          time.Time // Server start time for uptime calculation
 }
 
 // NewDashboardHandler creates a new admin dashboard handler
-func NewDashboardHandler(dashboardService *service.DashboardService, aggregationService *service.DashboardAggregationService) *DashboardHandler {
+func NewDashboardHandler(dashboardService *service.DashboardService, aggregationService *service.DashboardAggregationService, settingService *service.SettingService) *DashboardHandler {
 	return &DashboardHandler{
 		dashboardService:   dashboardService,
 		aggregationService: aggregationService,
+		settingService:     settingService,
 		startTime:          time.Now(),
 	}
+}
+
+func (h *DashboardHandler) usdCNYRate(ctx context.Context) float64 {
+	if h == nil || h.settingService == nil {
+		return service.DefaultUSDCNYRate
+	}
+	return h.settingService.GetUSDCNYRate(ctx)
 }
 
 // parseTimeRange parses start_date, end_date query parameters
@@ -72,6 +82,7 @@ func (h *DashboardHandler) GetStats(c *gin.Context) {
 		response.Error(c, 500, "Failed to get dashboard statistics")
 		return
 	}
+	stats.USDCNYRate = h.usdCNYRate(c.Request.Context())
 
 	// Calculate uptime in seconds
 	uptime := int64(time.Since(h.startTime).Seconds())
@@ -105,6 +116,7 @@ func (h *DashboardHandler) GetStats(c *gin.Context) {
 		"video_total_cost":            stats.VideoTotalCost,
 		"unified_total_actual_cost":   stats.UnifiedTotalActualCost,
 		"cost_currency":               stats.CostCurrency,
+		"usd_cny_rate":                stats.USDCNYRate,
 		"video_spend_by_provider":     stats.VideoSpendByProvider,
 
 		// 今日 Token 使用统计

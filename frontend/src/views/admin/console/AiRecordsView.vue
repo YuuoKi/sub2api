@@ -60,7 +60,7 @@
           </div>
           <div>
             <div class="text-xs text-gray-500 dark:text-gray-400">实际花费</div>
-            <div class="mt-1 text-lg font-semibold tabular-nums text-teal-600 dark:text-teal-300">{{ formatMoney(stats.total_actual_cost) }}</div>
+            <div class="mt-1 text-lg font-semibold tabular-nums text-teal-600 dark:text-teal-300">{{ formatMoney(stats.total_actual_cost, usdCnyRate) }}</div>
           </div>
           <div>
             <div class="text-xs text-gray-500 dark:text-gray-400">Tokens</div>
@@ -126,7 +126,7 @@
                 <td class="px-5 py-3 text-xs tabular-nums text-gray-600 dark:text-gray-300">
                   {{ formatTokens(log.input_tokens + log.output_tokens) }}
                 </td>
-                <td class="px-5 py-3 tabular-nums font-medium text-teal-600 dark:text-teal-300">{{ formatMoney(log.actual_cost) }}</td>
+                <td class="px-5 py-3 tabular-nums font-medium text-teal-600 dark:text-teal-300">{{ formatMoney(log.actual_cost, usdCnyRate) }}</td>
                 <td class="px-5 py-3 text-xs tabular-nums text-gray-500 dark:text-gray-400">{{ formatDuration(log.duration_ms) }}</td>
               </tr>
               <tr v-if="!loading && !logs.length">
@@ -163,7 +163,7 @@
           <div class="flex flex-wrap items-center gap-2 text-xs">
             <span class="font-medium text-gray-900 dark:text-white">{{ sample.employee_name || '未知员工' }}</span>
             <span class="rounded-md bg-gray-100 px-2 py-0.5 font-medium text-gray-700 dark:bg-dark-700 dark:text-gray-200">{{ sample.model }}</span>
-            <span v-if="sample.cost_estimate > 0" class="tabular-nums text-teal-600 dark:text-teal-300">{{ formatMoney(sample.cost_estimate) }}</span>
+            <span v-if="sample.cost_estimate > 0" class="tabular-nums text-teal-600 dark:text-teal-300">{{ formatSampleCost(sample) }}</span>
             <span class="ml-auto text-gray-400 dark:text-gray-500">{{ formatDateTime(sample.created_at) }}</span>
           </div>
           <div class="mt-3 space-y-2 text-sm">
@@ -193,6 +193,7 @@ import type { AdminUsageStatsResponse } from '@/api/admin/usage'
 import type { GenerationSample } from '@/api/admin/generation_content'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
+import { formatByCurrency } from '@/composables/useDisplayCurrency'
 import {
   formatCount,
   formatDateTime,
@@ -219,6 +220,7 @@ const pageSize = 20
 const stats = ref<AdminUsageStatsResponse | null>(null)
 const samples = ref<GenerationSample[]>([])
 const staffOptions = ref<AdminUser[]>([])
+const usdCnyRate = ref(7.2)
 
 const filterUserId = ref(0)
 const filterModel = ref('')
@@ -272,12 +274,22 @@ async function loadStaffOptions() {
 async function reload() {
   loading.value = true
   try {
-    await Promise.all([loadLogs(), loadStats(), loadSamples()])
+    const [, , , rateStats] = await Promise.all([
+      loadLogs(),
+      loadStats(),
+      loadSamples(),
+      adminAPI.dashboard.getStats().catch(() => null),
+    ])
+    usdCnyRate.value = Number(rateStats?.usd_cny_rate || 7.2)
   } catch (err) {
     appStore.showError(extractApiErrorMessage(err, '加载调用记录失败'))
   } finally {
     loading.value = false
   }
+}
+
+function formatSampleCost(sample: GenerationSample): string {
+  return formatByCurrency(sample.cost_estimate, sample.currency, usdCnyRate.value)
 }
 
 function onFilterChanged() {

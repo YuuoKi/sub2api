@@ -21,6 +21,7 @@ type generationContentRepoStub struct {
 	adoptionErr    error
 	adoptionResult *service.GenerationContentAdoption
 	weeklyReport   *service.GenerationContentWeeklyReport
+	recentRows     []service.GenerationContentSample
 }
 
 func (s *generationContentRepoStub) Create(context.Context, *service.GenerationContent) error {
@@ -36,7 +37,7 @@ func (s *generationContentRepoStub) GetCaptureStats(context.Context) (*service.G
 }
 
 func (s *generationContentRepoStub) GetRecent(context.Context, int) ([]service.GenerationContentSample, error) {
-	return nil, nil
+	return s.recentRows, nil
 }
 
 func (s *generationContentRepoStub) PurgeExpiredContent(context.Context, time.Time, int, bool) (int64, error) {
@@ -90,8 +91,31 @@ func setupGenerationContentRouter(repo *generationContentRepoStub, cfg *config.C
 	router := gin.New()
 	h := NewGenerationContentHandler(repo, cfg)
 	router.POST("/api/v1/admin/generation-content/:task_id/adoption", h.UpdateAdoption)
+	router.GET("/api/v1/admin/generation-content/samples", h.GetSamples)
 	router.GET("/api/v1/admin/generation-content/weekly-report", h.GetWeeklyReport)
 	return router
+}
+
+func TestGenerationContentHandlerSamplesIncludesCurrency(t *testing.T) {
+	taskID := int64(42)
+	repo := &generationContentRepoStub{recentRows: []service.GenerationContentSample{{
+		TaskID:       &taskID,
+		Model:        "seedance-v1",
+		CreatedAt:    time.Date(2026, 7, 6, 8, 0, 0, 0, time.UTC),
+		Username:     "operator",
+		VideoStatus:  "succeeded",
+		CostEstimate: 5.0094,
+		Currency:     "CNY",
+	}}}
+	router := setupGenerationContentRouter(repo, &config.Config{})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/generation-content/samples", nil)
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Contains(t, rec.Body.String(), `"currency":"CNY"`)
+	require.Contains(t, rec.Body.String(), `"cost_estimate":5.0094`)
 }
 
 func TestGenerationContentHandlerUpdateAdoptionMapsPayload(t *testing.T) {

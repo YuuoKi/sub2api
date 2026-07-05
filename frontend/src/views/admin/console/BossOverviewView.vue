@@ -73,6 +73,9 @@
                 <AnimatedNumber :value="card.value" :format="card.format" />
               </div>
               <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ card.hint }}</div>
+              <div v-if="card.icon === 'dollar'" class="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                账户余额与开卡额度以美元计，汇率 {{ usdCnyRate.toFixed(2) }} 可在设置中调整
+              </div>
             </div>
             <svg class="h-14 w-14 shrink-0 -rotate-90" viewBox="0 0 48 48" aria-hidden="true">
               <circle cx="24" cy="24" r="20" fill="none" stroke-width="4" class="stroke-gray-100 dark:stroke-dark-700" />
@@ -99,11 +102,11 @@
           <div class="flex items-center justify-between gap-3">
             <div>
               <h2 class="text-base font-semibold text-gray-900 dark:text-white">花费趋势</h2>
-              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ rangeLabel }}内每天实际花费（美元）</p>
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ rangeLabel }}内每天实际花费（人民币）</p>
             </div>
             <div class="text-right">
               <div class="text-xs text-gray-500 dark:text-gray-400">本期合计</div>
-              <div class="text-lg font-semibold text-teal-600 dark:text-teal-300">{{ formatMoney(totalSpend) }}</div>
+              <div class="text-lg font-semibold text-teal-600 dark:text-teal-300">{{ formatMoney(totalSpend, usdCnyRate) }}</div>
             </div>
           </div>
           <div class="mt-4 h-64">
@@ -126,7 +129,7 @@
                 <span class="h-2.5 w-2.5 shrink-0 rounded-full" :style="{ backgroundColor: chartColors[index % chartColors.length] }"></span>
                 <span class="min-w-0 flex-1 truncate text-gray-700 dark:text-gray-200" :title="model.model">{{ model.model }}</span>
                 <span class="shrink-0 tabular-nums text-gray-500 dark:text-gray-400">{{ formatCount(model.requests) }} 次</span>
-                <span class="shrink-0 tabular-nums font-medium text-teal-600 dark:text-teal-300">{{ formatMoney(model.actual_cost) }}</span>
+                <span class="shrink-0 tabular-nums font-medium text-teal-600 dark:text-teal-300">{{ formatMoney(model.actual_cost, usdCnyRate) }}</span>
               </div>
             </div>
           </div>
@@ -185,8 +188,8 @@
                 </td>
                 <td class="px-5 py-3 tabular-nums text-gray-700 dark:text-gray-200">{{ formatCount(item.requests) }}</td>
                 <td class="px-5 py-3 tabular-nums text-gray-700 dark:text-gray-200">{{ formatTokens(item.tokens) }}</td>
-                <td class="px-5 py-3 tabular-nums font-medium text-teal-600 dark:text-teal-300">{{ formatMoney(item.actual_cost) }}</td>
-                <td class="px-5 py-3 tabular-nums text-gray-700 dark:text-gray-200">{{ (item.video_cost ?? 0) > 0 ? formatMoney(item.video_cost ?? 0) : '—' }}</td>
+                <td class="px-5 py-3 tabular-nums font-medium text-teal-600 dark:text-teal-300">{{ formatMoney(item.actual_cost, usdCnyRate) }}</td>
+                <td class="px-5 py-3 tabular-nums text-gray-700 dark:text-gray-200">{{ (item.video_cost ?? 0) > 0 ? formatMoney(item.video_cost ?? 0, usdCnyRate) : '—' }}</td>
                 <td class="px-5 py-3">
                   <div class="flex items-center gap-2">
                     <div class="h-2 flex-1 overflow-hidden rounded-full bg-gray-100 dark:bg-dark-700">
@@ -318,6 +321,7 @@ const models = ref<ModelStat[]>([])
 const ranking = ref<UserSpendingRankingItem[]>([])
 const rankingTotals = ref({ actual_cost: 0, requests: 0, tokens: 0, video_cost: 0, combined_cost: 0 })
 const videoDashboard = ref<VideoDashboard | null>(null)
+const usdCnyRate = ref(7.2)
 
 const rangeOptions: Array<{ key: ConsoleRangeKey; label: string }> = [
   { key: '7d', label: '近 7 天' },
@@ -385,9 +389,9 @@ const statCards = computed<StatCard[]>(() => {
       label: `${rangeLabel.value}总花费`,
       value: combinedSpend.value,
       hint: totalVideoSpend.value > 0
-        ? `AI ${formatMoney(totalSpend.value)} + 视频 ${formatMoney(totalVideoSpend.value)}（美元）`
+        ? `AI ${formatMoney(totalSpend.value, usdCnyRate.value)} + 视频 ${formatMoney(totalVideoSpend.value, usdCnyRate.value)}`
         : '所有成员实际扣费合计',
-      format: (v) => formatMoney(v),
+      format: (v) => formatMoney(v, usdCnyRate.value),
       ratio: combinedSpend.value > 0 ? 1 : 0,
       icon: 'dollar',
       ringClass: 'stroke-teal-500',
@@ -455,7 +459,7 @@ const trendChartOptions = {
     legend: { display: false },
     tooltip: {
       callbacks: {
-        label: (context: { raw: unknown }) => ` 花费 ${formatMoney(Number(context.raw))}`,
+        label: (context: { raw: unknown }) => ` 花费 ${formatMoney(Number(context.raw), usdCnyRate.value)}`,
       },
     },
   },
@@ -463,7 +467,7 @@ const trendChartOptions = {
     x: { grid: { display: false }, ticks: { maxTicksLimit: 10, color: '#94a3b8' } },
     y: {
       grid: { color: 'rgba(148, 163, 184, 0.15)' },
-      ticks: { color: '#94a3b8', callback: (value: string | number) => `$${value}` },
+      ticks: { color: '#94a3b8', callback: (value: string | number) => formatMoney(Number(value), usdCnyRate.value) },
       beginAtZero: true,
     },
   },
@@ -500,7 +504,7 @@ const modelChartOptions = {
           const value = Number(context.raw)
           const total = (context.dataset.data as number[]).reduce((sum, v) => sum + v, 0)
           const pct = total > 0 ? ((value / total) * 100).toFixed(1) : '0.0'
-          return ` ${context.label}: ${formatMoney(value)} (${pct}%)`
+          return ` ${context.label}: ${formatMoney(value, usdCnyRate.value)} (${pct}%)`
         },
       },
     },
@@ -527,12 +531,14 @@ async function loadAll() {
   loading.value = true
   const { start, end } = getConsoleRange(rangeKey.value)
   try {
-    const [trendRes, modelsRes, rankingRes, videoRes] = await Promise.all([
+    const [statsRes, trendRes, modelsRes, rankingRes, videoRes] = await Promise.all([
+      adminAPI.dashboard.getStats(),
       adminAPI.dashboard.getUsageTrend({ start_date: start, end_date: end, granularity: 'day' }),
       adminAPI.dashboard.getModelStats({ start_date: start, end_date: end }),
       adminAPI.dashboard.getUserSpendingRanking({ start_date: start, end_date: end, limit: 20 }),
       adminAPI.video.dashboard().catch(() => null),
     ])
+    usdCnyRate.value = Number(statsRes.usd_cny_rate || 7.2)
     trend.value = trendRes.trend || []
     models.value = modelsRes.models || []
     ranking.value = rankingRes.ranking || []

@@ -2,6 +2,7 @@
  * 无界 AI 生产控制台（演示模式）共享工具：
  * 金额 / 数字 / 日期格式化与时间范围计算。
  */
+import { formatCny, formatUsdAccountAmount } from '../../../composables/useDisplayCurrency'
 
 export function formatLocalDate(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -21,14 +22,12 @@ export function getConsoleRange(key: ConsoleRangeKey): { start: string; end: str
   return { start: formatLocalDate(start), end: formatLocalDate(end) }
 }
 
-export function formatMoney(value?: number | null): string {
-  const amount = Number(value ?? 0)
-  if (!Number.isFinite(amount)) return '$0.00'
-  if (amount >= 10000) return `$${(amount / 1000).toFixed(1)}K`
-  if (amount >= 1) return `$${amount.toFixed(2)}`
-  if (amount >= 0.01) return `$${amount.toFixed(3)}`
-  if (amount === 0) return '$0.00'
-  return `$${amount.toFixed(4)}`
+export function formatMoney(value?: number | null, usdCnyRate?: number | null): string {
+  return formatCny(value, usdCnyRate)
+}
+
+export function formatAccountUsd(value?: number | null): string {
+  return formatUsdAccountAmount(value)
 }
 
 export function formatCount(value?: number | null): string {

@@ -56,6 +56,7 @@ const createDashboardStats = (): DashboardStats => ({
   hourly_active_users: 0,
   stats_updated_at: '',
   stats_stale: false,
+  usd_cny_rate: 7.2,
   total_api_keys: 0,
   active_api_keys: 0,
   total_accounts: 0,

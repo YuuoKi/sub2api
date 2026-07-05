@@ -302,6 +302,80 @@ func TestSeedanceBalanceChargeIsIdempotentOnWorkerRetry(t *testing.T) {
 	}
 }
 
+func TestSeedanceBalanceChargeReleasesClaimAfterDeductFailure(t *testing.T) {
+	ctx := context.Background()
+	repo := newMemoryVideoGatewayRepo()
+	task := &VideoTask{
+		ID:               45,
+		Provider:         VideoProviderSeedance,
+		Model:            "doubao-seedance-2-0-260128",
+		Status:           VideoStatusSucceeded,
+		UsageTotalTokens: videoInt64Ptr(102960),
+		Currency:         BillingCurrencyCNY,
+		CreatedBy:        8,
+	}
+	repo.tasks[task.ID] = cloneVideoTask(task)
+	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, nil)
+	userRepo, cache, settingSvc, cacheSvc := newVideoBalanceBillingDeps()
+	defer cacheSvc.Stop()
+	userRepo.err = errors.New("deduct temporarily unavailable")
+	svc.userRepo = userRepo
+	svc.settingService = settingSvc
+	svc.billingCacheService = cacheSvc
+
+	svc.chargeForVideo(ctx, task)
+	if _, ok := repo.balanceClaims[task.ID]; ok {
+		t.Fatalf("deduct failure must release balance claim for task %d", task.ID)
+	}
+
+	userRepo.err = nil
+	svc.chargeForVideo(ctx, task)
+	cacheSvc.Stop()
+
+	if len(userRepo.calls) != 2 {
+		t.Fatalf("expected failed attempt plus retry deduction, calls=%#v", userRepo.calls)
+	}
+	if cacheCalls := cache.deductCalls(); len(cacheCalls) != 1 {
+		t.Fatalf("only successful retry should enqueue cache deduction, calls=%#v", cacheCalls)
+	}
+	if _, ok := repo.balanceClaims[task.ID]; !ok {
+		t.Fatalf("successful retry should leave balance charge claimed")
+	}
+}
+
+func TestProcessRunnableTasksRetriesUnchargedSucceededBilling(t *testing.T) {
+	ctx := context.Background()
+	repo := newMemoryVideoGatewayRepo()
+	task := &VideoTask{
+		ID:               46,
+		Provider:         VideoProviderSeedance,
+		Model:            "doubao-seedance-2-0-260128",
+		Status:           VideoStatusSucceeded,
+		UsageTotalTokens: videoInt64Ptr(102960),
+		Currency:         BillingCurrencyCNY,
+		CreatedBy:        8,
+	}
+	repo.tasks[task.ID] = cloneVideoTask(task)
+	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, nil)
+	userRepo, cache, settingSvc, cacheSvc := newVideoBalanceBillingDeps()
+	defer cacheSvc.Stop()
+	svc.userRepo = userRepo
+	svc.settingService = settingSvc
+	svc.billingCacheService = cacheSvc
+
+	if err := svc.ProcessRunnableTasks(ctx, 10, time.Minute); err != nil {
+		t.Fatalf("process runnable tasks: %v", err)
+	}
+	cacheSvc.Stop()
+
+	if len(userRepo.calls) != 1 {
+		t.Fatalf("succeeded uncharged task should be retried for billing, calls=%#v", userRepo.calls)
+	}
+	if cacheCalls := cache.deductCalls(); len(cacheCalls) != 1 {
+		t.Fatalf("successful retry should enqueue cache deduction, calls=%#v", cacheCalls)
+	}
+}
+
 func TestSeedanceFailedTaskDoesNotDeductBalance(t *testing.T) {
 	ctx := context.Background()
 	repo := newMemoryVideoGatewayRepo()

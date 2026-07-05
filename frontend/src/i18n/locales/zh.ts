@@ -5515,6 +5515,8 @@ export default {
         description: '新用户的默认值',
         defaultBalance: '默认余额',
         defaultBalanceHint: '新用户的初始余额',
+        usdCnyRate: 'USD/CNY 汇率',
+        usdCnyRateHint: '控制台人民币展示用汇率；账户余额与开卡额度仍按美元存储',
         affiliateRebateRate: '邀请返利比例',
         affiliateRebateRateHint: '充值后返给邀请人的比例（0-100%，例如填写 10 表示返利 10%）',
         defaultConcurrency: '默认并发数',

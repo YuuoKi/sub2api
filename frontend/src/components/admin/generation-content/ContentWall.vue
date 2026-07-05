@@ -16,7 +16,7 @@
 
         <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-dark-400">
           <span v-if="s.video_status" class="badge badge-gray">{{ s.video_status }}</span>
-          <span>{{ formatCurrency(s.cost_estimate ?? 0) }}</span>
+          <span>{{ formatSampleCost(s) }}</span>
           <span>{{ formatBytes(s.total_bytes) }}</span>
           <span v-if="s.truncated" class="badge badge-warning">
             {{ t('admin.generationContent.truncated') }}
@@ -111,7 +111,8 @@
 import { reactive, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
-import { formatBytes, formatCurrency, formatRelativeTime } from '@/utils/format'
+import { formatBytes, formatRelativeTime } from '@/utils/format'
+import { formatByCurrency } from '@/composables/useDisplayCurrency'
 import type { AdoptionStatus, GenerationSample } from '@/api/admin/generation_content'
 
 interface Draft {
@@ -149,6 +150,10 @@ function feedbackMessage(sample: GenerationSample, idx: number): string {
 
 function feedbackType(sample: GenerationSample, idx: number): Feedback['type'] | undefined {
   return feedback[sampleKey(sample, idx)]?.type
+}
+
+function formatSampleCost(sample: GenerationSample): string {
+  return formatByCurrency(sample.cost_estimate, sample.currency)
 }
 
 function syncDrafts() {

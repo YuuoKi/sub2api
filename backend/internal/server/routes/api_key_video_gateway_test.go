@@ -175,6 +175,26 @@ func (r *apiKeyVideoGatewayMemoryRepo) ListRunnableTasks(_ context.Context, limi
 	return out, nil
 }
 
+func (r *apiKeyVideoGatewayMemoryRepo) ListUnchargedSucceededVideoTasks(_ context.Context, limit int) ([]*service.VideoTask, error) {
+	out := make([]*service.VideoTask, 0, limit)
+	for _, task := range r.tasks {
+		if task.Status != service.VideoStatusSucceeded {
+			continue
+		}
+		if task.CostEstimate <= 0 && (task.UsageTotalTokens == nil || *task.UsageTotalTokens <= 0) {
+			continue
+		}
+		if _, ok := r.balanceClaims[task.ID]; ok {
+			continue
+		}
+		out = append(out, cloneAPIKeyVideoTask(task))
+		if len(out) >= limit {
+			break
+		}
+	}
+	return out, nil
+}
+
 func (r *apiKeyVideoGatewayMemoryRepo) ClaimTaskForSubmit(_ context.Context, taskID int64) (bool, error) {
 	task, ok := r.tasks[taskID]
 	if !ok || task.Status != service.VideoStatusQueued {
@@ -221,14 +241,24 @@ func (r *apiKeyVideoGatewayMemoryRepo) InsertUsageLog(_ context.Context, task *s
 	return nil
 }
 
-func (r *apiKeyVideoGatewayMemoryRepo) ClaimVideoBalanceCharge(_ context.Context, taskID int64) (bool, error) {
+func (r *apiKeyVideoGatewayMemoryRepo) ClaimVideoBalanceCharge(_ context.Context, taskID int64) (time.Time, bool, error) {
 	if _, ok := r.balanceClaims[taskID]; ok {
-		return false, nil
+		return time.Time{}, false, nil
 	}
 	if _, ok := r.tasks[taskID]; !ok {
+		return time.Time{}, false, nil
+	}
+	claimedAt := time.Now().UTC()
+	r.balanceClaims[taskID] = claimedAt
+	return claimedAt, true, nil
+}
+
+func (r *apiKeyVideoGatewayMemoryRepo) ClearVideoBalanceChargeIfClaimedAt(_ context.Context, taskID int64, claimedAt time.Time) (bool, error) {
+	existing, ok := r.balanceClaims[taskID]
+	if !ok || !existing.Equal(claimedAt) {
 		return false, nil
 	}
-	r.balanceClaims[taskID] = time.Now().UTC()
+	delete(r.balanceClaims, taskID)
 	return true, nil
 }
 

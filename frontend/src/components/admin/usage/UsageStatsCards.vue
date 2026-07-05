@@ -28,12 +28,12 @@
       <div class="min-w-0 flex-1">
         <p class="text-xs font-medium text-gray-500">{{ t('usage.totalCost') }}</p>
         <p class="text-xl font-bold text-green-600">
-          ${{ (stats?.total_actual_cost || 0).toFixed(4) }}
+          {{ formatCost(stats?.total_actual_cost) }}
         </p>
         <p class="text-xs text-gray-400">
-          <span class="text-orange-500">{{ t('usage.accountCost') }} ${{ (stats?.total_account_cost || 0).toFixed(4) }}</span>
+          <span class="text-orange-500">{{ t('usage.accountCost') }} {{ formatCost(stats?.total_account_cost) }}</span>
           <span> · </span>
-          <span>{{ t('usage.standardCost') }} ${{ (stats?.total_cost || 0).toFixed(4) }}</span>
+          <span>{{ t('usage.standardCost') }} {{ formatCost(stats?.total_cost) }}</span>
         </p>
       </div>
     </div>
@@ -50,8 +50,12 @@
 import { useI18n } from 'vue-i18n'
 import type { AdminUsageStatsResponse } from '@/api/admin/usage'
 import Icon from '@/components/icons/Icon.vue'
+import { formatCny } from '@/composables/useDisplayCurrency'
 
-defineProps<{ stats: AdminUsageStatsResponse | null }>()
+const props = defineProps<{
+  stats: AdminUsageStatsResponse | null
+  usdCnyRate?: number | null
+}>()
 
 const { t } = useI18n()
 
@@ -64,4 +68,6 @@ const formatTokens = (value: number) => {
   if (value >= 1e3) return (value / 1e3).toFixed(2) + 'K'
   return value.toLocaleString()
 }
+
+const formatCost = (value?: number | null) => formatCny(value, props.usdCnyRate)
 </script>

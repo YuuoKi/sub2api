@@ -1360,6 +1360,7 @@ export interface DashboardStats {
   unified_total_actual_cost?: number // LLM + 视频统一总花费
   unified_today_actual_cost?: number
   cost_currency?: string // 归总展示币种（当前恒为 USD）
+  usd_cny_rate?: number // USD/CNY 展示汇率
   video_spend_by_provider?: VideoSpendByProvider[]
 }
 

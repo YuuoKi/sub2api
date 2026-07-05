@@ -290,6 +290,7 @@ const baseSettingsResponse = {
   totp_encryption_key_configured: false,
   default_balance: 0,
   default_concurrency: 1,
+  usd_cny_rate: 7.2,
   default_subscriptions: [],
   site_name: "Sub2API",
   site_logo: "",

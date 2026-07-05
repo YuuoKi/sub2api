@@ -156,6 +156,30 @@ func (s *VideoGatewayService) ProcessRunnableTasks(ctx context.Context, batch in
 			slog.Warn("video_gateway: process task failed", "task_id", task.ID, "provider", task.Provider, "error", err)
 		}
 	}
+	if err := s.retryUnchargedSucceededVideoBilling(ctx, batch); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *VideoGatewayService) retryUnchargedSucceededVideoBilling(ctx context.Context, batch int) error {
+	if s == nil || s.repo == nil {
+		return nil
+	}
+	if batch <= 0 {
+		batch = videoDefaultBatchSize
+	}
+	tasks, err := s.repo.ListUnchargedSucceededVideoTasks(ctx, batch)
+	if err != nil {
+		return fmt.Errorf("list uncharged succeeded video tasks: %w", err)
+	}
+	for _, task := range tasks {
+		if task == nil || task.Status != VideoStatusSucceeded {
+			continue
+		}
+		s.applyVideoBillingMetadata(task)
+		s.chargeForVideo(ctx, task)
+	}
 	return nil
 }
 

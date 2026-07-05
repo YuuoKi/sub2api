@@ -99,28 +99,111 @@ func TestVideoGatewayRepositoryClaimVideoBalanceCharge(t *testing.T) {
 
 	repo := NewVideoGatewayRepository(db)
 
-	mock.ExpectExec(`(?s)UPDATE video_tasks.*balance_charged_at = NOW\(\).*WHERE id = \$1 AND balance_charged_at IS NULL`).
+	claimedAt := time.Date(2026, 7, 6, 8, 0, 0, 0, time.UTC)
+	mock.ExpectQuery(`(?s)UPDATE video_tasks.*balance_charged_at = NOW\(\).*WHERE id = \$1 AND balance_charged_at IS NULL.*RETURNING balance_charged_at`).
 		WithArgs(int64(42)).
-		WillReturnResult(sqlmock.NewResult(0, 1))
-	claimed, err := repo.ClaimVideoBalanceCharge(context.Background(), 42)
+		WillReturnRows(sqlmock.NewRows([]string{"balance_charged_at"}).AddRow(claimedAt))
+	gotClaimedAt, claimed, err := repo.ClaimVideoBalanceCharge(context.Background(), 42)
 	if err != nil {
 		t.Fatalf("claim balance charge: %v", err)
 	}
 	if !claimed {
 		t.Fatalf("expected first claim to succeed")
 	}
+	if !gotClaimedAt.Equal(claimedAt) {
+		t.Fatalf("claimed_at = %s, want %s", gotClaimedAt, claimedAt)
+	}
 
-	mock.ExpectExec(`(?s)UPDATE video_tasks.*balance_charged_at = NOW\(\).*WHERE id = \$1 AND balance_charged_at IS NULL`).
+	mock.ExpectQuery(`(?s)UPDATE video_tasks.*balance_charged_at = NOW\(\).*WHERE id = \$1 AND balance_charged_at IS NULL.*RETURNING balance_charged_at`).
 		WithArgs(int64(42)).
-		WillReturnResult(sqlmock.NewResult(0, 0))
-	claimed, err = repo.ClaimVideoBalanceCharge(context.Background(), 42)
+		WillReturnError(sql.ErrNoRows)
+	gotClaimedAt, claimed, err = repo.ClaimVideoBalanceCharge(context.Background(), 42)
 	if err != nil {
 		t.Fatalf("second claim balance charge: %v", err)
 	}
 	if claimed {
 		t.Fatalf("expected second claim to be idempotent")
 	}
+	if !gotClaimedAt.IsZero() {
+		t.Fatalf("unclaimed task should return zero claim time, got %s", gotClaimedAt)
+	}
 
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sql expectations: %v", err)
+	}
+}
+
+func TestVideoGatewayRepositoryClearVideoBalanceChargeIfClaimedAt(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("new sqlmock: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	repo := NewVideoGatewayRepository(db)
+	claimedAt := time.Date(2026, 7, 6, 8, 0, 0, 0, time.UTC)
+
+	mock.ExpectExec(`(?s)UPDATE video_tasks.*balance_charged_at = NULL.*WHERE id = \$1 AND balance_charged_at = \$2`).
+		WithArgs(int64(42), claimedAt).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	cleared, err := repo.ClearVideoBalanceChargeIfClaimedAt(context.Background(), 42, claimedAt)
+	if err != nil {
+		t.Fatalf("clear balance charge: %v", err)
+	}
+	if !cleared {
+		t.Fatalf("expected compare-clear to affect the matching claim")
+	}
+
+	mock.ExpectExec(`(?s)UPDATE video_tasks.*balance_charged_at = NULL.*WHERE id = \$1 AND balance_charged_at = \$2`).
+		WithArgs(int64(42), claimedAt).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	cleared, err = repo.ClearVideoBalanceChargeIfClaimedAt(context.Background(), 42, claimedAt)
+	if err != nil {
+		t.Fatalf("second clear balance charge: %v", err)
+	}
+	if cleared {
+		t.Fatalf("expected stale claim timestamp not to clear")
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sql expectations: %v", err)
+	}
+}
+
+func TestVideoGatewayRepositoryListUnchargedSucceededVideoTasks(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("new sqlmock: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	now := time.Now().UTC()
+	rows := sqlmock.NewRows([]string{
+		"id", "provider_account_id", "provider", "model", "task_type", "prompt", "negative_prompt",
+		"reference_image_url", "reference_video_url", "content_json", "has_video_input",
+		"aspect_ratio", "duration", "resolution", "generate_audio", "watermark", "camera_fixed", "return_last_frame",
+		"usage_total_tokens", "actual_resolution", "actual_duration", "last_frame_url",
+		"status", "upstream_task_id", "result_url", "error_message", "cost_estimate", "poll_count",
+		"created_by", "created_at", "updated_at", "completed_at", "display_name", "email", "username",
+	}).AddRow(
+		int64(42), int64(7), service.VideoProviderSeedance, "doubao-seedance-2-0-260128", service.VideoTaskTypeTextToVideo,
+		"charge me", "", "", "", []byte(`[]`), false, "16:9", 5, "720p", nil, nil, nil, nil,
+		int64(102960), "720p", nil, nil, service.VideoStatusSucceeded, "upstream-42", "https://result.example/video.mp4", "", 4.73616, 2, int64(9), now, now, now,
+		"Seedance", "user@example.test", "operator",
+	)
+
+	mock.ExpectQuery(`(?s)WHERE vt\.status = 'succeeded'.*vt\.balance_charged_at IS NULL.*ORDER BY vt\.completed_at ASC NULLS LAST, vt\.updated_at ASC, vt\.id ASC`).
+		WithArgs(3).
+		WillReturnRows(rows)
+
+	repo := NewVideoGatewayRepository(db)
+	tasks, err := repo.ListUnchargedSucceededVideoTasks(context.Background(), 3)
+	if err != nil {
+		t.Fatalf("list uncharged succeeded video tasks: %v", err)
+	}
+	if len(tasks) != 1 || tasks[0].ID != 42 || tasks[0].Status != service.VideoStatusSucceeded {
+		t.Fatalf("unexpected uncharged tasks: %#v", tasks)
+	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet sql expectations: %v", err)
 	}

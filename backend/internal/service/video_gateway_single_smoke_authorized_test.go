@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
 
 // authReasonAbsent reports whether the smoke gate's "not authorized" reason is absent
@@ -172,5 +174,64 @@ func TestSeedanceUnapprovedProviderKeepsTinySmokeDurationLimit(t *testing.T) {
 	reasons := seedanceSmokeGateBlockedReasons(acc, task)
 	if !smokeDurationReasonPresent(reasons) {
 		t.Fatalf("single-smoke account must keep 1-5s duration cap, reasons=%v", reasons)
+	}
+}
+
+func TestSeedanceAdminProductionRequiresProductionAuthorized(t *testing.T) {
+	setSmokeGateEnv(t)
+	ctx := context.Background()
+	repo := newMemoryVideoGatewayRepo()
+	providerID := seedSmokeAuthorizedSeedanceProvider(repo, "seedance-admin-prod-test-key", "https://ark.example.test")
+	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, nil)
+
+	task, err := svc.CreateTask(ctx, VideoTaskCreateParams{
+		ProviderAccountID:                      providerID,
+		TaskType:                               VideoTaskTypeTextToVideo,
+		Model:                                  "doubao-seedance-2-0-260128",
+		Prompt:                                 "admin production should require authorization",
+		Duration:                               10,
+		Resolution:                             "720p",
+		CreatedBy:                              8,
+		EnforceRealProviderTrial:               false,
+		RequireSeedanceProductionAuthorization: true,
+	})
+
+	if err == nil {
+		t.Fatalf("expected production authorization error, got task=%#v", task)
+	}
+	if reason := infraerrors.Reason(err); reason != "VIDEO_PRODUCTION_NOT_AUTHORIZED" {
+		t.Fatalf("Reason(err) = %q, want VIDEO_PRODUCTION_NOT_AUTHORIZED (err=%v)", reason, err)
+	}
+	if len(repo.tasks) != 0 {
+		t.Fatalf("unauthorized production create must not persist a task, got %d", len(repo.tasks))
+	}
+}
+
+func TestSeedanceTinySmokeTrialStillAllowedWithoutProductionAuthorized(t *testing.T) {
+	setSmokeGateEnv(t)
+	ctx := context.Background()
+	repo := newMemoryVideoGatewayRepo()
+	providerID := seedSmokeAuthorizedSeedanceProvider(repo, "seedance-smoke-test-key", "https://ark.example.test")
+	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, nil)
+
+	task, err := svc.CreateTask(ctx, VideoTaskCreateParams{
+		ProviderAccountID:        providerID,
+		TaskType:                 VideoTaskTypeTextToVideo,
+		Model:                    "doubao-seedance-2-0-260128",
+		Prompt:                   "tiny real remains allowed",
+		Duration:                 5,
+		Resolution:               "720p",
+		CreatedBy:                8,
+		EnforceRealProviderTrial: true,
+	})
+
+	if err != nil {
+		t.Fatalf("tiny smoke trial should remain allowed: %v", err)
+	}
+	if task == nil || task.ID == 0 {
+		t.Fatal("expected trial task to be persisted")
+	}
+	if len(repo.tasks) != 1 {
+		t.Fatalf("expected one trial task, got %d", len(repo.tasks))
 	}
 }

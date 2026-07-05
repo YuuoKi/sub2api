@@ -29,6 +29,7 @@ export interface GenerationSample {
   model: string
   video_status: string
   cost_estimate: number
+  currency?: string
   created_at: string
   prompt_preview: string
   response_preview: string

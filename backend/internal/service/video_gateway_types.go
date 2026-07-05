@@ -250,24 +250,25 @@ type VideoProviderTestResult struct {
 }
 
 type VideoTaskCreateParams struct {
-	ProviderAccountID        int64
-	TaskType                 string
-	Model                    string
-	Prompt                   string
-	NegativePrompt           string
-	ReferenceImageURL        string
-	ReferenceVideoURL        string
-	Content                  []VideoTaskContentItem
-	AspectRatio              string
-	Duration                 int
-	Resolution               string
-	GenerateAudio            *bool
-	Watermark                *bool
-	CameraFixed              *bool
-	ReturnLastFrame          *bool
-	CreatedBy                int64
-	EnforceRealProviderTrial bool // JWT user paths: seedance requires daily trial + smoke gate
-	SafeDemoOnly             bool // Drama safe demo: route only to mock provider
+	ProviderAccountID                      int64
+	TaskType                               string
+	Model                                  string
+	Prompt                                 string
+	NegativePrompt                         string
+	ReferenceImageURL                      string
+	ReferenceVideoURL                      string
+	Content                                []VideoTaskContentItem
+	AspectRatio                            string
+	Duration                               int
+	Resolution                             string
+	GenerateAudio                          *bool
+	Watermark                              *bool
+	CameraFixed                            *bool
+	ReturnLastFrame                        *bool
+	CreatedBy                              int64
+	EnforceRealProviderTrial               bool // JWT user paths: seedance requires daily trial + smoke gate
+	RequireSeedanceProductionAuthorization bool // Admin production path: seedance requires provider metadata production_authorized=true
+	SafeDemoOnly                           bool // Drama safe demo: route only to mock provider
 }
 
 type VideoTaskListParams struct {
@@ -290,13 +291,15 @@ type VideoGatewayRepository interface {
 	GetTask(ctx context.Context, id int64) (*VideoTask, error)
 	ListTasks(ctx context.Context, params VideoTaskListParams) ([]*VideoTask, int64, error)
 	ListRunnableTasks(ctx context.Context, limit int) ([]*VideoTask, error)
+	ListUnchargedSucceededVideoTasks(ctx context.Context, limit int) ([]*VideoTask, error)
 	ClaimTaskForSubmit(ctx context.Context, taskID int64) (bool, error)
 	UpdateTask(ctx context.Context, task *VideoTask) error
 
 	AddTaskEvent(ctx context.Context, event *VideoTaskEvent) error
 	ListTaskEvents(ctx context.Context, taskID int64, limit int) ([]*VideoTaskEvent, error)
 	InsertUsageLog(ctx context.Context, task *VideoTask) error
-	ClaimVideoBalanceCharge(ctx context.Context, taskID int64) (bool, error)
+	ClaimVideoBalanceCharge(ctx context.Context, taskID int64) (time.Time, bool, error)
+	ClearVideoBalanceChargeIfClaimedAt(ctx context.Context, taskID int64, claimedAt time.Time) (bool, error)
 
 	CountTasksSince(ctx context.Context, since time.Time) (map[string]int64, error)
 	CountProviderTasksSince(ctx context.Context, since time.Time) (map[string]map[string]int64, error)

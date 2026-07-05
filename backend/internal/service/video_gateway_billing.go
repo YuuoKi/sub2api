@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"strings"
+	"time"
 )
 
 // VideoBudgetGuard is the VA1 per-call budget cap gate for
@@ -24,7 +25,7 @@ type VideoBudgetGuard interface {
 }
 
 // SetBudgetGuard wires the VA1 budget guard into the service. Passing nil disables
-// the gate (current production default until phase-2 real billing).
+// the pre-call cap gate; real post-delivery balance billing is wired separately.
 func (s *VideoGatewayService) SetBudgetGuard(g VideoBudgetGuard) {
 	s.budget = g
 }
@@ -148,7 +149,7 @@ func (s *VideoGatewayService) chargeForVideo(ctx context.Context, task *VideoTas
 		return
 	}
 
-	claimed, err := s.repo.ClaimVideoBalanceCharge(ctx, task.ID)
+	claimedAt, claimed, err := s.repo.ClaimVideoBalanceCharge(ctx, task.ID)
 	if err != nil {
 		slog.Warn("video_gateway: claim balance charge failed", "task_id", task.ID, "error", err)
 		return
@@ -166,6 +167,7 @@ func (s *VideoGatewayService) chargeForVideo(ctx context.Context, task *VideoTas
 		if amountUSD > 0 {
 			if err := s.userRepo.DeductBalance(ctx, task.CreatedBy, amountUSD); err != nil {
 				slog.Warn("video_gateway: user balance deduction failed", "task_id", task.ID, "user_id", task.CreatedBy, "error", err)
+				s.releaseVideoBalanceClaim(ctx, task.ID, claimedAt)
 				return
 			}
 			if s.billingCacheService != nil {
@@ -178,5 +180,19 @@ func (s *VideoGatewayService) chargeForVideo(ctx context.Context, task *VideoTas
 		if err := s.budget.Charge(ctx, task.CreatedBy, cost, task.ID); err != nil {
 			slog.Warn("video_gateway: post-success budget hook failed", "task_id", task.ID, "error", err)
 		}
+	}
+}
+
+func (s *VideoGatewayService) releaseVideoBalanceClaim(ctx context.Context, taskID int64, claimedAt time.Time) {
+	if s == nil || s.repo == nil || taskID <= 0 || claimedAt.IsZero() {
+		return
+	}
+	cleared, err := s.repo.ClearVideoBalanceChargeIfClaimedAt(ctx, taskID, claimedAt)
+	if err != nil {
+		slog.Warn("video_gateway: release balance charge claim failed", "task_id", taskID, "error", err)
+		return
+	}
+	if !cleared {
+		slog.Warn("video_gateway: balance charge claim was not released", "task_id", taskID)
 	}
 }

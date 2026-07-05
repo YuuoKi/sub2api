@@ -157,6 +157,26 @@ func (r *memoryVideoGatewayRepo) ListRunnableTasks(_ context.Context, limit int)
 	return out, nil
 }
 
+func (r *memoryVideoGatewayRepo) ListUnchargedSucceededVideoTasks(_ context.Context, limit int) ([]*VideoTask, error) {
+	out := make([]*VideoTask, 0, limit)
+	for _, task := range r.tasks {
+		if task.Status != VideoStatusSucceeded {
+			continue
+		}
+		if task.CostEstimate <= 0 && (task.UsageTotalTokens == nil || *task.UsageTotalTokens <= 0) {
+			continue
+		}
+		if _, ok := r.balanceClaims[task.ID]; ok {
+			continue
+		}
+		out = append(out, cloneVideoTask(task))
+		if len(out) >= limit {
+			break
+		}
+	}
+	return out, nil
+}
+
 func (r *memoryVideoGatewayRepo) ClaimTaskForSubmit(_ context.Context, taskID int64) (bool, error) {
 	task, ok := r.tasks[taskID]
 	if !ok || task.Status != VideoStatusQueued {
@@ -198,17 +218,27 @@ func (r *memoryVideoGatewayRepo) InsertUsageLog(_ context.Context, task *VideoTa
 	return nil
 }
 
-func (r *memoryVideoGatewayRepo) ClaimVideoBalanceCharge(_ context.Context, taskID int64) (bool, error) {
+func (r *memoryVideoGatewayRepo) ClaimVideoBalanceCharge(_ context.Context, taskID int64) (time.Time, bool, error) {
 	if _, ok := r.balanceClaims[taskID]; ok {
-		return false, nil
+		return time.Time{}, false, nil
 	}
 	task, ok := r.tasks[taskID]
 	if !ok {
-		return false, nil
+		return time.Time{}, false, nil
 	}
-	r.balanceClaims[taskID] = time.Now().UTC()
+	claimedAt := time.Now().UTC()
+	r.balanceClaims[taskID] = claimedAt
 	updated := cloneVideoTask(task)
 	r.tasks[taskID] = updated
+	return claimedAt, true, nil
+}
+
+func (r *memoryVideoGatewayRepo) ClearVideoBalanceChargeIfClaimedAt(_ context.Context, taskID int64, claimedAt time.Time) (bool, error) {
+	existing, ok := r.balanceClaims[taskID]
+	if !ok || !existing.Equal(claimedAt) {
+		return false, nil
+	}
+	delete(r.balanceClaims, taskID)
 	return true, nil
 }
 

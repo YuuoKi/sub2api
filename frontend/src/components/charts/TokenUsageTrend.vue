@@ -34,6 +34,7 @@ import {
 } from 'chart.js'
 import { Line } from 'vue-chartjs'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import { formatCny } from '@/composables/useDisplayCurrency'
 import type { TrendDataPoint } from '@/types'
 
 ChartJS.register(
@@ -52,6 +53,7 @@ const { t } = useI18n()
 const props = defineProps<{
   trendData: TrendDataPoint[]
   loading?: boolean
+  usdCnyRate?: number | null
 }>()
 
 const isDarkMode = computed(() => {
@@ -155,7 +157,7 @@ const lineOptions = computed(() => ({
           const dataIndex = tooltipItems[0]?.dataIndex
           if (dataIndex !== undefined && props.trendData[dataIndex]) {
             const data = props.trendData[dataIndex]
-            return `Actual: $${formatCost(data.actual_cost)} | Standard: $${formatCost(data.cost)}`
+            return `Actual: ${formatCost(data.actual_cost)} | Standard: ${formatCost(data.cost)}`
           }
           return ''
         }
@@ -216,13 +218,6 @@ const formatTokens = (value: number): string => {
 }
 
 const formatCost = (value: number): string => {
-  if (value >= 1000) {
-    return (value / 1000).toFixed(2) + 'K'
-  } else if (value >= 1) {
-    return value.toFixed(2)
-  } else if (value >= 0.01) {
-    return value.toFixed(3)
-  }
-  return value.toFixed(4)
+  return formatCny(value, props.usdCnyRate)
 }
 </script>

@@ -341,6 +341,26 @@ func (r *videoGatewayRepository) ListRunnableTasks(ctx context.Context, limit in
 	return scanVideoTaskRows(rows)
 }
 
+func (r *videoGatewayRepository) ListUnchargedSucceededVideoTasks(ctx context.Context, limit int) ([]*service.VideoTask, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	q := `
+		SELECT` + videoTaskSelectColumns + videoTaskJoinSQL + `
+		WHERE vt.status = 'succeeded'
+		  AND vt.balance_charged_at IS NULL
+		  AND COALESCE(vt.cost_estimate, 0) > 0
+		ORDER BY vt.completed_at ASC NULLS LAST, vt.updated_at ASC, vt.id ASC
+		LIMIT $1
+	`
+	rows, err := r.db.QueryContext(ctx, q, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	return scanVideoTaskRows(rows)
+}
+
 func (r *videoGatewayRepository) ClaimTaskForSubmit(ctx context.Context, taskID int64) (bool, error) {
 	const q = `
 		UPDATE video_tasks
@@ -474,14 +494,33 @@ func (r *videoGatewayRepository) InsertUsageLog(ctx context.Context, task *servi
 	return err
 }
 
-func (r *videoGatewayRepository) ClaimVideoBalanceCharge(ctx context.Context, taskID int64) (bool, error) {
+func (r *videoGatewayRepository) ClaimVideoBalanceCharge(ctx context.Context, taskID int64) (time.Time, bool, error) {
 	const q = `
 		UPDATE video_tasks
 		SET balance_charged_at = NOW(),
 		    updated_at = NOW()
 		WHERE id = $1 AND balance_charged_at IS NULL
+		RETURNING balance_charged_at
 	`
-	result, err := r.db.ExecContext(ctx, q, taskID)
+	var claimedAt time.Time
+	err := r.db.QueryRowContext(ctx, q, taskID).Scan(&claimedAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return time.Time{}, false, nil
+		}
+		return time.Time{}, false, err
+	}
+	return claimedAt, true, nil
+}
+
+func (r *videoGatewayRepository) ClearVideoBalanceChargeIfClaimedAt(ctx context.Context, taskID int64, claimedAt time.Time) (bool, error) {
+	const q = `
+		UPDATE video_tasks
+		SET balance_charged_at = NULL,
+		    updated_at = NOW()
+		WHERE id = $1 AND balance_charged_at = $2
+	`
+	result, err := r.db.ExecContext(ctx, q, taskID, claimedAt)
 	if err != nil {
 		return false, err
 	}

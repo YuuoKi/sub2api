@@ -206,11 +206,11 @@ func (r *generationContentRepository) GetWeeklyReport(ctx context.Context, start
 	if r == nil || r.db == nil {
 		return report, nil
 	}
-	const q = `
+	q := dashboardUSDCNYRateCTE + `
 SELECT
     COUNT(*) AS entries,
     COUNT(c.task_id) FILTER (WHERE c.task_id IS NOT NULL) AS video_tasks,
-    COALESCE(SUM(COALESCE(vt.cost_estimate, 0)), 0)::float8 AS total_cost_estimate,
+    COALESCE(SUM(` + dashboardVideoCostUSDExpr("vt") + `), 0)::float8 AS total_cost_estimate,
     COUNT(*) FILTER (WHERE c.adoption_status = 'adopted') AS adopted_count,
     COUNT(*) FILTER (WHERE c.adoption_status = 'rejected') AS rejected_count,
     COUNT(*) FILTER (WHERE c.adoption_status = 'pending') AS pending_count,
@@ -220,6 +220,7 @@ SELECT
     COUNT(*) FILTER (WHERE c.response_truncated = TRUE) AS truncated_count
 FROM ai_generation_content c
 LEFT JOIN video_tasks vt ON vt.id = c.task_id
+CROSS JOIN billing_rate
 WHERE c.created_at >= $1 AND c.created_at < $2`
 	if err := scanSingleRow(ctx, r.db, q, []any{start, end},
 		&report.Entries,
@@ -317,11 +318,13 @@ SELECT
     c.quality_score,
     c.adoption_notes,
     COALESCE(vt.status, ''),
-    COALESCE(vt.cost_estimate, 0)::float8
+    COALESCE(vt.cost_estimate, 0)::float8,
+    COALESCE(NULLIF(vul.currency, ''), NULLIF(vt.currency, ''), 'USD')
 FROM ai_generation_content c
 LEFT JOIN users  u ON u.id = c.user_id
 LEFT JOIN groups g ON g.id = c.group_id
 LEFT JOIN video_tasks vt ON vt.id = c.task_id
+LEFT JOIN video_usage_logs vul ON vul.video_task_id = c.task_id
 ORDER BY c.created_at DESC
 LIMIT $1`
 	rows, err := r.db.QueryContext(ctx, query, limit)
@@ -351,6 +354,7 @@ LIMIT $1`
 			&s.AdoptionNotes,
 			&s.VideoStatus,
 			&s.CostEstimate,
+			&s.Currency,
 		); err != nil {
 			return nil, fmt.Errorf("scan generation content recent: %w", err)
 		}

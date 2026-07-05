@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -694,6 +695,14 @@ func (s *VideoGatewayService) CreateTask(ctx context.Context, p VideoTaskCreateP
 	account := route.Account
 	if _, err := s.adapterFor(account.Provider); err != nil {
 		return nil, err
+	}
+	if account.Provider == VideoProviderSeedance && p.RequireSeedanceProductionAuthorization && !seedanceProductionAuthorized(account) {
+		return nil, infraerrors.Forbidden("VIDEO_PRODUCTION_NOT_AUTHORIZED", "seedance production is not authorized for this provider account").WithMetadata(map[string]string{
+			"provider":              VideoProviderSeedance,
+			"provider_account_id":   strconv.FormatInt(account.ID, 10),
+			"production_authorized": "false",
+			"reason":                "provider metadata production_authorized is not true",
+		})
 	}
 	createFn := s.repo.CreateTask
 	if p.EnforceRealProviderTrial {

@@ -147,7 +147,8 @@ import type {
   GenerationContentWeeklyReport,
   GenerationSample
 } from '@/api/admin/generation_content'
-import { formatBytes, formatCompactNumber, formatCurrency } from '@/utils/format'
+import { formatBytes, formatCompactNumber } from '@/utils/format'
+import { formatCny } from '@/composables/useDisplayCurrency'
 
 const { t } = useI18n()
 
@@ -171,7 +172,7 @@ const weeklyAnomalyCount = computed(() => {
 
 const fmtNum = (v: number | string) => formatCompactNumber(Number(v))
 const fmtBytes = (v: number | string) => formatBytes(Number(v))
-const fmtCurrency = (v: number | string) => formatCurrency(Number(v))
+const fmtCurrency = (v: number | string) => formatCny(Number(v))
 
 const load = async () => {
   abortController?.abort()

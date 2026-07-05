@@ -164,6 +164,7 @@ func (h *DashboardHandler) buildSnapshotV2Response(
 		if err != nil {
 			return nil, errors.New("failed to get dashboard statistics")
 		}
+		stats.USDCNYRate = h.usdCNYRate(ctx)
 		resp.Stats = &dashboardSnapshotV2Stats{
 			DashboardStats: *stats,
 			Uptime:         int64(time.Since(h.startTime).Seconds()),

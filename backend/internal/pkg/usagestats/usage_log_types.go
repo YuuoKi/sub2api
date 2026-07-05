@@ -62,6 +62,7 @@ type DashboardStats struct {
 	VideoTotalCost           float64                `json:"video_total_cost"`   // 视频费用，统一折算为 USD
 	UnifiedTotalActualCost   float64                `json:"unified_total_actual_cost"`
 	CostCurrency             string                 `json:"cost_currency"`
+	USDCNYRate               float64                `json:"usd_cny_rate"`
 	VideoSpendByProvider     []VideoSpendByProvider `json:"video_spend_by_provider,omitempty"`
 
 	// 今日 Token 使用统计

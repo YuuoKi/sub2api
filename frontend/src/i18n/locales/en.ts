@@ -5431,6 +5431,8 @@ export default {
         description: 'Default values for new users',
         defaultBalance: 'Default Balance',
         defaultBalanceHint: 'Initial balance for new users',
+        usdCnyRate: 'USD/CNY Rate',
+        usdCnyRateHint: 'Used for CNY display in admin console; balances and key quotas remain stored in USD',
         affiliateRebateRate: 'Affiliate Rebate Rate',
         affiliateRebateRateHint:
           'Rebate percentage credited to inviter after recharge (0-100%, e.g. 10 means 10%)',

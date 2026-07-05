@@ -92,6 +92,7 @@ type GenerationContentSample struct {
 	AdoptionNotes     string
 	VideoStatus       string
 	CostEstimate      float64
+	Currency          string
 }
 
 type GenerationContentAdoptionInput struct {

@@ -2776,6 +2776,26 @@
                   />
                   <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
                     {{ t("admin.settings.defaults.defaultBalanceHint") }}
+                    · {{ localText("约人民币", "Approx CNY") }}
+                    {{ formatUsdApprox(form.default_balance) }}
+                  </p>
+                </div>
+                <div>
+                  <label
+                    class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {{ t("admin.settings.defaults.usdCnyRate") }}
+                  </label>
+                  <input
+                    v-model.number="form.usd_cny_rate"
+                    type="number"
+                    step="0.0001"
+                    min="0.0001"
+                    class="input"
+                    placeholder="7.20"
+                  />
+                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.defaults.usdCnyRateHint") }}
                   </p>
                 </div>
                 <div>
@@ -5945,6 +5965,8 @@
                 </div>
                 <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                   {{ t("admin.settings.balanceNotify.thresholdHint") }}
+                  · {{ localText("约人民币", "Approx CNY") }}
+                  {{ formatUsdApprox(form.balance_low_notify_threshold) }}
                 </p>
               </div>
               <div>
@@ -6163,6 +6185,7 @@ import ProxySelector from "@/components/common/ProxySelector.vue";
 import ImageUpload from "@/components/common/ImageUpload.vue";
 import BackupSettings from "@/views/admin/BackupView.vue";
 import { useClipboard } from "@/composables/useClipboard";
+import { formatCny } from "@/composables/useDisplayCurrency";
 import { affiliatesAPI, type AffiliateAdminEntry, type SimpleUser as AffiliateSimpleUser } from "@/api/admin/affiliates";
 import { extractApiErrorMessage, extractI18nErrorMessage } from "@/utils/apiError";
 import { useAppStore } from "@/stores";
@@ -6182,6 +6205,10 @@ const isZhLocale = computed(() => locale.value.startsWith("zh"));
 
 function localText(zh: string, en: string): string {
   return isZhLocale.value ? zh : en;
+}
+
+function formatUsdApprox(value?: number | null): string {
+  return formatCny(value, form.usd_cny_rate);
 }
 
 const paymentGuideHref = computed(() =>
@@ -6445,6 +6472,7 @@ const form = reactive<SettingsForm>({
   login_agreement_updated_at: "2026-03-31",
   login_agreement_documents: defaultLoginAgreementDocuments(),
   default_balance: 0,
+  usd_cny_rate: 7.2,
   affiliate_rebate_rate: 20,
   affiliate_rebate_freeze_hours: 0,
   affiliate_rebate_duration_days: 0,
@@ -7553,6 +7581,7 @@ async function saveSettings() {
       login_agreement_updated_at: form.login_agreement_updated_at,
       login_agreement_documents: form.login_agreement_documents,
       default_balance: form.default_balance,
+      usd_cny_rate: Math.max(0.0001, Number(form.usd_cny_rate) || 7.2),
       affiliate_rebate_rate: Math.min(
         100,
         Math.max(0, Number(form.affiliate_rebate_rate) || 0),

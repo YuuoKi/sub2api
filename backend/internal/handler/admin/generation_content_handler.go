@@ -74,6 +74,7 @@ func (h *GenerationContentHandler) GetSamples(c *gin.Context) {
 			"model":            r.Model,
 			"video_status":     r.VideoStatus,
 			"cost_estimate":    r.CostEstimate,
+			"currency":         r.Currency,
 			"created_at":       r.CreatedAt,
 			"prompt_preview":   promptPreview,
 			"response_preview": respPreview,

@@ -409,18 +409,24 @@
         </div>
 
         <!-- Model Distribution -->
-        <ModelDistributionChart :model-stats="stats.models" :loading="false" />
+        <ModelDistributionChart
+          :model-stats="stats.models"
+          :loading="false"
+          :usd-cny-rate="stats.usd_cny_rate"
+        />
 
         <EndpointDistributionChart
           :endpoint-stats="stats.endpoints || []"
           :loading="false"
           :title="t('usage.inboundEndpoint')"
+          :usd-cny-rate="stats.usd_cny_rate"
         />
 
         <EndpointDistributionChart
           :endpoint-stats="stats.upstream_endpoints || []"
           :loading="false"
           :title="t('usage.upstreamEndpoint')"
+          :usd-cny-rate="stats.usd_cny_rate"
         />
       </template>
 
@@ -675,7 +681,7 @@ const handleClose = () => {
 
 // Format helpers
 const formatCost = (value: number): string => {
-  return formatCny(value)
+  return formatCny(value, stats.value?.usd_cny_rate)
 }
 
 const formatNumber = (value: number): string => {

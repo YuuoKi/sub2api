@@ -59,14 +59,14 @@ vi.mock('vue-i18n', async () => {
 
 const AppLayoutStub = { template: '<div><slot /></div>' }
 const StatCardStub = {
-  props: ['title', 'value'],
-  template: '<div class="stat-card"><span>{{ title }}</span><strong>{{ value }}</strong></div>'
+  props: ['title', 'value', 'formatValue'],
+  template: '<div class="stat-card"><span>{{ title }}</span><strong>{{ formatValue ? formatValue(value) : value }}</strong></div>'
 }
 const CaptureSparklineStub = { template: '<div data-test="sparkline" />' }
 const ContentWallStub = {
-  props: ['samples', 'isLive'],
+  props: ['samples', 'isLive', 'usdCnyRate'],
   emits: ['updated'],
-  template: '<div data-test="content-wall">{{ samples.length }} samples / live={{ isLive }}</div>'
+  template: '<div data-test="content-wall">{{ samples.length }} samples / live={{ isLive }} / rate={{ usdCnyRate }}</div>'
 }
 
 describe('GenerationContentView', () => {
@@ -180,5 +180,57 @@ describe('GenerationContentView', () => {
 
     expect(wrapper.find('[data-test="content-wall"]').text()).toContain('1 samples / live=true')
     expect(wrapper.text()).toContain('Failed to load generation content.')
+  })
+
+  it('passes the API USD/CNY rate into sample and weekly cost displays', async () => {
+    getStats.mockResolvedValue({
+      captured_today: 0,
+      captured_week: 0,
+      distinct_employees: 0,
+      distinct_teams: 0,
+      distinct_models: 0,
+      total_bytes: 0,
+      daily_rate: 0,
+      daily_series: [],
+      is_live: true
+    })
+    getSamples.mockResolvedValue({
+      is_live: true,
+      usd_cny_rate: 7.5,
+      samples: []
+    })
+    getWeeklyReport.mockResolvedValue({
+      period_start: '2026-07-01T00:00:00Z',
+      period_end: '2026-07-08T00:00:00Z',
+      entries: 1,
+      video_tasks: 1,
+      total_cost_estimate: 1,
+      adopted_count: 0,
+      rejected_count: 0,
+      pending_count: 1,
+      unreviewed_count: 0,
+      adoption_rate: 0,
+      anomalies: {
+        failed_tasks: 0,
+        missing_task_joins: 0,
+        truncated_rows: 0
+      },
+      markdown: 'ok'
+    })
+
+    const wrapper = mount(GenerationContentView, {
+      global: {
+        stubs: {
+          AppLayout: AppLayoutStub,
+          StatCard: StatCardStub,
+          CaptureSparkline: CaptureSparklineStub,
+          ContentWall: ContentWallStub
+        }
+      }
+    })
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="content-wall"]').text()).toContain('rate=7.5')
+    expect(wrapper.text()).toContain('¥7.50')
   })
 })

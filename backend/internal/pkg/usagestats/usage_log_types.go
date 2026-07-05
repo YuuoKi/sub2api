@@ -280,6 +280,7 @@ type UsageStats struct {
 	TotalActualCost   float64        `json:"total_actual_cost"`
 	TotalAccountCost  *float64       `json:"total_account_cost,omitempty"`
 	AverageDurationMs float64        `json:"average_duration_ms"`
+	USDCNYRate        float64        `json:"usd_cny_rate"`
 	Endpoints         []EndpointStat `json:"endpoints,omitempty"`
 	UpstreamEndpoints []EndpointStat `json:"upstream_endpoints,omitempty"`
 	EndpointPaths     []EndpointStat `json:"endpoint_paths,omitempty"`
@@ -354,4 +355,5 @@ type AccountUsageStatsResponse struct {
 	Models            []ModelStat           `json:"models"`
 	Endpoints         []EndpointStat        `json:"endpoints"`
 	UpstreamEndpoints []EndpointStat        `json:"upstream_endpoints"`
+	USDCNYRate        float64               `json:"usd_cny_rate"`
 }

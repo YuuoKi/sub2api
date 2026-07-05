@@ -1,123 +1,188 @@
-# 审查包：S3 Loop CNY 执行收口
+# S3 Loop CNY 修复复查包
 
-> 执行者：Codex  
-> 完成时间：2026-07-06 00:38  
-> 关联任务书：`docs/superpowers/codex-handoff/CODEX_TASK_S3_LOOP_CNY.md`  
-> 状态：`partial`（业务代码与测试门禁通过；golangci 本机基线异常已阻塞）
+> 仓库：`D:\sub2api-trunk`
+> 分支：`wujie/video-capture-moat-20260702`
+> 基线提交：`31af790e S3 loop CNY billing and display`
+> 本轮状态：`内部可用` / `待人工浏览器复核`
+> 禁止项遵守：未 push，未 deploy，未读取 `.env`/token/cookie，未触发真实付费 provider。
 
----
+## 1. 本轮复查结论
 
-## 1. 本任务做了什么
+上一轮复查发现的问题已经开修并复核完成：
 
-- 后端 dashboard/generation-content 增加 `usd_cny_rate` 与样本 `currency`，weekly 成本统一折算成 USD 聚合，前端再按汇率展示人民币。
-- 视频扣费改为带 claim 时间戳的 compare-and-clear；扣费失败只释放本次 claim，并新增 succeeded 未扣费任务的 retry/reconciliation。
-- Seedance 普通 admin 生产创建要求 provider metadata `production_authorized=true`；tiny-real/trial/smoke 仍走原有限流、allowlist、redaction gate。
-- 前端成本、图表、usage table、account stats、video/generation records 统一展示 `¥`；余额、开卡额度、quota、默认余额和余额阈值仍按 USD 存储/输入，并增加约人民币提示。
-
----
-
-## 2. 改了哪些文件
-
-| 文件 | 变更摘要 |
+| 问题 | 修复结果 |
 |---|---|
-| `backend/internal/handler/admin/dashboard_handler.go` | dashboard stats 注入 `usd_cny_rate`，读取失败回退 7.2 |
-| `backend/internal/repository/generation_content_repo.go` | recent samples 返回 currency；weekly total_cost_estimate 按汇率统一 USD |
-| `backend/internal/service/video_gateway_billing.go` | 扣费 claim 返回 claimedAt，失败 compare-clear 本次 claim |
-| `backend/internal/service/video_gateway_worker.go` | worker 增加 succeeded 未扣费任务 retry |
-| `backend/internal/repository/video_gateway_repo.go` | 新增 compare-clear 与 uncharged succeeded 查询 |
-| `backend/internal/service/video_gateway_service.go` / `backend/internal/handler/video_handler.go` | admin production path 显式要求 Seedance production 授权 |
-| `frontend/src/composables/useDisplayCurrency.ts` | 新增人民币/美元账户金额统一 formatter |
-| `frontend/src/views/admin/**` / `frontend/src/components/**` | dashboard、console、usage、account stats、generation/video records 接入人民币展示 |
-| `frontend/src/api/admin/*.ts` / `frontend/src/types/index.ts` | 增加 `usd_cny_rate`、`currency` 类型 |
-| `*_test.go` / `*.spec.ts` | 覆盖汇率字段、混币聚合、扣费 retry、production gate、前端显示 helper |
+| Usage / Account / Generation / Video 部分页面没有使用设置里的 `usd_cny_rate`，仍可能按默认 7.2 展示 | 已修复。相关后端接口补齐 `usd_cny_rate`，前端显式透传到卡片、表格、图表和样本墙 |
+| `currency=CNY` 样本需要原样展示人民币，不能再乘汇率 | 已加回归测试，`CNY` 原样 `¥5.0094`，`USD` 按汇率一次转换 |
+| `UsageView.spec.ts` mock 未包含真实调用的 `dashboard.getModelStats`，Vitest stderr 有噪音 | 已修复 mock，目标用例不再因缺 mock 打印该错误 |
+| VideoTasks 列表没有独立汇率字段 | 已新增只读 composable 从现有 dashboard stats 拉取 `usd_cny_rate`，失败回退 7.2，不改视频列表分页契约 |
+| 旧导出的 `components/account/AccountStatsModal.vue` 仍保留 `$` / USD 展示 | 已同步修复，避免未来通过 barrel export 重新暴露美元显示 |
 
----
+## 2. 代码逻辑说明
 
-## 3. Phase 验收结果
+### 后端
 
-| Phase | 结果 | 证据 |
-|---|---|---|
-| S3-0 baseline | pass + blocked | `go test ./...` pass；frontend `npx.cmd eslint` / `vue-tsc` / `vitest` pass；`golangci-lint run ./...` 基线即失败 `no go files to analyze` |
-| S3-1 汇率与生成内容 | pass | handler/repository targeted Go tests pass；full backend tests最终 pass |
-| S3-2 扣费可靠性 | pass | billing/repository targeted Go tests pass；full backend tests最终 pass |
-| S3-3 Seedance production gate | pass | 新增 production unauthorized 与 tiny trial allowed 测试；首次全量发现服务层默认误触，已在第 1 修复轮改为显式 admin production flag |
-| S3-4 前端人民币展示 | pass | focused specs 26 pass；`npx.cmd eslint` pass；`npx.cmd vue-tsc --noEmit` pass；full vitest 103 files / 605 tests pass |
-| S3-5 收口 | partial | `go test ./...` pass；`git diff --check` pass；secret scan pass；golangci 仍 blocked |
+- 新增 `backend/internal/handler/admin/display_currency.go`
+  - `resolveUSDCNYRate(ctx, settingService)` 统一读取设置汇率。
+  - `settingService == nil` 或读取异常时沿用 `service.DefaultUSDCNYRate`，当前默认 `7.2`。
 
----
+- `GET /api/v1/admin/usage/stats`
+  - `usagestats.UsageStats` 新增 `usd_cny_rate`。
+  - `admin.UsageHandler` 注入 `SettingService` 后在返回前填充汇率。
 
-## 4. 验证命令与结果
+- `GET /api/v1/admin/accounts/:id/stats`
+  - `usagestats.AccountUsageStatsResponse` 新增 `usd_cny_rate`。
+  - `admin.AccountHandler` 注入 `SettingService` 后在账户统计返回前填充汇率。
 
-```text
-cd backend
-$env:GOCACHE='D:\sub2api-trunk\.cache\go-build'; go test ./...
-=> PASS
+- `GET /api/v1/admin/generation-content/samples`
+  - 顶层响应新增 `usd_cny_rate`。
+  - sample 的 `currency` 字段沿用上一轮实现，用于前端判断是否原生 CNY。
 
-golangci-lint run ./...
-=> BLOCKED: Running error: context loading failed: no go files to analyze
+- `GET /api/v1/admin/generation-content/weekly-report`
+  - 顶层响应新增 `usd_cny_rate`。
+  - weekly `total_cost_estimate` 仍保持后端 USD 归一聚合，前端展示时只乘一次汇率。
 
-cd frontend
-npx.cmd eslint . --ext .ts,.vue --max-warnings=0
-=> PASS
+- `backend/cmd/server/wire_gen.go`
+  - 将现有 `settingService` 注入 `AccountHandler`、`UsageHandler`、`GenerationContentHandler`。
+  - 其他测试构造函数通过 variadic 参数保持兼容。
 
-npx.cmd vue-tsc --noEmit
-=> PASS
+### 前端
 
-npx.cmd vitest run --reporter=basic
-=> PASS: 103 files / 605 tests
+- 新增 `frontend/src/composables/useAdminDisplayCurrencyRate.ts`
+  - 调用 `adminAPI.dashboard.getStats()` 读取 `usd_cny_rate`。
+  - 无效值或接口失败时回退 `DEFAULT_USD_CNY_RATE = 7.2`。
 
-git diff --check
-=> PASS（仅提示 CODEX_START_HERE.md 既有 LF/CRLF warning）
+- `formatByCurrency(amount, currency, rate)`
+  - `currency=CNY`：原样人民币格式化，不乘汇率。
+  - `currency=USD` 或缺省：按传入汇率乘一次后展示为 `¥`。
 
-C:\Users\浩臣移动工作站\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe tools/secret_scan.py --include-untracked
-=> PASS: no high-confidence tracked-plus-untracked findings
-```
+- `GenerationContentView`
+  - 从 samples / weekly 响应接收汇率。
+  - 只有有效正数汇率才覆盖当前值，避免旧响应缺字段时把已取得的汇率重置为默认 7.2。
+  - `ContentWall` 显式接收 `usdCnyRate`。
 
-截图说明：本轮未启动前端 dev server，也未做浏览器截图；原因是变更为数据展示/类型/组件层改造，已用 component specs、full vitest、eslint、vue-tsc 覆盖。浏览器验收路径见第 8 节。
+- `AccountStatsModal`
+  - 总成本、今日成本、最高成本日、趋势 tooltip、Model/Endpoint chart 均使用接口汇率。
+  - admin 组件和旧 barrel export 组件同步修复。
 
----
+- `VideoTasksView`
+  - 挂载时并行拉取任务列表和 dashboard 汇率。
+  - 任务 `currency=CNY` 不二次换算，USD 按 dashboard 汇率展示。
 
-## 5. 接口与字段契约
+## 3. 新增/更新测试
 
-- `GET /api/v1/admin/dashboard/stats`：`data.usd_cny_rate: number`
-- `GET /api/v1/admin/generation-content/samples`：sample 增加 `currency?: string`
-- `SystemSettings.usd_cny_rate: number`
-- `UpdateSettingsRequest.usd_cny_rate?: number`
-- 视频 repository/service：`ClaimVideoBalanceCharge` 返回 claimedAt；新增 `ClearVideoBalanceChargeIfClaimedAt` 与 `ListUnchargedSucceededVideoTasks`
+### 后端
 
----
+- `TestAdminUsageStatsIncludesUSDCNYRate`
+  - 验证 admin usage stats 响应的 `data.usd_cny_rate` 使用设置值 `7.41`。
 
-## 6. 双重换算保护
+- `TestGenerationContentHandlerSamplesIncludesUSDCNYRate`
+  - 验证 generation samples 顶层响应带 `usd_cny_rate`。
 
-- 后端 weekly generation report 只输出 USD 归一聚合：CNY video cost 通过 `usd_cny_rate` 折回 USD，USD 原值保留。
-- 前端 `formatByCurrency(amount, currency, rate)` 对 `currency=CNY` 原样显示人民币；`USD/缺省` 才乘一次汇率。
-- `users.balance`、`api_keys.quota`、默认余额、余额阈值继续保留 USD 主语义；仅显示“约人民币”提示。
+- `TestGenerationContentHandlerWeeklyReportIncludesUSDCNYRate`
+  - 验证 weekly report 顶层响应带 `usd_cny_rate`。
 
----
+### 前端
 
-## 7. 风险、阻塞与回滚
+- `useAdminDisplayCurrencyRate.spec.ts`
+  - 覆盖 dashboard 汇率读取和无效汇率回退。
 
-- 未解决问题：`golangci-lint run ./...` 在 `backend/` 复现本机基线异常 `no go files to analyze`，本轮代码未能让该工具门禁变绿，状态标 `已阻塞`。
-- 外部风险：没有触发真实 provider 调用；Seedance production gate 只在 admin 普通创建路径生效，tiny-real/trial/smoke 保持原 gate。
-- 回滚方案：本地 commit 后可 `git revert <commit>`；若只回滚前端展示，可优先回滚 `frontend/src/composables/useDisplayCurrency.ts` 及调用点；若只回滚 production gate，可回滚 `video_handler.go` 与 `video_gateway_service.go` 中显式 flag。
+- `ContentWall.spec.ts`
+  - 覆盖 USD 按自定义汇率转换、CNY 不二次转换。
 
----
+- `GenerationContentView.spec.ts`
+  - 覆盖 samples 响应汇率向样本墙和 weekly cost 显示透传。
+  - 覆盖 weekly 缺字段时不覆盖 samples 的有效汇率。
 
-## 8. 老板浏览器验收路径
+- `AccountStatsModal.spec.ts`
+  - 覆盖账户统计卡片与分布图表使用接口汇率。
 
-1. 管理后台打开设置页，进入用户/默认值区域，确认 `USD/CNY 汇率` 可编辑，默认余额与余额阈值仍是 USD 输入，并显示约人民币提示。
-2. 打开老板概览/Usage/Dashboard，看成本、图表 tooltip、usage table、账户统计弹窗是否显示 `¥`；余额、开卡额度、quota 仍显示 `$`。
-3. 打开视频任务和生成内容墙，确认 USD 样本折算 `¥`，CNY 样本不二次换算；后台创建 Seedance 普通生产任务时未授权账号返回 `VIDEO_PRODUCTION_NOT_AUTHORIZED`。
+- `UsageView.spec.ts`
+  - 补齐 `dashboard.getModelStats` mock，移除本轮相关测试噪音。
 
----
+## 4. 红测记录
 
-## 9. 后续提示词
+| 命令 | 预期失败证据 |
+|---|---|
+| `npx.cmd vitest run src/components/admin/generation-content/__tests__/ContentWall.spec.ts src/views/admin/__tests__/GenerationContentView.spec.ts src/components/admin/account/__tests__/AccountStatsModal.spec.ts src/views/admin/__tests__/UsageView.spec.ts --reporter=basic` | 红：ContentWall 仍显示 `¥7.20`；GenerationContentView 没传 `rate=7.5`；AccountStatsModal 没显示 `¥7.50` |
+| `npx.cmd vitest run src/composables/__tests__/useAdminDisplayCurrencyRate.spec.ts --reporter=basic` | 红：`../useAdminDisplayCurrencyRate` 不存在 |
+| `$env:GOCACHE='D:\sub2api-trunk\tmp\gocache'; go test ./internal/handler/admin -run "TestAdminUsageStatsIncludesUSDCNYRate|TestGenerationContentHandler.*USDCNYRate" -count=1` | 红：构造器尚不支持 `SettingService` 注入；后续修正测试响应包裹层后进入绿测 |
 
-```text
-继续在 D:\sub2api-trunk 审查 S3 Loop CNY 收口结果。
-重点复核：
-1. golangci-lint 本机 no go files to analyze 是否为工具/模块环境问题；
-2. Seedance production_authorized gate 是否仅影响 admin 普通生产创建；
-3. 前端是否还有成本字段误显示 $，以及余额/quota 字段是否仍保持 USD 主语义。
-禁止 push/deploy/读取 .env。
-```
+## 5. 绿测与全量门禁
+
+| 命令 | 结果 |
+|---|---|
+| `$env:GOCACHE='D:\sub2api-trunk\tmp\gocache'; go test ./internal/handler/admin -run "TestAdminUsageStatsIncludesUSDCNYRate|TestGenerationContentHandler.*USDCNYRate" -count=1` | PASS |
+| `npx.cmd vitest run src/composables/__tests__/useAdminDisplayCurrencyRate.spec.ts src/components/admin/generation-content/__tests__/ContentWall.spec.ts src/views/admin/__tests__/GenerationContentView.spec.ts src/components/admin/account/__tests__/AccountStatsModal.spec.ts src/views/admin/__tests__/UsageView.spec.ts --reporter=basic` | PASS：5 files / 15 tests |
+| `$env:GOCACHE='D:\sub2api-trunk\tmp\gocache'; go test ./...` | PASS |
+| `$env:GOCACHE='D:\sub2api-trunk\tmp\gocache'; golangci-lint run ./...` | PASS：`0 issues`；仍有本机用户目录 golangci cache 写入 warning，不影响 lint 结果 |
+| `npx.cmd eslint . --ext .ts,.vue --max-warnings=0` | PASS |
+| `npx.cmd vue-tsc --noEmit` | PASS |
+| `npx.cmd vitest run --reporter=basic` | PASS：105 files / 610 tests |
+| `git diff --check` | PASS；仅提示既有 `CODEX_START_HERE.md` LF/CRLF warning |
+| `C:\Users\浩臣移动工作站\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe tools/secret_scan.py --include-untracked` | PASS：no high-confidence tracked-plus-untracked findings |
+
+Vitest 全量 stderr 中仍存在既有测试主动制造的错误日志和 Vue router-link stub warning，例如 auth invalid-json、SettingsView router-link、订阅网络错误、TableLoader server error、OpsOpenAITokenStatsCard load failure；这些测试均为 PASS，且不是本轮新增问题。
+
+## 6. 本轮修改文件索引
+
+### 后端
+
+- `backend/internal/handler/admin/display_currency.go`
+- `backend/internal/handler/admin/usage_handler.go`
+- `backend/internal/handler/admin/account_handler.go`
+- `backend/internal/handler/admin/generation_content_handler.go`
+- `backend/internal/pkg/usagestats/usage_log_types.go`
+- `backend/cmd/server/wire_gen.go`
+- `backend/internal/handler/admin/usage_handler_request_type_test.go`
+- `backend/internal/handler/admin/generation_content_handler_test.go`
+
+### 前端
+
+- `frontend/src/composables/useAdminDisplayCurrencyRate.ts`
+- `frontend/src/composables/__tests__/useAdminDisplayCurrencyRate.spec.ts`
+- `frontend/src/api/admin/usage.ts`
+- `frontend/src/api/admin/generation_content.ts`
+- `frontend/src/types/index.ts`
+- `frontend/src/views/admin/UsageView.vue`
+- `frontend/src/views/admin/GenerationContentView.vue`
+- `frontend/src/views/admin/video/VideoTasksView.vue`
+- `frontend/src/components/admin/account/AccountStatsModal.vue`
+- `frontend/src/components/account/AccountStatsModal.vue`
+- `frontend/src/components/admin/account/__tests__/AccountStatsModal.spec.ts`
+- `frontend/src/components/admin/generation-content/ContentWall.vue`
+- `frontend/src/components/admin/generation-content/__tests__/ContentWall.spec.ts`
+- `frontend/src/views/admin/__tests__/GenerationContentView.spec.ts`
+- `frontend/src/views/admin/__tests__/UsageView.spec.ts`
+
+## 7. 未纳入本轮提交的既有脏状态
+
+- `docs/superpowers/codex-handoff/CODEX_START_HERE.md`
+- `docs/superpowers/codex-handoff/CODEX_TASK_S3_LOOP_CNY.md`
+
+这两项是任务书前置授权脏状态，本轮不回退、不覆盖、不纳入修复提交。
+
+## 8. 截图说明
+
+本轮未启动前端 dev server，未做浏览器截图。原因：本次修复集中在接口字段、类型契约和组件格式化逻辑，已经通过组件测试、全量 vitest、eslint、vue-tsc 覆盖。建议人工浏览器复核路径：
+
+1. 管理后台设置页把 USD/CNY 汇率临时调整到非默认值，例如 `7.5`。
+2. 打开 Usage、Accounts stats、Generation Content、Video Tasks，确认 USD 来源成本显示为 `¥` 且按新汇率变化。
+3. 找一条 `currency=CNY` 的 Seedance/video 样本，确认金额不再乘汇率二次放大。
+
+## 9. 风险与回滚
+
+### 风险
+
+- VideoTasks 通过 dashboard stats 拉汇率；如果 dashboard stats 接口失败，会回退 `7.2`，不会阻塞任务列表。
+- 后端新增字段为向后兼容字段，不改变既有聚合金额语义。
+- 未做真实 provider 调用；生产授权 gate 和付费调用仍需按受控验收路径验证。
+
+### 回滚
+
+- 若已提交，执行 `git revert <本轮修复提交>`。
+- 若未提交，按文件索引反向还原本轮列出的 backend/frontend 修改；不要回退任务书前置脏状态。
+
+## 10. 最终状态
+
+本轮审查发现项已修复，新增回归测试已覆盖，后端与前端全量门禁通过。当前仍建议人工浏览器复核展示路径后再对外宣称最终可演示。

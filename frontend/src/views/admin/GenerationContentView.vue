@@ -129,7 +129,12 @@
         {{ weeklyReportError }}
       </div>
 
-      <ContentWall :samples="samples" :is-live="isLive" @updated="load" />
+      <ContentWall
+        :samples="samples"
+        :is-live="isLive"
+        :usd-cny-rate="usdCnyRate"
+        @updated="load"
+      />
     </div>
   </AppLayout>
 </template>
@@ -148,7 +153,7 @@ import type {
   GenerationSample
 } from '@/api/admin/generation_content'
 import { formatBytes, formatCompactNumber } from '@/utils/format'
-import { formatCny } from '@/composables/useDisplayCurrency'
+import { DEFAULT_USD_CNY_RATE, formatCny, normalizeUsdCnyRate } from '@/composables/useDisplayCurrency'
 
 const { t } = useI18n()
 
@@ -156,6 +161,7 @@ const stats = ref<GenerationContentStats | null>(null)
 const samples = ref<GenerationSample[]>([])
 const samplesLive = ref(false)
 const weeklyReport = ref<GenerationContentWeeklyReport | null>(null)
+const usdCnyRate = ref(DEFAULT_USD_CNY_RATE)
 const loading = ref(false)
 const pageError = ref('')
 const weeklyReportError = ref('')
@@ -172,7 +178,14 @@ const weeklyAnomalyCount = computed(() => {
 
 const fmtNum = (v: number | string) => formatCompactNumber(Number(v))
 const fmtBytes = (v: number | string) => formatBytes(Number(v))
-const fmtCurrency = (v: number | string) => formatCny(Number(v))
+const fmtCurrency = (v: number | string) => formatCny(Number(v), usdCnyRate.value)
+
+function setUsdCnyRate(rate?: number | null) {
+  const value = Number(rate)
+  if (Number.isFinite(value) && value > 0) {
+    usdCnyRate.value = normalizeUsdCnyRate(value)
+  }
+}
 
 const load = async () => {
   abortController?.abort()
@@ -198,12 +211,14 @@ const load = async () => {
   if (samplesResult.status === 'fulfilled') {
     samples.value = samplesResult.value.samples ?? []
     samplesLive.value = Boolean(samplesResult.value.is_live || samples.value.length > 0)
+    setUsdCnyRate(samplesResult.value.usd_cny_rate)
   } else if (!isAbortError(samplesResult.reason)) {
     pageError.value = t('admin.generationContent.loadFailed')
   }
 
   if (weeklyResult.status === 'fulfilled') {
     weeklyReport.value = weeklyResult.value
+    setUsdCnyRate(weeklyResult.value.usd_cny_rate)
   } else if (!isAbortError(weeklyResult.reason)) {
     weeklyReport.value = null
     weeklyReportError.value = t('admin.generationContent.weeklyReportLoadFailed')

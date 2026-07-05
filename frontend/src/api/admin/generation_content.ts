@@ -43,6 +43,7 @@ export interface GenerationSample {
 export interface GenerationContentSamplesResponse {
   samples: GenerationSample[]
   is_live: boolean
+  usd_cny_rate?: number
 }
 
 export type AdoptionStatus = 'adopted' | 'rejected' | 'pending'
@@ -75,6 +76,7 @@ export interface GenerationContentWeeklyReport {
   entries: number
   video_tasks: number
   total_cost_estimate: number
+  usd_cny_rate?: number
   adopted_count: number
   rejected_count: number
   pending_count: number

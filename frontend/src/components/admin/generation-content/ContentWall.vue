@@ -129,6 +129,7 @@ interface Feedback {
 const props = defineProps<{
   samples: GenerationSample[]
   isLive: boolean
+  usdCnyRate?: number | null
 }>()
 
 const emit = defineEmits<{
@@ -153,7 +154,7 @@ function feedbackType(sample: GenerationSample, idx: number): Feedback['type'] |
 }
 
 function formatSampleCost(sample: GenerationSample): string {
-  return formatByCurrency(sample.cost_estimate, sample.currency)
+  return formatByCurrency(sample.cost_estimate, sample.currency, props.usdCnyRate)
 }
 
 function syncDrafts() {

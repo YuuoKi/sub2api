@@ -86,10 +86,10 @@ func (s *generationContentRepoStub) GetWeeklyReport(context.Context, time.Time, 
 	return s.weeklyReport, nil
 }
 
-func setupGenerationContentRouter(repo *generationContentRepoStub, cfg *config.Config) *gin.Engine {
+func setupGenerationContentRouter(repo *generationContentRepoStub, cfg *config.Config, settingService ...*service.SettingService) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	h := NewGenerationContentHandler(repo, cfg)
+	h := NewGenerationContentHandler(repo, cfg, settingService...)
 	router.POST("/api/v1/admin/generation-content/:task_id/adoption", h.UpdateAdoption)
 	router.GET("/api/v1/admin/generation-content/samples", h.GetSamples)
 	router.GET("/api/v1/admin/generation-content/weekly-report", h.GetWeeklyReport)
@@ -116,6 +116,19 @@ func TestGenerationContentHandlerSamplesIncludesCurrency(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.Contains(t, rec.Body.String(), `"currency":"CNY"`)
 	require.Contains(t, rec.Body.String(), `"cost_estimate":5.0094`)
+}
+
+func TestGenerationContentHandlerSamplesIncludesUSDCNYRate(t *testing.T) {
+	repo := &generationContentRepoStub{}
+	settingSvc := service.NewSettingService(&dashboardSettingRepoStub{value: "7.41"}, nil)
+	router := setupGenerationContentRouter(repo, &config.Config{}, settingSvc)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/generation-content/samples", nil)
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Contains(t, rec.Body.String(), `"usd_cny_rate":7.41`)
 }
 
 func TestGenerationContentHandlerUpdateAdoptionMapsPayload(t *testing.T) {
@@ -253,6 +266,19 @@ func TestGenerationContentHandlerWeeklyReportReturnsMarkdown(t *testing.T) {
 	require.Contains(t, rec.Body.String(), `"entries":10`)
 	require.Contains(t, rec.Body.String(), `"markdown"`)
 	require.Contains(t, rec.Body.String(), "Weekly Production Ledger")
+}
+
+func TestGenerationContentHandlerWeeklyReportIncludesUSDCNYRate(t *testing.T) {
+	repo := &generationContentRepoStub{weeklyReport: &service.GenerationContentWeeklyReport{}}
+	settingSvc := service.NewSettingService(&dashboardSettingRepoStub{value: "7.41"}, nil)
+	router := setupGenerationContentRouter(repo, &config.Config{}, settingSvc)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/generation-content/weekly-report", nil)
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Contains(t, rec.Body.String(), `"usd_cny_rate":7.41`)
 }
 
 func TestGenerationContentHandlerWeeklyReportRejectsInvalidWindow(t *testing.T) {

@@ -320,7 +320,7 @@ const loadStats = async () => {
     const s = await adminAPI.usage.getStats({ ...filters.value, stream: legacyStream === null ? undefined : legacyStream })
     if (seq !== statsReqSeq) return
     usageStats.value = s
-    usdCnyRate.value = Number((s as AdminUsageStatsResponse & { usd_cny_rate?: number }).usd_cny_rate || DEFAULT_USD_CNY_RATE)
+    usdCnyRate.value = Number(s.usd_cny_rate || DEFAULT_USD_CNY_RATE)
     inboundEndpointStats.value = s.endpoints || []
     upstreamEndpointStats.value = s.upstream_endpoints || []
     endpointPathStats.value = s.endpoint_paths || []

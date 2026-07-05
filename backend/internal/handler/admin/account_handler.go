@@ -58,6 +58,7 @@ type AccountHandler struct {
 	sessionLimitCache       service.SessionLimitCache
 	rpmCache                service.RPMCache
 	tokenCacheInvalidator   service.TokenCacheInvalidator
+	settingService          *service.SettingService
 }
 
 // NewAccountHandler creates a new admin account handler
@@ -75,7 +76,12 @@ func NewAccountHandler(
 	sessionLimitCache service.SessionLimitCache,
 	rpmCache service.RPMCache,
 	tokenCacheInvalidator service.TokenCacheInvalidator,
+	settingServices ...*service.SettingService,
 ) *AccountHandler {
+	var settingService *service.SettingService
+	if len(settingServices) > 0 {
+		settingService = settingServices[0]
+	}
 	return &AccountHandler{
 		adminService:            adminService,
 		oauthService:            oauthService,
@@ -90,6 +96,7 @@ func NewAccountHandler(
 		sessionLimitCache:       sessionLimitCache,
 		rpmCache:                rpmCache,
 		tokenCacheInvalidator:   tokenCacheInvalidator,
+		settingService:          settingService,
 	}
 }
 
@@ -1008,6 +1015,7 @@ func (h *AccountHandler) GetStats(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
+	stats.USDCNYRate = resolveUSDCNYRate(c.Request.Context(), h.settingService)
 
 	response.Success(c, stats)
 }

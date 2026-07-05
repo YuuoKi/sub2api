@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -36,10 +37,10 @@ func (s *adminUsageRepoCapture) GetStatsWithFilters(ctx context.Context, filters
 	return &usagestats.UsageStats{}, nil
 }
 
-func newAdminUsageRequestTypeTestRouter(repo *adminUsageRepoCapture) *gin.Engine {
+func newAdminUsageRequestTypeTestRouter(repo *adminUsageRepoCapture, settingService ...*service.SettingService) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	usageSvc := service.NewUsageService(repo, nil, nil, nil)
-	handler := NewUsageHandler(usageSvc, nil, nil, nil)
+	handler := NewUsageHandler(usageSvc, nil, nil, nil, settingService...)
 	router := gin.New()
 	router.GET("/admin/usage", handler.List)
 	router.GET("/admin/usage/stats", handler.Stats)
@@ -117,6 +118,25 @@ func TestAdminUsageStatsRequestTypePriority(t *testing.T) {
 	require.NotNil(t, repo.statsFilters.RequestType)
 	require.Equal(t, int16(service.RequestTypeStream), *repo.statsFilters.RequestType)
 	require.Nil(t, repo.statsFilters.Stream)
+}
+
+func TestAdminUsageStatsIncludesUSDCNYRate(t *testing.T) {
+	repo := &adminUsageRepoCapture{}
+	settingSvc := service.NewSettingService(&dashboardSettingRepoStub{value: "7.41"}, nil)
+	router := newAdminUsageRequestTypeTestRouter(repo, settingSvc)
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/usage/stats", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	var body struct {
+		Data struct {
+			USDCNYRate float64 `json:"usd_cny_rate"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.Equal(t, 7.41, body.Data.USDCNYRate)
 }
 
 func TestAdminUsageStatsInvalidRequestType(t *testing.T) {

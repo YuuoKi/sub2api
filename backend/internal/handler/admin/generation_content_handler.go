@@ -25,12 +25,17 @@ const (
 // GenerationContentHandler 提供 ai_generation_content 表的只读统计 + 样本端点（护城河看板）。
 // 纯聚合无业务逻辑，故直接依赖 repo 接口，不引入额外 service 层。
 type GenerationContentHandler struct {
-	repo service.GenerationContentRepository
-	cfg  *config.Config
+	repo           service.GenerationContentRepository
+	cfg            *config.Config
+	settingService *service.SettingService
 }
 
-func NewGenerationContentHandler(repo service.GenerationContentRepository, cfg *config.Config) *GenerationContentHandler {
-	return &GenerationContentHandler{repo: repo, cfg: cfg}
+func NewGenerationContentHandler(repo service.GenerationContentRepository, cfg *config.Config, settingServices ...*service.SettingService) *GenerationContentHandler {
+	var settingService *service.SettingService
+	if len(settingServices) > 0 {
+		settingService = settingServices[0]
+	}
+	return &GenerationContentHandler{repo: repo, cfg: cfg, settingService: settingService}
 }
 
 // GetStats handles GET /api/v1/admin/generation-content/stats
@@ -88,8 +93,9 @@ func (h *GenerationContentHandler) GetSamples(c *gin.Context) {
 	}
 
 	response.Success(c, gin.H{
-		"samples": samples,
-		"is_live": len(rows) > 0,
+		"samples":      samples,
+		"is_live":      len(rows) > 0,
+		"usd_cny_rate": resolveUSDCNYRate(c.Request.Context(), h.settingService),
 	})
 }
 
@@ -189,6 +195,7 @@ func (h *GenerationContentHandler) GetWeeklyReport(c *gin.Context) {
 		"pending_count":       report.PendingCount,
 		"unreviewed_count":    report.UnreviewedCount,
 		"adoption_rate":       report.AdoptionRate,
+		"usd_cny_rate":        resolveUSDCNYRate(c.Request.Context(), h.settingService),
 		"anomalies": gin.H{
 			"failed_tasks":       report.Anomalies.FailedTasks,
 			"missing_task_joins": report.Anomalies.MissingTaskJoins,

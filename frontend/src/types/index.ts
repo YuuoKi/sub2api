@@ -1635,6 +1635,7 @@ export interface AccountUsageStatsResponse {
   models: ModelStat[]
   endpoints: EndpointStat[]
   upstream_endpoints: EndpointStat[]
+  usd_cny_rate?: number
 }
 
 // ==================== User Attribute Types ====================

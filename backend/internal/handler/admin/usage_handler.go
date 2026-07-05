@@ -25,6 +25,7 @@ type UsageHandler struct {
 	apiKeyService  *service.APIKeyService
 	adminService   service.AdminService
 	cleanupService *service.UsageCleanupService
+	settingService *service.SettingService
 }
 
 // NewUsageHandler creates a new admin usage handler
@@ -33,12 +34,18 @@ func NewUsageHandler(
 	apiKeyService *service.APIKeyService,
 	adminService service.AdminService,
 	cleanupService *service.UsageCleanupService,
+	settingServices ...*service.SettingService,
 ) *UsageHandler {
+	var settingService *service.SettingService
+	if len(settingServices) > 0 {
+		settingService = settingServices[0]
+	}
 	return &UsageHandler{
 		usageService:   usageService,
 		apiKeyService:  apiKeyService,
 		adminService:   adminService,
 		cleanupService: cleanupService,
+		settingService: settingService,
 	}
 }
 
@@ -330,6 +337,7 @@ func (h *UsageHandler) Stats(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
+	stats.USDCNYRate = resolveUSDCNYRate(c.Request.Context(), h.settingService)
 
 	response.Success(c, stats)
 }

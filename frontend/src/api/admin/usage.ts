@@ -19,6 +19,7 @@ export interface AdminUsageStatsResponse {
   total_actual_cost: number
   total_account_cost: number
   average_duration_ms: number
+  usd_cny_rate?: number
   endpoints?: EndpointStat[]
   upstream_endpoints?: EndpointStat[]
   endpoint_paths?: EndpointStat[]

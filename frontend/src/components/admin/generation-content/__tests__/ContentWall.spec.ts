@@ -69,11 +69,12 @@ function sample(overrides: Partial<GenerationSample> = {}): GenerationSample {
   }
 }
 
-function mountWall(samples: GenerationSample[] = [sample()]) {
+function mountWall(samples: GenerationSample[] = [sample()], usdCnyRate?: number) {
   return mount(ContentWall, {
     props: {
       isLive: true,
-      samples
+      samples,
+      usdCnyRate
     }
   })
 }
@@ -185,5 +186,16 @@ describe('ContentWall adoption feedback', () => {
       adoption_status: 'pending'
     })
     await flushPromises()
+  })
+
+  it('uses the supplied USD/CNY rate without converting native CNY samples twice', () => {
+    const wrapper = mountWall([
+      sample({ task_id: 1, cost_estimate: 1, currency: 'USD' }),
+      sample({ task_id: 2, cost_estimate: 5.0094, currency: 'CNY' })
+    ], 7.5)
+
+    expect(wrapper.text()).toContain('¥7.50')
+    expect(wrapper.text()).toContain('¥5.0094')
+    expect(wrapper.text()).not.toContain('¥37.5705')
   })
 })

@@ -1,0 +1,10 @@
+{
+  "display_name": "Seedance 2.0 - R2 Production",
+  "enabled": true,
+  "api_key": "REDACTED_IN_REPO",
+  "default_model": "doubao-seedance-2-0-260128",
+  "metadata_json": {
+    "production_authorized": true,
+    "single_smoke_authorized": true
+  }
+}

@@ -7,9 +7,9 @@
 
 ---
 
-> **2026-07-05 R1（当前任务）**：V-1→A-4 已完成；Claude 复查发现生产扣费/通道 gate 等缺口。请执行 **[CODEX_TASK_R1.md](./CODEX_TASK_R1.md)** 的 R1-A～R1-F，交付 `deliverables/2026-07-05-R1-backend-review.md`。不要重做 V-1→A-4。
+> **2026-07-05 R2（下一批）**：控制台 v2 + R1 已合并到分支 `wujie/video-capture-moat-20260702`。请执行 **[CODEX_TASK_PRODUCTION_VERIFY.md](./CODEX_TASK_PRODUCTION_VERIFY.md)**（正式 Seedance 冒烟、图片回归、计费对账抽检）。交付 `deliverables/YYYY-MM-DD-R2-*-review.md`。
 >
-> 已完成任务书（只读参考）：[CODEX_TASK_BILLING.md](./CODEX_TASK_BILLING.md)、[CODEX_TASK_API_CONTRACT.md](./CODEX_TASK_API_CONTRACT.md)
+> **2026-07-05 R1（已完成）**：见 [CODEX_TASK_R1.md](./CODEX_TASK_R1.md) 与 `deliverables/2026-07-05-R1-backend-review.md`。
 
 ## 第一步：读这些（顺序固定）
 

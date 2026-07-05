@@ -1,0 +1,7 @@
+# Superpowers implementation plans
+
+Plans created by the Superpowers `writing-plans` skill are saved here as:
+
+`YYYY-MM-DD-<feature-name>.md`
+
+See `.cursor/SETUP.md` for the recommended agent workflow.

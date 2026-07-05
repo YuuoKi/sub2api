@@ -139,6 +139,11 @@ docs/*
 !docs/PAYMENT.md
 !docs/PAYMENT_CN.md
 !docs/ADMIN_PAYMENT_INTEGRATION_API.md
+!docs/api/
+!docs/api/**
+!docs/superpowers/
+!docs/superpowers/codex-handoff/
+!docs/superpowers/codex-handoff/**
 .serena/
 .codex/
 frontend/coverage/

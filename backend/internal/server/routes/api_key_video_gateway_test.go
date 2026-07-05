@@ -422,7 +422,7 @@ func TestAPIKeyVideoGatewayBlocksSeedanceWithoutTrialMode(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
 	require.Equal(t, http.StatusForbidden, body.Code)
-	require.Equal(t, "VIDEO_PROVIDER_DISABLED", body.Reason)
+	require.Equal(t, "VIDEO_PRODUCTION_NOT_AUTHORIZED", body.Reason)
 	require.Equal(t, service.VideoProviderSeedance, body.Metadata["provider"])
 	require.Equal(t, "0", body.Metadata["real_provider_dispatch_count"])
 	require.Equal(t, 0, repo.realProviderTaskCount())

@@ -9,13 +9,16 @@
 
 > **2026-07-05 R2：R2-A `done`** — 真实 Seedance task #4 已跑通（见 [R2-A 审查包](./deliverables/2026-07-05-R2-A-production-smoke-review.md)）。**请废弃临时 Key。**
 >
-> **2026-07-05 R1（已完成）**：见 [CODEX_TASK_R1.md](./CODEX_TASK_R1.md) 与 `deliverables/2026-07-05-R1-backend-review.md`。
+> **2026-07-05 S1 收尾（当前执行）**：[CODEX_TASK_S1_CLOSEOUT.md](./CODEX_TASK_S1_CLOSEOUT.md) — 仓库卫生、secret-scan、PR #3726 门禁、R2-B/C 终态。
+> **S1-R2BC（已完成）**：[CODEX_TASK_S1_R2BC_MERGE.md](./CODEX_TASK_S1_R2BC_MERGE.md) · [S1-R2BC-review](./deliverables/2026-07-05-S1-R2BC-review.md) · [S1-CLOSEOUT](./deliverables/2026-07-05-S1-CLOSEOUT-review.md)
+>
+> **R1 / V-1→A-4（已完成）**：见 [CODEX_TASK_R1.md](./CODEX_TASK_R1.md) 与 `deliverables/2026-07-05-*.md`。
 
 ## 第一步：读这些（顺序固定）
 
 1. 本文件（你正在读）
-2. **R1 复查任务书（当前执行）**：[CODEX_TASK_R1.md](./CODEX_TASK_R1.md)
-3. 已有审查包：`deliverables/2026-07-05-*.md`（9 份，了解已交付范围）
+2. **S1 收尾任务书（当前执行）**：[CODEX_TASK_S1_CLOSEOUT.md](./CODEX_TASK_S1_CLOSEOUT.md)
+3. 已有审查包：`deliverables/2026-07-05-*.md`（含 R2-A/R2-C partial/R2 收口）
 4. 契约文档：`docs/api/video-gateway-contract.md`、`docs/api/image-gateway-contract.md`
 
 ---
@@ -133,4 +136,4 @@ YYYY-MM-DD-<任务ID>-review.md
 - 与前端界面相关的决策：**写入审查包「给 Claude 的建议」**，不要自己改 Vue
 - 需要老板提供：Seedance Key、官方单价表、是否启用真实冒烟
 
-**现在从 P0-2 或 P0-3 后端开始执行。**
+**现在从 [CODEX_TASK_S1_CLOSEOUT.md](./CODEX_TASK_S1_CLOSEOUT.md) 的 S1-C0 开始。**

@@ -11,30 +11,30 @@ Updated: 2026-07-05 Asia/Shanghai
 
 Sub2API is the Wujie internal AI API / model scheduling / ledger middle layer. It is useful for internal decision evidence and controlled demos, not a public production platform.
 
-## Current Status
+## Current Status (对齐北极星 V5.0 `#current-state` · 2026-07-05)
 
-- Overall status: `内部可用 / 待复核` for controlled internal mock/dev ledger work.
-- Phase A' tiny real: `内部可用 / 可演示` for one controlled single-call evidence path only.
-- B1 generation-content ledger: `内部可用 / 待复核`; adoption feedback, weekly report, and Admin ContentWall sample review path exist.
-- B2 webhook P1: fixed in commit `628ddd10`; provider lookup failure no longer returns 2xx success, while unknown order ack semantics are preserved.
-- B2 VERIFY.log: appended and tracked in commit `4b1cf24b`; `_review/MEGA_LOOP_FINAL_AUDIT_20260703/VERIFY.log` remains the final-audit log.
-- LOOP bug audit + fix wave (2026-07-04): 25-round adversarial audit recorded in `_review/LOOP_BUG_AUDIT_20260704/`; fixes committed as 10 grouped commits (`17112f8b`..`f176c256`) covering all 7 P0 and ~24 of 32 P1 findings. Remaining known gaps: P1-019/020 (video billing brake, blocked before real Seedance), P1-027 (atomic quota reservation). Verification: `_review/BUG_FIX_STATUS_20260704/VERIFY.md`.
-- QCanvas B2 bridge: QCanvas hono-api commit `5e87e3f` proxies `POST /sub2api/v1/generation-content/:task_id/adoption`; QCanvas web commit `c0f1deb` adds Studio V2 session History and adoption UI.
+- Branch: `wujie/video-capture-moat-20260702` · PR [#3726](https://github.com/Wei-Shaw/sub2api/pull/3726)
+- Admin console v2: `内部可用 / 可演示` — 总览 / 密钥库 / 成员与开卡 / 任务记录 / 系统（六导航）
+- Real Seedance + balance deduct: `内部可用` — R2-A（task #4, ¥5.0094, 108900 tokens）；审查包 `docs/superpowers/codex-handoff/deliverables/2026-07-05-R2-A-production-smoke-review.md`
+- Billing (LLM + image + video unify): `内部可用` — migrations 149–154；R2-B 图片冒烟、R2-C 3+3 扩样仍属 S1
+- Generation-content ledger: `内部可用` — `ai_generation_content` 在真实链路运行
+- Real paid calls: 按 `production_authorized` 账号级 gate + 老板逐 Key 授权；**未授权账号不得日常真实调用**
+- Codex 执行入口: `docs/superpowers/codex-handoff/CODEX_START_HERE.md` + `deliverables/`
 
-## Current Truth Sources
+## Historical Evidence (追溯用 · 非当前规划入口)
 
-- Bug audit + fix package (latest): `_review/LOOP_BUG_AUDIT_20260704/FINDINGS.md`, `_review/BUG_FIX_STATUS_20260704/VERIFY.md`
-- B2 webhook package: `_review/B2_webhook_fix_20260704/VERIFY.md`, `_review/B2_webhook_fix_20260704/SUMMARY.md`
-- Final audit package: `_review/MEGA_LOOP_FINAL_AUDIT_20260703/`
-- Chat context: `docs/CHAT_STRATEGY_CONTEXT.md`
-- Phase A' success evidence: `_review/phase-a-prime-tiny-real_20260702/success_result.json`
-- QCanvas B2 package: `D:\Codex创业任务\QCanvas（无界版）\QCanvas\docs\reviews\B2_adoption_20260704\`
+- Phase A' tiny real (已被 R2-A 超越): `_review/phase-a-prime-tiny-real_20260702/success_result.json`
+- G3 受控 dev mock: `_review/capture-arming-D2-20260702-G3/SUMMARY.md`
+- LOOP bug audit + fix (2026-07-04): `_review/LOOP_BUG_AUDIT_20260704/`, `_review/BUG_FIX_STATUS_20260704/VERIFY.md`
+- B2 webhook fix: `_review/B2_webhook_fix_20260704/`
+- MEGA final audit: `_review/MEGA_LOOP_FINAL_AUDIT_20260703/`
+- QCanvas B2 adoption bridge: QCanvas `docs/reviews/B2_adoption_20260704/`
 
 ## Do Not Claim
 
-- Do not claim public production readiness.
-- Do not claim real paid provider daily calls are generally authorized.
-- Do not claim QCanvas/Auth/root pnpm gates are solved.
+- Do not claim public production readiness or multi-tenant SaaS.
+- Do not claim real paid provider daily calls are generally authorized (only `production_authorized` accounts after boss Key approval).
+- Do not claim QCanvas S2 / root pnpm gates are solved.
 - Do not read or print `.env`, keys, tokens, cookies, or provider credentials.
 
 ## Boundaries

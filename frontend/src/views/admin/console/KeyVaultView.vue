@@ -301,7 +301,8 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { adminAPI } from '@/api/admin'
@@ -313,6 +314,7 @@ import { videoGatewayDisplayProvider } from '@/utils/productMode'
 import { formatDateTime } from './consoleUtils'
 
 const appStore = useAppStore()
+const route = useRoute()
 
 type TabKey = 'accounts' | 'video'
 const tabs: Array<{ key: TabKey; label: string }> = [
@@ -609,5 +611,16 @@ async function reload() {
   }
 }
 
-onMounted(reload)
+function syncTabFromRoute() {
+  if (route.query.tab === 'video') {
+    activeTab.value = 'video'
+  }
+}
+
+watch(() => route.query.tab, syncTabFromRoute)
+
+onMounted(() => {
+  syncTabFromRoute()
+  void reload()
+})
 </script>

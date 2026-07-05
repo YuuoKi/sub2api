@@ -480,7 +480,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: true,
-      title: '员工与开卡'
+      title: '成员与开卡'
     }
   },
   {

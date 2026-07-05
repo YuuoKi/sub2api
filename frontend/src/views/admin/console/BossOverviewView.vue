@@ -28,6 +28,37 @@
         </div>
       </div>
 
+      <!-- P0-4：启用中的通道异常上浮 -->
+      <section
+        v-if="channelAlerts.length"
+        class="space-y-2 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-500/30 dark:bg-red-500/10"
+        role="alert"
+      >
+        <div
+          v-for="alert in channelAlerts"
+          :key="`${alert.provider}-${alert.route_account}`"
+          class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
+        >
+          <div class="flex min-w-0 items-start gap-3">
+            <Icon name="exclamationTriangle" size="md" class="mt-0.5 shrink-0 text-red-600 dark:text-red-400" />
+            <div class="min-w-0">
+              <p class="text-sm font-medium text-red-800 dark:text-red-200">
+                {{ channelAlertTitle(alert) }}
+              </p>
+              <p class="mt-1 text-xs text-red-700 dark:text-red-300">
+                {{ diagnosticSuggestedAction(alert) }}新任务可能失败。
+              </p>
+            </div>
+          </div>
+          <RouterLink
+            class="btn btn-sm shrink-0 border-red-300 bg-white text-red-700 hover:bg-red-50 dark:border-red-500/40 dark:bg-dark-800 dark:text-red-200 dark:hover:bg-red-500/10"
+            :to="{ path: '/admin/console/key-vault', query: { tab: 'video' } }"
+          >
+            去密钥库检查
+          </RouterLink>
+        </div>
+      </section>
+
       <!-- 核心指标卡：SVG 环形描边动画 + 数字滚动 -->
       <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div
@@ -265,6 +296,8 @@ import type { ModelStat, TrendDataPoint, UserSpendingRankingItem } from '@/types
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import { videoGatewayDisplayProvider } from '@/utils/productMode'
+import { diagnosticSuggestedAction, humanIssueLabel } from '@/views/admin/video/videoUtils'
+import type { VideoHealthDiagnostic } from '@/api/admin/video'
 import {
   type ConsoleRangeKey,
   formatCount,
@@ -311,6 +344,28 @@ const totalRequests = computed(() => rankingTotals.value.requests)
 const activeStaff = computed(
   () => ranking.value.filter((item) => item.actual_cost > 0 || item.requests > 0 || (item.video_cost ?? 0) > 0).length,
 )
+
+const channelAlerts = computed<VideoHealthDiagnostic[]>(() => {
+  const dashboard = videoDashboard.value
+  if (!dashboard) return []
+  const enabledProviders = new Set(
+    (dashboard.provider_status || [])
+      .filter((provider) => provider.enabled && provider.provider !== 'mock')
+      .map((provider) => provider.provider),
+  )
+  return (dashboard.health_diagnostics || []).filter(
+    (item) => enabledProviders.has(item.provider) && item.status !== '正常',
+  )
+})
+
+function channelAlertTitle(alert: VideoHealthDiagnostic): string {
+  const name = videoGatewayDisplayProvider(alert.provider, alert.display_name)
+  const issue = humanIssueLabel(alert.exception_type || alert.key_status || alert.recent_error)
+  if (issue && issue !== '正常') {
+    return `${name}（${alert.route_account}）${issue}`
+  }
+  return `${name}（${alert.route_account}）通道异常，需处理`
+}
 
 type StatCard = {
   label: string

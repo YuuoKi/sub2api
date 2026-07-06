@@ -1,13 +1,15 @@
 # Codex 任务书 — 请先完整阅读本文件再动手
 
-> **给 Codex 的开场白**  
-> 你是 Sub2API（无界 AI 生产控制台）仓库里的**后端执行代理**。前端控制台业务化重构（总览 / 密钥库 / 员工与开卡 / 任务记录）已由 Claude 完成并验证。  
-> **你的任务**：只实现路线图里标注【Codex】的后端与配置工作；**不要改** `frontend/src/views/admin/console/` 下的新页面（除非 roadmap 明确写了后端配套且无可避免的小改动）。  
+> **给 Codex 的开场白**
+> 你是 Sub2API（无界 AI 生产控制台）仓库里的**后端执行代理**。前端控制台业务化重构（总览 / 密钥库 / 员工与开卡 / 任务记录）已由 Claude 完成并验证。
+> **你的任务**：只实现路线图里标注【Codex】的后端与配置工作；**不要改** `frontend/src/views/admin/console/` 下的新页面（除非 roadmap 明确写了后端配套且无可避免的小改动）。
 > **做完后**：在 `docs/superpowers/codex-handoff/deliverables/` 下新建一份审查包 Markdown（用 [DELIVERABLE_TEMPLATE.md](./DELIVERABLE_TEMPLATE.md)），然后告诉老板「已完成，审查包路径是 xxx」。
 
 ---
 
-> **2026-07-07 当前任务（最高优先级）**：[CODEX_TASK_S3_G2_CLOSEOUT.md](./CODEX_TASK_S3_G2_CLOSEOUT.md) — S3 收口：文档 commit + Groups 等 ¥ 漏网 + 浏览器验收表 + 审查包。**新对话开这个。**
+> **2026-07-07 当前任务（最高优先级）**：[CODEX_TASK_MLA_DBUG.md](./CODEX_TASK_MLA_DBUG.md) — MEGA LOOP 已复核 Bug **分段 Dbug 修复**（DBug-0→8，逐 Phase commit + 审查包）。**新对话开这个。**
+>
+> **2026-07-07 次要（若 S3 文档未 commit）**：[CODEX_TASK_S3_G2_CLOSEOUT.md](./CODEX_TASK_S3_G2_CLOSEOUT.md) — S3 收口：Groups ¥ 漏网 + 浏览器验收表。
 >
 > **2026-07-06 S3 loop（已完成）**：[CODEX_TASK_S3_LOOP_CNY.md](./CODEX_TASK_S3_LOOP_CNY.md) — 人民币统一 + 扣费自愈 + admin production gate（commit `31af790e` + `a3adde7b`）。
 >

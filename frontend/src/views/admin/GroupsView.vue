@@ -144,9 +144,12 @@
                   "
                 >
                   <span v-if="row.daily_limit_usd"
-                    >${{ row.daily_limit_usd }}/{{
+                    >{{ formatUsdLimit(row.daily_limit_usd) }}/{{
                       t("admin.groups.limitDay")
-                    }}</span
+                    }}
+                    <span class="ml-1 text-gray-400 dark:text-gray-500">{{
+                      formatApproxCny(row.daily_limit_usd)
+                    }}</span></span
                   >
                   <span
                     v-if="
@@ -157,9 +160,12 @@
                     >·</span
                   >
                   <span v-if="row.weekly_limit_usd"
-                    >${{ row.weekly_limit_usd }}/{{
+                    >{{ formatUsdLimit(row.weekly_limit_usd) }}/{{
                       t("admin.groups.limitWeek")
-                    }}</span
+                    }}
+                    <span class="ml-1 text-gray-400 dark:text-gray-500">{{
+                      formatApproxCny(row.weekly_limit_usd)
+                    }}</span></span
                   >
                   <span
                     v-if="row.weekly_limit_usd && row.monthly_limit_usd"
@@ -167,9 +173,12 @@
                     >·</span
                   >
                   <span v-if="row.monthly_limit_usd"
-                    >${{ row.monthly_limit_usd }}/{{
+                    >{{ formatUsdLimit(row.monthly_limit_usd) }}/{{
                       t("admin.groups.limitMonth")
-                    }}</span
+                    }}
+                    <span class="ml-1 text-gray-400 dark:text-gray-500">{{
+                      formatApproxCny(row.monthly_limit_usd)
+                    }}</span></span
                   >
                 </template>
                 <span v-else class="text-gray-400 dark:text-gray-500">{{
@@ -261,9 +270,7 @@
                   t("admin.groups.usageToday")
                 }}</span>
                 <span class="ml-1 font-medium text-gray-700 dark:text-gray-300"
-                  >${{
-                    formatCost(usageMap.get(row.id)?.today_cost ?? 0)
-                  }}</span
+                  >{{ formatCost(usageMap.get(row.id)?.today_cost ?? 0) }}</span
                 >
               </div>
               <div class="text-gray-500 dark:text-gray-400">
@@ -271,9 +278,7 @@
                   t("admin.groups.usageTotal")
                 }}</span>
                 <span class="ml-1 font-medium text-gray-700 dark:text-gray-300"
-                  >${{
-                    formatCost(usageMap.get(row.id)?.total_cost ?? 0)
-                  }}</span
+                  >{{ formatCost(usageMap.get(row.id)?.total_cost ?? 0) }}</span
                 >
               </div>
             </div>
@@ -2858,6 +2863,8 @@ import { VueDraggable } from "vue-draggable-plus";
 import { createStableObjectKeyResolver } from "@/utils/stableObjectKey";
 import { useKeyedDebouncedSearch } from "@/composables/useKeyedDebouncedSearch";
 import { getPersistedPageSize } from "@/composables/usePersistedPageSize";
+import { useAdminDisplayCurrencyRate } from "@/composables/useAdminDisplayCurrencyRate";
+import { formatCny } from "@/composables/useDisplayCurrency";
 import {
   createDefaultMessagesDispatchFormState,
   messagesDispatchConfigToFormState,
@@ -2869,6 +2876,7 @@ import {
 const { t } = useI18n();
 const appStore = useAppStore();
 const onboardingStore = useOnboardingStore();
+const { usdCnyRate, loadUsdCnyRate } = useAdminDisplayCurrencyRate();
 
 const columns = computed<Column[]>(() => [
   { key: "name", label: t("admin.groups.columns.name"), sortable: true },
@@ -3543,11 +3551,17 @@ const loadGroups = async () => {
   }
 };
 
-const formatCost = (cost: number): string => {
-  if (cost >= 1000) return cost.toFixed(0);
-  if (cost >= 100) return cost.toFixed(1);
-  return cost.toFixed(2);
+const formatUsdLimit = (value: number): string => {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return "USD 0";
+  return `USD ${amount.toFixed(6).replace(/0+$/, "").replace(/\.$/, "")}`;
 };
+
+const formatApproxCny = (value: number): string =>
+  `≈${formatCny(value, usdCnyRate.value)}`;
+
+const formatCost = (cost: number): string =>
+  formatCny(cost, usdCnyRate.value);
 
 const loadUsageSummary = async () => {
   usageLoading.value = true;
@@ -4042,6 +4056,7 @@ const saveSortOrder = async () => {
 };
 
 onMounted(() => {
+  loadUsdCnyRate();
   loadGroups();
   document.addEventListener("click", handleClickOutside);
 });

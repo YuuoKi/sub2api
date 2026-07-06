@@ -7,6 +7,10 @@
 
 ---
 
+> **2026-07-07 当前任务（最高优先级）**：[CODEX_TASK_S3_G2_CLOSEOUT.md](./CODEX_TASK_S3_G2_CLOSEOUT.md) — S3 收口：文档 commit + Groups 等 ¥ 漏网 + 浏览器验收表 + 审查包。**新对话开这个。**
+>
+> **2026-07-06 S3 loop（已完成）**：[CODEX_TASK_S3_LOOP_CNY.md](./CODEX_TASK_S3_LOOP_CNY.md) — 人民币统一 + 扣费自愈 + admin production gate（commit `31af790e` + `a3adde7b`）。
+>
 > **2026-07-05 R2：R2-A `done`** — 真实 Seedance task #4 已跑通（见 [R2-A 审查包](./deliverables/2026-07-05-R2-A-production-smoke-review.md)）。**请废弃临时 Key。**
 >
 > **2026-07-05 S1 收尾（当前执行）**：[CODEX_TASK_S1_CLOSEOUT.md](./CODEX_TASK_S1_CLOSEOUT.md) — 仓库卫生、secret-scan、PR #3726 门禁、R2-B/C 终态。
@@ -136,4 +140,4 @@ YYYY-MM-DD-<任务ID>-review.md
 - 与前端界面相关的决策：**写入审查包「给 Claude 的建议」**，不要自己改 Vue
 - 需要老板提供：Seedance Key、官方单价表、是否启用真实冒烟
 
-**现在从 [CODEX_TASK_S1_CLOSEOUT.md](./CODEX_TASK_S1_CLOSEOUT.md) 的 S1-C0 开始。**
+**现在从 [CODEX_TASK_S3_G2_CLOSEOUT.md](./CODEX_TASK_S3_G2_CLOSEOUT.md) 的 Phase G2-0 开始。**

@@ -290,6 +290,7 @@ type VideoGatewayRepository interface {
 	CreateDailyTrialTask(ctx context.Context, task *VideoTask, provider string, createdBy int64, trialDate time.Time) (bool, error)
 	GetTask(ctx context.Context, id int64) (*VideoTask, error)
 	ListTasks(ctx context.Context, params VideoTaskListParams) ([]*VideoTask, int64, error)
+	ListDramaTasks(ctx context.Context, params VideoTaskListParams, filters map[string]string) ([]*VideoTask, int64, error)
 	ListRunnableTasks(ctx context.Context, limit int) ([]*VideoTask, error)
 	ListUnchargedSucceededVideoTasks(ctx context.Context, limit int) ([]*VideoTask, error)
 	ClaimTaskForSubmit(ctx context.Context, taskID int64) (bool, error)

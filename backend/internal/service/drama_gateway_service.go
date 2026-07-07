@@ -411,7 +411,10 @@ func (s *VideoGatewayService) ListDramaTasks(ctx context.Context, p VideoTaskLis
 	if p.PageSize <= 0 || p.PageSize > videoMaxPageSize {
 		p.PageSize = videoMaxPageSize
 	}
-	tasks, _, err := s.ListTasks(ctx, p)
+	if p.Page <= 0 {
+		p.Page = 1
+	}
+	tasks, total, err := s.repo.ListDramaTasks(ctx, p, filters)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -421,12 +424,9 @@ func (s *VideoGatewayService) ListDramaTasks(ctx context.Context, p VideoTaskLis
 		if err != nil {
 			return nil, 0, err
 		}
-		contract := dramaTaskContract(task, events)
-		if dramaTaskMatchesFilters(contract, filters) {
-			out = append(out, contract)
-		}
+		out = append(out, dramaTaskContract(task, events))
 	}
-	return out, int64(len(out)), nil
+	return out, total, nil
 }
 
 func (s *VideoGatewayService) RecordDramaShotDecision(ctx context.Context, p DramaShotDecisionParams, userID int64, isAdmin bool) (*DramaEventRecord, error) {

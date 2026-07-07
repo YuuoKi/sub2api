@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -141,6 +142,66 @@ func (r *memoryVideoGatewayRepo) ListTasks(_ context.Context, params VideoTaskLi
 		out = append(out, cloneVideoTask(task))
 	}
 	return out, int64(len(out)), nil
+}
+
+func (r *memoryVideoGatewayRepo) ListDramaTasks(ctx context.Context, params VideoTaskListParams, filters map[string]string) ([]*VideoTask, int64, error) {
+	matched := make([]*VideoTask, 0, len(r.tasks))
+	for _, task := range r.tasks {
+		if params.Status != "" && task.Status != params.Status {
+			continue
+		}
+		if params.Provider != "" && task.Provider != params.Provider {
+			continue
+		}
+		if !params.IsAdmin && task.CreatedBy != params.CreatedBy {
+			continue
+		}
+		events, err := r.ListTaskEvents(ctx, task.ID, 200)
+		if err != nil {
+			return nil, 0, err
+		}
+		if !hasDramaContextEvent(events) {
+			continue
+		}
+		contract := dramaTaskContract(task, events)
+		if !dramaTaskMatchesFilters(contract, filters) {
+			continue
+		}
+		matched = append(matched, cloneVideoTask(task))
+	}
+	sort.Slice(matched, func(i, j int) bool {
+		if matched[i].CreatedAt.Equal(matched[j].CreatedAt) {
+			return matched[i].ID > matched[j].ID
+		}
+		return matched[i].CreatedAt.After(matched[j].CreatedAt)
+	})
+	total := int64(len(matched))
+	page := params.Page
+	if page <= 0 {
+		page = 1
+	}
+	pageSize := params.PageSize
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+	start := (page - 1) * pageSize
+	if start >= len(matched) {
+		return []*VideoTask{}, total, nil
+	}
+	end := start + pageSize
+	if end > len(matched) {
+		end = len(matched)
+	}
+	return matched[start:end], total, nil
+}
+
+func hasDramaContextEvent(events []*VideoTaskEvent) bool {
+	for _, event := range events {
+		if event != nil && event.EventType == "drama_context" {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *memoryVideoGatewayRepo) ListRunnableTasks(_ context.Context, limit int) ([]*VideoTask, error) {

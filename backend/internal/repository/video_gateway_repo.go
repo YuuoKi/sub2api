@@ -305,6 +305,115 @@ func (r *videoGatewayRepository) ListTasks(ctx context.Context, params service.V
 	return out, total, nil
 }
 
+const dramaContextJoinSQL = `
+		INNER JOIN LATERAL (
+			SELECT vte_dc.payload_json
+			FROM video_task_events vte_dc
+			WHERE vte_dc.video_task_id = vt.id AND vte_dc.event_type = 'drama_context'
+			ORDER BY vte_dc.created_at DESC, vte_dc.id DESC
+			LIMIT 1
+		) dc ON TRUE
+`
+
+const dramaEngineFamilySQL = `
+CASE
+	WHEN POSITION('seedance' IN LOWER(COALESCE(dc.payload_json->>'selected_provider', vt.provider))) > 0 THEN 'seedance'
+	WHEN POSITION('kling' IN LOWER(COALESCE(dc.payload_json->>'selected_provider', vt.provider))) > 0 THEN 'kling'
+	ELSE 'mock'
+END`
+
+const dramaSelectedModeSQL = `COALESCE(NULLIF(dc.payload_json->>'selected_mode', ''), REPLACE(vt.task_type, '_', '-'))`
+
+const dramaSelectedModelSQL = `COALESCE(NULLIF(dc.payload_json->>'selected_model', ''), vt.model)`
+
+func appendDramaTaskFilterClauses(filters map[string]string, where *[]string, args *[]any) {
+	textFilters := map[string]string{
+		"employee_alias": "employee_alias",
+		"api_client_id":  "api_client_id",
+		"project_id":     "project_id",
+		"drama_type":     "drama_type",
+		"genre":          "genre",
+		"scene_type":     "scene_type",
+	}
+	for key, jsonKey := range textFilters {
+		want := strings.TrimSpace(filters[key])
+		if want == "" {
+			continue
+		}
+		*args = append(*args, strings.ToLower(want))
+		*where = append(*where, fmt.Sprintf("LOWER(COALESCE(dc.payload_json->>%s, '')) = $%d", quoteSQLLiteral(jsonKey), len(*args)))
+	}
+	if want := strings.TrimSpace(filters["status"]); want != "" {
+		*args = append(*args, want)
+		*where = append(*where, fmt.Sprintf("vt.status = $%d", len(*args)))
+	}
+	if want := strings.TrimSpace(filters["engine"]); want != "" {
+		*args = append(*args, strings.ToLower(want))
+		*where = append(*where, fmt.Sprintf("LOWER(%s) = $%d", dramaEngineFamilySQL, len(*args)))
+	}
+	if want := strings.TrimSpace(filters["model"]); want != "" {
+		*args = append(*args, strings.ToLower(want))
+		*where = append(*where, fmt.Sprintf("LOWER(%s) = $%d", dramaSelectedModelSQL, len(*args)))
+	}
+	if want := strings.TrimSpace(filters["mode"]); want != "" {
+		*args = append(*args, strings.ToLower(want))
+		*where = append(*where, fmt.Sprintf("LOWER(%s) = $%d", dramaSelectedModeSQL, len(*args)))
+	}
+}
+
+func quoteSQLLiteral(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
+}
+
+func (r *videoGatewayRepository) ListDramaTasks(ctx context.Context, params service.VideoTaskListParams, filters map[string]string) ([]*service.VideoTask, int64, error) {
+	where := []string{"1=1"}
+	args := []any{}
+	if strings.TrimSpace(params.Status) != "" {
+		args = append(args, params.Status)
+		where = append(where, fmt.Sprintf("vt.status = $%d", len(args)))
+	}
+	if strings.TrimSpace(params.Provider) != "" {
+		args = append(args, params.Provider)
+		where = append(where, fmt.Sprintf("vt.provider = $%d", len(args)))
+	}
+	if !params.IsAdmin {
+		args = append(args, params.CreatedBy)
+		where = append(where, fmt.Sprintf("vt.created_by = $%d", len(args)))
+	}
+	appendDramaTaskFilterClauses(filters, &where, &args)
+	whereSQL := strings.Join(where, " AND ")
+	fromSQL := videoTaskJoinSQL + dramaContextJoinSQL
+
+	var total int64
+	countQ := "SELECT COUNT(*) " + fromSQL + " WHERE " + whereSQL
+	if err := r.db.QueryRowContext(ctx, countQ, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	page := params.Page
+	if page <= 0 {
+		page = 1
+	}
+	pageSize := params.PageSize
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+	args = append(args, pageSize, (page-1)*pageSize)
+	q := "SELECT" + videoTaskSelectColumns + fromSQL + " WHERE " + whereSQL + fmt.Sprintf(`
+		ORDER BY vt.created_at DESC, vt.id DESC
+		LIMIT $%d OFFSET $%d
+	`, len(args)-1, len(args))
+	rows, err := r.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer func() { _ = rows.Close() }()
+	out, err := scanVideoTaskRows(rows)
+	if err != nil {
+		return nil, 0, err
+	}
+	return out, total, nil
+}
+
 func (r *videoGatewayRepository) ListRunnableTasks(ctx context.Context, limit int) ([]*service.VideoTask, error) {
 	if limit <= 0 {
 		limit = 20

@@ -161,6 +161,10 @@ func (r *apiKeyVideoGatewayMemoryRepo) ListTasks(_ context.Context, params servi
 	return out, int64(len(out)), nil
 }
 
+func (r *apiKeyVideoGatewayMemoryRepo) ListDramaTasks(ctx context.Context, params service.VideoTaskListParams, _ map[string]string) ([]*service.VideoTask, int64, error) {
+	return r.ListTasks(ctx, params)
+}
+
 func (r *apiKeyVideoGatewayMemoryRepo) ListRunnableTasks(_ context.Context, limit int) ([]*service.VideoTask, error) {
 	out := make([]*service.VideoTask, 0, limit)
 	for _, task := range r.tasks {

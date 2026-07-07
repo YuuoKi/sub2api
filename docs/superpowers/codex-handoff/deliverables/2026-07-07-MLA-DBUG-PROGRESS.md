@@ -11,7 +11,7 @@
 | DBug-1 | done | `414ff2e9` | `docs/superpowers/codex-handoff/deliverables/2026-07-07-DBug-1-webhook-stale-recharging.md` |
 | DBug-2 | done | `704c8f4c` | `docs/superpowers/codex-handoff/deliverables/2026-07-07-DBug-2-token-refresh-unify.md` |
 | DBug-3 | done | `0b8eee6c` | `docs/superpowers/codex-handoff/deliverables/2026-07-07-DBug-3-payment-jsapi-orphan-order.md` |
-| DBug-4 | done | (pending commit) | `docs/superpowers/codex-handoff/deliverables/2026-07-07-DBug-4-backend-mode-stripe-return.md` |
+| DBug-4 | done | `2ac31bf5` | `docs/superpowers/codex-handoff/deliverables/2026-07-07-DBug-4-backend-mode-stripe-return.md` |
 | DBug-5 | pending | | |
 | DBug-6 | pending | | |
 | DBug-7 | pending | | |

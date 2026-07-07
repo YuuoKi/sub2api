@@ -415,4 +415,26 @@ describe('PaymentView WeChat JSAPI flow', () => {
     expect(showError).not.toHaveBeenCalled()
     expect(window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY)).toContain('weixin://wxpay/bizpayurl?pr=fallback-native')
   })
+
+  it('does not create a second order when JSAPI invoke fails after order is created', async () => {
+    createOrder.mockResolvedValue(jsapiOrderFixture('resume-token-jsapi-fail'))
+    bridgeInvoke.mockImplementation((_action, _payload, callback) => {
+      callback({ err_msg: 'get_brand_wcpay_request:fail' })
+    })
+
+    shallowMount(PaymentView, {
+      global: {
+        stubs: {
+          Teleport: true,
+          Transition: false,
+        },
+      },
+    })
+    await flushPromises()
+    await flushPromises()
+
+    expect(createOrder).toHaveBeenCalledTimes(1)
+    expect(showWarning).not.toHaveBeenCalledWith('payment.errors.mobilePaymentFallbackToQr')
+    expect(window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY)).toContain('sub2_jsapi_123')
+  })
 })

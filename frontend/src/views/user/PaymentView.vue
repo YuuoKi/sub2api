@@ -797,7 +797,6 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
           appStore.showInfo(t('payment.qr.cancelled'))
           resetPayment()
         } else if (errMsg && !errMsg.includes('ok')) {
-          resetPayment()
           const fallbackApplied = await attemptMobileQrFallback(
             { reason: 'WECHAT_JSAPI_FAILED', message: errMsg },
             {
@@ -806,6 +805,7 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
               planId,
               paymentType: visibleMethod,
               attempted: options.mobileQrFallbackAttempted === true,
+              existingOrderId: decision.paymentState.orderId,
             },
           )
           if (!fallbackApplied) {
@@ -880,9 +880,15 @@ interface MobileQrFallbackContext {
   planId?: number
   paymentType: string
   attempted: boolean
+  existingOrderId?: number
 }
 
-function shouldFallbackToDesktopQr(err: unknown, paymentMethod: string, attempted: boolean): boolean {
+function shouldFallbackToDesktopQr(
+  err: unknown,
+  paymentMethod: string,
+  attempted: boolean,
+  existingOrderId?: number,
+): boolean {
   if (attempted || !isMobileDevice()) {
     return false
   }
@@ -899,6 +905,9 @@ function shouldFallbackToDesktopQr(err: unknown, paymentMethod: string, attempte
   const normalizedMessage = message.toLowerCase()
 
   if (normalizedMethod === 'wxpay') {
+    if (reason === 'WECHAT_JSAPI_FAILED' && (existingOrderId ?? 0) > 0) {
+      return false
+    }
     return reason === 'WECHAT_H5_NOT_AUTHORIZED'
       || reason === 'WECHAT_PAYMENT_MP_NOT_CONFIGURED'
       || reason === 'WECHAT_JSAPI_FAILED'
@@ -916,7 +925,7 @@ function shouldFallbackToDesktopQr(err: unknown, paymentMethod: string, attempte
 }
 
 async function attemptMobileQrFallback(err: unknown, context: MobileQrFallbackContext): Promise<boolean> {
-  if (!shouldFallbackToDesktopQr(err, context.paymentType, context.attempted)) {
+  if (!shouldFallbackToDesktopQr(err, context.paymentType, context.attempted, context.existingOrderId)) {
     return false
   }
 

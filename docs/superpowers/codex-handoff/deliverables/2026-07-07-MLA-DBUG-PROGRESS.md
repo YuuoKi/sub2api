@@ -2,7 +2,7 @@
 
 > 执行者：Codex
 > 范围：`CODEX_TASK_MLA_DBUG.md`
-> 当前状态：DBug-7 已完成；下一 Phase 为 DBug-8（secret-scan fail-closed）
+> 当前状态：**DBug-8 已完成** — MLA Dbug 全 Phase 收尾
 > 红线：不 push、不 deploy、不读 `.env`、不触发真实 provider、每个修复 Phase 单独 commit
 
 | Phase | Status | Commit | 审查包 |
@@ -15,7 +15,7 @@
 | DBug-5 | done | `35d49031` | `docs/superpowers/codex-handoff/deliverables/2026-07-07-DBug-5-drama-list-pagination.md` |
 | DBug-6 | done | `b5350c38` | `docs/superpowers/codex-handoff/deliverables/2026-07-07-DBug-6-keysview-error-display.md` |
 | DBug-7 | done | `5f53444f` | `docs/superpowers/codex-handoff/deliverables/2026-07-07-DBug-7-video-tasks-list-polling.md` |
-| DBug-8 | pending | | |
+| DBug-8 | done | `83c71550` | `docs/superpowers/codex-handoff/deliverables/2026-07-07-DBug-8-secret-scan-fail-closed.md` |
 
 ## DBug-0 Notes
 

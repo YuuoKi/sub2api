@@ -20,13 +20,16 @@ function Find-Python {
 
 $python = Find-Python
 if (-not $python) {
-    # Python not available locally; do not block agent work.
-    exit 0
+    $ErrorActionPreference = 'Continue'
+    Write-Error "secret-scan requires Python (python3/python/py). Install Python and retry, or run: make secret-scan"
+    exit 2
 }
 
 $scanner = Join-Path $repoRoot 'tools\secret_scan.py'
 if (-not (Test-Path $scanner)) {
-    exit 0
+    $ErrorActionPreference = 'Continue'
+    Write-Error "secret-scan scanner missing at tools\secret_scan.py"
+    exit 2
 }
 
 & $python $scanner --include-untracked

@@ -14,7 +14,7 @@ New project template: `~/.cursor/templates/project-quality/` (copy `.cursor/` in
 |------|------|------|
 | `afterFileEdit` (matcher: `Write`) | `~/.cursor/hooks/after-file-edit-marker.ps1` | 本轮对话编辑了源码才写 session 标记 |
 | `stop` | `~/.cursor/hooks/agent-stop-quality.ps1` | 有 session 标记 + 有未提交源码 diff → 发一次 `followup_message` |
-| `beforeShellExecution` (`git push`) | 项目级 `secret-scan.ps1` 硬拦截；用户级 reminder 自动让位 | push 前 secret 扫描 |
+| `beforeShellExecution` (`git push`) | 项目级 `secret-scan.ps1` 硬拦截（`failClosed: true`；缺 Python 或 `tools/secret_scan.py` 时 exit 2，禁止静默放行）；用户级 reminder 自动让位 | push 前 secret 扫描 |
 
 **stop 钩子的刹车逻辑（多层，与论坛推荐一致）:**
 

@@ -791,7 +791,7 @@ let authInitialized = false
 const navigationLoading = useNavigationLoadingState()
 // 延迟初始化预加载，传入 router 实例
 let routePrefetch: ReturnType<typeof useRoutePrefetch> | null = null
-const BACKEND_MODE_ALLOWED_PATHS = ['/internal-pilot', '/login', '/key-usage', '/setup', '/payment/result', '/payment/airwallex', '/legal']
+const BACKEND_MODE_ALLOWED_PATHS = ['/internal-pilot', '/login', '/key-usage', '/setup', '/payment/result', '/payment/airwallex', '/payment/stripe', '/payment/stripe-popup', '/legal']
 const BACKEND_MODE_AUTHENTICATED_ALLOWED_PATHS = ['/admin/video/create', '/admin/video/tasks']
 const BACKEND_MODE_CALLBACK_PATHS = [
   '/auth/callback',
@@ -880,7 +880,7 @@ router.beforeEach((to, _from, next) => {
     if (appStore.backendModeEnabled && !authStore.isAuthenticated) {
       const isAllowed = isBackendModePublicRouteAllowed(to.path, authStore.hasPendingAuthSession)
       if (!isAllowed) {
-        next('/login')
+        next({ path: '/login', query: { redirect: to.fullPath } })
         return
       }
     }

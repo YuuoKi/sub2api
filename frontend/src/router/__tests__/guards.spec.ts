@@ -47,7 +47,45 @@ vi.mock('@/api/auth', () => ({
 }))
 
 
-// 用于测试的 auth 状态
+const BACKEND_MODE_PUBLIC_PATHS = [
+  '/internal-pilot',
+  '/login',
+  '/key-usage',
+  '/setup',
+  '/payment/result',
+  '/payment/airwallex',
+  '/payment/stripe',
+  '/payment/stripe-popup',
+  '/legal',
+]
+function simulateBackendModePublicRedirect(
+  toPath: string,
+  fullPath: string,
+  authState: MockAuthState,
+): string | { path: string; query: { redirect: string } } | null {
+  if (!authState.backendModeEnabled || authState.isAuthenticated) {
+    return null
+  }
+
+  const callbackPaths = [
+    '/auth/callback',
+    '/auth/linuxdo/callback',
+    '/auth/oidc/callback',
+    '/auth/wechat/callback',
+    '/auth/wechat/payment/callback',
+  ]
+  const pendingAuthPaths = ['/register', '/email-verify']
+  const isAllowed =
+    BACKEND_MODE_PUBLIC_PATHS.some((path) => toPath === path || toPath.startsWith(path)) ||
+    callbackPaths.includes(toPath) ||
+    (authState.hasPendingAuthSession && pendingAuthPaths.includes(toPath))
+
+  if (!isAllowed) {
+    return { path: '/login', query: { redirect: fullPath } }
+  }
+  return null
+}
+
 interface MockAuthState {
   isAuthenticated: boolean
   isAdmin: boolean
@@ -79,7 +117,7 @@ function simulateGuard(
       return authState.isAdmin ? '/admin/dashboard' : '/dashboard'
     }
     if (authState.backendModeEnabled && !authState.isAuthenticated) {
-      const allowed = ['/internal-pilot', '/login', '/key-usage', '/setup', '/payment/result']
+      const allowed = BACKEND_MODE_PUBLIC_PATHS
       const callbackPaths = [
         '/auth/callback',
         '/auth/linuxdo/callback',
@@ -128,7 +166,7 @@ function simulateGuard(
     if (authState.isAuthenticated && authState.isAdmin) {
       return null
     }
-    const allowed = ['/internal-pilot', '/login', '/key-usage', '/setup', '/payment/result']
+    const allowed = BACKEND_MODE_PUBLIC_PATHS
     const callbackPaths = [
       '/auth/callback',
       '/auth/linuxdo/callback',
@@ -500,6 +538,38 @@ describe('路由守卫逻辑', () => {
       }
       const redirect = simulateGuard('/payment/result', { requiresAuth: false }, authState)
       expect(redirect).toBeNull()
+    })
+
+    it('unauthenticated: /payment/stripe return URL is allowed in backend mode', () => {
+      const authState: MockAuthState = {
+        isAuthenticated: false,
+        isAdmin: false,
+        isSimpleMode: false,
+        backendModeEnabled: true,
+        hasPendingAuthSession: false,
+      }
+      const redirect = simulateGuard(
+        '/payment/stripe',
+        { requiresAuth: false },
+        authState,
+      )
+      expect(redirect).toBeNull()
+    })
+
+    it('unauthenticated: blocked backend_mode routes redirect to login with fullPath', () => {
+      const authState: MockAuthState = {
+        isAuthenticated: false,
+        isAdmin: false,
+        isSimpleMode: false,
+        backendModeEnabled: true,
+        hasPendingAuthSession: false,
+      }
+      const fullPath = '/payment/stripe?order_id=1&resume_token=t'
+      const redirect = simulateBackendModePublicRedirect('/payment/stripe', fullPath, authState)
+      expect(redirect).toBeNull()
+
+      const blocked = simulateBackendModePublicRedirect('/dashboard', '/dashboard', authState)
+      expect(blocked).toEqual({ path: '/login', query: { redirect: '/dashboard' } })
     })
 
     it('unauthenticated: /register is allowed when a pending auth session exists', () => {

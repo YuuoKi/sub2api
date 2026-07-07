@@ -2,7 +2,7 @@
 
 > 执行者：Codex
 > 范围：`CODEX_TASK_MLA_DBUG.md`
-> 当前状态：DBug-3 已完成；下一 Phase 为 DBug-4（backend_mode Stripe 回跳）
+> 当前状态：DBug-4 已完成；下一 Phase 为 DBug-5（Drama 分页）
 > 红线：不 push、不 deploy、不读 `.env`、不触发真实 provider、每个修复 Phase 单独 commit
 
 | Phase | Status | Commit | 审查包 |
@@ -11,7 +11,7 @@
 | DBug-1 | done | `414ff2e9` | `docs/superpowers/codex-handoff/deliverables/2026-07-07-DBug-1-webhook-stale-recharging.md` |
 | DBug-2 | done | `704c8f4c` | `docs/superpowers/codex-handoff/deliverables/2026-07-07-DBug-2-token-refresh-unify.md` |
 | DBug-3 | done | `0b8eee6c` | `docs/superpowers/codex-handoff/deliverables/2026-07-07-DBug-3-payment-jsapi-orphan-order.md` |
-| DBug-4 | pending | | |
+| DBug-4 | done | (pending commit) | `docs/superpowers/codex-handoff/deliverables/2026-07-07-DBug-4-backend-mode-stripe-return.md` |
 | DBug-5 | pending | | |
 | DBug-6 | pending | | |
 | DBug-7 | pending | | |

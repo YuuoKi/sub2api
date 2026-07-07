@@ -2,7 +2,7 @@
 
 > 执行者：Codex
 > 范围：`CODEX_TASK_MLA_DBUG.md`
-> 当前状态：DBug-4 已完成；下一 Phase 为 DBug-5（Drama 分页）
+> 当前状态：DBug-5 已完成；下一 Phase 为 DBug-6（KeysView 错误信息）
 > 红线：不 push、不 deploy、不读 `.env`、不触发真实 provider、每个修复 Phase 单独 commit
 
 | Phase | Status | Commit | 审查包 |
@@ -12,7 +12,7 @@
 | DBug-2 | done | `704c8f4c` | `docs/superpowers/codex-handoff/deliverables/2026-07-07-DBug-2-token-refresh-unify.md` |
 | DBug-3 | done | `0b8eee6c` | `docs/superpowers/codex-handoff/deliverables/2026-07-07-DBug-3-payment-jsapi-orphan-order.md` |
 | DBug-4 | done | `2ac31bf5` | `docs/superpowers/codex-handoff/deliverables/2026-07-07-DBug-4-backend-mode-stripe-return.md` |
-| DBug-5 | pending | | |
+| DBug-5 | done | `35d49031` | `docs/superpowers/codex-handoff/deliverables/2026-07-07-DBug-5-drama-list-pagination.md` |
 | DBug-6 | pending | | |
 | DBug-7 | pending | | |
 | DBug-8 | pending | | |

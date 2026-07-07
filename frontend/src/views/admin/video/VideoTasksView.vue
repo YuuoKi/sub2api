@@ -154,7 +154,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -179,6 +179,7 @@ import {
   statusBadgeClass,
   statusLabel,
   taskTypeLabel,
+  isTerminalStatus,
 } from './videoUtils'
 
 const appStore = useAppStore()
@@ -186,6 +187,7 @@ const authStore = useAuthStore()
 const router = useRouter()
 const loading = ref(false)
 const tasks = ref<VideoTask[]>([])
+let refreshTimer: ReturnType<typeof setInterval> | null = null
 const { usdCnyRate, loadUsdCnyRate } = useAdminDisplayCurrencyRate()
 const filters = reactive({ status: '', provider: '' })
 const pagination = reactive({ page: 1, page_size: 20, total: 0, pages: 1 })
@@ -259,6 +261,15 @@ function copyToCreate(task: VideoTask) {
 onMounted(() => {
   void loadUsdCnyRate()
   void loadTasks()
+  refreshTimer = setInterval(() => {
+    if (tasks.value.some((task) => !isTerminalStatus(task.status))) {
+      void loadTasks()
+    }
+  }, 4000)
+})
+
+onUnmounted(() => {
+  if (refreshTimer) clearInterval(refreshTimer)
 })
 </script>
 

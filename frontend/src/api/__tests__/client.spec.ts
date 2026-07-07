@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import axios from 'axios'
 import type { AxiosInstance } from 'axios'
+import { setActivePinia, createPinia } from 'pinia'
 
 // 需要在导入 client 之前设置 mock
 vi.mock('@/i18n', () => ({
@@ -201,6 +202,111 @@ describe('API Client', () => {
         value: originalLocation,
         writable: true,
       })
+    })
+
+    it('401 刷新成功后同步 Pinia token 与 localStorage', async () => {
+      localStorage.setItem('auth_token', 'expired-token')
+      localStorage.setItem('refresh_token', 'refresh-token')
+
+      setActivePinia(createPinia())
+      const { useAuthStore } = await import('@/stores/auth')
+      const store = useAuthStore()
+      store.$patch({ token: 'expired-token' })
+
+      const refreshSpy = vi.spyOn(axios, 'post').mockResolvedValue({
+        data: {
+          code: 0,
+          data: {
+            access_token: 'fresh-token',
+            refresh_token: 'fresh-refresh',
+            expires_in: 3600,
+          },
+        },
+      })
+
+      let callCount = 0
+      const adapter = vi.fn().mockImplementation(async (config: { url?: string }) => {
+        callCount += 1
+        if (callCount === 1) {
+          return Promise.reject({
+            response: {
+              status: 401,
+              data: { code: 'TOKEN_EXPIRED', message: 'Token expired' },
+            },
+            config: {
+              url: '/test',
+              headers: { Authorization: 'Bearer expired-token' },
+            },
+            code: 'ERR_BAD_REQUEST',
+          })
+        }
+
+        return {
+          status: 200,
+          data: { code: 0, data: { ok: true } },
+          headers: {},
+          config,
+          statusText: 'OK',
+        }
+      })
+      apiClient.defaults.adapter = adapter
+
+      const response = await apiClient.get('/test')
+
+      expect(refreshSpy).toHaveBeenCalledTimes(1)
+      expect(response.data).toEqual({ ok: true })
+      expect(localStorage.getItem('auth_token')).toBe('fresh-token')
+      expect(store.token).toBe('fresh-token')
+    })
+
+    it('并发 401 重试只触发一次 refresh', async () => {
+      localStorage.setItem('auth_token', 'expired-token')
+      localStorage.setItem('refresh_token', 'refresh-token')
+
+      const refreshSpy = vi.spyOn(axios, 'post').mockImplementation(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20))
+        return {
+          data: {
+            code: 0,
+            data: {
+              access_token: 'fresh-token',
+              refresh_token: 'fresh-refresh',
+              expires_in: 3600,
+            },
+          },
+        }
+      })
+
+      let callCount = 0
+      const adapter = vi.fn().mockImplementation(async (config: { url?: string }) => {
+        callCount += 1
+        if (callCount <= 2) {
+          return Promise.reject({
+            response: {
+              status: 401,
+              data: { code: 'TOKEN_EXPIRED', message: 'Token expired' },
+            },
+            config: {
+              url: config.url,
+              headers: { Authorization: 'Bearer expired-token' },
+            },
+            code: 'ERR_BAD_REQUEST',
+          })
+        }
+
+        return {
+          status: 200,
+          data: { code: 0, data: { ok: true } },
+          headers: {},
+          config,
+          statusText: 'OK',
+        }
+      })
+      apiClient.defaults.adapter = adapter
+
+      await Promise.all([apiClient.get('/one'), apiClient.get('/two')])
+
+      expect(refreshSpy).toHaveBeenCalledTimes(1)
     })
   })
 

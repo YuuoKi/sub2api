@@ -6,6 +6,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed, readonly } from 'vue'
 import { authAPI, isTotp2FARequired, type LoginResponse } from '@/api'
+import { refreshAccessTokenOnce, type TokenRefreshResult } from '@/api/tokenRefresh'
 import type { User, LoginRequest, RegisterRequest, AuthResponse } from '@/types'
 
 const AUTH_TOKEN_KEY = 'auth_token'
@@ -199,22 +200,26 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
+   * Apply refreshed tokens to Pinia state and reschedule proactive refresh.
+   * Called by the unified refreshAccessTokenOnce helper.
+   */
+  function syncTokenRefreshResult(result: TokenRefreshResult): void {
+    token.value = result.access_token
+    refreshTokenValue.value = result.refresh_token
+    tokenExpiresAt.value = result.expires_at
+    scheduleTokenRefreshAt(result.expires_at)
+  }
+
+  /**
    * Perform the actual token refresh
    */
   async function performTokenRefresh(): Promise<void> {
-    if (!refreshTokenValue.value) {
+    if (!refreshTokenValue.value && !localStorage.getItem(REFRESH_TOKEN_KEY)) {
       return
     }
 
     try {
-      const response = await authAPI.refreshToken()
-
-      // Update state
-      token.value = response.access_token
-      refreshTokenValue.value = response.refresh_token
-
-      // Schedule next refresh (this also updates tokenExpiresAt and localStorage)
-      scheduleTokenRefresh(response.expires_in)
+      await refreshAccessTokenOnce()
     } catch (error) {
       console.error('Token refresh failed:', error)
       // Don't clear auth here - the interceptor will handle 401 errors
@@ -488,6 +493,7 @@ export const useAuthStore = defineStore('auth', () => {
     checkAuth,
     refreshUser,
     setPendingAuthSession,
-    clearPendingAuthSession
+    clearPendingAuthSession,
+    syncTokenRefreshResult,
   }
 })

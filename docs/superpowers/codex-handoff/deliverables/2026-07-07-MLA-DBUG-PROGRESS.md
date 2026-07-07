@@ -2,14 +2,14 @@
 
 > 执行者：Codex
 > 范围：`CODEX_TASK_MLA_DBUG.md`
-> 当前状态：DBug-1 已完成；下一 Phase 为 DBug-2（token refresh）
+> 当前状态：DBug-2 已完成；下一 Phase 为 DBug-3（支付 JSAPI fallback）
 > 红线：不 push、不 deploy、不读 `.env`、不触发真实 provider、每个修复 Phase 单独 commit
 
 | Phase | Status | Commit | 审查包 |
 |-------|--------|--------|--------|
 | DBug-0 | done | — | `docs/superpowers/codex-handoff/deliverables/2026-07-07-DBug-0-baseline.md` |
 | DBug-1 | done | `414ff2e9` | `docs/superpowers/codex-handoff/deliverables/2026-07-07-DBug-1-webhook-stale-recharging.md` |
-| DBug-2 | pending | | |
+| DBug-2 | done | (pending commit) | `docs/superpowers/codex-handoff/deliverables/2026-07-07-DBug-2-token-refresh-unify.md` |
 | DBug-3 | pending | | |
 | DBug-4 | pending | | |
 | DBug-5 | pending | | |

@@ -8,7 +8,7 @@
 | Phase | Status | Commit | 审查包 |
 |-------|--------|--------|--------|
 | DBug-0 | done | — | `docs/superpowers/codex-handoff/deliverables/2026-07-07-DBug-0-baseline.md` |
-| DBug-1 | done | `b100f805` | `docs/superpowers/codex-handoff/deliverables/2026-07-07-DBug-1-webhook-stale-recharging.md` |
+| DBug-1 | done | `414ff2e9` | `docs/superpowers/codex-handoff/deliverables/2026-07-07-DBug-1-webhook-stale-recharging.md` |
 | DBug-2 | pending | | |
 | DBug-3 | pending | | |
 | DBug-4 | pending | | |

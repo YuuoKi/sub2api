@@ -1138,6 +1138,7 @@ import {
   type CcSwitchClientType
 } from '@/utils/ccswitchImport'
 import { isVideoGatewayDemoMode } from '@/utils/productMode'
+import { extractApiErrorMessage } from '@/utils/apiError'
 
 // Helper to format date for datetime-local input
 const formatDateTimeLocal = (isoDate: string): string => {
@@ -1637,8 +1638,8 @@ const handleSubmit = async () => {
     }
     closeModals()
     loadApiKeys()
-  } catch (error: any) {
-    const errorMsg = error.response?.data?.detail || t('keys.failedToSave')
+  } catch (error: unknown) {
+    const errorMsg = extractApiErrorMessage(error, t('keys.failedToSave'))
     appStore.showError(errorMsg)
     // Don't advance tour on error
   } finally {

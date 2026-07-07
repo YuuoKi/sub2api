@@ -2,13 +2,13 @@
 
 > 执行者：Codex
 > 范围：`CODEX_TASK_MLA_DBUG.md`
-> 当前状态：DBug-0 已完成基线预检；DBug-1 尚未开始
+> 当前状态：DBug-1 已完成；下一 Phase 为 DBug-2（token refresh）
 > 红线：不 push、不 deploy、不读 `.env`、不触发真实 provider、每个修复 Phase 单独 commit
 
 | Phase | Status | Commit | 审查包 |
 |-------|--------|--------|--------|
 | DBug-0 | done | — | `docs/superpowers/codex-handoff/deliverables/2026-07-07-DBug-0-baseline.md` |
-| DBug-1 | pending | | |
+| DBug-1 | done | `b100f805` | `docs/superpowers/codex-handoff/deliverables/2026-07-07-DBug-1-webhook-stale-recharging.md` |
 | DBug-2 | pending | | |
 | DBug-3 | pending | | |
 | DBug-4 | pending | | |

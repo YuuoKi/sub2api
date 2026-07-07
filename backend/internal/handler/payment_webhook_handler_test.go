@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/enttest"
@@ -143,6 +144,86 @@ func TestUnknownOrderWebhookAcksWithSuccess(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code,
 		"Stripe requires 2xx to stop retrying; anything else restarts the retry loop")
 	require.Empty(t, w.Body.String(), "Stripe expects an empty body on the ack path")
+}
+
+// TestWebhook_StaleRecharging_Acks2xx exercises the full handleNotify path when
+// HandlePaymentNotification returns ErrPaymentFulfillmentStale (order stuck in
+// RECHARGING beyond the recovery window). The handler must ack 2xx so the
+// provider stops retrying; returning 500 causes an infinite retry storm.
+func TestWebhook_StaleRecharging_Acks2xx(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx := context.Background()
+
+	db, err := sql.Open("sqlite", "file:payment_webhook_stale_recharging?mode=memory&cache=shared")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	_, err = db.Exec("PRAGMA foreign_keys = ON")
+	require.NoError(t, err)
+
+	drv := entsql.OpenDB(dialect.SQLite, db)
+	client := enttest.NewClient(t, enttest.WithOptions(dbent.Driver(drv)))
+	t.Cleanup(func() { _ = client.Close() })
+
+	const outTradeNo = "sub2_stale_webhook"
+	const payAmount = 10.0
+
+	user, err := client.User.Create().
+		SetEmail("stale-webhook@example.com").
+		SetPasswordHash("hash").
+		SetUsername("stale-webhook-user").
+		Save(ctx)
+	require.NoError(t, err)
+
+	order, err := client.PaymentOrder.Create().
+		SetUserID(user.ID).
+		SetUserEmail(user.Email).
+		SetUserName(user.Username).
+		SetAmount(payAmount).
+		SetPayAmount(payAmount).
+		SetFeeRate(0).
+		SetRechargeCode("STALE-WEBHOOK").
+		SetOutTradeNo(outTradeNo).
+		SetPaymentType(payment.TypeStripe).
+		SetPaymentTradeNo("trade-stale-webhook").
+		SetOrderType(payment.OrderTypeBalance).
+		SetStatus(service.OrderStatusRecharging).
+		SetExpiresAt(time.Now().Add(time.Hour)).
+		SetClientIP("127.0.0.1").
+		SetSrcHost("api.example.com").
+		Save(ctx)
+	require.NoError(t, err)
+
+	staleUpdatedAt := time.Now().Add(-3 * time.Minute)
+	_, err = client.PaymentOrder.UpdateOneID(order.ID).SetUpdatedAt(staleUpdatedAt).Save(ctx)
+	require.NoError(t, err)
+
+	registry := payment.NewRegistry()
+	registry.Register(webhookHandlerProviderStub{
+		key: payment.TypeStripe,
+		notification: &payment.PaymentNotification{
+			OrderID: outTradeNo,
+			TradeNo: "trade-stale-webhook",
+			Amount:  payAmount,
+			Status:  payment.NotificationStatusSuccess,
+		},
+	})
+
+	paymentSvc := service.NewPaymentService(client, registry, nil, nil, nil, nil, nil, nil, nil)
+	h := NewPaymentWebhookHandler(paymentSvc, registry)
+
+	router := gin.New()
+	router.POST("/webhook/stripe", h.StripeWebhook)
+
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/webhook/stripe", bytes.NewBufferString(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+
+	router.ServeHTTP(recorder, req)
+
+	require.Equal(t, http.StatusOK, recorder.Code,
+		"stale RECHARGING webhook must ack 2xx to stop provider retries; body=%q", recorder.Body.String())
+	require.Empty(t, recorder.Body.String(), "Stripe expects an empty body on the ack path")
 }
 
 func TestPaymentWebhookProviderLookupFailureRejectsNonWxpay(t *testing.T) {

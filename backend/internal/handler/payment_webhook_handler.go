@@ -152,6 +152,16 @@ func (h *PaymentWebhookHandler) handleNotify(c *gin.Context, providerKey string)
 			writeSuccessResponse(c, resolvedProviderKey)
 			return
 		}
+		if errors.Is(err, service.ErrPaymentFulfillmentStale) {
+			slog.Error("[Payment Webhook] stale fulfillment, acking to stop retries",
+				"provider", resolvedProviderKey,
+				"outTradeNo", notification.OrderID,
+				"tradeNo", notification.TradeNo,
+				"error", err,
+			)
+			writeSuccessResponse(c, resolvedProviderKey)
+			return
+		}
 		slog.Error("[Payment Webhook] handle notification failed", "provider", resolvedProviderKey, "error", err)
 		c.String(http.StatusInternalServerError, "handle failed")
 		return

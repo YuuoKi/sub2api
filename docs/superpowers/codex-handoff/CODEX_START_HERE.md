@@ -7,7 +7,7 @@
 
 ---
 
-> **2026-07-07 当前任务（最高优先级）**：[CODEX_TASK_MLA_DBUG.md](./CODEX_TASK_MLA_DBUG.md) — MEGA LOOP 已复核 Bug **分段 Dbug 修复**（DBug-0→8，逐 Phase commit + 审查包）。**新对话开这个。**
+> **2026-07-08 MLA DBug：done** — [CODEX_TASK_MLA_DBUG.md](./CODEX_TASK_MLA_DBUG.md) + [CODEX_TASK_MLA_DBUG_CLOSEOUT.md](./CODEX_TASK_MLA_DBUG_CLOSEOUT.md) 已完成 DBug-0→8、补强 `42b94ca2` 与全量门禁收尾；总审查包：[2026-07-08-MLA-DBUG-CLOSEOUT.md](./deliverables/2026-07-08-MLA-DBUG-CLOSEOUT.md)。
 >
 > **2026-07-07 次要（若 S3 文档未 commit）**：[CODEX_TASK_S3_G2_CLOSEOUT.md](./CODEX_TASK_S3_G2_CLOSEOUT.md) — S3 收口：Groups ¥ 漏网 + 浏览器验收表。
 >

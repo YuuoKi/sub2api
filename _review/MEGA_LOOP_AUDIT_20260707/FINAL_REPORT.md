@@ -13,6 +13,8 @@ Sub2API is in materially better shape than the Jul 4 LOOP audit: **all 6 exploit
 
 **7 confirmed bugs** remain (5 P1 backend/frontend, 2 P2), plus **12 likely** items and **intentional/deferred** gaps (late-payment manual recovery, phase-2 budget guard).
 
+**2026-07-08 update:** DBug-1~8 fixed the confirmed MLA items mapped in `CODEX_TASK_MLA_DBUG.md` and the supplemental video-list polling item. Closeout anchor is `42b94ca2`; see `docs/superpowers/codex-handoff/deliverables/2026-07-08-MLA-DBUG-CLOSEOUT.md` and `TRUTH_MATRIX.md` for current fixed status. Original audit text above is preserved as the 2026-07-07 record-only snapshot.
+
 **Highest priority:** payment webhook retry storm on stale RECHARGING (`MLA-P1-001`), then frontend token refresh unification and payment flow fixes.
 
 ---

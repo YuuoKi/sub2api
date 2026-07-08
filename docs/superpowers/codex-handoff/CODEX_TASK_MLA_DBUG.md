@@ -423,9 +423,16 @@ if errors.Is(err, service.ErrPaymentFulfillmentStale) {
 ```markdown
 | Phase | Status | Commit | 审查包 |
 |-------|--------|--------|--------|
-| DBug-0 | done/blocked | — | ... |
-| DBug-1 | pending | | |
-...
+| DBug-0 | done | — | `docs/superpowers/codex-handoff/deliverables/2026-07-07-DBug-0-baseline.md` |
+| DBug-1 | done | `414ff2e9` | `docs/superpowers/codex-handoff/deliverables/2026-07-07-DBug-1-webhook-stale-recharging.md` |
+| DBug-2 | done | `704c8f4c` | `docs/superpowers/codex-handoff/deliverables/2026-07-07-DBug-2-token-refresh-unify.md` |
+| DBug-3 | done | `0b8eee6c` | `docs/superpowers/codex-handoff/deliverables/2026-07-07-DBug-3-payment-jsapi-orphan-order.md` |
+| DBug-4 | done | `2ac31bf5` | `docs/superpowers/codex-handoff/deliverables/2026-07-07-DBug-4-backend-mode-stripe-return.md` |
+| DBug-5 | done | `35d49031` | `docs/superpowers/codex-handoff/deliverables/2026-07-07-DBug-5-drama-list-pagination.md` |
+| DBug-6 | done | `b5350c38` | `docs/superpowers/codex-handoff/deliverables/2026-07-07-DBug-6-keysview-error-display.md` |
+| DBug-7 | done | `5f53444f` | `docs/superpowers/codex-handoff/deliverables/2026-07-07-DBug-7-video-tasks-list-polling.md` |
+| DBug-8 | done | `83c71550` | `docs/superpowers/codex-handoff/deliverables/2026-07-07-DBug-8-secret-scan-fail-closed.md` |
+| Closeout reinforcement | done | `42b94ca2` | `docs/superpowers/codex-handoff/deliverables/2026-07-08-MLA-DBUG-CLOSEOUT.md` |
 ```
 
 每完成一 Phase 更新一行。

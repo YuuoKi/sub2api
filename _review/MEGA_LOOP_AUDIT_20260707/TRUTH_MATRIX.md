@@ -73,3 +73,23 @@
 | LBA-P1-011 | OAuth tokens from URL fragment | **FixedSinceLBA** | oauthFragment utility (7/4 fix commit) |
 | LBA-P1-012 | Stripe client_secret in URL | **PartiallyFixed** | sessionStorage for secrets; URL may still carry order_id |
 | LBA-P1-013 | clientSecret in localStorage | **FixedSinceLBA** | `paymentFlow.ts` uses sessionStorage for secrets |
+
+---
+
+## MLA DBug Closeout (2026-07-08)
+
+**Anchor:** `42b94ca2` (`fix(review): close DBug-3 JSAPI unavailable path and drama SQL integration test`)
+
+| ID | Status | Evidence |
+|----|--------|----------|
+| MLA-P1-001 | **Fixed** | `414ff2e9` webhook stale RECHARGING returns 2xx |
+| MLA-P1-005 | **Fixed** | `704c8f4c` shared token refresh singleflight |
+| MLA-P1-006 | **Fixed** | `704c8f4c` interceptor refresh syncs Pinia |
+| MLA-P1-007 | **Fixed** | `0b8eee6c`; `42b94ca2` JSAPI bridge unavailable timeout coverage |
+| MLA-P1-008 | **Fixed** | `2ac31bf5` backend-mode Stripe redirect preservation |
+| MLA-P2-001 | **Fixed** | `35d49031`; `42b94ca2` Postgres drama list integration test |
+| MLA-P2-007 | **Fixed** | `b5350c38` KeysView submit error display |
+| MLA-P2-013 | **Fixed** | `83c71550` secret-scan fail-closed hook |
+| MLA-REV-SUP1 | **Fixed** | `5f53444f` video tasks list polling |
+
+**Full gate:** backend `go test ./...` PASS, backend `golangci-lint run ./...` 0 issues, frontend lint/typecheck PASS, frontend `npx.cmd vitest run --reporter=basic` PASS (109 files / 620 tests). `pnpm exec vitest run` remains a Windows shim environment red before test execution.

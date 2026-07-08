@@ -95,6 +95,10 @@ func (s *authRepoStub) ListKeysByUserID(ctx context.Context, userID int64) ([]st
 	return s.listKeysByUserID(ctx, userID)
 }
 
+func (s *authRepoStub) ListQuotaWarningCandidates(context.Context, int) ([]APIKeyQuotaWarningItem, error) {
+	panic("unexpected ListQuotaWarningCandidates call")
+}
+
 func (s *authRepoStub) ListKeysByGroupID(ctx context.Context, groupID int64) ([]string, error) {
 	if s.listKeysByGroupID == nil {
 		panic("unexpected ListKeysByGroupID call")

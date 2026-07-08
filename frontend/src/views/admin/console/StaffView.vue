@@ -133,8 +133,18 @@
                                 {{ keyStatusLabel(key.status) }}
                               </span>
                             </td>
-                            <td class="px-3 py-2 text-xs tabular-nums text-gray-600 dark:text-gray-300">
-                              {{ key.quota > 0 ? `${formatAccountUsd(key.quota_used)} / ${formatAccountUsd(key.quota)}` : '不限额' }}
+                            <td class="px-3 py-2 text-xs tabular-nums" :class="quotaWarningTextClass(key.quota_warning_level || quotaWarningLevel(key.quota_used, key.quota))">
+                              <div>{{ key.quota > 0 ? `${formatAccountUsd(key.quota_used)} / ${formatAccountUsd(key.quota)}` : '不限额' }}</div>
+                              <div
+                                v-if="key.quota > 0"
+                                class="mt-1 h-1.5 w-24 overflow-hidden rounded-full bg-gray-200 dark:bg-dark-600"
+                              >
+                                <div
+                                  class="h-full rounded-full transition-all"
+                                  :class="quotaWarningBarClass(key.quota_warning_level || quotaWarningLevel(key.quota_used, key.quota))"
+                                  :style="{ width: `${Math.min(((key.quota_used || 0) / key.quota) * 100, 100)}%` }"
+                                />
+                              </div>
                             </td>
                             <td class="px-3 py-2 text-xs tabular-nums text-teal-600 dark:text-teal-300">{{ formatMoney(keyUsageMap[key.id]?.total_actual_cost, usdCnyRate) }}</td>
                             <td class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">{{ formatDateTime(key.last_used_at) }}</td>
@@ -297,7 +307,15 @@ import type { AdminUser, ApiKey } from '@/types'
 import type { BatchApiKeyUsageStats, BatchUserUsageStats } from '@/api/admin/dashboard'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
-import { formatAccountUsd, formatDateTime, formatMoney, staffDisplayName } from './consoleUtils'
+import {
+  formatAccountUsd,
+  formatDateTime,
+  formatMoney,
+  quotaWarningBarClass,
+  quotaWarningLevel,
+  quotaWarningTextClass,
+  staffDisplayName,
+} from './consoleUtils'
 
 const appStore = useAppStore()
 

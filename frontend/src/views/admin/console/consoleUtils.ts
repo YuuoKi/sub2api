@@ -70,3 +70,40 @@ export function staffDisplayName(username?: string | null, email?: string | null
   if (mail.includes('@')) return mail.split('@')[0]
   return mail || '未知员工'
 }
+
+export type QuotaWarningLevel = 'none' | 'warn' | 'critical'
+
+/** Derive quota warning level from used/limit (mirrors backend QuotaUsagePercent). */
+export function quotaWarningLevel(used?: number | null, limit?: number | null): QuotaWarningLevel {
+  const quota = Number(limit ?? 0)
+  if (!Number.isFinite(quota) || quota <= 0) return 'none'
+  const usedAmt = Number(used ?? 0)
+  const safeUsed = Number.isFinite(usedAmt) && usedAmt > 0 ? usedAmt : 0
+  const ratio = safeUsed / quota
+  if (ratio >= 1) return 'critical'
+  if (ratio >= 0.8) return 'warn'
+  return 'none'
+}
+
+/** Text color classes for quota usage (reuse KeysView yellow/red tokens). */
+export function quotaWarningTextClass(level: QuotaWarningLevel | string | null | undefined): string {
+  switch (level) {
+    case 'critical':
+      return 'text-red-500'
+    case 'warn':
+      return 'text-yellow-500'
+    default:
+      return 'text-gray-600 dark:text-gray-300'
+  }
+}
+
+export function quotaWarningBarClass(level: QuotaWarningLevel | string | null | undefined): string {
+  switch (level) {
+    case 'critical':
+      return 'bg-red-500'
+    case 'warn':
+      return 'bg-yellow-500'
+    default:
+      return 'bg-teal-500'
+  }
+}

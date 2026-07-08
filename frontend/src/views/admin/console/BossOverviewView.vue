@@ -28,6 +28,31 @@
         </div>
       </div>
 
+      <!-- B2：卡额度 80%/100% 告警摘要 -->
+      <section
+        v-if="quotaAlertTotal > 0"
+        class="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between"
+        :class="quotaCriticalCount > 0
+          ? 'border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/10'
+          : 'border-yellow-200 bg-yellow-50 dark:border-yellow-500/30 dark:bg-yellow-500/10'"
+        role="status"
+      >
+        <div class="min-w-0">
+          <p
+            class="text-sm font-medium"
+            :class="quotaCriticalCount > 0 ? 'text-red-800 dark:text-red-200' : 'text-yellow-800 dark:text-yellow-200'"
+          >
+            卡额度告警：{{ quotaCriticalCount }} 张已满额，{{ quotaWarnCount }} 张接近上限（≥80%）
+          </p>
+          <p class="mt-1 text-xs text-gray-600 dark:text-gray-400">
+            到「成员与开卡」检查员工卡额度，避免任务中途被拒。
+          </p>
+        </div>
+        <RouterLink class="btn btn-sm btn-outline shrink-0" to="/admin/console/staff">
+          去成员与开卡
+        </RouterLink>
+      </section>
+
       <!-- P0-4：启用中的通道异常上浮 -->
       <section
         v-if="channelAlerts.length"
@@ -322,6 +347,9 @@ const ranking = ref<UserSpendingRankingItem[]>([])
 const rankingTotals = ref({ actual_cost: 0, requests: 0, tokens: 0, video_cost: 0, combined_cost: 0 })
 const videoDashboard = ref<VideoDashboard | null>(null)
 const usdCnyRate = ref(7.2)
+const quotaWarnCount = ref(0)
+const quotaCriticalCount = ref(0)
+const quotaAlertTotal = computed(() => quotaWarnCount.value + quotaCriticalCount.value)
 
 const rangeOptions: Array<{ key: ConsoleRangeKey; label: string }> = [
   { key: '7d', label: '近 7 天' },
@@ -539,6 +567,8 @@ async function loadAll() {
       adminAPI.video.dashboard().catch(() => null),
     ])
     usdCnyRate.value = Number(statsRes.usd_cny_rate || 7.2)
+    quotaWarnCount.value = Number(statsRes.quota_warnings?.warn_count || 0)
+    quotaCriticalCount.value = Number(statsRes.quota_warnings?.critical_count || 0)
     trend.value = trendRes.trend || []
     models.value = modelsRes.models || []
     ranking.value = rankingRes.ranking || []

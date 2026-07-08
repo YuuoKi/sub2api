@@ -68,6 +68,8 @@ type APIKeyRepository interface {
 	CountByGroupID(ctx context.Context, groupID int64) (int64, error)
 	ListKeysByUserID(ctx context.Context, userID int64) ([]string, error)
 	ListKeysByGroupID(ctx context.Context, groupID int64) ([]string, error)
+	// ListQuotaWarningCandidates returns active keys with quota>0 that are at/above the warn threshold.
+	ListQuotaWarningCandidates(ctx context.Context, limit int) ([]APIKeyQuotaWarningItem, error)
 
 	// Quota methods
 	IncrementQuotaUsed(ctx context.Context, id int64, amount float64) (float64, error)
@@ -791,6 +793,35 @@ func (s *APIKeyService) SearchAPIKeys(ctx context.Context, userID int64, keyword
 		return nil, fmt.Errorf("search api keys: %w", err)
 	}
 	return keys, nil
+}
+
+// GetQuotaWarningsSummary returns warn/critical counts and top items for the admin overview.
+func (s *APIKeyService) GetQuotaWarningsSummary(ctx context.Context, topN int) (*APIKeyQuotaWarningsSummary, error) {
+	if s == nil || s.apiKeyRepo == nil {
+		return &APIKeyQuotaWarningsSummary{TopItems: []APIKeyQuotaWarningItem{}}, nil
+	}
+	if topN <= 0 {
+		topN = 5
+	}
+	items, err := s.apiKeyRepo.ListQuotaWarningCandidates(ctx, 200)
+	if err != nil {
+		return nil, fmt.Errorf("list quota warning candidates: %w", err)
+	}
+	out := &APIKeyQuotaWarningsSummary{TopItems: make([]APIKeyQuotaWarningItem, 0, topN)}
+	for _, item := range items {
+		switch item.QuotaWarningLevel {
+		case QuotaWarningCritical:
+			out.CriticalCount++
+		case QuotaWarningWarn:
+			out.WarnCount++
+		default:
+			continue
+		}
+		if len(out.TopItems) < topN {
+			out.TopItems = append(out.TopItems, item)
+		}
+	}
+	return out, nil
 }
 
 // GetUserGroupRates 获取用户的专属分组倍率配置

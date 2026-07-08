@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -497,6 +498,69 @@ func (r *apiKeyRepository) ListKeysByGroupID(ctx context.Context, groupID int64)
 		return nil, err
 	}
 	return keys, nil
+}
+
+// ListQuotaWarningCandidates returns active keys with quota>0 whose usage ratio is >= 80%.
+// Results are ordered by usage ratio descending. limit caps the scan size (default 200).
+func (r *apiKeyRepository) ListQuotaWarningCandidates(ctx context.Context, limit int) ([]service.APIKeyQuotaWarningItem, error) {
+	if limit <= 0 {
+		limit = 200
+	}
+	rows, err := r.activeQuery().
+		Where(
+			apikey.StatusEQ(service.StatusAPIKeyActive),
+			apikey.QuotaGT(0),
+		).
+		WithUser(func(q *dbent.UserQuery) {
+			q.Select(user.FieldID, user.FieldUsername, user.FieldEmail)
+		}).
+		Order(apikey.ByQuotaUsed(entsql.OrderDesc())).
+		Limit(limit * 2). // over-fetch then filter by ratio in Go
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]service.APIKeyQuotaWarningItem, 0, limit)
+	for _, row := range rows {
+		percent, level := service.QuotaUsagePercent(row.QuotaUsed, row.Quota)
+		if level == service.QuotaWarningNone {
+			continue
+		}
+		item := service.APIKeyQuotaWarningItem{
+			ID:                row.ID,
+			UserID:            row.UserID,
+			Name:              row.Name,
+			Quota:             row.Quota,
+			QuotaUsed:         row.QuotaUsed,
+			QuotaUsagePercent: percent,
+			QuotaWarningLevel: level,
+		}
+		if row.Edges.User != nil {
+			item.Username = row.Edges.User.Username
+			item.Email = row.Edges.User.Email
+		}
+		out = append(out, item)
+		if len(out) >= limit {
+			break
+		}
+	}
+	// Prefer critical over warn, then higher percent.
+	sortQuotaWarningItems(out)
+	return out, nil
+}
+
+func sortQuotaWarningItems(items []service.APIKeyQuotaWarningItem) {
+	sort.SliceStable(items, func(i, j int) bool {
+		return quotaWarningRank(items[i]) > quotaWarningRank(items[j])
+	})
+}
+
+func quotaWarningRank(item service.APIKeyQuotaWarningItem) float64 {
+	rank := item.QuotaUsagePercent
+	if item.QuotaWarningLevel == service.QuotaWarningCritical {
+		rank += 1000
+	}
+	return rank
 }
 
 // IncrementQuotaUsed 使用 Ent 原子递增 quota_used 字段并返回新值

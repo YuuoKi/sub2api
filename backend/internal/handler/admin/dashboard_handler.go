@@ -21,15 +21,26 @@ type DashboardHandler struct {
 	dashboardService   *service.DashboardService
 	aggregationService *service.DashboardAggregationService
 	settingService     *service.SettingService
+	apiKeyService      *service.APIKeyService
 	startTime          time.Time // Server start time for uptime calculation
 }
 
 // NewDashboardHandler creates a new admin dashboard handler
-func NewDashboardHandler(dashboardService *service.DashboardService, aggregationService *service.DashboardAggregationService, settingService *service.SettingService) *DashboardHandler {
+func NewDashboardHandler(
+	dashboardService *service.DashboardService,
+	aggregationService *service.DashboardAggregationService,
+	settingService *service.SettingService,
+	apiKeyServices ...*service.APIKeyService,
+) *DashboardHandler {
+	var apiKeyService *service.APIKeyService
+	if len(apiKeyServices) > 0 {
+		apiKeyService = apiKeyServices[0]
+	}
 	return &DashboardHandler{
 		dashboardService:   dashboardService,
 		aggregationService: aggregationService,
 		settingService:     settingService,
+		apiKeyService:      apiKeyService,
 		startTime:          time.Now(),
 	}
 }
@@ -87,7 +98,7 @@ func (h *DashboardHandler) GetStats(c *gin.Context) {
 	// Calculate uptime in seconds
 	uptime := int64(time.Since(h.startTime).Seconds())
 
-	response.Success(c, gin.H{
+	payload := gin.H{
 		// 用户统计
 		"total_users":     stats.TotalUsers,
 		"today_new_users": stats.TodayNewUsers,
@@ -143,7 +154,17 @@ func (h *DashboardHandler) GetStats(c *gin.Context) {
 		"hourly_active_users": stats.HourlyActiveUsers,
 		"stats_updated_at":    stats.StatsUpdatedAt,
 		"stats_stale":         stats.StatsStale,
-	})
+	}
+
+	quotaWarnings := &service.APIKeyQuotaWarningsSummary{TopItems: []service.APIKeyQuotaWarningItem{}}
+	if h.apiKeyService != nil {
+		if summary, err := h.apiKeyService.GetQuotaWarningsSummary(c.Request.Context(), 5); err == nil && summary != nil {
+			quotaWarnings = summary
+		}
+	}
+	payload["quota_warnings"] = quotaWarnings
+
+	response.Success(c, payload)
 }
 
 type DashboardAggregationBackfillRequest struct {

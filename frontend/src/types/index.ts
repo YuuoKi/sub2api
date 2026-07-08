@@ -567,6 +567,8 @@ export interface ApiKey {
   last_used_at: string | null
   quota: number // Quota limit in USD (0 = unlimited)
   quota_used: number // Used quota amount in USD
+  quota_usage_percent?: number // 0-100; 0 when unlimited
+  quota_warning_level?: 'none' | 'warn' | 'critical'
   expires_at: string | null // Expiration time (null = never expires)
   created_at: string
   updated_at: string
@@ -1362,6 +1364,23 @@ export interface DashboardStats {
   cost_currency?: string // 归总展示币种（当前恒为 USD）
   usd_cny_rate?: number // USD/CNY 展示汇率
   video_spend_by_provider?: VideoSpendByProvider[]
+
+  // B2 卡额度告警（80%/100%）
+  quota_warnings?: {
+    warn_count: number
+    critical_count: number
+    top_items: Array<{
+      id: number
+      user_id: number
+      name: string
+      quota: number
+      quota_used: number
+      quota_usage_percent: number
+      quota_warning_level: 'none' | 'warn' | 'critical'
+      username?: string
+      email?: string
+    }>
+  }
 }
 
 export interface VideoSpendByProvider {

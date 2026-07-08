@@ -44,6 +44,13 @@
             </button>
           </div>
         </div>
+        <p
+          v-if="task.result_url && resultExpiryHint"
+          class="mt-2 text-xs"
+          :class="resultExpiryNear ? 'text-yellow-600 dark:text-yellow-300' : 'text-gray-500 dark:text-gray-400'"
+        >
+          {{ resultExpiryHint }}
+        </p>
         <div class="mt-4 grid gap-4 lg:grid-cols-[0.7fr_1.2fr_1fr]">
           <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-700">
             <div class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">{{ isVideoGatewayDemoMode ? '任务状态' : '状态' }}</div>
@@ -199,6 +206,30 @@ let refreshTimer: ReturnType<typeof setInterval> | null = null
 
 const taskId = computed(() => Number(route.params.id))
 const routingTrace = computed(() => task.value ? extractRoutingTrace(task.value) : null)
+const resultExpiryNear = computed(() => {
+  const raw = task.value?.result_url_expires_at
+  if (!raw) return false
+  const expires = new Date(raw).getTime()
+  if (Number.isNaN(expires)) return false
+  const remaining = expires - Date.now()
+  return remaining > 0 && remaining <= 2 * 60 * 60 * 1000
+})
+const resultExpiryHint = computed(() => {
+  if (!task.value?.result_url) return ''
+  const raw = task.value.result_url_expires_at
+  if (!raw) return '结果链接过期时间未知，请尽快下载或复制。'
+  const expires = new Date(raw)
+  if (Number.isNaN(expires.getTime())) return '结果链接过期时间未知，请尽快下载或复制。'
+  const label = formatDate(raw)
+  const source = task.value.result_url_expiry_source
+  if (source === 'estimated') {
+    return `结果链接预计约在 ${label} 过期（上游未提供签名过期参数，按完成时间 +24h 估算）。请尽快下载或复制。`
+  }
+  if (expires.getTime() <= Date.now()) {
+    return `结果链接可能已于 ${label} 过期。`
+  }
+  return `结果链接将于 ${label} 过期，请尽快下载或复制。`
+})
 const outcomeTitle = computed(() => {
   if (!task.value) return '-'
   if (task.value.error_message) return isVideoGatewayDemoMode ? '任务失败，原因已记录' : '任务失败'

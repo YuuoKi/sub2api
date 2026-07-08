@@ -61,6 +61,8 @@ export interface VideoTaskSummary {
   prompt: string
   status: VideoTaskStatus
   result_url: string
+  result_url_expires_at?: string | null
+  result_url_expiry_source?: 'url_query' | 'estimated' | 'unknown' | string
   error_message: string
   cost_estimate: number
   currency?: string // 'CNY' = Seedance 真实计费；'USD' = 其他（旧后端可能缺失）

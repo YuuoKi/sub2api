@@ -106,10 +106,20 @@
                   {{ formatTaskCost(task) }}
                 </td>
                 <td class="px-5 py-3">
-                  <a v-if="task.result_url" class="inline-flex items-center gap-1 text-primary-600 hover:text-primary-700 dark:text-primary-300" :href="task.result_url" target="_blank" rel="noreferrer">
-                    <Icon name="externalLink" size="xs" />
-                    打开结果
-                  </a>
+                  <div v-if="task.result_url" class="space-y-1">
+                    <a class="inline-flex items-center gap-1 text-primary-600 hover:text-primary-700 dark:text-primary-300" :href="task.result_url" target="_blank" rel="noreferrer">
+                      <Icon name="externalLink" size="xs" />
+                      打开结果
+                    </a>
+                    <div
+                      v-if="resultExpiryLabel(task)"
+                      class="text-xs"
+                      :class="isResultExpiryNear(task) ? 'text-yellow-600 dark:text-yellow-300' : 'text-gray-500 dark:text-gray-400'"
+                      :title="resultExpiryLabel(task)"
+                    >
+                      {{ resultExpiryLabel(task) }}
+                    </div>
+                  </div>
                   <div v-else-if="task.error_message" class="max-w-sm rounded-md border border-red-200 bg-red-50 p-2 text-xs leading-5 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
                     <div class="font-medium">{{ isVideoGatewayDemoMode ? '任务失败原因' : '失败原因' }}</div>
                     <div>{{ errorMessageLabel(task.error_message) }}</div>
@@ -120,6 +130,9 @@
                 <td class="px-5 py-3">
                   <div class="flex flex-wrap gap-2">
                     <a v-if="task.result_url" class="btn btn-sm btn-outline" :href="task.result_url" target="_blank" rel="noreferrer">打开结果</a>
+                    <button v-if="task.result_url" class="btn btn-sm btn-outline" type="button" @click="copyResultUrl(task)">
+                      复制链接
+                    </button>
                     <button class="btn btn-sm btn-outline" type="button" @click="copyToCreate(task)">
                       {{ isVideoGatewayDemoMode ? '复制参数重新提交' : '复制参数' }}
                     </button>
@@ -256,6 +269,34 @@ function copyToCreate(task: VideoTask) {
   saveTaskDraft(task)
   appStore.showInfo(isVideoGatewayDemoMode ? '已复制任务参数，可在试跑任务页调整后重新提交。' : '已复制任务参数，可在创建页调整后重新提交。')
   router.push('/admin/video/create')
+}
+
+function resultExpiryLabel(task: VideoTask): string {
+  if (!task.result_url || !task.result_url_expires_at) return ''
+  const expires = new Date(task.result_url_expires_at)
+  if (Number.isNaN(expires.getTime())) return ''
+  const label = formatDate(task.result_url_expires_at)
+  if (expires.getTime() <= Date.now()) return `可能已过期（${label}）`
+  if (task.result_url_expiry_source === 'estimated') return `预计 ${label} 过期`
+  return `${label} 过期`
+}
+
+function isResultExpiryNear(task: VideoTask): boolean {
+  if (!task.result_url_expires_at) return false
+  const expires = new Date(task.result_url_expires_at).getTime()
+  if (Number.isNaN(expires)) return false
+  const remaining = expires - Date.now()
+  return remaining <= 2 * 60 * 60 * 1000
+}
+
+async function copyResultUrl(task: VideoTask) {
+  if (!task.result_url) return
+  try {
+    await navigator.clipboard.writeText(task.result_url)
+    appStore.showSuccess('结果链接已复制。')
+  } catch {
+    appStore.showError('复制失败，请手动选择链接。')
+  }
 }
 
 onMounted(() => {

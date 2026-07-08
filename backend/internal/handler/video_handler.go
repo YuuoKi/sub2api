@@ -80,8 +80,10 @@ type videoTaskResponse struct {
 	ReturnLastFrame     *bool                          `json:"return_last_frame,omitempty"`
 	Status              string                         `json:"status"`
 	UpstreamTaskID      string                         `json:"upstream_task_id"`
-	ResultURL           string                         `json:"result_url"`
-	Usage               videoTaskUsageResponse         `json:"usage"`
+	ResultURL             string                         `json:"result_url"`
+	ResultURLExpiresAt    *string                        `json:"result_url_expires_at,omitempty"`
+	ResultURLExpirySource string                         `json:"result_url_expiry_source,omitempty"`
+	Usage                 videoTaskUsageResponse         `json:"usage"`
 	ActualResolution    string                         `json:"actual_resolution"`
 	ActualDuration      *int                           `json:"actual_duration"`
 	LastFrameURL        string                         `json:"last_frame_url"`
@@ -514,6 +516,17 @@ func videoTaskToResponse(task *service.VideoTask, events []*service.VideoTaskEve
 		v := formatTaskTime(*task.CompletedAt)
 		completed = &v
 	}
+	var resultExpiresAt *string
+	resultExpirySource := ""
+	if task.ResultURL != "" {
+		if expires, source := service.ParseResultURLExpiry(task.ResultURL, task.CompletedAt); expires != nil {
+			v := formatTaskTime(*expires)
+			resultExpiresAt = &v
+			resultExpirySource = source
+		} else {
+			resultExpirySource = source
+		}
+	}
 	eventResponses := make([]videoTaskEventResponse, 0, len(events))
 	for _, event := range events {
 		eventResponses = append(eventResponses, videoTaskEventResponse{
@@ -557,10 +570,12 @@ func videoTaskToResponse(task *service.VideoTask, events []*service.VideoTaskEve
 		CameraFixed:         task.CameraFixed,
 		ReturnLastFrame:     task.ReturnLastFrame,
 		Status:              task.Status,
-		UpstreamTaskID:      task.UpstreamTaskID,
-		ResultURL:           task.ResultURL,
-		Usage:               videoTaskUsageResponse{TotalTokens: totalTokens},
-		ActualResolution:    task.ActualResolution,
+		UpstreamTaskID:        task.UpstreamTaskID,
+		ResultURL:             task.ResultURL,
+		ResultURLExpiresAt:    resultExpiresAt,
+		ResultURLExpirySource: resultExpirySource,
+		Usage:                 videoTaskUsageResponse{TotalTokens: totalTokens},
+		ActualResolution:      task.ActualResolution,
 		ActualDuration:      actualDuration,
 		LastFrameURL:        task.LastFrameURL,
 		ErrorMessage:        task.ErrorMessage,

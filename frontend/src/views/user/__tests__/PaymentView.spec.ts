@@ -255,12 +255,12 @@ describe('PaymentView WeChat JSAPI flow', () => {
     expect(window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY)).toBeNull()
   })
 
-  it('clears stale recovery state when JSAPI never becomes available', async () => {
+  it('does not create a second order when JSAPI bridge never becomes available', async () => {
     vi.useFakeTimers()
     createOrder.mockResolvedValue(jsapiOrderFixture('resume-token-missing-bridge'))
     ;(window as Window & { WeixinJSBridge?: { invoke: typeof bridgeInvoke } }).WeixinJSBridge = undefined
 
-    const wrapper = shallowMount(PaymentView, {
+    shallowMount(PaymentView, {
       global: {
         stubs: {
           Teleport: true,
@@ -274,12 +274,13 @@ describe('PaymentView WeChat JSAPI flow', () => {
     await flushPromises()
     await flushPromises()
 
+    expect(createOrder).toHaveBeenCalledTimes(1)
     expect(showError).toHaveBeenCalledWith(
       'payment.errors.wechatJsapiUnavailable payment.errors.wechatOpenInWeChatHint',
     )
     expect(routerPush).not.toHaveBeenCalled()
-    expect(window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY)).toBeNull()
-    expect(wrapper.html()).not.toContain('payment-status-panel-stub')
+    expect(window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY)).toContain('sub2_jsapi_123')
+    vi.useRealTimers()
   })
 
   it('clears a stale recovery snapshot before handling wechat resume callback params', async () => {

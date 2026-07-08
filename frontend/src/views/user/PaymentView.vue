@@ -817,15 +817,23 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
           await redirectToPaymentResult(resultState)
         }
       } catch (err: unknown) {
-        resetPayment()
+        const existingOrderId = decision.paymentState.orderId
+        if ((existingOrderId ?? 0) <= 0) {
+          resetPayment()
+        }
         const fallbackApplied = await attemptMobileQrFallback(err, {
           orderAmount,
           orderType,
           planId,
           paymentType: visibleMethod,
           attempted: options.mobileQrFallbackAttempted === true,
+          existingOrderId,
         })
         if (!fallbackApplied) {
+          if ((existingOrderId ?? 0) > 0) {
+            applyScenarioError(err, visibleMethod)
+            return
+          }
           throw err
         }
       }
@@ -905,8 +913,14 @@ function shouldFallbackToDesktopQr(
   const normalizedMessage = message.toLowerCase()
 
   if (normalizedMethod === 'wxpay') {
-    if (reason === 'WECHAT_JSAPI_FAILED' && (existingOrderId ?? 0) > 0) {
-      return false
+    if ((existingOrderId ?? 0) > 0) {
+      if (
+        reason === 'WECHAT_JSAPI_FAILED'
+        || normalizedMessage.includes('wechat_jsapi_unavailable')
+        || normalizedMessage.includes('weixinjsbridge is unavailable')
+      ) {
+        return false
+      }
     }
     return reason === 'WECHAT_H5_NOT_AUTHORIZED'
       || reason === 'WECHAT_PAYMENT_MP_NOT_CONFIGURED'

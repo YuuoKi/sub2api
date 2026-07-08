@@ -59,46 +59,46 @@ type apiKeyVideoTaskCreateRequest struct {
 }
 
 type videoTaskResponse struct {
-	ID                  int64                          `json:"id"`
-	ProviderAccountID   int64                          `json:"provider_account_id"`
-	ProviderAccountName string                         `json:"provider_account_name"`
-	Provider            string                         `json:"provider"`
-	Model               string                         `json:"model"`
-	TaskType            string                         `json:"task_type"`
-	Prompt              string                         `json:"prompt"`
-	NegativePrompt      string                         `json:"negative_prompt"`
-	ReferenceImageURL   string                         `json:"reference_image_url"`
-	ReferenceVideoURL   string                         `json:"reference_video_url"`
-	Content             []service.VideoTaskContentItem `json:"content,omitempty"`
-	HasVideoInput       bool                           `json:"has_video_input"`
-	AspectRatio         string                         `json:"aspect_ratio"`
-	Duration            int                            `json:"duration"`
-	Resolution          string                         `json:"resolution"`
-	GenerateAudio       *bool                          `json:"generate_audio,omitempty"`
-	Watermark           *bool                          `json:"watermark,omitempty"`
-	CameraFixed         *bool                          `json:"camera_fixed,omitempty"`
-	ReturnLastFrame     *bool                          `json:"return_last_frame,omitempty"`
-	Status              string                         `json:"status"`
-	UpstreamTaskID      string                         `json:"upstream_task_id"`
+	ID                    int64                          `json:"id"`
+	ProviderAccountID     int64                          `json:"provider_account_id"`
+	ProviderAccountName   string                         `json:"provider_account_name"`
+	Provider              string                         `json:"provider"`
+	Model                 string                         `json:"model"`
+	TaskType              string                         `json:"task_type"`
+	Prompt                string                         `json:"prompt"`
+	NegativePrompt        string                         `json:"negative_prompt"`
+	ReferenceImageURL     string                         `json:"reference_image_url"`
+	ReferenceVideoURL     string                         `json:"reference_video_url"`
+	Content               []service.VideoTaskContentItem `json:"content,omitempty"`
+	HasVideoInput         bool                           `json:"has_video_input"`
+	AspectRatio           string                         `json:"aspect_ratio"`
+	Duration              int                            `json:"duration"`
+	Resolution            string                         `json:"resolution"`
+	GenerateAudio         *bool                          `json:"generate_audio,omitempty"`
+	Watermark             *bool                          `json:"watermark,omitempty"`
+	CameraFixed           *bool                          `json:"camera_fixed,omitempty"`
+	ReturnLastFrame       *bool                          `json:"return_last_frame,omitempty"`
+	Status                string                         `json:"status"`
+	UpstreamTaskID        string                         `json:"upstream_task_id"`
 	ResultURL             string                         `json:"result_url"`
 	ResultURLExpiresAt    *string                        `json:"result_url_expires_at,omitempty"`
 	ResultURLExpirySource string                         `json:"result_url_expiry_source,omitempty"`
 	Usage                 videoTaskUsageResponse         `json:"usage"`
-	ActualResolution    string                         `json:"actual_resolution"`
-	ActualDuration      *int                           `json:"actual_duration"`
-	LastFrameURL        string                         `json:"last_frame_url"`
-	ErrorMessage        string                         `json:"error_message"`
-	CostEstimate        float64                        `json:"cost_estimate"`
-	CreatedBy           int64                          `json:"created_by"`
-	CreatedByEmail      string                         `json:"created_by_email"`
-	CreatedByName       string                         `json:"created_by_name"`
-	CreatedByLabel      string                         `json:"created_by_label"`
-	RoutingStrategy     string                         `json:"routing_strategy"`
-	RoutingReason       string                         `json:"routing_reason"`
-	CreatedAt           string                         `json:"created_at"`
-	UpdatedAt           string                         `json:"updated_at"`
-	CompletedAt         *string                        `json:"completed_at"`
-	Events              []videoTaskEventResponse       `json:"events,omitempty"`
+	ActualResolution      string                         `json:"actual_resolution"`
+	ActualDuration        *int                           `json:"actual_duration"`
+	LastFrameURL          string                         `json:"last_frame_url"`
+	ErrorMessage          string                         `json:"error_message"`
+	CostEstimate          float64                        `json:"cost_estimate"`
+	CreatedBy             int64                          `json:"created_by"`
+	CreatedByEmail        string                         `json:"created_by_email"`
+	CreatedByName         string                         `json:"created_by_name"`
+	CreatedByLabel        string                         `json:"created_by_label"`
+	RoutingStrategy       string                         `json:"routing_strategy"`
+	RoutingReason         string                         `json:"routing_reason"`
+	CreatedAt             string                         `json:"created_at"`
+	UpdatedAt             string                         `json:"updated_at"`
+	CompletedAt           *string                        `json:"completed_at"`
+	Events                []videoTaskEventResponse       `json:"events,omitempty"`
 }
 
 type videoTaskUsageResponse struct {
@@ -550,46 +550,46 @@ func videoTaskToResponse(task *service.VideoTask, events []*service.VideoTaskEve
 		actualDuration = &v
 	}
 	return videoTaskResponse{
-		ID:                  task.ID,
-		ProviderAccountID:   task.ProviderAccountID,
-		ProviderAccountName: task.ProviderAccountName,
-		Provider:            task.Provider,
-		Model:               task.Model,
-		TaskType:            task.TaskType,
-		Prompt:              task.Prompt,
-		NegativePrompt:      task.NegativePrompt,
-		ReferenceImageURL:   task.ReferenceImageURL,
-		ReferenceVideoURL:   task.ReferenceVideoURL,
-		Content:             task.Content,
-		HasVideoInput:       task.HasVideoInput,
-		AspectRatio:         task.AspectRatio,
-		Duration:            task.Duration,
-		Resolution:          task.Resolution,
-		GenerateAudio:       task.GenerateAudio,
-		Watermark:           task.Watermark,
-		CameraFixed:         task.CameraFixed,
-		ReturnLastFrame:     task.ReturnLastFrame,
-		Status:              task.Status,
+		ID:                    task.ID,
+		ProviderAccountID:     task.ProviderAccountID,
+		ProviderAccountName:   task.ProviderAccountName,
+		Provider:              task.Provider,
+		Model:                 task.Model,
+		TaskType:              task.TaskType,
+		Prompt:                task.Prompt,
+		NegativePrompt:        task.NegativePrompt,
+		ReferenceImageURL:     task.ReferenceImageURL,
+		ReferenceVideoURL:     task.ReferenceVideoURL,
+		Content:               task.Content,
+		HasVideoInput:         task.HasVideoInput,
+		AspectRatio:           task.AspectRatio,
+		Duration:              task.Duration,
+		Resolution:            task.Resolution,
+		GenerateAudio:         task.GenerateAudio,
+		Watermark:             task.Watermark,
+		CameraFixed:           task.CameraFixed,
+		ReturnLastFrame:       task.ReturnLastFrame,
+		Status:                task.Status,
 		UpstreamTaskID:        task.UpstreamTaskID,
 		ResultURL:             task.ResultURL,
 		ResultURLExpiresAt:    resultExpiresAt,
 		ResultURLExpirySource: resultExpirySource,
 		Usage:                 videoTaskUsageResponse{TotalTokens: totalTokens},
 		ActualResolution:      task.ActualResolution,
-		ActualDuration:      actualDuration,
-		LastFrameURL:        task.LastFrameURL,
-		ErrorMessage:        task.ErrorMessage,
-		CostEstimate:        task.CostEstimate,
-		CreatedBy:           task.CreatedBy,
-		CreatedByEmail:      task.CreatedByEmail,
-		CreatedByName:       task.CreatedByName,
-		CreatedByLabel:      videoCreatedByLabel(task),
-		RoutingStrategy:     routingStrategy,
-		RoutingReason:       routingReason,
-		CreatedAt:           formatTaskTime(task.CreatedAt),
-		UpdatedAt:           formatTaskTime(task.UpdatedAt),
-		CompletedAt:         completed,
-		Events:              eventResponses,
+		ActualDuration:        actualDuration,
+		LastFrameURL:          task.LastFrameURL,
+		ErrorMessage:          task.ErrorMessage,
+		CostEstimate:          task.CostEstimate,
+		CreatedBy:             task.CreatedBy,
+		CreatedByEmail:        task.CreatedByEmail,
+		CreatedByName:         task.CreatedByName,
+		CreatedByLabel:        videoCreatedByLabel(task),
+		RoutingStrategy:       routingStrategy,
+		RoutingReason:         routingReason,
+		CreatedAt:             formatTaskTime(task.CreatedAt),
+		UpdatedAt:             formatTaskTime(task.UpdatedAt),
+		CompletedAt:           completed,
+		Events:                eventResponses,
 	}
 }
 

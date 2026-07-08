@@ -7,6 +7,8 @@
 
 ---
 
+> **2026-07-09 Night Phase B：done** — [CODEX_TASK_NIGHT_PHASEB_20260709.md](./CODEX_TASK_NIGHT_PHASEB_20260709.md) · 审查包 [2026-07-09-NIGHT-PHASEB-review.md](./deliverables/2026-07-09-NIGHT-PHASEB-review.md)。B1 adoption 员工 Key 401 已修（`POST /v1/generation-content/:task_id/adoption`）；B2 卡额度 80/100% 告警；B3 结果链接过期提示（无对象存储转存）。commits：`3541f7b6` / `d44a7e07` / `c2bcf727` + docs closeout。无人值守：未 push。
+>
 > **2026-07-08 MLA DBug：done** — [CODEX_TASK_MLA_DBUG.md](./CODEX_TASK_MLA_DBUG.md) + [CODEX_TASK_MLA_DBUG_CLOSEOUT.md](./CODEX_TASK_MLA_DBUG_CLOSEOUT.md) 已完成 DBug-0→8、补强 `42b94ca2` 与全量门禁收尾；总审查包：[2026-07-08-MLA-DBUG-CLOSEOUT.md](./deliverables/2026-07-08-MLA-DBUG-CLOSEOUT.md)。
 >
 > **2026-07-07 次要（若 S3 文档未 commit）**：[CODEX_TASK_S3_G2_CLOSEOUT.md](./CODEX_TASK_S3_G2_CLOSEOUT.md) — S3 收口：Groups ¥ 漏网 + 浏览器验收表。
@@ -15,7 +17,7 @@
 >
 > **2026-07-05 R2：R2-A `done`** — 真实 Seedance task #4 已跑通（见 [R2-A 审查包](./deliverables/2026-07-05-R2-A-production-smoke-review.md)）。**请废弃临时 Key。**
 >
-> **2026-07-05 S1 收尾（当前执行）**：[CODEX_TASK_S1_CLOSEOUT.md](./CODEX_TASK_S1_CLOSEOUT.md) — 仓库卫生、secret-scan、PR #3726 门禁、R2-B/C 终态。
+> **2026-07-05 S1 收尾（历史）**：[CODEX_TASK_S1_CLOSEOUT.md](./CODEX_TASK_S1_CLOSEOUT.md) — 仓库卫生、secret-scan、PR #3726 门禁、R2-B/C 终态。
 > **S1-R2BC（已完成）**：[CODEX_TASK_S1_R2BC_MERGE.md](./CODEX_TASK_S1_R2BC_MERGE.md) · [S1-R2BC-review](./deliverables/2026-07-05-S1-R2BC-review.md) · [S1-CLOSEOUT](./deliverables/2026-07-05-S1-CLOSEOUT-review.md)
 >
 > **R1 / V-1→A-4（已完成）**：见 [CODEX_TASK_R1.md](./CODEX_TASK_R1.md) 与 `deliverables/2026-07-05-*.md`。

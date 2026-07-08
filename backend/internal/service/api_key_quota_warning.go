@@ -37,20 +37,20 @@ func QuotaUsagePercent(used, limit float64) (percent float64, level string) {
 
 // APIKeyQuotaWarningItem is one key approaching or at quota limit.
 type APIKeyQuotaWarningItem struct {
-	ID                 int64   `json:"id"`
-	UserID             int64   `json:"user_id"`
-	Name               string  `json:"name"`
-	Quota              float64 `json:"quota"`
-	QuotaUsed          float64 `json:"quota_used"`
-	QuotaUsagePercent  float64 `json:"quota_usage_percent"`
-	QuotaWarningLevel  string  `json:"quota_warning_level"`
-	Username           string  `json:"username,omitempty"`
-	Email              string  `json:"email,omitempty"`
+	ID                int64   `json:"id"`
+	UserID            int64   `json:"user_id"`
+	Name              string  `json:"name"`
+	Quota             float64 `json:"quota"`
+	QuotaUsed         float64 `json:"quota_used"`
+	QuotaUsagePercent float64 `json:"quota_usage_percent"`
+	QuotaWarningLevel string  `json:"quota_warning_level"`
+	Username          string  `json:"username,omitempty"`
+	Email             string  `json:"email,omitempty"`
 }
 
 // APIKeyQuotaWarningsSummary aggregates warn/critical key counts for the console overview.
 type APIKeyQuotaWarningsSummary struct {
-	WarnCount     int                     `json:"warn_count"`
-	CriticalCount int                     `json:"critical_count"`
+	WarnCount     int                      `json:"warn_count"`
+	CriticalCount int                      `json:"critical_count"`
 	TopItems      []APIKeyQuotaWarningItem `json:"top_items"`
 }

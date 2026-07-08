@@ -107,6 +107,7 @@ func ProvideHandlers(
 	paymentWebhookHandler *PaymentWebhookHandler,
 	availableChannelHandler *AvailableChannelHandler,
 	videoHandler *VideoHandler,
+	generationContentHandler *GenerationContentHandler,
 	_ *service.IdempotencyCoordinator,
 	_ *service.IdempotencyCleanupService,
 	_ *service.VideoGatewayWorker,
@@ -128,7 +129,8 @@ func ProvideHandlers(
 		Payment:          paymentHandler,
 		PaymentWebhook:   paymentWebhookHandler,
 		AvailableChannel: availableChannelHandler,
-		Video:            videoHandler,
+		Video:             videoHandler,
+		GenerationContent: generationContentHandler,
 	}
 }
 
@@ -151,6 +153,8 @@ var ProviderSet = wire.NewSet(
 	NewPaymentWebhookHandler,
 	NewAvailableChannelHandler,
 	NewVideoHandler,
+	NewGenerationContentHandler,
+	service.NewGenerationContentAdoptionService,
 
 	// Admin handlers
 	admin.NewDashboardHandler,

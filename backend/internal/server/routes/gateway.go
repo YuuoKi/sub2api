@@ -122,6 +122,9 @@ func RegisterGatewayRoutes(
 				tasks.POST("/:id/cancel", h.Video.CancelAPIKeyVideoTask)
 			}
 		}
+		if h.GenerationContent != nil {
+			gateway.POST("/generation-content/:task_id/adoption", h.GenerationContent.SubmitAdoption)
+		}
 	}
 
 	// Gemini 原生 API 兼容层（Gemini SDK/CLI 直连）

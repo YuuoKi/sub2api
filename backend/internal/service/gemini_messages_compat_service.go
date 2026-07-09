@@ -2050,6 +2050,7 @@ func (s *GeminiMessagesCompatService) handleStreamingResponse(c *gin.Context, re
 		parts := extractGeminiParts(geminiResp)
 		imageCount += countGeminiInlineDataImageParts(geminiResp)
 		for _, part := range parts {
+			signature := extractGeminiPartThoughtSignature(part)
 			if text, ok := part["text"].(string); ok && text != "" {
 				delta, newSeen := computeGeminiTextDelta(seenText, text)
 				seenText = newSeen
@@ -2064,16 +2065,27 @@ func (s *GeminiMessagesCompatService) handleStreamingResponse(c *gin.Context, re
 							"index": openBlockIndex,
 						})
 					}
+					if openToolIndex >= 0 {
+						writeSSE(c.Writer, "content_block_stop", map[string]any{
+							"type":  "content_block_stop",
+							"index": openToolIndex,
+						})
+						openToolIndex = -1
+						openToolName = ""
+						seenToolJSON = ""
+					}
 					openBlockType = "text"
 					openBlockIndex = nextBlockIndex
 					nextBlockIndex++
+					textBlock := map[string]any{
+						"type": "text",
+						"text": "",
+					}
+					attachClaudeBlockSignature(textBlock, signature)
 					writeSSE(c.Writer, "content_block_start", map[string]any{
-						"type":  "content_block_start",
-						"index": openBlockIndex,
-						"content_block": map[string]any{
-							"type": "text",
-							"text": "",
-						},
+						"type":          "content_block_start",
+						"index":         openBlockIndex,
+						"content_block": textBlock,
 					})
 				}
 
@@ -2128,15 +2140,17 @@ func (s *GeminiMessagesCompatService) handleStreamingResponse(c *gin.Context, re
 					nextBlockIndex++
 					sawToolUse = true
 
+					toolBlock := map[string]any{
+						"type":  "tool_use",
+						"id":    openToolID,
+						"name":  name,
+						"input": map[string]any{},
+					}
+					attachClaudeBlockSignature(toolBlock, signature)
 					writeSSE(c.Writer, "content_block_start", map[string]any{
-						"type":  "content_block_start",
-						"index": openToolIndex,
-						"content_block": map[string]any{
-							"type":  "tool_use",
-							"id":    openToolID,
-							"name":  name,
-							"input": map[string]any{},
-						},
+						"type":          "content_block_start",
+						"index":         openToolIndex,
+						"content_block": toolBlock,
 					})
 				}
 
@@ -2166,6 +2180,45 @@ func (s *GeminiMessagesCompatService) handleStreamingResponse(c *gin.Context, re
 						},
 					})
 				}
+				flusher.Flush()
+				continue
+			}
+
+			if imageBlock, ok := claudeImageBlockFromGeminiPart(part); ok {
+				// Images arrive complete in one part: close open blocks, emit start+stop.
+				if openBlockIndex >= 0 {
+					writeSSE(c.Writer, "content_block_stop", map[string]any{
+						"type":  "content_block_stop",
+						"index": openBlockIndex,
+					})
+					openBlockIndex = -1
+					openBlockType = ""
+				}
+				if openToolIndex >= 0 {
+					writeSSE(c.Writer, "content_block_stop", map[string]any{
+						"type":  "content_block_stop",
+						"index": openToolIndex,
+					})
+					openToolIndex = -1
+					openToolName = ""
+					seenToolJSON = ""
+				}
+
+				imageIndex := nextBlockIndex
+				nextBlockIndex++
+				if firstTokenMs == nil {
+					ms := int(time.Since(startTime).Milliseconds())
+					firstTokenMs = &ms
+				}
+				writeSSE(c.Writer, "content_block_start", map[string]any{
+					"type":          "content_block_start",
+					"index":         imageIndex,
+					"content_block": imageBlock,
+				})
+				writeSSE(c.Writer, "content_block_stop", map[string]any{
+					"type":  "content_block_stop",
+					"index": imageIndex,
+				})
 				flusher.Flush()
 			}
 		}
@@ -2717,11 +2770,14 @@ func convertGeminiToClaudeMessage(geminiResp map[string]any, originalModel strin
 						if !ok {
 							continue
 						}
+						signature := extractGeminiPartThoughtSignature(pm)
 						if text, ok := pm["text"].(string); ok && text != "" {
-							contentBlocks = append(contentBlocks, map[string]any{
+							block := map[string]any{
 								"type": "text",
 								"text": text,
-							})
+							}
+							attachClaudeBlockSignature(block, signature)
+							contentBlocks = append(contentBlocks, block)
 						}
 						if fc, ok := pm["functionCall"].(map[string]any); ok {
 							name, _ := fc["name"].(string)
@@ -2730,12 +2786,17 @@ func convertGeminiToClaudeMessage(geminiResp map[string]any, originalModel strin
 							}
 							args := fc["args"]
 							sawToolUse = true
-							contentBlocks = append(contentBlocks, map[string]any{
+							block := map[string]any{
 								"type":  "tool_use",
 								"id":    "toolu_" + randomHex(8),
 								"name":  name,
 								"input": args,
-							})
+							}
+							attachClaudeBlockSignature(block, signature)
+							contentBlocks = append(contentBlocks, block)
+						}
+						if imageBlock, ok := claudeImageBlockFromGeminiPart(pm); ok {
+							contentBlocks = append(contentBlocks, imageBlock)
 						}
 					}
 				}
@@ -2816,19 +2877,84 @@ func countGeminiInlineDataImageParts(geminiResp map[string]any) int {
 }
 
 func geminiPartHasImageInlineData(part map[string]any) bool {
+	_, _, ok := extractGeminiInlineDataImage(part)
+	return ok
+}
+
+func extractGeminiPartThoughtSignature(part map[string]any) string {
+	if part == nil {
+		return ""
+	}
+	for _, key := range []string{"thoughtSignature", "thought_signature"} {
+		if sig, ok := part[key].(string); ok {
+			if trimmed := strings.TrimSpace(sig); trimmed != "" {
+				return trimmed
+			}
+		}
+	}
+	return ""
+}
+
+func attachClaudeBlockSignature(block map[string]any, signature string) {
+	if block == nil {
+		return
+	}
+	signature = strings.TrimSpace(signature)
+	if signature == "" {
+		return
+	}
+	block["signature"] = signature
+}
+
+// extractGeminiInlineDataImage returns media type and base64 data for an image inlineData part.
+func extractGeminiInlineDataImage(part map[string]any) (mediaType, data string, ok bool) {
+	if part == nil {
+		return "", "", false
+	}
 	for _, key := range []string{"inlineData", "inline_data"} {
-		inlineData, ok := part[key].(map[string]any)
-		if !ok || inlineData == nil {
+		inlineData, found := part[key].(map[string]any)
+		if !found || inlineData == nil {
 			continue
 		}
 		mimeType, _ := inlineData["mimeType"].(string)
 		if strings.TrimSpace(mimeType) == "" {
 			mimeType, _ = inlineData["mime_type"].(string)
 		}
-		mimeType = strings.ToLower(strings.TrimSpace(mimeType))
-		return mimeType == "" || strings.HasPrefix(mimeType, "image/")
+		mimeType = strings.TrimSpace(mimeType)
+		normalized := strings.ToLower(mimeType)
+		if normalized != "" && !strings.HasPrefix(normalized, "image/") {
+			return "", "", false
+		}
+		dataVal, _ := inlineData["data"].(string)
+		dataVal = strings.TrimSpace(dataVal)
+		if dataVal == "" {
+			return "", "", false
+		}
+		if mimeType == "" {
+			mimeType = "image/png"
+		}
+		return mimeType, dataVal, true
 	}
-	return false
+	return "", "", false
+}
+
+// claudeImageBlockFromGeminiPart maps a Gemini inlineData image part to a Claude image content block.
+// When thoughtSignature is present on the Gemini part, it is attached as "signature".
+func claudeImageBlockFromGeminiPart(part map[string]any) (map[string]any, bool) {
+	mediaType, data, ok := extractGeminiInlineDataImage(part)
+	if !ok {
+		return nil, false
+	}
+	block := map[string]any{
+		"type": "image",
+		"source": map[string]any{
+			"type":       "base64",
+			"media_type": mediaType,
+			"data":       data,
+		},
+	}
+	attachClaudeBlockSignature(block, extractGeminiPartThoughtSignature(part))
+	return block, true
 }
 
 func extractGeminiUsage(data []byte) *ClaudeUsage {
@@ -3275,12 +3401,16 @@ func convertClaudeMessagesToGeminiContents(messages any, toolUseIDToName map[str
 							mediaType, _ := src["media_type"].(string)
 							data, _ := src["data"].(string)
 							if mediaType != "" && data != "" {
-								parts = append(parts, map[string]any{
+								part := map[string]any{
 									"inlineData": map[string]any{
 										"mimeType": mediaType,
 										"data":     data,
 									},
-								})
+								}
+								if signature, _ := bm["signature"].(string); strings.TrimSpace(signature) != "" {
+									part["thoughtSignature"] = strings.TrimSpace(signature)
+								}
+								parts = append(parts, part)
 							}
 						case "url":
 							fileData, err := geminiFileDataFromClaudeImageSource(src)

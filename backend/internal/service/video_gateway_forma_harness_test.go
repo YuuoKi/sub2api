@@ -15,10 +15,11 @@ import (
 // by the caller (newFormAHarnessSvc) and passed to the driver; these knobs only tune the
 // task and the poll cadence.
 type formAChainOpts struct {
-	maxTicks  int
-	duration  int
-	model     string
-	tickDelay time.Duration // sleep between worker ticks (0 for mock; ~poll interval for real)
+	maxTicks    int
+	duration    int
+	model       string
+	aspectRatio string // optional; empty => CreateTask default 16:9
+	tickDelay   time.Duration // sleep between worker ticks (0 for mock; ~poll interval for real)
 }
 
 // formAChainResult captures every observable channel of the Form A chain.
@@ -64,6 +65,7 @@ func driveFormASeedanceChain(t *testing.T, repo *memoryVideoGatewayRepo, svc *Vi
 		Prompt:            "form A single-shot harness clip",
 		CreatedBy:         21,
 		Duration:          duration,
+		AspectRatio:       strings.TrimSpace(o.aspectRatio),
 	})
 	res := &formAChainResult{created: created, createErr: err}
 	res.auditPath = os.Getenv("SUB2API_VIDEO_REDACTED_EVENT_LOG")

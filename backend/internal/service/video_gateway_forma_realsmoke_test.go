@@ -102,15 +102,18 @@ func TestSeedanceSingleRealSmokeFormA(t *testing.T) {
 	// vs the in-memory mock proof; everything else is identical production code.
 	repo, svc, providerID := newFormAHarnessSvc(t, "" /* real Ark */, apiKey, cost, perCallCap)
 
+	aspect := strings.TrimSpace(os.Getenv("SUB2API_SEEDANCE_SMOKE_ASPECT"))
+
 	t.Logf("=== FORM A SINGLE REAL SMOKE ARMED (full product chain) ===")
-	t.Logf("model=%q duration=%ds cost/s=%.3f per_call_cap=%.3f poll_interval=%s url=%s",
-		model, duration, cost, perCallCap, pollInterval, "https://ark.cn-beijing.volces.com/api/v3 (adapter default)")
+	t.Logf("model=%q duration=%ds aspect=%q cost/s=%.3f per_call_cap=%.3f poll_interval=%s url=%s",
+		model, duration, aspect, cost, perCallCap, pollInterval, "https://ark.cn-beijing.volces.com/api/v3 (adapter default)")
 
 	res := driveFormASeedanceChain(t, repo, svc, providerID, formAChainOpts{
-		model:     model,
-		duration:  duration,
-		maxTicks:  realSmokePollHardCeiling + 5, // worker also self-caps at video_gateway.max_poll_attempts
-		tickDelay: pollInterval,
+		model:       model,
+		duration:    duration,
+		aspectRatio: aspect,
+		maxTicks:    realSmokePollHardCeiling + 5, // worker also self-caps at video_gateway.max_poll_attempts
+		tickDelay:   pollInterval,
 	})
 	if res.createErr != nil {
 		// Budget-gate rejection or a fail-closed adapter abort (gate/SSRF/audit/self-check).

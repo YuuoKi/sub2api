@@ -19,7 +19,7 @@
 | G3 | 视频成品本地归档 | `feat(video): archive succeeded results to local assets` |
 | G4 | 任务预览 + 备份超期黄条 | `feat(console): video preview and backup stale alert` |
 | G5 | 全量门禁 + 文档收口 | `docs: close out unified sweep gates` |
-| G6 | R2-B/C/竖屏（有授权才跑） | 审查包章节；无授权 `blocked` |
+| G6 | R2-B/C/竖屏（有授权才跑） | §9：9:16 Form A **done**；NB2 上游 **done**（产品链 skip）；v2v skip |
 
 ## 硬边界
 

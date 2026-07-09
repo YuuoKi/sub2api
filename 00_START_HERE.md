@@ -15,11 +15,11 @@ Sub2API is the Wujie internal AI API / model scheduling / ledger middle layer. I
 
 - Branch: `wujie/video-capture-moat-20260702` · PR [#3726](https://github.com/Wei-Shaw/sub2api/pull/3726)
 - Admin console v2: `内部可用 / 可演示` — 总览下钻、月预算进度、额度告警、备份超期提示
-- Real Seedance + balance deduct: `内部可用` — R2-A（task #4）；**R2-B/C 扩样仍 blocked（等授权）**
+- Real Seedance + balance deduct: `内部可用` — R2-A（task #4，16:9）；**G6 Form A 9:16 done**（≈¥5）；**R2-B NB2 上游 done**（512，$0.045；产品链 skip）；v2v skip
 - Billing: `内部可用` — migrations 149–155（含 `local_asset_*`）
 - Phase B 运营：卡额度告警 + 月预算 + 成品本地归档 + 采纳/周报（console 提示词 tab）已落地
 - 当前执行入口：`docs/superpowers/codex-handoff/CODEX_TASK_UNIFIED_SWEEP_20260709.md` · 审查包 `deliverables/2026-07-09-UNIFIED-SWEEP-review.md`
-- Real paid calls: 按 `production_authorized` + 老板逐 Key 授权；**未授权不得日常真实调用**
+- Real paid calls: 按 `production_authorized` + 老板逐 Key 授权；**临时 Key 用后请立即废弃**；未授权不得日常真实调用
 
 ## Historical Evidence (追溯用 · 非当前规划入口)
 

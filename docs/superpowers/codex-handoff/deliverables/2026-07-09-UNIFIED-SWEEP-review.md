@@ -4,7 +4,7 @@
 > 完成时间：2026-07-09 Asia/Shanghai  
 > 关联任务：[CODEX_TASK_UNIFIED_SWEEP_20260709.md](../CODEX_TASK_UNIFIED_SWEEP_20260709.md)  
 > 基线 HEAD：`8e401f42`（Night Phase B）  
-> 状态：`partial`（G0–G5 done；G6 真实付费 blocked 等授权）
+> 状态：`partial`（G0–G5 done；G6 9:16 Form A **done**；R2-B NB2 上游 **done** / 产品链 skip；v2v skip）
 
 ---
 
@@ -15,7 +15,7 @@
 - **G3**：成功视频任务异步归档到 `DATA_DIR/assets/video/{id}/`；DB 记 `local_asset_path`；`GET /api/v1/video/tasks/:id/local-asset` 受控下载。
 - **G4**：任务列表/详情视频预览 + 本地归档入口；总览备份超期黄条（>7 天或无成功备份）。
 - **G5**：全量 go test / golangci / eslint / typecheck / consoleUtils vitest 绿。
-- **G6**：无老板当面授权，真实付费冒烟记 `blocked`（不读 `.env`、不触发付费）。
+- **G6**：老板授权临时 Ark Key + ¥50 硬顶后，跑 **Form A 全链路** Seedance **9:16 / 5s / 720p** 真实付费冒烟 → `succeeded`（详见 §9）。
 
 ---
 
@@ -42,7 +42,9 @@
 | G3 成品归档 | pass | `TestArchiveSucceededVideoResult*`；失败不阻断 |
 | G4 预览 + 备份告警 | pass | typecheck 绿；UI 已接 |
 | G5 全量门禁 | pass | 见 §4 |
-| G6 真实付费 | blocked | 缺老板授权 / 预算 / 停止条件 |
+| G6 真实付费 9:16 | pass | Form A `succeeded`；`ratio=9:16`；tokens=108900；upstream `cgt-20260709141516-ptcrw` |
+| G6 R2-B NB2 | partial | 上游 Google `generateContent` 512 档 **done**（$0.045）；产品链 usage/余额 skip — 见 [R2-B 审查包](./2026-07-09-R2-B-image-smoke-review.md) |
+| G6 v2v | skip | 竖屏样本已覆盖优先缺口；剩余预算保留，未再开火 |
 
 ---
 
@@ -91,10 +93,12 @@ secret-scan
 ## 6. 风险与遗留
 
 - secret-scan：本机 WindowsApps Python 为 stub；Docker/WSL 挂载失败 → **partial**，日间补跑
-- G6 R2-B/C / 9:16 / v2v 仍需老板授权后另开会话
+- R2-B 产品链（Sub2API usage_logs / 余额）未跑；仅上游 Google 签字
+- v2v 仍 skip
+- Form A 走内存 harness，**不写** dev DB `video_tasks` / 用户余额；上游火山账单仍真实扣费
 - 归档依赖 `result_url` 可下载 + media allowlist；失败仅打日志
 - 备份黄条依赖 data-management API；无权限时静默
-- 已加 image realsmoke 脚手架测试（默认 skip，启用后仍拒绝无授权调用）
+- **请老板立即废弃本次临时 Gemini Key**（Ark Key 已确认废弃）
 
 ---
 
@@ -105,24 +109,52 @@ secret-scan
 3. `75094c48` — feat(billing): company monthly budget cny progress  
 4. `69077a5d` — feat(video): archive succeeded results to local assets  
 5. `01ae4c3f` — feat(console): video preview and backup stale alert  
-6. （本收口）`docs: close out unified sweep gates`（含 lint 修复 + image smoke scaffold + 文档）
+6. `3a31cd1a` — docs: close out unified sweep gates  
+7. （待提交）Form A `SUB2API_SEEDANCE_SMOKE_ASPECT` + 本审查包 G6 收口
 
 ---
 
-## 9. G6 阻塞说明（真实付费）
+## 9. G6 真实付费（2026-07-09 授权续跑）
 
-**状态：`blocked`**
+**状态：`partial`（9:16 done；NB2 上游 done；产品链/v2v skip）**
 
-缺：
-1. 老板当面授权本轮真实付费调用（R2-B NB2 1 次 + 可选 R2-C / 9:16 / v2v）
-2. `production_authorized` 账号 + 已入库 Key（禁止读 `.env` 明文）
-3. 单次预算上限与停止条件
-4. 火山/Google 账单核对入口（人工）
+### 授权与停止条件
+| 项 | 值 |
+|----|-----|
+| 预算硬顶 | ¥50 CNY |
+| Key | 临时 Ark + 临时 Gemini（仅 env；**未**入库、**未**写入审查包） |
+| 开火 | ① Form A Seedance 5s 9:16 ② NB2 512 直连 Google 各 1 次 |
+| 停止 | 各单次成功后停；不跑 v2v / 更高档位 |
 
-授权后从 `CODEX_TASK_PRODUCTION_VERIFY.md` / 本审查包 G6 续跑；脚手架：`image_gateway_realsmoke_scaffold_test.go`（默认 skip）。
+### 验收（脱敏）— Seedance 9:16
+| 项 | 结果 |
+|----|------|
+| 路径 | Form A：`CreateTask` → budget gate → worker submit/poll → terminal |
+| 模型 | `doubao-seedance-2-0-260128` |
+| 规格 | 5s / 720p / **`ratio=9:16`** |
+| upstream_task_id | `cgt-20260709141516-ptcrw` |
+| status | `succeeded`（≈286s） |
+| tokens / 估费 | 108900 → **≈¥5.01** |
+
+### 验收（脱敏）— NB2 512
+| 项 | 结果 |
+|----|------|
+| 路径 | 直连 Google `generateContent`（**非** Sub2API 产品链） |
+| 模型 | `gemini-3.1-flash-image-preview` |
+| 规格 | 512 / 1:1 → `image/jpeg` ~111KB |
+| responseId | `zEFPat3DN6_sz7IP-NjMoQI` |
+| tokens / 估费 | 1208 → **$0.045 ≈¥0.32** |
+| 详情 | [2026-07-09-R2-B-image-smoke-review.md](./2026-07-09-R2-B-image-smoke-review.md) |
+
+### 预算
+累计估 ≈¥5.33；余量 ≈¥44.7。
+
+### 未做
+- NB2 经 Sub2API `/v1/messages` 的 usage_logs / 余额签字
+- v2v；NB2 1K/2K/4K 扩样
 
 ---
 
 ## 8. Verdict
 
-**partial / 内部可用** — 零成本运营闭环与成品归档已落地；真实付费签字证据（G6）停等老板授权。
+**partial / 内部可用** — 运营闭环已落地；Seedance 9:16 + NB2 上游付费签字 **done**；产品链图片计费与 v2v / secret-scan 仍为遗留。

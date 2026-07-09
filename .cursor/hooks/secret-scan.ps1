@@ -15,6 +15,18 @@ function Find-Python {
             return $cmd.Source
         }
     }
+    # Cursor hook shells may start before a fresh install refreshes PATH.
+    $local = [Environment]::GetFolderPath('LocalApplicationData')
+    foreach ($rel in @(
+        'Programs\Python\Python312\python.exe',
+        'Programs\Python\Python311\python.exe',
+        'Programs\Python\Python313\python.exe'
+    )) {
+        $path = Join-Path $local $rel
+        if (Test-Path -LiteralPath $path) {
+            return $path
+        }
+    }
     return $null
 }
 

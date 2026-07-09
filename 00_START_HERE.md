@@ -1,6 +1,6 @@
 # Sub2API START HERE
 
-Updated: 2026-07-05 Asia/Shanghai
+Updated: 2026-07-09 Asia/Shanghai
 
 ## North Star (唯一总规划真相源)
 
@@ -11,29 +11,26 @@ Updated: 2026-07-05 Asia/Shanghai
 
 Sub2API is the Wujie internal AI API / model scheduling / ledger middle layer. It is useful for internal decision evidence and controlled demos, not a public production platform.
 
-## Current Status (对齐北极星 V5.0 `#current-state` · 2026-07-05)
+## Current Status (对齐北极星 V5.0 · Unified Sweep 2026-07-09)
 
 - Branch: `wujie/video-capture-moat-20260702` · PR [#3726](https://github.com/Wei-Shaw/sub2api/pull/3726)
-- Admin console v2: `内部可用 / 可演示` — 总览 / 密钥库 / 成员与开卡 / 任务记录 / 系统（六导航）
-- Real Seedance + balance deduct: `内部可用` — R2-A（task #4, ¥5.0094, 108900 tokens）；审查包 `docs/superpowers/codex-handoff/deliverables/2026-07-05-R2-A-production-smoke-review.md`
-- Billing (LLM + image + video unify): `内部可用` — migrations 149–154；R2-B 图片冒烟、R2-C 3+3 扩样仍属 S1
-- Generation-content ledger: `内部可用` — `ai_generation_content` 在真实链路运行
-- Real paid calls: 按 `production_authorized` 账号级 gate + 老板逐 Key 授权；**未授权账号不得日常真实调用**
-- Codex 执行入口: `docs/superpowers/codex-handoff/CODEX_START_HERE.md` + `deliverables/`
+- Admin console v2: `内部可用 / 可演示` — 总览下钻、月预算进度、额度告警、备份超期提示
+- Real Seedance + balance deduct: `内部可用` — R2-A（task #4）；**R2-B/C 扩样仍 blocked（等授权）**
+- Billing: `内部可用` — migrations 149–155（含 `local_asset_*`）
+- Phase B 运营：卡额度告警 + 月预算 + 成品本地归档 + 采纳/周报（console 提示词 tab）已落地
+- 当前执行入口：`docs/superpowers/codex-handoff/CODEX_TASK_UNIFIED_SWEEP_20260709.md` · 审查包 `deliverables/2026-07-09-UNIFIED-SWEEP-review.md`
+- Real paid calls: 按 `production_authorized` + 老板逐 Key 授权；**未授权不得日常真实调用**
 
 ## Historical Evidence (追溯用 · 非当前规划入口)
 
-- Phase A' tiny real (已被 R2-A 超越): `_review/phase-a-prime-tiny-real_20260702/success_result.json`
-- G3 受控 dev mock: `_review/capture-arming-D2-20260702-G3/SUMMARY.md`
-- LOOP bug audit + fix (2026-07-04): `_review/LOOP_BUG_AUDIT_20260704/`, `_review/BUG_FIX_STATUS_20260704/VERIFY.md`
-- B2 webhook fix: `_review/B2_webhook_fix_20260704/`
-- MEGA final audit: `_review/MEGA_LOOP_FINAL_AUDIT_20260703/`
-- QCanvas B2 adoption bridge: QCanvas `docs/reviews/B2_adoption_20260704/`
+- Night Phase B: `deliverables/2026-07-09-NIGHT-PHASEB-review.md`
+- R2-A: `deliverables/2026-07-05-R2-A-production-smoke-review.md`
+- MLA DBug closeout: `deliverables/2026-07-08-MLA-DBUG-CLOSEOUT.md`
 
 ## Do Not Claim
 
 - Do not claim public production readiness or multi-tenant SaaS.
-- Do not claim real paid provider daily calls are generally authorized (only `production_authorized` accounts after boss Key approval).
+- Do not claim real paid provider daily calls are generally authorized.
 - Do not claim QCanvas S2 / root pnpm gates are solved.
 - Do not read or print `.env`, keys, tokens, cookies, or provider credentials.
 

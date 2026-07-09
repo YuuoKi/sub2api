@@ -127,9 +127,9 @@ func TestDashboardHandlerGetStatsIncludesMonthlyBudget(t *testing.T) {
 
 	var body struct {
 		Data struct {
-			MonthlyBudgetCNY           float64 `json:"monthly_budget_cny"`
-			MonthlySpendCNY            float64 `json:"monthly_spend_cny"`
-			MonthlyBudgetUsagePercent  float64 `json:"monthly_budget_usage_percent"`
+			MonthlyBudgetCNY          float64 `json:"monthly_budget_cny"`
+			MonthlySpendCNY           float64 `json:"monthly_spend_cny"`
+			MonthlyBudgetUsagePercent float64 `json:"monthly_budget_usage_percent"`
 		} `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
@@ -137,4 +137,3 @@ func TestDashboardHandlerGetStatsIncludesMonthlyBudget(t *testing.T) {
 	require.InDelta(t, 720.0, body.Data.MonthlySpendCNY, 0.01)
 	require.InDelta(t, 72.0, body.Data.MonthlyBudgetUsagePercent, 0.01)
 }
-

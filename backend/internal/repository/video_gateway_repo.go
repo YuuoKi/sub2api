@@ -584,7 +584,7 @@ func (r *videoGatewayRepository) ListExpiredLocalAssets(ctx context.Context, old
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	return scanVideoTaskRows(rows)
 }
 

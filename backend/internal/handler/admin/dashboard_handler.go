@@ -220,9 +220,9 @@ func (h *DashboardHandler) UpdateMonthlyBudget(c *gin.Context) {
 	}
 	budgetCNY, spendCNY, usagePct := h.monthlyBudgetSnapshot(c)
 	response.Success(c, gin.H{
-		"monthly_budget_cny":            budgetCNY,
-		"monthly_spend_cny":             spendCNY,
-		"monthly_budget_usage_percent":  usagePct,
+		"monthly_budget_cny":           budgetCNY,
+		"monthly_spend_cny":            spendCNY,
+		"monthly_budget_usage_percent": usagePct,
 	})
 }
 

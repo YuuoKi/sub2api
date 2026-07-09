@@ -7,7 +7,7 @@
 
 ---
 
-> **2026-07-09 UNIFIED SWEEP（当前执行）** — [CODEX_TASK_UNIFIED_SWEEP_20260709.md](./CODEX_TASK_UNIFIED_SWEEP_20260709.md) · 审查包 [2026-07-09-UNIFIED-SWEEP-review.md](./deliverables/2026-07-09-UNIFIED-SWEEP-review.md)。G0–G5 零成本/归档/月预算；G6 真实付费最后（无授权则 blocked）。基线 Night B `8e401f42`。
+> **2026-07-09 UNIFIED SWEEP：partial（G0–G5 done / G6 blocked）** — [CODEX_TASK_UNIFIED_SWEEP_20260709.md](./CODEX_TASK_UNIFIED_SWEEP_20260709.md) · 审查包 [2026-07-09-UNIFIED-SWEEP-review.md](./deliverables/2026-07-09-UNIFIED-SWEEP-review.md)。月预算、成品本地归档、总览下钻、采纳/周报、预览与备份告警已落地；真实付费冒烟停等授权。
 >
 > **2026-07-09 Night Phase B：done** — [CODEX_TASK_NIGHT_PHASEB_20260709.md](./CODEX_TASK_NIGHT_PHASEB_20260709.md) · 审查包 [2026-07-09-NIGHT-PHASEB-review.md](./deliverables/2026-07-09-NIGHT-PHASEB-review.md)。B1 adoption 员工 Key 401 已修（`POST /v1/generation-content/:task_id/adoption`）；B2 卡额度 80/100% 告警；B3 结果链接过期提示（无对象存储转存）。commits：`3541f7b6` / `d44a7e07` / `c2bcf727` + docs closeout。无人值守：未 push。
 >

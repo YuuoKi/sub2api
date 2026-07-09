@@ -71,7 +71,7 @@ func (s *VideoGatewayService) ArchiveSucceededVideoResult(ctx context.Context, t
 		slog.Warn("video asset archive download failed", "task_id", task.ID, "error", err.Error())
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		slog.Warn("video asset archive bad status", "task_id", task.ID, "status", resp.StatusCode)
 		return

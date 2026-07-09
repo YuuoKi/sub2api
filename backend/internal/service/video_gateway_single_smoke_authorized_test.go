@@ -135,6 +135,116 @@ func TestSingleSmokeAuthorizedSetViaUpdateProvider(t *testing.T) {
 // TestSingleSmokeAuthorizedAcceptsStringForm proves the gate tolerates the metadata value
 // arriving as the JSON string "true"/"1" (admin tooling / DB JSON round-trips), not only a
 // native bool — so the write script works regardless of how the value is serialized.
+func TestVideoProviderMetadataScrubsCredentialLikeKeysOnCreate(t *testing.T) {
+	ctx := context.Background()
+	repo := newMemoryVideoGatewayRepo()
+	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, nil)
+
+	created, err := svc.CreateProviderAccount(ctx, VideoProviderCreateParams{
+		Provider:     VideoProviderKling,
+		DisplayName:  "Kling Metadata Scrub",
+		Enabled:      true,
+		AccessKey:    "real-ak-stored-only-in-encrypted-blob",
+		SecretKey:    "real-sk-stored-only-in-encrypted-blob",
+		DefaultModel: "kling-v1",
+		Metadata: map[string]any{
+			"single_smoke_authorized": true,
+			"real_smoke_authorized":   true,
+			"production_authorized":   true,
+			"note":                    "kept",
+			"access_key":              "metadata-ak-leak",
+			"secret_key":              "metadata-sk-leak",
+			"api_key":                 "metadata-api-leak",
+			"jwt":                     "metadata-jwt-leak",
+			"authorization":           "Bearer metadata-auth-leak",
+			"credentials": map[string]any{
+				"token": "metadata-token-leak",
+			},
+			"nested": map[string]any{
+				"safe_note": "kept-nested",
+				"password":  "metadata-password-leak",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("create provider: %v", err)
+	}
+
+	stored, err := svc.GetProviderAccount(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("get provider: %v", err)
+	}
+	if !metadataBool(stored.Metadata, "single_smoke_authorized") ||
+		!metadataBool(stored.Metadata, "real_smoke_authorized") ||
+		!metadataBool(stored.Metadata, "production_authorized") {
+		t.Fatalf("expected authorization metadata to survive scrub, got %#v", stored.Metadata)
+	}
+	if stored.Metadata["note"] != "kept" {
+		t.Fatalf("expected safe metadata to survive scrub, got %#v", stored.Metadata)
+	}
+	if containsSecretField(stored.Metadata) || strings.Contains(fmtAny(stored.Metadata), "metadata-") {
+		t.Fatalf("metadata scrub left credential-like data: %#v", stored.Metadata)
+	}
+	if raw := repo.providers[created.ID]; raw == nil || containsSecretField(raw.Metadata) || strings.Contains(fmtAny(raw.Metadata), "metadata-") {
+		t.Fatalf("stored provider metadata scrub left credential-like data: %#v", raw)
+	}
+}
+
+func TestVideoProviderMetadataScrubsCredentialLikeKeysOnUpdate(t *testing.T) {
+	ctx := context.Background()
+	repo := newMemoryVideoGatewayRepo()
+	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, nil)
+
+	created, err := svc.CreateProviderAccount(ctx, VideoProviderCreateParams{
+		Provider:     VideoProviderSeedance,
+		DisplayName:  "Seedance Metadata Scrub",
+		Enabled:      true,
+		APIKey:       "seedance-key-stored-only-in-encrypted-field",
+		DefaultModel: "doubao-seedance-2-0-260128",
+	})
+	if err != nil {
+		t.Fatalf("create provider: %v", err)
+	}
+
+	metadata := map[string]any{
+		"single_smoke_authorized": true,
+		"production_authorized":   true,
+		"reason":                  "internal approval",
+		"token":                   "metadata-token-leak",
+		"credential": map[string]any{
+			"secret": "metadata-secret-leak",
+		},
+	}
+	updated, err := svc.UpdateProviderAccount(ctx, created.ID, VideoProviderUpdateParams{
+		Metadata: &metadata,
+	})
+	if err != nil {
+		t.Fatalf("update provider: %v", err)
+	}
+
+	if !metadataBool(updated.Metadata, "single_smoke_authorized") ||
+		!metadataBool(updated.Metadata, "production_authorized") {
+		t.Fatalf("expected authorization metadata to survive scrub, got %#v", updated.Metadata)
+	}
+	if updated.Metadata["reason"] != "internal approval" {
+		t.Fatalf("expected safe metadata to survive scrub, got %#v", updated.Metadata)
+	}
+	if containsSecretField(updated.Metadata) || strings.Contains(fmtAny(updated.Metadata), "metadata-") {
+		t.Fatalf("metadata scrub left credential-like data: %#v", updated.Metadata)
+	}
+
+	stored, err := svc.GetProviderAccount(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("get provider: %v", err)
+	}
+	if containsSecretField(stored.Metadata) || strings.Contains(fmtAny(stored.Metadata), "metadata-") {
+		t.Fatalf("stored metadata scrub left credential-like data: %#v", stored.Metadata)
+	}
+	if raw := repo.providers[created.ID]; raw == nil || containsSecretField(raw.Metadata) || strings.Contains(fmtAny(raw.Metadata), "metadata-") {
+		t.Fatalf("stored provider metadata scrub left credential-like data: %#v", raw)
+	}
+}
+
 func TestSingleSmokeAuthorizedAcceptsStringForm(t *testing.T) {
 	for _, v := range []any{true, "true", "1", "yes"} {
 		acc := &VideoProviderAccount{Metadata: map[string]any{"single_smoke_authorized": v}}

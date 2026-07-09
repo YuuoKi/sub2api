@@ -101,3 +101,36 @@ QCanvas 侧 Kling 静态路径（KX-F）成立，但用户指定的 `@tapcanvas/
 
 5. **上线前替换 Kling 占位价表。**  
    `kling-video-2026-07` 当前是 provisional rate，不可直接用于真实成本对账。
+
+## 8. Fix follow-up - 2026-07-10
+
+**Updated verdict:** `pass_with_findings`.
+
+This section supersedes the two Important findings above for the current working tree. The paid Kling smoke remains **blocked: awaiting AK/SK** and was not run.
+
+### Fixed / no longer reproduces
+
+| Item | Current status | Evidence |
+|---|---|---|
+| Sub2API admin `metadata_json` credential leakage | fixed | `backend/internal/service/video_gateway_service.go` now scrubs credential-like metadata keys before provider create/update persistence and defensively before provider responses. Regression coverage added in `backend/internal/service/video_gateway_single_smoke_authorized_test.go`. Focused red test failed before the fix with `access_key`, `secret_key`, `api_key`, `jwt`, `authorization`, `token`, `credential` retained; it passes after the fix. |
+| QCanvas required web gate | no longer reproduces in current QCanvas worktree | `pnpm --filter @tapcanvas/web test -- _test/unit/studioV2RealTaskAdapter.test.ts _test/unit/studioV2ShellMockRealWiring.test.ts` now passes: 93 files, 538 tests. No QCanvas source edit was needed in this fix pass. |
+
+### Commands rerun after fix
+
+| Command | Result |
+|---|---|
+| `go test -tags=unit ./internal/service/ -run "TestVideoProviderMetadataScrubsCredentialLikeKeys" -count=1` | pass: `ok github.com/Wei-Shaw/sub2api/internal/service 5.569s` |
+| `go test -tags=unit ./internal/service/ -run "Metadata\|Kling\|kling\|SingleSmoke\|ProviderKey" -count=1` | pass: `ok github.com/Wei-Shaw/sub2api/internal/service 5.252s` |
+| `go test -tags=unit ./internal/server/routes/ -run "Kling\|VideoGateway" -count=1` | pass: `ok github.com/Wei-Shaw/sub2api/internal/server/routes 4.902s` |
+| `rg -n "KLING_REAL_CALL_DISABLED\|KLING_REAL_POLL_DISABLED\|kling is disabled in API-key" --glob "*.go"` | pass: no matches |
+| `pnpm --filter @tapcanvas/web test -- _test/unit/studioV2RealTaskAdapter.test.ts _test/unit/studioV2ShellMockRealWiring.test.ts` | pass: 93 files, 538 tests |
+| `pnpm --filter @tapcanvas/api test -- src/modules/sub2api/sub2api.video-mock-gateway.service.test.ts src/modules/sub2api/sub2api.routes.test.ts` | pass: 2 files, 66 tests; stderr contains expected negative-path logs from tests |
+| `rg -n "127.0.0.1:7781" apps/web/src/ui/studio-v2` | pass: no matches |
+
+### Files changed by this fix pass
+
+- `backend/internal/service/video_gateway_service.go`
+- `backend/internal/service/video_gateway_single_smoke_authorized_test.go`
+- `docs/superpowers/codex-handoff/deliverables/2026-07-10-KLING-REAL-CROSSCHECK-review.md`
+
+No commit and no push were performed.

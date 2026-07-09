@@ -44,8 +44,18 @@ func TestIsImageGenerationModel_CaseInsensitive(t *testing.T) {
 func TestExtractImageSize_ValidSizes(t *testing.T) {
 	svc := &AntigravityGatewayService{}
 
+	// NB2 official "512" → billing tier 0.5K
+	body := []byte(`{"generationConfig":{"imageConfig":{"imageSize":"512"}}}`)
+	require.Equal(t, "0.5K", svc.extractImageSize(body))
+
+	body = []byte(`{"imageConfig":{"imageSize":"512px"}}`)
+	require.Equal(t, "0.5K", svc.extractImageSize(body))
+
+	body = []byte(`{"generationConfig":{"imageConfig":{"imageSize":"0.5K"}}}`)
+	require.Equal(t, "0.5K", svc.extractImageSize(body))
+
 	// 1K
-	body := []byte(`{"generationConfig":{"imageConfig":{"imageSize":"1K"}}}`)
+	body = []byte(`{"generationConfig":{"imageConfig":{"imageSize":"1K"}}}`)
 	require.Equal(t, "1K", svc.extractImageSize(body))
 
 	// 2K

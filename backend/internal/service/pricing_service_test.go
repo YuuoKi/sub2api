@@ -156,6 +156,30 @@ func TestGetModelPricing_ImageModelDoesNotFallbackToTextModel(t *testing.T) {
 	require.Same(t, imagePricing, got)
 }
 
+func TestGetModelPricing_GptImage2FallsBackToGptImage15Then1(t *testing.T) {
+	image15 := &LiteLLMModelPricing{OutputCostPerImageToken: 3.2e-5}
+	image1 := &LiteLLMModelPricing{OutputCostPerImageToken: 4e-5}
+
+	// Prefer gpt-image-1.5 when gpt-image-2 is absent.
+	svc := &PricingService{
+		pricingData: map[string]*LiteLLMModelPricing{
+			"gpt-image-1.5": image15,
+			"gpt-image-1":   image1,
+		},
+	}
+	got := svc.GetModelPricing("gpt-image-2")
+	require.Same(t, image15, got)
+
+	// Then gpt-image-1 when 1.5 is also absent.
+	svc = &PricingService{
+		pricingData: map[string]*LiteLLMModelPricing{
+			"gpt-image-1": image1,
+		},
+	}
+	got = svc.GetModelPricing("gpt-image-2")
+	require.Same(t, image1, got)
+}
+
 func TestParsePricingData_PreservesPriorityAndServiceTierFields(t *testing.T) {
 	raw := map[string]any{
 		"gpt-5.4": map[string]any{

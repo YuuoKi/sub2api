@@ -215,11 +215,12 @@ func (a *seedanceVideoAdapter) CreateTask(ctx context.Context, account *VideoPro
 		payload["negative_prompt"] = task.NegativePrompt
 	}
 	// Explicitly send generation parameters so the smoke/production gate duration
-	// is applied upstream instead of relying on Ark defaults. The create payload
-	// field names (`duration`, `resolution`, `ratio`) are covered by local snapshot
+	// is applied upstream instead of relying on Ark defaults. Seedance 2.0 treats
+	// duration=-1 as "auto"; omit only when unset (0). The create payload field
+	// names (`duration`, `resolution`, `ratio`) are covered by local snapshot
 	// tests and archived Ark-shaped fixtures; whether `ratio:9:16` yields the
 	// intended portrait clip still needs one real paid confirmation.
-	if task.Duration > 0 {
+	if task.Duration != 0 {
 		payload["duration"] = task.Duration
 	}
 	if task.Resolution != "" {

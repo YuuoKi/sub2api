@@ -1,48 +1,70 @@
 # Image Gateway Contract
 
-> 鐘舵€侊細鍐呴儴鍙敤 / 寰呭鏍? 
-> 閫傜敤鏂癸細QCanvas / TapCanvas / 鏈潵鍐呴儴鎺ュ叆鏂? 
-> 鏈€鍚庢洿鏂帮細2026-07-05  
-> 鍏宠仈浠诲姟涔︼細`docs/superpowers/codex-handoff/CODEX_TASK_API_CONTRACT.md`銆乣docs/superpowers/codex-handoff/CODEX_TASK_BILLING.md`
+> Status: internal / ready for integrators  
+> Audience: QCanvas / TapCanvas / future internal clients  
+> Last updated: 2026-07-09  
+> Related: `docs/superpowers/codex-handoff/CODEX_TASK_API_CONTRACT.md`, `docs/superpowers/codex-handoff/CODEX_TASK_BILLING.md`
 
-鏈枃妗ｅ浐鍖?Sub2API 鍥剧墖鐢熸垚/缂栬緫閫氶亾濂戠害锛岄噸鐐硅鐩?Gemini 3.1 Flash Image Preview锛屼篃灏辨槸浠诲姟涔︿腑鐨?Nano Banana 2銆?
-## 1. 绔偣
+This document freezes Sub2API image generation/edit contracts for:
 
-| 鍦烘櫙 | Method | Path | Auth | 璇存槑 |
-|------|--------|------|------|------|
-| Claude messages 鍏煎璺緞 | POST | `/v1/messages` | `Authorization: Bearer <api-key>` | 鎺ュ叆鏂圭敤 Claude 鏍煎紡鍙?Gemini 鍥剧墖鐢熸垚/缂栬緫璇锋眰銆?|
-| Gemini 鍘熺敓璺緞 | POST | `/v1beta/models/{model}:generateContent` | `Authorization: Bearer <api-key>` | Gemini SDK/CLI 鐩磋繛锛屽師鐢?`generateContent` 閫忎紶銆?|
-| OpenAI Images 璺緞 | POST | `/v1/images/generations` | `Authorization: Bearer <api-key>` | OpenAI 骞冲彴缁勪娇鐢紝闈炴湰 NB2 濂戠害閲嶇偣銆?|
-| OpenAI Images Edit 璺緞 | POST | `/v1/images/edits` | `Authorization: Bearer <api-key>` | OpenAI 骞冲彴缁勪娇鐢紝闈炴湰 NB2 濂戠害閲嶇偣銆?|
+- **Nano Banana 2 (NB2)** = `gemini-3.1-flash-image-preview`
+- **GPT Image 2** = `gpt-image-2`
 
-`/v1/messages` 浼氭寜 API key 鎵€灞炲垎缁勫钩鍙拌矾鐢便€侴emini 鍥剧墖鑳藉姏瑕佹眰鍒嗙粍鍏佽鍥剧墖鐢熸垚锛屼笖妯″瀷/璇锋眰琚瘑鍒负鍥剧墖鎰忓浘銆?
-## 2. `/v1/messages` 璇锋眰 Schema
+## Official alignment (this round)
 
-鍏煎 Claude messages 涓讳綋锛屽苟鍏佽鍥剧墖鐢熸垚閰嶇疆浠庨《灞傛垨 `generationConfig` 閫忎紶鍒?Gemini锛?
-| 瀛楁 | 绫诲瀷 | 蹇呭～ | 璇存槑 |
-|------|------|------|------|
-| `model` | string | 鏄?| 鎺ㄨ崘 `gemini-3.1-flash-image-preview`銆?|
-| `max_tokens` | number | 鏄?| Claude 鍏煎瀛楁銆?|
-| `messages` | array | 鏄?| Claude messages 鏁扮粍銆?|
-| `imageConfig` | object | 鍚?| 鍏煎椤跺眰鍐欐硶锛屼細杞负 Gemini `generationConfig.imageConfig`銆?|
-| `generationConfig.imageConfig` | object | 鍚?| 鍘熺敓鍐欐硶锛岄€忎紶鍒?Gemini銆?|
-| `responseModalities` | array | 鍚?| 鍏煎椤跺眰鍐欐硶锛屼細杞负 Gemini `generationConfig.responseModalities`銆傚浘鐗囩敓鎴愬簲浼?`["TEXT", "IMAGE"]`銆?|
-| `generationConfig.responseModalities` | array | 鍚?| 鍘熺敓鍐欐硶锛岄€忎紶鍒?Gemini銆?|
-| `stream` | bool | 鍚?| streaming 涓?non-streaming 閮戒細鎸夊搷搴?`inlineData` 缁熻鍥剧墖寮犳暟銆?|
+| Surface | Preferred path | Official contract notes |
+|---------|----------------|-------------------------|
+| NB2 | **`POST /v1/messages`** (Claude-compat → Gemini) and native **`POST /v1beta/models/{model}:generateContent`** | Pass through `imageConfig` / `responseModalities`; official `imageSize` values `"512"` / `"1K"` / `"2K"` / `"4K"`; billing normalizes `"512"` → `0.5K`; retain `thoughtSignature` across image-edit rounds (clean only on account switch / binding loss). |
+| GPT Image 2 | **`POST /v1/images/generations`** and **`POST /v1/images/edits`** | Model id `gpt-image-2` is in OpenAI default model constants. OpenAI bills **token-based** (not a flat per-image list price). Packaged pricing includes a `gpt-image-2` entry; if that key is missing at runtime, pricing lookup falls back **`gpt-image-2` → `gpt-image-1.5` → `gpt-image-1`**. |
+| Jimeng / 即梦 | **Not in Sub2API this round** | Out of scope for the dual-surface alignment pass; do not assume a Sub2API route. |
+
+Kling / 可灵 video remains disabled/skeleton this round (see video contract / integration guide). LLM productization is out of scope here.
+
+## 1. Endpoints
+
+| Scenario | Method | Path | Auth | Notes |
+|----------|--------|------|------|-------|
+| Claude messages compat (NB2 preferred) | POST | `/v1/messages` | `Authorization: Bearer <api-key>` | Claude-shaped body; Gemini image gen/edit via platform routing. |
+| Gemini native (NB2) | POST | `/v1beta/models/{model}:generateContent` | `Authorization: Bearer <api-key>` | Native Gemini SDK/CLI passthrough. |
+| OpenAI Images (GPT Image 2) | POST | `/v1/images/generations` | `Authorization: Bearer <api-key>` | OpenAI platform group. |
+| OpenAI Images Edit (GPT Image 2) | POST | `/v1/images/edits` | `Authorization: Bearer <api-key>` | OpenAI platform group. |
+
+`/v1/messages` routes by the API key's group platform. Gemini image capability requires the group to allow image generation and the model/request to be recognized as image intent.
+
+## 2. `/v1/messages` request schema (NB2)
+
+Compatible with Claude messages, with image generation config accepted at the top level or under `generationConfig` and mapped into Gemini `generationConfig`:
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `model` | string | yes | Prefer `gemini-3.1-flash-image-preview`. |
+| `max_tokens` | number | yes | Claude-compat field. |
+| `messages` | array | yes | Claude messages array. |
+| `imageConfig` | object | no | Top-level compat; mapped to Gemini `generationConfig.imageConfig`. |
+| `generationConfig.imageConfig` | object | no | Native shape; passed through to Gemini. |
+| `responseModalities` | array | no | Top-level compat; mapped to Gemini `generationConfig.responseModalities`. Image gen should send `["TEXT", "IMAGE"]`. |
+| `generationConfig.responseModalities` | array | no | Native shape; passed through to Gemini. |
+| `stream` | bool | no | Streaming and non-streaming both count images from response `inlineData`. |
 
 ### imageConfig
 
-| 瀛楁 | 绫诲瀷 | 蹇呭～ | 璇存槑 |
-|------|------|------|------|
-| `aspectRatio` | string | 鍚?| 鏀寔 `1:1`銆乣3:2`銆乣2:3`銆乣3:4`銆乣4:3`銆乣4:5`銆乣5:4`銆乣9:16`銆乣16:9`銆乣21:9`銆乣1:4`銆乣4:1`銆乣1:8`銆乣8:1`銆乣9:21`銆?|
-| `imageSize` | string | 鍚?| Gemini 瀹樻柟鍊间负 `"512"` / `"1K"` / `"2K"` / `"4K"`銆傚缓璁皟鐢ㄦ柟鎸夎繖涓ぇ灏忓啓浼犮€?|
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `aspectRatio` | string | no | Supported: `1:1`, `3:2`, `2:3`, `3:4`, `4:3`, `4:5`, `5:4`, `9:16`, `16:9`, `21:9`, `1:4`, `4:1`, `1:8`, `8:1`, `9:21`, … |
+| `imageSize` | string | no | Official Gemini values: `"512"` / `"1K"` / `"2K"` / `"4K"`. Callers should send these as-is. |
 
-璁¤垂褰掍竴鍖栵細
+Billing normalization:
 
-- `"512"`銆乣"512px"`銆乣"0.5K"` 浼氬綊涓€涓?`0.5K`銆?- `"1K"` / `"1024px"` 褰掍竴涓?`1K`銆?- `"2K"` / `"2048px"` 褰掍竴涓?`2K`銆?- `"4K"` / `"4096px"` 褰掍竴涓?`4K`銆?- 鏈煡鍊奸粯璁ゆ寜 `2K` 璁¤垂骞惰褰?warning銆?
-### 鍥剧墖杈撳叆
+- `"512"`, `"512px"`, `"0.5K"` → `0.5K`
+- `"1K"` / `"1024px"` → `1K`
+- `"2K"` / `"2048px"` → `2K`
+- `"4K"` / `"4096px"` → `4K`
+- Unknown values default to `2K` billing with a warning log
 
-Claude content block 鏀寔锛?
+### Image input
+
+Claude content blocks support base64:
+
 ```json
 {
   "type": "image",
@@ -54,7 +76,8 @@ Claude content block 鏀寔锛?
 }
 ```
 
-涔熸敮鎸?URL source锛屽苟杞负 Gemini `fileData`锛?
+URL sources are also supported and converted to Gemini `fileData`:
+
 ```json
 {
   "type": "image",
@@ -66,10 +89,11 @@ Claude content block 鏀寔锛?
 }
 ```
 
-URL source 蹇呴』閫氳繃 SSRF/allowlist 鏍￠獙銆侴emini 鍗曟鏈€澶?14 寮犲弬鑰冨浘锛屾帴鍏ユ柟搴斿湪鍓嶇鍏堝仛鏁伴噺闄愬埗銆?
-媒体 URL allowlist 统一优先读取 `SUB2API_MEDIA_URL_ALLOWLIST`；未配置时兼容 fallback 到旧 `SUB2API_VIDEO_URL_ALLOWLIST`。图片和视频共用这一组素材域名控制。
+URL sources must pass SSRF/allowlist checks. Gemini allows up to 14 reference images per request; integrators should enforce limits client-side.
 
-## 3. `/v1/messages` 璇锋眰绀轰緥
+Media URL allowlist prefers `SUB2API_MEDIA_URL_ALLOWLIST`; if unset, falls back to legacy `SUB2API_VIDEO_URL_ALLOWLIST`. Image and video share this allowlist.
+
+## 3. `/v1/messages` example
 
 ```json
 {
@@ -99,7 +123,7 @@ URL source 蹇呴』閫氳繃 SSRF/allowlist 鏍￠獙銆侴emini 鍗曟鏈�
 }
 ```
 
-Sub2API 杞粰 Gemini 鐨勫叧閿粨鏋勶細
+Key structure forwarded to Gemini:
 
 ```json
 {
@@ -127,11 +151,12 @@ Sub2API 杞粰 Gemini 鐨勫叧閿粨鏋勶細
 }
 ```
 
-## 4. Gemini 鍘熺敓璺緞
+## 4. Gemini native path (`/v1beta`)
 
 `POST /v1beta/models/{model}:generateContent`
 
-鎺ュ叆鏂瑰彲鐩存帴浼?Gemini 鍘熺敓 body銆係ub2API 鍘熺敓璺緞淇濈暀 `thoughtSignature`锛屽苟鍙湪璐﹀彿鍒囨崲/缁戝畾缂哄け绛夐渶瑕侀噸璇曟仮澶嶆椂娓呯悊鏃х鍚嶃€?
+Integrators may send a native Gemini body. Sub2API keeps `thoughtSignature` for multi-turn image edit continuity, and only replaces/cleans signatures when sticky-session account switch or binding loss requires a retry recovery.
+
 ```json
 {
   "contents": [
@@ -152,35 +177,72 @@ Sub2API 杞粰 Gemini 鐨勫叧閿粨鏋勶細
 }
 ```
 
-澶氳疆缂栬緫娉ㄦ剰锛?
-- 鍝嶅簲閲岀殑 `thoughtSignature` 鏄?Gemini 浼氳瘽杩炵画鎬х殑涓€閮ㄥ垎銆?- 瀹㈡埛绔笅涓€杞簲鍘熸牱甯﹀洖鐩稿叧 signed parts銆?- Sub2API 鐨勭┖ part 杩囨护涓嶄細鍒犻櫎鍥剧墖/鎬濊€冪鍚?part銆?
-## 5. 鍝嶅簲涓庡浘鐗囪鏁?
-Gemini 鍥剧墖杈撳嚭浠ュ搷搴斾腑鐨?`inlineData` 鍥剧墖 part 涓哄噯銆係ub2API 璁¤垂涓嶄細鍥哄畾鍐欐 1 寮狅紝鑰屾槸缁熻瀹為檯杩斿洖鐨勫浘鐗?part 鏁帮細
+Multi-turn edit notes:
 
-- non-streaming锛氱粺璁℃渶缁?JSON body 涓殑 `inlineData` 鍥剧墖 part銆?- streaming锛氭寜娴佸紡鍝嶅簲鑱氬悎缁熻 `inlineData` 鍥剧墖 part銆?- native 涓?`/v1/messages` 鍏煎璺緞閮戒娇鐢ㄥ悓涓€璁℃暟璇箟銆?
-鎺ュ叆鏂规嬁鍒板搷搴斿悗锛屽簲鎸変笂娓稿崗璁В鏋?`content` / `parts` / `inlineData`锛屼笉瑕佸亣璁炬瘡娆″彧杩斿洖涓€寮犲浘銆?
-## 6. 閿欒鐮佽〃
+- Response `thoughtSignature` is part of Gemini session continuity.
+- Clients must echo related signed parts on the next turn.
+- Empty-part filtering does **not** drop image/thought-signature parts.
 
-| HTTP | type / reason | 瑙﹀彂鏉′欢 |
-|------|---------------|----------|
-| 400 | `invalid_request_error` 鎴?`VALIDATION_ERROR` | JSON 鏃犳晥銆佸瓧娈电被鍨嬩笉鍖归厤銆佷笂娓告嫆缁濊姹傘€?|
-| 400 | URL 鏍￠獙閿欒 | URL source 鏈€氳繃 SSRF/allowlist 鏍￠獙銆?|
-| 403 | `permission_error` | 鍒嗙粍涓嶅厑璁稿浘鐗囩敓鎴愭垨妯″瀷鑼冨洿涓嶅厑璁搞€?|
-| 404 | `not_found_error` | 闈?OpenAI 骞冲彴璋冪敤 `/v1/images/*`锛屾垨涓嶆敮鎸佺殑 endpoint銆?|
-| 429 | `rate_limit_error` | 鍥剧墖骞跺彂妲戒綅鑰楀敖鎴栦笂娓搁檺娴併€?|
-| 502/503 | upstream error | 涓婃父涓嶅彲鐢ㄣ€佽秴鏃舵垨鍝嶅簲瑙ｆ瀽澶辫触銆?|
+## 5. GPT Image 2 (`/v1/images/*`)
 
-## 7. 璁¤垂璇存槑
+Use OpenAI Images endpoints with model `gpt-image-2` (also listed in Sub2API OpenAI default models).
 
-Nano Banana 2 妯″瀷锛歚gemini-3.1-flash-image-preview`銆?
-| imageSize | 褰掍竴妗ｄ綅 | 鏍囧噯姣忓浘浠锋牸 |
-|-----------|----------|--------------|
+- Generations: `POST /v1/images/generations`
+- Edits: `POST /v1/images/edits`
+
+Pricing notes:
+
+- Official OpenAI GPT Image 2 billing is **token-based** (text input / image input / image output tokens).
+- Packaged LiteLLM-style table includes `gpt-image-2` token rates for lookup.
+- If `gpt-image-2` is absent from the loaded price table, `GetModelPricing` falls back in order: **`gpt-image-2` → `gpt-image-1.5` → `gpt-image-1`** (never to a text chat model).
+- Channel/group image overrides still win when configured.
+
+## 6. Response and image counting (NB2)
+
+Gemini image output is counted from `inlineData` image parts. Sub2API does not hard-code 1 image; it counts actual returned image parts:
+
+- non-streaming: count `inlineData` image parts in the final JSON body
+- streaming: aggregate `inlineData` image parts across the stream
+- native and `/v1/messages` compat share the same counting semantics
+
+Integrators should parse `content` / `parts` / `inlineData` per upstream contract and must not assume a single image per response.
+
+## 7. Error codes
+
+| HTTP | type / reason | When |
+|------|---------------|------|
+| 400 | `invalid_request_error` or `VALIDATION_ERROR` | Invalid JSON, field type mismatch, upstream rejection |
+| 400 | URL validation error | URL source failed SSRF/allowlist checks |
+| 403 | `permission_error` | Group disallows image generation or model not allowed |
+| 404 | `not_found_error` | Non-OpenAI platform calling `/v1/images/*`, or unsupported endpoint |
+| 429 | `rate_limit_error` | Image concurrency slot exhausted or upstream rate limit |
+| 502/503 | upstream error | Upstream unavailable, timeout, or response parse failure |
+
+## 8. NB2 billing
+
+Model: `gemini-3.1-flash-image-preview`
+
+| imageSize | Normalized tier | Standard price / image |
+|-----------|-----------------|------------------------|
 | `512` | `0.5K` | `$0.045` |
 | `1K` | `1K` | `$0.067` |
 | `2K` | `2K` | `$0.101` |
 | `4K` | `4K` | `$0.151` |
 
-鍏朵粬璁¤垂瑙勫垯锛?
-- 鏂囨湰/鍥剧墖杈撳叆锛歚$0.50 / 1M tokens`銆?- 鏂囨湰杈撳嚭锛歚$3.00 / 1M tokens`銆?- 鍥剧墖杈撳嚭锛歚$60.00 / 1M image tokens`锛屼唬鐮佷晶鎸変笂琛ㄦ瘡鍥句环钀借处銆?- `usage_logs.media_type` 鍦ㄥ浘鐗囦换鍔′腑鍐欎负 `image`銆?- `usage_logs.image_count` 涓哄疄闄呰緭鍑哄浘鐗囨暟銆?- `total_cost` 涓烘ā鍨嬪師濮嬫垚鏈紱`actual_cost` 浼氫箻鐢ㄦ埛/鍒嗙粍 rate銆俙rate=1` 鏃朵袱鑰呯浉鍚屻€?
-## 8. 鎺ュ叆鏂规敞鎰?
-- 鍥剧墖灏哄閫夋嫨鍣ㄥ缓璁彧缁?`512`銆乣1K`銆乣2K`銆乣4K` 鍥涙。锛岄伩鍏嶆湭鐭ュ€兼寜 `2K` 鍏滃簳璁¤垂銆?- 澶氬浘杈撳嚭瑕佹寜瀹為檯 `inlineData` 鏁板睍绀轰笌涓嬭浇銆?- 澶氳疆缂栬緫蹇呴』淇濆瓨骞跺洖浼?`thoughtSignature`锛屽惁鍒欎笂娓稿彲鑳芥嫆缁濆悗缁姹傘€?- URL 鍥剧墖杈撳叆浼氳蛋 SSRF/allowlist 鏍￠獙锛涚敓浜ф帴鍏ュ墠闇€瑕佺‘璁ょ礌鏉?CDN 鍩熷悕宸叉斁琛屻€?
+Other rules:
+
+- Text/image input: `$0.50 / 1M tokens`
+- Text output: `$3.00 / 1M tokens`
+- Image output token rate: `$60.00 / 1M image tokens` (code path bills per-image table above)
+- `usage_logs.media_type` = `image` for image jobs
+- `usage_logs.image_count` = actual output image count
+- `total_cost` is model raw cost; `actual_cost` applies user/group rate (`rate=1` → equal)
+
+## 9. Integrator checklist
+
+- Size pickers should expose only `512` / `1K` / `2K` / `4K` to avoid unknown → `2K` billing fallback.
+- Multi-image outputs must be displayed/downloaded by actual `inlineData` count.
+- Multi-turn edits must preserve and return `thoughtSignature`, or upstream may reject follow-ups.
+- URL image inputs go through SSRF/allowlist; confirm product CDN hosts are allowlisted before production.
+- Prefer NB2 via `/v1/messages` or `/v1beta`; prefer GPT Image 2 via `/v1/images/*`.
+- Do not expect Jimeng/即梦 on Sub2API in this round.

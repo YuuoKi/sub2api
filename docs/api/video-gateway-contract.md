@@ -116,6 +116,8 @@
 - 正式账号：`provider_account.metadata.production_authorized=true`。仍必须满足全局真实调用 env gate、脱敏事件日志、显式 Seedance model、媒体 URL allowlist；但跳过 1..5 秒 smoke 上限，按 Seedance 契约使用 `-1` 或 `4..15` 秒。
 - API-key `/v1/video/tasks`：`provider:"seedance"` 且不带 `trial_mode` 时走正式路径，要求 `provider_account.metadata.production_authorized=true`；`trial_mode:"tiny_real"` 仍走每日 1 次试跑 gate。
 - 媒体 URL allowlist 优先读取 `SUB2API_MEDIA_URL_ALLOWLIST`，未配置时 fallback 到旧 `SUB2API_VIDEO_URL_ALLOWLIST`。
+- `duration=-1`（自动时长）会**显式**写入 Ark create payload 的 `duration` 字段，不再省略；`duration=0` / 未设置才省略该字段。
+- `provider:"kling"`：本轮 API-key 视频网关保持 **disabled / skeleton**（不可真实调用）。可灵为下轮必接项，勿当作当前可用能力。
 
 智能画布通过 `/v1/video/tasks` 调正式 Seedance 的当前请求示例：
 

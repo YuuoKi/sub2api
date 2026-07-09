@@ -4063,21 +4063,42 @@ func (s *AntigravityGatewayService) handleClaudeStreamingResponse(c *gin.Context
 	}
 }
 
-// extractImageSize 从 Gemini 请求中提取 image_size 参数
+// extractImageSize 从 Gemini 请求中提取 image_size 参数。
+// 官方 NB2 imageSize 含 "512" / "1K" / "2K" / "4K"；计费归一为 0.5K/1K/2K/4K。
 func (s *AntigravityGatewayService) extractImageSize(body []byte) string {
-	var req antigravity.GeminiRequest
+	type imageConfigPayload struct {
+		ImageSize string `json:"imageSize"`
+	}
+	var req struct {
+		GenerationConfig *struct {
+			ImageConfig *imageConfigPayload `json:"imageConfig"`
+		} `json:"generationConfig"`
+		ImageConfig *imageConfigPayload `json:"imageConfig"`
+	}
 	if err := json.Unmarshal(body, &req); err != nil {
-		return "2K" // 默认 2K
+		return "2K"
 	}
 
+	imageConfig := req.ImageConfig
 	if req.GenerationConfig != nil && req.GenerationConfig.ImageConfig != nil {
-		size := strings.ToUpper(strings.TrimSpace(req.GenerationConfig.ImageConfig.ImageSize))
-		if size == "1K" || size == "2K" || size == "4K" {
-			return size
-		}
+		imageConfig = req.GenerationConfig.ImageConfig
+	}
+	if imageConfig == nil {
+		return "2K"
 	}
 
-	return "2K" // 默认 2K
+	rawSize := strings.TrimSpace(imageConfig.ImageSize)
+	if rawSize == "" {
+		return "2K"
+	}
+	size := normalizeBillingImageSizeTier(rawSize)
+	switch size {
+	case "0.5K", "1K", "2K", "4K":
+		return size
+	default:
+		logger.LegacyPrintf("service.antigravity_gateway", "Unknown Gemini imageSize %q, defaulting to 2K", rawSize)
+		return "2K"
+	}
 }
 
 // isImageGenerationModel 判断模型是否为图片生成模型

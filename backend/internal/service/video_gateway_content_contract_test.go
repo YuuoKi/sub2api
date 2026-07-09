@@ -242,6 +242,37 @@ func TestSeedanceCreateMapsContentArrayWithRoles(t *testing.T) {
 	}
 }
 
+func TestSeedanceCreateSendsExplicitAutoDurationMinusOne(t *testing.T) {
+	t.Setenv("SUB2API_VIDEO_URL_ALLOWLIST", "")
+	var captured map[string]any
+	adapter, acc := newSmokeGatedSeedanceFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&captured)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"id":"t-auto","status":"queued"}`))
+	})
+	// duration=-1 is a production Seedance contract value; smoke accounts cap 1..5s.
+	acc.Metadata = map[string]any{"production_authorized": true}
+
+	task := &VideoTask{
+		Model:      "doubao-seedance-2-0-260128",
+		Prompt:     "auto duration product demo",
+		Duration:   -1,
+		Resolution: "720p",
+		Content: []VideoTaskContentItem{
+			{Type: "text", Text: "auto duration product demo"},
+			{Type: "image_url", Role: "reference_image", URL: "https://ref.cn-beijing.volces.com/ref-a.png"},
+		},
+	}
+	if _, err := adapter.CreateTask(context.Background(), acc, task); err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	// JSON numbers decode as float64; Ark contract requires explicit -1 (not omitted).
+	duration, ok := captured["duration"].(float64)
+	if !ok || duration != -1 {
+		t.Fatalf("duration = %#v (%T), want explicit -1; payload=%#v", captured["duration"], captured["duration"], captured)
+	}
+}
+
 func TestSeedanceCreatePayloadSnapshotMatchesArkContract(t *testing.T) {
 	t.Setenv("SUB2API_VIDEO_URL_ALLOWLIST", "volces.com")
 

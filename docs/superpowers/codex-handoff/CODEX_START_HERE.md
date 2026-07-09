@@ -7,6 +7,8 @@
 
 ---
 
+> **2026-07-09 UNIFIED SWEEP（当前执行）** — [CODEX_TASK_UNIFIED_SWEEP_20260709.md](./CODEX_TASK_UNIFIED_SWEEP_20260709.md) · 审查包 [2026-07-09-UNIFIED-SWEEP-review.md](./deliverables/2026-07-09-UNIFIED-SWEEP-review.md)。G0–G5 零成本/归档/月预算；G6 真实付费最后（无授权则 blocked）。基线 Night B `8e401f42`。
+>
 > **2026-07-09 Night Phase B：done** — [CODEX_TASK_NIGHT_PHASEB_20260709.md](./CODEX_TASK_NIGHT_PHASEB_20260709.md) · 审查包 [2026-07-09-NIGHT-PHASEB-review.md](./deliverables/2026-07-09-NIGHT-PHASEB-review.md)。B1 adoption 员工 Key 401 已修（`POST /v1/generation-content/:task_id/adoption`）；B2 卡额度 80/100% 告警；B3 结果链接过期提示（无对象存储转存）。commits：`3541f7b6` / `d44a7e07` / `c2bcf727` + docs closeout。无人值守：未 push。
 >
 > **2026-07-08 MLA DBug：done** — [CODEX_TASK_MLA_DBUG.md](./CODEX_TASK_MLA_DBUG.md) + [CODEX_TASK_MLA_DBUG_CLOSEOUT.md](./CODEX_TASK_MLA_DBUG_CLOSEOUT.md) 已完成 DBug-0→8、补强 `42b94ca2` 与全量门禁收尾；总审查包：[2026-07-08-MLA-DBUG-CLOSEOUT.md](./deliverables/2026-07-08-MLA-DBUG-CLOSEOUT.md)。

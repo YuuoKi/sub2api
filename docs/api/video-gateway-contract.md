@@ -55,23 +55,28 @@ Error response:
 | `generate_audio` | bool | 鍚?| Ark 椤跺眰鍙傛暟锛岄粯璁ょ敱 provider 鍐冲畾銆?|
 | `watermark` | bool | 鍚?| Ark 椤跺眰鍙傛暟銆?|
 | `camera_fixed` | bool | 鍚?| Ark 椤跺眰鍙傛暟銆?|
-| `return_last_frame` | bool | 鍚?| 鎴愬姛鍚庤姹?provider 杩斿洖灏惧抚鍥撅紝渚涚画鎷嶄娇鐢ㄣ€?|
+| `return_last_frame` | bool | no | Ask provider for last-frame image after success (continue-shot). |
+| `upstream_video_id` | string | no | Kling extend: official Kling video asset id (maps to upstream `video_id`). |
+| `audio_id` | string | no | Kling avatar: official Kling audio asset id (xor with content `audio_url` → `sound_file`). |
 
 ### content[] Item
 
-| 瀛楁 | 绫诲瀷 | 蹇呭～ | 璇存槑 |
+| Field | Type | Required | Notes |
 |------|------|------|------|
-| `type` | string | 鏄?| `text` / `image_url` / `video_url` / `audio_url`銆?|
-| `role` | string | 鏉′欢蹇呭～ | 鍥剧墖銆佽棰戙€侀煶棰戞潯鐩缓璁樉寮忎紶銆?|
-| `url` | string | 鏉′欢蹇呭～ | media URL锛屽繀椤婚€氳繃 SSRF/allowlist 鏍￠獙銆?|
-| `text` | string | 鏉′欢蹇呭～ | `type=text` 鏃朵娇鐢ㄣ€?|
+| `type` | string | yes | `text` / `image_url` / `video_url` / `audio_url`. |
+| `role` | string | conditional | Recommended for image/video/audio items. |
+| `url` | string | conditional | Media URL; must pass SSRF/allowlist. Optional when Kling `video_id` / `audio_id` is set. |
+| `text` | string | conditional | Used when `type=text`. |
+| `video_id` | string | conditional | Kling extend: Kling video **asset id** (not HTTP URL). |
+| `audio_id` | string | conditional | Kling avatar: Kling audio **asset id** (xor with `url` → `sound_file`). |
+| `metadata` | object | no | Provider passthrough (e.g. omni `refer_type`; also `video_id` / `audio_id`). |
 
-| type | role 鍙€夊€?| 闄愬埗 |
+| type | role values | Limits |
 |------|-------------|------|
-| `text` | 涓嶄紶 | 鏈€澶?1 鏉°€?|
-| `image_url` | `first_frame` / `last_frame` / `reference_image` | 鍙傝€冨浘鏈€澶?9 寮狅紱棣栧熬甯фā寮忔渶澶?1 寮犻甯?+ 1 寮犲熬甯с€?|
-| `video_url` | `reference_video` | 鏈€澶?3 娈点€傚惈姝ゅ瓧娈垫椂 `has_video_input=true`锛岃璐归€夊惈瑙嗛杈撳叆浠枫€?|
-| `audio_url` | `reference_audio` | 鏈€澶?3 娈碉紱涓嶈兘鍗曠嫭浣跨敤锛屽繀椤诲悓鏃舵湁鑷冲皯 1 涓浘鐗囨垨瑙嗛鍙傝€冦€?|
+| `text` | omit | At most 1. |
+| `image_url` | `first_frame` / `last_frame` / `reference_image` | ≤9 reference images; frame mode ≤1 first + 1 last. `last_frame` requires `first_frame`. HEAD size ≤ **30 MB**. |
+| `video_url` | `reference_video` | ≤3 clips; sets `has_video_input=true`. HEAD size ≤ **50 MB**. Kling extend prefers `video_id` over HTTP URL. |
+| `audio_url` | `reference_audio` | ≤3 clips; cannot stand alone (need ≥1 image or video ref). HEAD size ≤ **15 MB**. Kling avatar maps URL → upstream `sound_file`. |
 
 ## 3. 妯″紡鐭╅樀
 
@@ -119,6 +124,15 @@ Error response:
 - 媒体 URL allowlist 优先读取 `SUB2API_MEDIA_URL_ALLOWLIST`，未配置时 fallback 到旧 `SUB2API_VIDEO_URL_ALLOWLIST`。
 - `duration=-1`（自动时长）会**显式**写入 Ark create payload 的 `duration` 字段，不再省略；`duration=0` / 未设置才省略该字段。
 
+### Seedance cancel / content / media HEAD（WS1.4）
+
+- **Cancel is real DELETE:** `CancelTask` calls Ark `DELETE /contents/generations/tasks/{upstream_task_id}` (Bearer API key). HTTP 2xx / 404 / 409 all map to local `cancelled`. Missing upstream id → local cancel only (`local_cancel_no_upstream_id`). Kling cancel remains local-only (no reliable public cancel).
+- **`last_frame` requires `first_frame`:** `image_to_video` content validation rejects `role=last_frame` without a `first_frame` (`last_frame requires first_frame`).
+- **Media HEAD size limits** (fail-closed Content-Length probe on allowlisted http(s) URLs):
+  - image: **30 MB**
+  - video: **50 MB**
+  - audio: **15 MB**
+
 ## 4.2 Kling / 可灵（真实适配已接入，fail-closed gate）
 
 `provider:"kling"` 已从 disabled/skeleton 升级为**可真实调用**路径，鉴权与 gate 与 Seedance 对称，但凭证形态与时长枚举不同。
@@ -144,9 +158,42 @@ DB `task_type` 仍限制在 `text_to_video` / `image_to_video` / `reference_to_v
 
 ### Duration
 
-- Kling **仅允许** `duration=5` 或 `10`（字符串枚举下发上游）。
-- 试跑（无 `production_authorized`）：仅允许 `5`。
-- 正式（`production_authorized=true`）：允许 `5` 或 `10`。
+- **Non-omni** (t2v / i2v / multi / extend / avatar): only `duration=5` or `10` (string enum to upstream).
+- **Omni** (`kling-3.0-omni` / `kling-o1` → `kling-v3-omni` / `kling-video-o1`): `duration` **3..15** seconds (official wider range).
+- Tiny smoke without `production_authorized`: non-omni still capped to **5**; omni still must be within 3..15 and other smoke gates.
+
+### Extend: `video_id` (not `video_url`)
+
+Official video-extend accepts a Kling **video asset id**, not an HTTP URL.
+
+- Create request field: `upstream_video_id` (preferred). Also accepted: `content[].video_id`, `content[].metadata.video_id`, or a **non-HTTP** bare id in `reference_video_url` / `content[].url`.
+- Wire payload: `{"video_id":"<kling-asset-id>", ...}`.
+- Pure HTTP `video_url` without an id → `KLING_MISSING_VIDEO_ID` (fail-closed; no upstream call).
+- Task / poll responses may echo `upstream_video_id` when the provider returns a video asset id.
+
+### Avatar: `sound_file` / `audio_id` (xor)
+
+- `audio_id`: Kling audio asset id via top-level `audio_id`, `content[].audio_id`, or `content[].metadata.audio_id` (must not be an HTTP URL).
+- `sound_file`: HTTP(S) URL from `content[]` item `type=audio_url` + `url` (SSRF/allowlist validated).
+- Both set → `KLING_AVATAR_AUDIO_CONFLICT`. Prefer one path only.
+
+### Omni `content[]` mapping
+
+Gateway `content[]` maps to official omni lists:
+
+| Gateway content | Upstream omni field |
+|-----------------|---------------------|
+| `image_url` (+ reference / frame roles collected as images) | `image_list[]` entries with `image_url` |
+| `video_url` | `video_list[]` entries with `video_url` |
+| optional item metadata | whitelist passthrough: `type`, `refer_type`, `keep_original_sound` |
+
+### Placeholder pricing (production settle fail-closed)
+
+Kling catalog rates under `VideoPricingVersionKling202607` are **PLACEHOLDER / provisional** (CNY/sec). While the pricing version is provisional:
+
+- **Production settle** (`calculateKlingActualCost` on succeeded tasks) returns **0** (fail-closed; do not charge as if official tariffs were confirmed).
+- Budget-gate / tiny_real **estimates** may still use placeholder CNY/sec for gating only.
+- Seedance token billing is unchanged.
 
 ### Smoke / production gates
 
@@ -172,10 +219,10 @@ API-key `/v1/video/tasks`：
 |-------------------------------|-------------------|------|
 | `kling-v1` | `kling-v1` | 基础 |
 | `kling-2.6-pro` / `kling-v2-6` / `kling-3.0` | `kling-v2-6` | `kling-2.6-pro` 暗示 `mode=pro` |
-| `kling-3.0-omni` | `kling-v3-omni` | 走 omni-video |
-| `kling-o1` | `kling-video-o1` | 走 omni-video |
-| `kling-video-extend` | `kling-v1`（路由别名） | 选 video-extend 端点 |
-| `kling-avatar` / `kling-lip-sync` | `kling-v1`（路由别名） | 选 avatar 端点 |
+| `kling-3.0-omni` | `kling-v3-omni` | 走 omni-video；duration 3..15 |
+| `kling-o1` | `kling-video-o1` | 走 omni-video；duration 3..15 |
+| `kling-video-extend` | `kling-v1`（路由别名） | 选 video-extend；requires `upstream_video_id` / `video_id` |
+| `kling-avatar` / `kling-lip-sync` | `kling-v1`（路由别名） | 选 avatar；`audio_id` xor `sound_file` |
 | 其他 | — | `KLING_MODEL_NOT_ALLOWED` |
 
 Kling tiny_real 请求示例：
@@ -215,41 +262,43 @@ Kling tiny_real 请求示例：
 }
 ```
 
-## 5. 浠诲姟鍝嶅簲 Schema
+## 5. Task response schema
 
-`data` 鍐呬换鍔″璞★細
+`data` task object:
 
-| 瀛楁 | 绫诲瀷 | 璇存槑 |
+| Field | Type | Notes |
 |------|------|------|
-| `id` | number | Sub2API 浠诲姟 ID銆俀Canvas 搴斾紭鍏堢敤瀹冧綔涓?taskId銆?|
+| `id` | number | Sub2API task ID. QCanvas should prefer this as taskId. |
 | `provider` | string | `mock` / `seedance` / `kling`. |
-| `model` | string | 瀹為檯璁板綍妯″瀷銆?|
-| `task_type` | string | 浠诲姟绫诲瀷銆?|
-| `prompt` | string | 鏂囨湰鎻愮ず璇嶃€?|
-| `negative_prompt` | string | 鍙嶅悜鎻愮ず璇嶃€?|
-| `reference_image_url` | string | 鏃у瓧娈靛洖鏄俱€?|
-| `reference_video_url` | string | 鏃у瓧娈靛洖鏄俱€?|
-| `content` | array | 褰掍竴鍖栧悗鐨?content 鏁扮粍銆?|
-| `has_video_input` | bool | 鏄惁鍚?`video_url` 杈撳叆锛涜棰戣璐归€変环渚濊禆姝ゅ瓧娈点€?|
-| `aspect_ratio` | string | 璇锋眰姣斾緥銆?|
-| `duration` | number | 璇锋眰鏃堕暱銆?|
-| `resolution` | string | 璇锋眰鍒嗚鲸鐜囥€?|
-| `generate_audio` | bool | 鍙€夊洖鏄俱€?|
-| `watermark` | bool | 鍙€夊洖鏄俱€?|
-| `camera_fixed` | bool | 鍙€夊洖鏄俱€?|
-| `return_last_frame` | bool | 鍙€夊洖鏄俱€?|
-| `status` | string | `queued` / `submitted` / `running` / `succeeded` / `failed` / `cancelled`銆?|
-| `upstream_task_id` | string | provider 浠诲姟 ID銆?|
-| `result_url` | string | 鎴愬姛鍚庣殑瑙嗛 URL銆侫PI-key 鍝嶅簲涓嶅啀杈撳嚭 PascalCase `ResultURL`銆?|
-| `usage.total_tokens` | number | provider 鎴愬姛鍝嶅簲涓殑鐪熷疄 token锛岀敤浜?BILLING V-2銆傛棫浠诲姟鏃犲€兼椂涓?0銆?|
-| `actual_resolution` | string | provider 纭鐨勫疄闄呭垎杈ㄧ巼銆?|
-| `actual_duration` | number/null | provider 纭鐨勫疄闄呮椂闀裤€?|
-| `last_frame_url` | string | `return_last_frame=true` 鏃剁殑灏惧抚 URL銆?|
-| `error_message` | string | 澶辫触鍘熷洜銆?|
-| `cost_estimate` | number | 浠诲姟鎴愭湰銆係eedance 鎴愬姛浠诲姟鎸夌湡瀹?usage 璁¤垂銆?|
-| `mock_only` | bool | API-key mock-only 杈圭晫鏍囧織銆?|
-| `provider_boundary` | string | mock-only 杈圭晫璇存槑銆?|
-| `real_provider_dispatch_count` | number | mock-only 涓嬪繀椤讳负 0銆?|
+| `model` | string | Recorded model. |
+| `task_type` | string | Task type. |
+| `prompt` | string | Text prompt. |
+| `negative_prompt` | string | Negative prompt. |
+| `reference_image_url` | string | Legacy echo. |
+| `reference_video_url` | string | Legacy echo. |
+| `content` | array | Normalized content array. |
+| `has_video_input` | bool | Whether request included `video_url` input; Seedance billing tier depends on this. |
+| `aspect_ratio` | string | Requested ratio. |
+| `duration` | number | Requested duration. |
+| `resolution` | string | Requested resolution. |
+| `generate_audio` | bool | Optional echo. |
+| `watermark` | bool | Optional echo. |
+| `camera_fixed` | bool | Optional echo. |
+| `return_last_frame` | bool | Optional echo. |
+| `upstream_video_id` | string | Kling: video asset id used/returned for extend (upstream `video_id`). |
+| `audio_id` | string | Kling avatar: audio asset id when not using `sound_file`. |
+| `status` | string | `queued` / `submitted` / `running` / `succeeded` / `failed` / `cancelled`. |
+| `upstream_task_id` | string | Provider task ID. |
+| `result_url` | string | Video URL on success. API-key responses no longer emit PascalCase `ResultURL`. |
+| `usage.total_tokens` | number | Real tokens from provider success (BILLING V-2). 0 when absent on older tasks. |
+| `actual_resolution` | string | Provider-confirmed resolution. |
+| `actual_duration` | number/null | Provider-confirmed duration. |
+| `last_frame_url` | string | Last-frame URL when `return_last_frame=true`. |
+| `error_message` | string | Failure reason. |
+| `cost_estimate` | number | Task cost. Seedance succeeds on real usage; Kling production settle is **0** while placeholder pricing is provisional. |
+| `mock_only` | bool | API-key mock-only boundary flag. |
+| `provider_boundary` | string | Mock-only boundary note. |
+| `real_provider_dispatch_count` | number | Must be 0 under mock-only. |
 
 鎴愬姛鍝嶅簲绀轰緥锛?
 ```json

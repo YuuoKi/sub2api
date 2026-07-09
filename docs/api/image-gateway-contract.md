@@ -14,9 +14,9 @@ This document freezes Sub2API image generation/edit contracts for:
 
 | Surface | Preferred path | Official contract notes |
 |---------|----------------|-------------------------|
-| NB2 | **`POST /v1/messages`** (Claude-compat → Gemini) and native **`POST /v1beta/models/{model}:generateContent`** | Pass through `imageConfig` / `responseModalities`; official `imageSize` values `"512"` / `"1K"` / `"2K"` / `"4K"`; billing normalizes `"512"` → `0.5K`; retain `thoughtSignature` across image-edit rounds (clean only on account switch / binding loss). |
+| NB2 | **`POST /v1/messages`** (Claude-compat → Gemini) and native **`POST /v1beta/models/{model}:generateContent`** | Pass through `imageConfig` / `responseModalities`; official `imageSize` values `"512"` / `"1K"` / `"2K"` / `"4K"`; billing normalizes `"512"` → `0.5K`; Claude responses return `type:"image"` from `inlineData` and preserve `thoughtSignature` as `signature` for multi-turn (streaming too); clean signatures only on account switch / binding loss. |
 | GPT Image 2 | **`POST /v1/images/generations`** and **`POST /v1/images/edits`** | Model id `gpt-image-2` is in OpenAI default model constants. OpenAI bills **token-based** (not a flat per-image list price). Packaged pricing includes a `gpt-image-2` entry; if that key is missing at runtime, pricing lookup falls back **`gpt-image-2` → `gpt-image-1.5` → `gpt-image-1`**. |
-| Jimeng / 即梦 | **Not in Sub2API this round** | Out of scope for the dual-surface alignment pass; do not assume a Sub2API route. |
+| Jimeng / 即梦 | **Not in Sub2API yet (WS3)** | Out of scope until WS3; do not assume a Sub2API route. |
 
 Kling / 可灵 video is live-but-gated on the video gateway (JWT AK+SK + tiny_real/production); see [video-gateway-contract.md](./video-gateway-contract.md) §4.2 and [qcanvas-integration-guide.md](./qcanvas-integration-guide.md). Real smoke remains `blocked: awaiting AK/SK`. LLM productization is out of scope here.
 
@@ -205,7 +205,28 @@ Gemini image output is counted from `inlineData` image parts. Sub2API does not h
 - streaming: aggregate `inlineData` image parts across the stream
 - native and `/v1/messages` compat share the same counting semantics
 
-Integrators should parse `content` / `parts` / `inlineData` per upstream contract and must not assume a single image per response.
+### `/v1/messages` Claude response (WS1.1)
+
+Claude-compat responses now surface Gemini `inlineData` images as Claude **image** content blocks (not text-only):
+
+```json
+{
+  "type": "image",
+  "source": {
+    "type": "base64",
+    "media_type": "image/png",
+    "data": "<base64>"
+  },
+  "signature": "<thoughtSignature>"
+}
+```
+
+- Each Gemini image part (`inlineData` / `inline_data`) maps to one Claude `type:"image"` block with base64 `source`.
+- Gemini `thoughtSignature` / `thought_signature` on a part is preserved on the Claude block as **`signature`** so multi-turn image edit can round-trip (client echoes the block; Sub2API maps `signature` back to Gemini `thoughtSignature`).
+- Text and `tool_use` blocks also carry `signature` when the upstream part had a thought signature.
+- **Streaming** (`stream: true`) emits the same image content blocks (with `signature` when present), not only non-streaming JSON.
+
+Integrators should parse `content` for `type:"image"` blocks (and native `parts` / `inlineData`) and must not assume a single image per response.
 
 ## 7. Error codes
 
@@ -241,8 +262,8 @@ Other rules:
 ## 9. Integrator checklist
 
 - Size pickers should expose only `512` / `1K` / `2K` / `4K` to avoid unknown → `2K` billing fallback.
-- Multi-image outputs must be displayed/downloaded by actual `inlineData` count.
-- Multi-turn edits must preserve and return `thoughtSignature`, or upstream may reject follow-ups.
+- Multi-image outputs must be displayed/downloaded by actual `inlineData` / Claude `type:"image"` count.
+- Multi-turn edits must preserve and echo Claude `signature` (Gemini `thoughtSignature`), or upstream may reject follow-ups. Streaming clients must handle image content blocks the same way.
 - URL image inputs go through SSRF/allowlist; confirm product CDN hosts are allowlisted before production.
 - Prefer NB2 via `/v1/messages` or `/v1beta`; prefer GPT Image 2 via `/v1/images/*`.
-- Do not expect Jimeng/即梦 on Sub2API in this round.
+- Do not expect Jimeng/即梦 on Sub2API until WS3.

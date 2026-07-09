@@ -61,11 +61,21 @@ Studio V2 policy (2026-07-09):
 
 Stable response fields for QCanvas: `id`, `status`, `result_url`, `error_message`, `provider`. Prefer `last_frame_url` when `return_last_frame=true`.
 
+### Continue-shot (last frame)
+
+Sub2API already supports continue-shot plumbing:
+
+- Create with `return_last_frame=true`
+- On success, read `last_frame_url` and feed it as the next shot’s `first_frame` (Seedance: `last_frame` also requires `first_frame`)
+
+**QCanvas WS2** will wire Studio UI to these fields; do not assume the canvas UI is live yet—only the Sub2API contract is.
+
 ### Duration
 
 - Seedance production: `-1` (auto) or `4..15` seconds.
 - Sub2API **explicitly sends** `duration: -1` to Ark (does not omit it).
 - Tiny smoke trial still caps duration to 1..5 seconds.
+- Seedance cancel is a real upstream **DELETE**; media HEAD limits: image 30 MB / video 50 MB / audio 15 MB.
 
 ### Kling / 可灵
 
@@ -91,7 +101,12 @@ Kling is **callable** on the API-key video gateway via the same fail-closed gate
 | `kling-video-extend` | routing alias | extend endpoint (`model_name` base `kling-v1`) |
 | `kling-avatar` / `kling-lip-sync` | routing alias | avatar endpoint |
 
-Duration: **5 or 10** only; tiny smoke without production auth → **5** only.
+#### Wire notes (WS1.2 / WS1.3)
+
+- **Extend:** send Kling video **asset id** via `upstream_video_id` (or `content[].video_id`). Official upstream field is `video_id` — **not** an HTTP `video_url`. Pure URLs fail closed (`KLING_MISSING_VIDEO_ID`).
+- **Avatar:** use either `audio_id` (asset id) **or** `content[]` `audio_url` → upstream `sound_file` (xor; both → conflict).
+- **Omni:** gateway `content[]` maps to `image_list` / `video_list`; duration **3..15**. Non-omni duration remains **5|10** only (tiny smoke without production auth → **5**).
+- **Pricing:** Kling catalog is still PLACEHOLDER; production settle is fail-closed (cost 0) until official tariffs land.
 
 Studio ARM (when Kling catalog id selected + armed): dispatch `provider=kling` + `trialMode=tiny_real` + `allowRealCalls=true`.
 
@@ -103,9 +118,11 @@ Studio ARM (when Kling catalog id selected + armed): dispatch `provider=kling` +
 |-------|------------------------|-------|
 | Nano Banana 2 (`gemini-3.1-flash-image-preview`) | `/v1/messages` or `/v1beta` | Official `imageSize`: `"512"` / `"1K"` / `"2K"` / `"4K"`; billing maps `"512"` → `0.5K` |
 | GPT Image 2 (`gpt-image-2`) | `/v1/images/generations` / `/edits` | OpenAI platform group; packaged pricing includes `gpt-image-2` with fallback to `1.5` → `1` |
-| Jimeng / 即梦 | **Not in Sub2API** | Out of scope this round |
+| Jimeng / 即梦 | **Not in Sub2API yet** (WS3) | Do not assume a Sub2API route until WS3 lands |
 
 QCanvas may still vendor-direct some image/LLM calls today; forcing canvas image traffic through Sub2API is a later workstream. This guide freezes the **middle-layer** contracts so callers can integrate correctly.
+
+NB2 via `/v1/messages`: Claude responses now return `type:"image"` blocks from Gemini `inlineData`, and preserve `thoughtSignature` as Claude `signature` for multi-turn (streaming included). See [image-gateway-contract.md](./image-gateway-contract.md) §6.
 
 ## 6. Hono env checklist (no secrets)
 
@@ -121,10 +138,11 @@ Unset gateway config → dry-run / blocked, not silent production dispatch.
 ## 7. Next round (explicit backlog)
 
 1. Obtain official Kling AK/SK → configure admin dual-key → run paid tiny_real smoke  
-2. Studio omnimodal reference video/audio UI  
-3. Force QCanvas image path through Sub2API Image API  
-4. Jimeng into Sub2API (product decision)  
-5. LLM product surface (Kimi / Doubao preferred)
+2. QCanvas WS2: Studio continue-shot UI on `return_last_frame` / `last_frame_url`  
+3. Studio omnimodal reference video/audio UI  
+4. Force QCanvas image path through Sub2API Image API  
+5. Jimeng into Sub2API (**WS3** — still not yet)  
+6. LLM product surface (Kimi / Doubao preferred)
 
 ## 8. Verification pointers
 

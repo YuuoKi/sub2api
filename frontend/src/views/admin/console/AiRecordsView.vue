@@ -149,34 +149,42 @@
 
       <!-- 提示词采集样本 -->
       <section v-show="innerTab === 'prompts'" class="space-y-3">
-        <div class="rounded-lg border border-teal-200 bg-teal-50 px-4 py-3 text-xs text-teal-800 dark:border-teal-500/20 dark:bg-teal-500/10 dark:text-teal-100">
-          提示词与结果已脱敏采集，作为员工经验沉淀的素材。这里展示最近的采集样本。
+        <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-teal-200 bg-teal-50 px-4 py-3 text-xs text-teal-800 dark:border-teal-500/20 dark:bg-teal-500/10 dark:text-teal-100">
+          <span>提示词与结果已脱敏采集。可在此标注采纳/质量分；完整周报也可在生成内容看板查看。</span>
+          <RouterLink class="font-medium underline hover:no-underline" to="/admin/generation-content">
+            打开生成内容看板
+          </RouterLink>
         </div>
-        <div v-if="!samples.length && !loading" class="rounded-lg border border-gray-200 bg-white px-5 py-10 text-center text-sm text-gray-500 dark:border-dark-700 dark:bg-dark-800 dark:text-gray-400">
-          还没有采集到提示词样本。员工发起真实任务后这里会自动出现。
-        </div>
+
         <div
-          v-for="(sample, index) in samples"
-          :key="`${sample.task_id ?? 'na'}-${index}`"
+          v-if="weeklyReport"
           class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-800"
         >
-          <div class="flex flex-wrap items-center gap-2 text-xs">
-            <span class="font-medium text-gray-900 dark:text-white">{{ sample.employee_name || '未知员工' }}</span>
-            <span class="rounded-md bg-gray-100 px-2 py-0.5 font-medium text-gray-700 dark:bg-dark-700 dark:text-gray-200">{{ sample.model }}</span>
-            <span v-if="sample.cost_estimate > 0" class="tabular-nums text-teal-600 dark:text-teal-300">{{ formatSampleCost(sample) }}</span>
-            <span class="ml-auto text-gray-400 dark:text-gray-500">{{ formatDateTime(sample.created_at) }}</span>
-          </div>
-          <div class="mt-3 space-y-2 text-sm">
+          <div class="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <div class="text-xs font-medium text-gray-500 dark:text-gray-400">提示词</div>
-              <p class="mt-1 whitespace-pre-wrap leading-6 text-gray-800 dark:text-gray-100">{{ sample.prompt_preview || '（空）' }}</p>
+              <h2 class="text-sm font-semibold text-gray-900 dark:text-white">经验周报摘要</h2>
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                采纳率 {{ Math.round((weeklyReport.adoption_rate || 0) * 100) }}% ·
+                采纳 {{ weeklyReport.adopted_count }} /
+                待审 {{ (weeklyReport.pending_count || 0) + (weeklyReport.unreviewed_count || 0) }}
+              </p>
             </div>
-            <div v-if="sample.response_preview">
-              <div class="text-xs font-medium text-gray-500 dark:text-gray-400">结果摘要</div>
-              <p class="mt-1 whitespace-pre-wrap leading-6 text-gray-600 dark:text-gray-300">{{ sample.response_preview }}</p>
+            <div class="text-right text-xs text-gray-500 dark:text-gray-400">
+              条目 {{ weeklyReport.entries }} · 视频任务 {{ weeklyReport.video_tasks }}
             </div>
           </div>
+          <pre
+            v-if="weeklyReport.markdown"
+            class="mt-3 max-h-48 overflow-auto whitespace-pre-wrap rounded-md bg-gray-50 p-3 text-xs text-gray-700 dark:bg-dark-900 dark:text-gray-200"
+          >{{ weeklyReport.markdown }}</pre>
         </div>
+
+        <ContentWall
+          :samples="samples"
+          :is-live="samplesLive"
+          :usd-cny-rate="usdCnyRate"
+          @updated="onAdoptionUpdated"
+        />
       </section>
     </div>
   </AppLayout>
@@ -184,26 +192,28 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
+import ContentWall from '@/components/admin/generation-content/ContentWall.vue'
 import { adminAPI } from '@/api/admin'
 import type { AdminUsageLog, AdminUser } from '@/types'
 import type { AdminUsageStatsResponse } from '@/api/admin/usage'
-import type { GenerationSample } from '@/api/admin/generation_content'
+import type { GenerationContentWeeklyReport, GenerationSample } from '@/api/admin/generation_content'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
-import { formatByCurrency } from '@/composables/useDisplayCurrency'
 import {
   formatCount,
   formatDateTime,
   formatDuration,
   formatMoney,
   formatTokens,
+  parseAiRecordsQuery,
   staffDisplayName,
 } from './consoleUtils'
 
 const appStore = useAppStore()
+const route = useRoute()
 
 type InnerTab = 'logs' | 'prompts'
 const innerTabs: Array<{ key: InnerTab; label: string }> = [
@@ -219,6 +229,8 @@ const page = ref(1)
 const pageSize = 20
 const stats = ref<AdminUsageStatsResponse | null>(null)
 const samples = ref<GenerationSample[]>([])
+const samplesLive = ref(false)
+const weeklyReport = ref<GenerationContentWeeklyReport | null>(null)
 const staffOptions = ref<AdminUser[]>([])
 const usdCnyRate = ref(7.2)
 
@@ -228,6 +240,13 @@ const filterStart = ref('')
 const filterEnd = ref('')
 
 const totalPages = computed(() => Math.ceil(logsTotal.value / pageSize))
+
+function applyRouteQuery() {
+  const parsed = parseAiRecordsQuery(route.query as Record<string, unknown>)
+  filterUserId.value = parsed.userId
+  filterModel.value = parsed.model
+  innerTab.value = parsed.tab
+}
 
 function buildFilterParams() {
   return {
@@ -256,9 +275,21 @@ async function loadSamples() {
   try {
     const res = await adminAPI.generationContent.getSamples()
     samples.value = res.samples || []
+    samplesLive.value = Boolean(res.is_live)
+    if (typeof res.usd_cny_rate === 'number' && res.usd_cny_rate > 0) {
+      usdCnyRate.value = res.usd_cny_rate
+    }
   } catch {
-    // 采集看板未开启时静默处理，不影响调用明细
     samples.value = []
+    samplesLive.value = false
+  }
+}
+
+async function loadWeeklyReport() {
+  try {
+    weeklyReport.value = await adminAPI.generationContent.getWeeklyReport()
+  } catch {
+    weeklyReport.value = null
   }
 }
 
@@ -274,13 +305,14 @@ async function loadStaffOptions() {
 async function reload() {
   loading.value = true
   try {
-    const [, , , rateStats] = await Promise.all([
+    const [, , , , rateStats] = await Promise.all([
       loadLogs(),
       loadStats(),
       loadSamples(),
+      loadWeeklyReport(),
       adminAPI.dashboard.getStats().catch(() => null),
     ])
-    usdCnyRate.value = Number(rateStats?.usd_cny_rate || 7.2)
+    usdCnyRate.value = Number(rateStats?.usd_cny_rate || usdCnyRate.value || 7.2)
   } catch (err) {
     appStore.showError(extractApiErrorMessage(err, '加载调用记录失败'))
   } finally {
@@ -288,8 +320,9 @@ async function reload() {
   }
 }
 
-function formatSampleCost(sample: GenerationSample): string {
-  return formatByCurrency(sample.cost_estimate, sample.currency, usdCnyRate.value)
+function onAdoptionUpdated() {
+  void loadSamples()
+  void loadWeeklyReport()
 }
 
 function onFilterChanged() {
@@ -316,6 +349,7 @@ function setPage(next: number) {
 }
 
 onMounted(() => {
+  applyRouteQuery()
   void loadStaffOptions()
   void reload()
 })

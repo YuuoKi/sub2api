@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  parseAiRecordsQuery,
   quotaWarningBarClass,
   quotaWarningLevel,
   quotaWarningTextClass,
@@ -24,5 +25,23 @@ describe('quotaWarning classes', () => {
     expect(quotaWarningTextClass('critical')).toContain('red')
     expect(quotaWarningBarClass('warn')).toContain('yellow')
     expect(quotaWarningBarClass('critical')).toContain('red')
+  })
+})
+
+describe('parseAiRecordsQuery', () => {
+  it('parses user_id model and prompts tab', () => {
+    expect(parseAiRecordsQuery({ user_id: '42', model: ' seedance ', tab: 'prompts' })).toEqual({
+      userId: 42,
+      model: 'seedance',
+      tab: 'prompts',
+    })
+  })
+
+  it('defaults invalid values', () => {
+    expect(parseAiRecordsQuery({ user_id: '0', tab: 'other' })).toEqual({
+      userId: 0,
+      model: '',
+      tab: 'logs',
+    })
   })
 })

@@ -150,12 +150,18 @@
               <Doughnut :data="modelChartData" :options="modelChartOptions" />
             </div>
             <div class="max-h-48 min-w-0 flex-1 space-y-2 overflow-y-auto pr-1">
-              <div v-for="(model, index) in topModels" :key="model.model" class="flex items-center gap-2 text-xs">
+              <button
+                v-for="(model, index) in topModels"
+                :key="model.model"
+                type="button"
+                class="flex w-full items-center gap-2 rounded-md px-1 py-0.5 text-left text-xs hover:bg-gray-50 dark:hover:bg-dark-700/40"
+                @click="goAiRecordsByModel(model.model)"
+              >
                 <span class="h-2.5 w-2.5 shrink-0 rounded-full" :style="{ backgroundColor: chartColors[index % chartColors.length] }"></span>
                 <span class="min-w-0 flex-1 truncate text-gray-700 dark:text-gray-200" :title="model.model">{{ model.model }}</span>
                 <span class="shrink-0 tabular-nums text-gray-500 dark:text-gray-400">{{ formatCount(model.requests) }} 次</span>
                 <span class="shrink-0 tabular-nums font-medium text-teal-600 dark:text-teal-300">{{ formatMoney(model.actual_cost, usdCnyRate) }}</span>
-              </div>
+              </button>
             </div>
           </div>
           <div v-else class="mt-4 flex h-44 items-center justify-center text-sm text-gray-500 dark:text-gray-400">
@@ -194,7 +200,7 @@
                 v-for="(item, index) in ranking"
                 :key="item.user_id"
                 class="cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-700/40"
-                @click="goStaff()"
+                @click="goAiRecordsByUser(item.user_id)"
               >
                 <td class="px-5 py-3">
                   <span
@@ -551,8 +557,14 @@ function setRange(key: ConsoleRangeKey) {
   void loadAll()
 }
 
-function goStaff() {
-  void router.push('/admin/console/staff')
+function goAiRecordsByUser(userId: number) {
+  void router.push({ path: '/admin/console/ai-records', query: { user_id: String(userId) } })
+}
+
+function goAiRecordsByModel(model: string) {
+  const trimmed = (model || '').trim()
+  if (!trimmed) return
+  void router.push({ path: '/admin/console/ai-records', query: { model: trimmed } })
 }
 
 async function loadAll() {

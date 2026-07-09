@@ -107,3 +107,24 @@ export function quotaWarningBarClass(level: QuotaWarningLevel | string | null | 
       return 'bg-teal-500'
   }
 }
+
+/** Parse /admin/console/ai-records query for overview drill-down. */
+export function parseAiRecordsQuery(query: Record<string, unknown> | { [key: string]: unknown }): {
+  userId: number
+  model: string
+  tab: 'logs' | 'prompts'
+} {
+  const rawUser = query.user_id
+  const userStr = Array.isArray(rawUser) ? String(rawUser[0] ?? '') : String(rawUser ?? '')
+  const parsed = Number.parseInt(userStr, 10)
+  const userId = Number.isFinite(parsed) && parsed > 0 ? parsed : 0
+
+  const rawModel = query.model
+  const model = (Array.isArray(rawModel) ? String(rawModel[0] ?? '') : String(rawModel ?? '')).trim()
+
+  const rawTab = query.tab
+  const tabStr = Array.isArray(rawTab) ? String(rawTab[0] ?? '') : String(rawTab ?? '')
+  const tab = tabStr === 'prompts' ? 'prompts' : 'logs'
+
+  return { userId, model, tab }
+}

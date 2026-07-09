@@ -4,7 +4,7 @@
 > 完成时间：2026-07-09 Asia/Shanghai  
 > 关联任务：[CODEX_TASK_UNIFIED_SWEEP_20260709.md](../CODEX_TASK_UNIFIED_SWEEP_20260709.md)  
 > 基线 HEAD：`8e401f42`（Night Phase B）  
-> 状态：`partial`（G0–G5 done；G6 9:16 Form A **done**；R2-B NB2 上游 **done** / 产品链 skip；v2v skip）
+> 状态：`partial`（G0–G5 done；G6 9:16 Form A **done**；R2-B NB2 产品链 **done**；v2v skip）
 
 ---
 
@@ -43,7 +43,7 @@
 | G4 预览 + 备份告警 | pass | typecheck 绿；UI 已接 |
 | G5 全量门禁 | pass | 见 §4 |
 | G6 真实付费 9:16 | pass | Form A `succeeded`；`ratio=9:16`；tokens=108900；upstream `cgt-20260709141516-ptcrw` |
-| G6 R2-B NB2 | partial | 上游 Google `generateContent` 512 档 **done**（$0.045）；产品链 usage/余额 skip — 见 [R2-B 审查包](./2026-07-09-R2-B-image-smoke-review.md) |
+| G6 R2-B NB2 | pass | 产品链 `/v1/messages`：usage_log#1 `media_type=image` cost=$0.045；余额 18.6085→18.5635 — [R2-B](./2026-07-09-R2-B-image-smoke-review.md) |
 | G6 v2v | skip | 竖屏样本已覆盖优先缺口；剩余预算保留，未再开火 |
 
 ---
@@ -93,12 +93,12 @@ secret-scan
 ## 6. 风险与遗留
 
 - secret-scan：本机 WindowsApps Python 为 stub；Docker/WSL 挂载失败 → **partial**，日间补跑
-- R2-B 产品链（Sub2API usage_logs / 余额）未跑；仅上游 Google 签字
+- R2-B 产品链已补：usage_log#1 / 余额 Δ$0.045；请废弃 Gemini Key 并清理临时账号/API Key
 - v2v 仍 skip
 - Form A 走内存 harness，**不写** dev DB `video_tasks` / 用户余额；上游火山账单仍真实扣费
 - 归档依赖 `result_url` 可下载 + media allowlist；失败仅打日志
 - 备份黄条依赖 data-management API；无权限时静默
-- **请老板立即废弃本次临时 Gemini Key**（Ark Key 已确认废弃）
+- 本机 Docker 网络曾坏（`deploy_sub2api-network` TCP 超时），已切到 `deploy_sub2api-network_fix`
 
 ---
 
@@ -116,14 +116,14 @@ secret-scan
 
 ## 9. G6 真实付费（2026-07-09 授权续跑）
 
-**状态：`partial`（9:16 done；NB2 上游 done；产品链/v2v skip）**
+**状态：`partial`（9:16 done；NB2 产品链 done；v2v skip）**
 
 ### 授权与停止条件
 | 项 | 值 |
 |----|-----|
 | 预算硬顶 | ¥50 CNY |
-| Key | 临时 Ark + 临时 Gemini（仅 env；**未**入库、**未**写入审查包） |
-| 开火 | ① Form A Seedance 5s 9:16 ② NB2 512 直连 Google 各 1 次 |
+| Key | 临时 Ark + 临时 Gemini（仅 env/运行时；**未**写入审查包） |
+| 开火 | ① Form A Seedance 5s 9:16 ② NB2 上游 ③ NB2 产品链 `/v1/messages` 各 1 次 |
 | 停止 | 各单次成功后停；不跑 v2v / 更高档位 |
 
 ### 验收（脱敏）— Seedance 9:16
@@ -136,25 +136,24 @@ secret-scan
 | status | `succeeded`（≈286s） |
 | tokens / 估费 | 108900 → **≈¥5.01** |
 
-### 验收（脱敏）— NB2 512
+### 验收（脱敏）— NB2 产品链
 | 项 | 结果 |
 |----|------|
-| 路径 | 直连 Google `generateContent`（**非** Sub2API 产品链） |
-| 模型 | `gemini-3.1-flash-image-preview` |
-| 规格 | 512 / 1:1 → `image/jpeg` ~111KB |
-| responseId | `zEFPat3DN6_sz7IP-NjMoQI` |
-| tokens / 估费 | 1208 → **$0.045 ≈¥0.32** |
+| 路径 | `POST /v1/messages` → gemini account#1 / group#2 |
+| 模型 | `gemini-3.1-flash-image-preview`（512） |
+| msg id | `msg_d018298a80eaa88b30bf4c15` |
+| usage_log | id=1；`media_type=image`；**$0.045** |
+| 余额 | 18.6085 → **18.5635**（user_id=3） |
 | 详情 | [2026-07-09-R2-B-image-smoke-review.md](./2026-07-09-R2-B-image-smoke-review.md) |
 
 ### 预算
-累计估 ≈¥5.33；余量 ≈¥44.7。
+累计估 ≈¥5.65；余量 ≈¥44.3。
 
 ### 未做
-- NB2 经 Sub2API `/v1/messages` 的 usage_logs / 余额签字
 - v2v；NB2 1K/2K/4K 扩样
 
 ---
 
 ## 8. Verdict
 
-**partial / 内部可用** — 运营闭环已落地；Seedance 9:16 + NB2 上游付费签字 **done**；产品链图片计费与 v2v / secret-scan 仍为遗留。
+**partial / 内部可用** — 运营闭环已落地；Seedance 9:16 + NB2 产品链付费签字 **done**；v2v 仍 skip。

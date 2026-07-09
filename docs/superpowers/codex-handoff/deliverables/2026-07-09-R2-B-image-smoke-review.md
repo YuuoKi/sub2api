@@ -2,32 +2,33 @@
 
 > 执行者：Grok  
 > 完成时间：2026-07-09 Asia/Shanghai  
-> 状态：**`partial`**（上游 Google `generateContent` 签字 **done**；Sub2API 产品链入库/计费未跑）
+> 状态：**`done`**（上游 Google + Sub2API 产品链均已签字）
 
 ---
 
 ## 1. 本任务做了什么
 
-- 老板提供临时 Gemini API Key + 沿用 ¥50 预算硬顶。
-- 对 **Nano Banana 2**（`gemini-3.1-flash-image-preview`）发起 **1 次**最低档真实作图：`imageSize=512`、`aspectRatio=1:1`、`responseModalities=["TEXT","IMAGE"]`。
-- Key 仅运行时注入；审查包与 git **不含** Key / 图片 base64。
-- 本仓 `image_gateway_realsmoke_scaffold_test.go` 仍为 skip-only 脚手架，**未**走 Sub2API `/v1/messages` 产品链（无本机员工 API Key / 已授权 Gemini 供应商账号接线）。
+1. **上游直连**（较早）：`generateContent` 512 档成功（responseId `zEFPat3DN6_sz7IP-NjMoQI`，$0.045）。
+2. **产品链**（本轮）：修复本机 Docker 网络后，录入临时 Gemini Key → `gemini-default` 分组 + `nb2-temp-smoke` 账号 → 员工 API Key → `POST /v1/messages` NB2 512 → `usage_logs` / 余额扣减。
+
+Key 仅运行时注入；审查包与 git **不含** Key / 图片 base64。
 
 ---
 
-## 2. 验收结果
+## 2. 验收结果（产品链）
 
 | 验收项 | 结果 | 证据 |
 |--------|------|------|
-| 上游 HTTP | pass | `200`，~9.65s |
-| 模型 | pass | `modelVersion=gemini-3.1-flash-image-preview` |
-| `imageConfig` 透传意图 | pass | 请求含 `imageSize=512`、`aspectRatio=1:1` |
-| `responseModalities` | pass | 请求 `["TEXT","IMAGE"]`；响应含 `inlineData` |
-| 出图 | pass | 1 张 `image/jpeg`，约 110916 bytes；`finishReason=STOP` |
-| usage tokens | pass | prompt=23 / candidates=1185 / total=1208 |
-| 计费估算 | pass | NB2 0.5K 官方档 **$0.045**（≈¥0.32 @7.2） |
-| Sub2API `usage_logs.media_type=image` | skip | 未走产品链，无本仓 usage 行 |
-| 余额扣减 | skip | 同上 |
+| 路径 | pass | `POST /v1/messages` + `anthropic-version`；model=`gemini-3.1-flash-image-preview` |
+| HTTP | pass | **200**；`msg_d018298a80eaa88b30bf4c15`；`stop_reason=end_turn` |
+| 供应商账号 | pass | accounts.id=**1** `nb2-temp-smoke` / platform=gemini / type=apikey |
+| 分组 | pass | groups.id=**2** `gemini-default` / `allow_image_generation=true` |
+| `usage_logs` | pass | id=**1**；`media_type=image`；`total_cost=actual_cost=0.045` |
+| tokens | pass | input=26 / output=1133 |
+| 余额扣减 | pass | user_id=3：`18.60850000` → **`18.56350000`**（Δ **$0.045**） |
+| 上游直连（对照） | pass | 见历史 §上游 |
+
+> 注：Claude messages 兼容响应里 `content` 图片块形态需前端按契约解析；本轮以 **计费/usage/余额** 为产品链签字主证据。
 
 ---
 
@@ -35,25 +36,23 @@
 
 | 字段 | 值 |
 |------|-----|
-| path | `POST .../v1beta/models/gemini-3.1-flash-image-preview:generateContent` |
-| responseId | `zEFPat3DN6_sz7IP-NjMoQI` |
-| imageSize / ratio | 512 / 1:1 |
-| mime | image/jpeg |
-| tokens | 1208 total |
-| est cost | $0.045 ≈ ¥0.32 |
-| 预算余量（相对 ¥50，含此前 Seedance ≈¥5） | ≈¥44.7 |
+| path | Sub2API `/v1/messages` → Gemini AI Studio |
+| msg id | `msg_d018298a80eaa88b30bf4c15` |
+| imageSize | 512（0.5K 档） |
+| usage_log_id | 1 |
+| cost | **$0.045** ≈ ¥0.32 @7.2 |
+| 发起人 | zoucha-test@wujie.local（user_id=3） |
 
 ---
 
 ## 4. 安全提醒
 
-**请老板立即在 Google AI Studio / Cloud 控制台废弃本次临时 Gemini API Key。**  
-审查包不含 Key 明文；完整响应（含 base64）仅在本机 `.cache/g6-realsmoke/`（gitignored）。
+**请老板立即在 Google AI Studio 废弃本次临时 Gemini API Key。**  
+建议同时在 admin 停用/删除 `nb2-temp-smoke` 账号与 `nb2-product-chain-temp` API Key。
 
 ---
 
-## 5. 遗留
+## 5. 运维附注（本轮顺带）
 
-- 若需「产品链签字」：在 dev 录入 `production_authorized` Gemini 供应商账号 + 员工 API Key，再经 `/v1/messages` 或 native 路径跑 1 次，核对 `usage_logs` / 余额。
-- 四档扩样（1K/2K/4K）未跑；控预算仅 512。
-- v2v 仍 skip。
+- 本机 `deploy_sub2api-network` 容器间 TCP 超时导致登录/调度失败；已重建为 `deploy_sub2api-network_fix` 并恢复 `18081`。
+- 数据卷保留；未 wipe DB。

@@ -315,6 +315,21 @@ export async function getBatchApiKeysUsage(
   return data
 }
 
+export async function updateMonthlyBudget(monthlyBudgetCNY: number): Promise<{
+  monthly_budget_cny: number
+  monthly_spend_cny: number
+  monthly_budget_usage_percent: number
+}> {
+  const { data } = await apiClient.put<{
+    monthly_budget_cny: number
+    monthly_spend_cny: number
+    monthly_budget_usage_percent: number
+  }>('/admin/dashboard/monthly-budget', {
+    monthly_budget_cny: monthlyBudgetCNY,
+  })
+  return data
+}
+
 export const dashboardAPI = {
   getStats,
   getRealtimeMetrics,
@@ -326,7 +341,8 @@ export const dashboardAPI = {
   getUserUsageTrend,
   getUserSpendingRanking,
   getBatchUsersUsage,
-  getBatchApiKeysUsage
+  getBatchApiKeysUsage,
+  updateMonthlyBudget,
 }
 
 export default dashboardAPI

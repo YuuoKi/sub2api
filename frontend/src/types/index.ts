@@ -1381,6 +1381,11 @@ export interface DashboardStats {
       email?: string
     }>
   }
+
+  // G2 公司月度总预算（人民币；0=未设）
+  monthly_budget_cny?: number
+  monthly_spend_cny?: number
+  monthly_budget_usage_percent?: number
 }
 
 export interface VideoSpendByProvider {

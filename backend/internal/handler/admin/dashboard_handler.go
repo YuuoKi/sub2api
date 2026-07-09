@@ -164,7 +164,66 @@ func (h *DashboardHandler) GetStats(c *gin.Context) {
 	}
 	payload["quota_warnings"] = quotaWarnings
 
+	budgetCNY, spendCNY, usagePct := h.monthlyBudgetSnapshot(c)
+	payload["monthly_budget_cny"] = budgetCNY
+	payload["monthly_spend_cny"] = spendCNY
+	payload["monthly_budget_usage_percent"] = usagePct
+
 	response.Success(c, payload)
+}
+
+func (h *DashboardHandler) monthlyBudgetSnapshot(c *gin.Context) (budgetCNY, spendCNY, usagePct float64) {
+	ctx := c.Request.Context()
+	if h.settingService != nil {
+		budgetCNY = h.settingService.GetCompanyMonthlyBudgetCNY(ctx)
+	}
+	rate := h.usdCNYRate(ctx)
+	userTZ := c.Query("timezone")
+	now := timezone.NowInUserLocation(userTZ)
+	start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	end := start.AddDate(0, 1, 0)
+	if h.dashboardService != nil {
+		if ranking, err := h.dashboardService.GetUserSpendingRanking(ctx, start, end, 1); err == nil && ranking != nil {
+			spendUSD := ranking.TotalCombinedActualCost
+			if spendUSD <= 0 {
+				spendUSD = ranking.TotalActualCost
+			}
+			spendCNY = spendUSD * rate
+		}
+	}
+	usagePct = service.MonthlyBudgetUsagePercent(spendCNY, budgetCNY)
+	return budgetCNY, spendCNY, usagePct
+}
+
+type updateMonthlyBudgetRequest struct {
+	MonthlyBudgetCNY float64 `json:"monthly_budget_cny"`
+}
+
+// UpdateMonthlyBudget handles PUT /api/v1/admin/dashboard/monthly-budget
+func (h *DashboardHandler) UpdateMonthlyBudget(c *gin.Context) {
+	if h.settingService == nil {
+		response.InternalError(c, "Setting service not available")
+		return
+	}
+	var req updateMonthlyBudgetRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request body")
+		return
+	}
+	if req.MonthlyBudgetCNY < 0 {
+		response.BadRequest(c, "monthly_budget_cny must be >= 0")
+		return
+	}
+	if err := h.settingService.SetCompanyMonthlyBudgetCNY(c.Request.Context(), req.MonthlyBudgetCNY); err != nil {
+		response.Error(c, 500, "Failed to update monthly budget")
+		return
+	}
+	budgetCNY, spendCNY, usagePct := h.monthlyBudgetSnapshot(c)
+	response.Success(c, gin.H{
+		"monthly_budget_cny":            budgetCNY,
+		"monthly_spend_cny":             spendCNY,
+		"monthly_budget_usage_percent":  usagePct,
+	})
 }
 
 type DashboardAggregationBackfillRequest struct {

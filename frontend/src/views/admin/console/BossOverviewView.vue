@@ -84,6 +84,63 @@
         </div>
       </section>
 
+      <!-- G2：公司月度总预算进度 -->
+      <section
+        v-if="monthlyBudgetCNY > 0"
+        class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-800"
+      >
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div class="min-w-0">
+            <p class="text-sm font-medium text-gray-900 dark:text-white">本月预算进度</p>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              已用 ¥{{ monthlySpendCNY.toFixed(2) }} / 预算 ¥{{ monthlyBudgetCNY.toFixed(2) }}
+              （{{ monthlyBudgetUsagePercent.toFixed(1) }}%）
+            </p>
+          </div>
+          <form class="flex flex-wrap items-center gap-2" @submit.prevent="saveMonthlyBudget">
+            <input
+              v-model.number="budgetDraft"
+              type="number"
+              min="0"
+              step="1"
+              class="input h-9 w-32"
+              placeholder="月预算 ¥"
+            />
+            <button class="btn btn-sm btn-outline" type="submit" :disabled="budgetSaving">
+              {{ budgetSaving ? '保存中…' : '更新预算' }}
+            </button>
+          </form>
+        </div>
+        <div class="mt-3 h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-dark-700">
+          <div
+            class="h-full rounded-full transition-all"
+            :class="monthlyBudgetUsagePercent >= 100
+              ? 'bg-red-500'
+              : monthlyBudgetUsagePercent >= 80
+                ? 'bg-yellow-500'
+                : 'bg-teal-500'"
+            :style="{ width: `${Math.min(100, monthlyBudgetUsagePercent)}%` }"
+          />
+        </div>
+      </section>
+      <section
+        v-else
+        class="flex flex-col gap-3 rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 dark:border-dark-600 dark:bg-dark-800/60 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <p class="text-sm text-gray-600 dark:text-gray-300">尚未设置公司月度总预算。设一个数字后，总览会显示本月花费进度条。</p>
+        <form class="flex flex-wrap items-center gap-2" @submit.prevent="saveMonthlyBudget">
+          <input
+            v-model.number="budgetDraft"
+            type="number"
+            min="0"
+            step="1"
+            class="input h-9 w-32"
+            placeholder="例如 1000"
+          />
+          <button class="btn btn-sm btn-outline" type="submit" :disabled="budgetSaving">设置月预算</button>
+        </form>
+      </section>
+
       <!-- 核心指标卡：SVG 环形描边动画 + 数字滚动 -->
       <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div
@@ -356,6 +413,11 @@ const usdCnyRate = ref(7.2)
 const quotaWarnCount = ref(0)
 const quotaCriticalCount = ref(0)
 const quotaAlertTotal = computed(() => quotaWarnCount.value + quotaCriticalCount.value)
+const monthlyBudgetCNY = ref(0)
+const monthlySpendCNY = ref(0)
+const monthlyBudgetUsagePercent = ref(0)
+const budgetDraft = ref(0)
+const budgetSaving = ref(false)
 
 const rangeOptions: Array<{ key: ConsoleRangeKey; label: string }> = [
   { key: '7d', label: '近 7 天' },
@@ -567,6 +629,26 @@ function goAiRecordsByModel(model: string) {
   void router.push({ path: '/admin/console/ai-records', query: { model: trimmed } })
 }
 
+async function saveMonthlyBudget() {
+  const value = Number(budgetDraft.value)
+  if (!Number.isFinite(value) || value < 0) {
+    appStore.showError('月预算须为大于等于 0 的数字')
+    return
+  }
+  budgetSaving.value = true
+  try {
+    const res = await adminAPI.dashboard.updateMonthlyBudget(value)
+    monthlyBudgetCNY.value = Number(res.monthly_budget_cny || 0)
+    monthlySpendCNY.value = Number(res.monthly_spend_cny || 0)
+    monthlyBudgetUsagePercent.value = Number(res.monthly_budget_usage_percent || 0)
+    budgetDraft.value = monthlyBudgetCNY.value
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, '保存月预算失败'))
+  } finally {
+    budgetSaving.value = false
+  }
+}
+
 async function loadAll() {
   loading.value = true
   const { start, end } = getConsoleRange(rangeKey.value)
@@ -581,6 +663,10 @@ async function loadAll() {
     usdCnyRate.value = Number(statsRes.usd_cny_rate || 7.2)
     quotaWarnCount.value = Number(statsRes.quota_warnings?.warn_count || 0)
     quotaCriticalCount.value = Number(statsRes.quota_warnings?.critical_count || 0)
+    monthlyBudgetCNY.value = Number(statsRes.monthly_budget_cny || 0)
+    monthlySpendCNY.value = Number(statsRes.monthly_spend_cny || 0)
+    monthlyBudgetUsagePercent.value = Number(statsRes.monthly_budget_usage_percent || 0)
+    budgetDraft.value = monthlyBudgetCNY.value
     trend.value = trendRes.trend || []
     models.value = modelsRes.models || []
     ranking.value = rankingRes.ranking || []

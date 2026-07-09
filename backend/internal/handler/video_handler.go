@@ -2,6 +2,8 @@ package handler
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -83,6 +85,9 @@ type videoTaskResponse struct {
 	ResultURL             string                         `json:"result_url"`
 	ResultURLExpiresAt    *string                        `json:"result_url_expires_at,omitempty"`
 	ResultURLExpirySource string                         `json:"result_url_expiry_source,omitempty"`
+	LocalAssetPath        string                         `json:"local_asset_path,omitempty"`
+	LocalAssetSavedAt     *string                        `json:"local_asset_saved_at,omitempty"`
+	LocalAssetAvailable   bool                           `json:"local_asset_available"`
 	Usage                 videoTaskUsageResponse         `json:"usage"`
 	ActualResolution      string                         `json:"actual_resolution"`
 	ActualDuration        *int                           `json:"actual_duration"`
@@ -258,6 +263,36 @@ func (h *VideoHandler) GetTask(c *gin.Context) {
 		return
 	}
 	response.Success(c, videoTaskToResponse(task, events))
+}
+
+// DownloadLocalAsset serves a previously archived local video file (admin or task owner).
+func (h *VideoHandler) DownloadLocalAsset(c *gin.Context) {
+	id, ok := parseTaskID(c)
+	if !ok {
+		return
+	}
+	subject, _ := middleware2.GetAuthSubjectFromContext(c)
+	role, _ := middleware2.GetUserRoleFromContext(c)
+	task, _, err := h.video.GetTask(c.Request.Context(), id, subject.UserID, role == "admin")
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	if task == nil || strings.TrimSpace(task.LocalAssetPath) == "" {
+		response.ErrorFrom(c, infraerrors.NotFound("VIDEO_ASSET_NOT_FOUND", "local asset not archived yet"))
+		return
+	}
+	abs, err := service.ResolveLocalAssetAbsPath(task.LocalAssetPath)
+	if err != nil {
+		response.ErrorFrom(c, infraerrors.BadRequest("VIDEO_ASSET_INVALID", err.Error()))
+		return
+	}
+	if _, err := os.Stat(abs); err != nil {
+		response.ErrorFrom(c, infraerrors.NotFound("VIDEO_ASSET_MISSING", "local asset file missing"))
+		return
+	}
+	c.Header("Content-Disposition", fmt.Sprintf("inline; filename=%q", filepath.Base(abs)))
+	c.File(abs)
 }
 
 func (h *VideoHandler) CancelTask(c *gin.Context) {
@@ -549,6 +584,11 @@ func videoTaskToResponse(task *service.VideoTask, events []*service.VideoTaskEve
 		v := *task.ActualDuration
 		actualDuration = &v
 	}
+	var localSavedAt *string
+	if task.LocalAssetSavedAt != nil {
+		v := formatTaskTime(*task.LocalAssetSavedAt)
+		localSavedAt = &v
+	}
 	return videoTaskResponse{
 		ID:                    task.ID,
 		ProviderAccountID:     task.ProviderAccountID,
@@ -574,6 +614,9 @@ func videoTaskToResponse(task *service.VideoTask, events []*service.VideoTaskEve
 		ResultURL:             task.ResultURL,
 		ResultURLExpiresAt:    resultExpiresAt,
 		ResultURLExpirySource: resultExpirySource,
+		LocalAssetPath:        task.LocalAssetPath,
+		LocalAssetSavedAt:     localSavedAt,
+		LocalAssetAvailable:   strings.TrimSpace(task.LocalAssetPath) != "",
 		Usage:                 videoTaskUsageResponse{TotalTokens: totalTokens},
 		ActualResolution:      task.ActualResolution,
 		ActualDuration:        actualDuration,

@@ -63,6 +63,9 @@ export interface VideoTaskSummary {
   result_url: string
   result_url_expires_at?: string | null
   result_url_expiry_source?: 'url_query' | 'estimated' | 'unknown' | string
+  local_asset_path?: string
+  local_asset_saved_at?: string | null
+  local_asset_available?: boolean
   error_message: string
   cost_estimate: number
   currency?: string // 'CNY' = Seedance 真实计费；'USD' = 其他（旧后端可能缺失）
@@ -313,6 +316,11 @@ async function cancelTask(id: number): Promise<VideoTask> {
   return data
 }
 
+/** Authenticated local archive preview/download path (relative to API base). */
+export function localAssetURL(taskId: number): string {
+  return `/video/tasks/${taskId}/local-asset`
+}
+
 export const videoAdminAPI = {
   listProviders,
   createProvider,
@@ -332,6 +340,7 @@ export const videoTaskAPI = {
   create: createTask,
   get: getTask,
   cancel: cancelTask,
+  localAssetURL,
 }
 
 export default videoAdminAPI

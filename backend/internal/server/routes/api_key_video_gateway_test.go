@@ -220,6 +220,43 @@ func (r *apiKeyVideoGatewayMemoryRepo) UpdateTask(_ context.Context, task *servi
 	return nil
 }
 
+func (r *apiKeyVideoGatewayMemoryRepo) SetTaskLocalAsset(_ context.Context, taskID int64, path string, savedAt time.Time) error {
+	task, ok := r.tasks[taskID]
+	if !ok {
+		return service.ErrVideoTaskNotFound
+	}
+	task.LocalAssetPath = path
+	t := savedAt
+	task.LocalAssetSavedAt = &t
+	return nil
+}
+
+func (r *apiKeyVideoGatewayMemoryRepo) ClearTaskLocalAsset(_ context.Context, taskID int64) error {
+	task, ok := r.tasks[taskID]
+	if !ok {
+		return nil
+	}
+	task.LocalAssetPath = ""
+	task.LocalAssetSavedAt = nil
+	return nil
+}
+
+func (r *apiKeyVideoGatewayMemoryRepo) ListExpiredLocalAssets(_ context.Context, olderThan time.Time, limit int) ([]*service.VideoTask, error) {
+	out := make([]*service.VideoTask, 0)
+	for _, task := range r.tasks {
+		if task.LocalAssetPath == "" || task.LocalAssetSavedAt == nil {
+			continue
+		}
+		if task.LocalAssetSavedAt.Before(olderThan) {
+			out = append(out, task)
+			if limit > 0 && len(out) >= limit {
+				break
+			}
+		}
+	}
+	return out, nil
+}
+
 func (r *apiKeyVideoGatewayMemoryRepo) AddTaskEvent(_ context.Context, event *service.VideoTaskEvent) error {
 	event.ID = r.nextEventID
 	r.nextEventID++

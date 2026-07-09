@@ -137,6 +137,8 @@ type VideoTask struct {
 	PricingSource       string
 	PricingVersion      string
 	PollCount           int
+	LocalAssetPath      string
+	LocalAssetSavedAt   *time.Time
 	CreatedBy           int64
 	CreatedByEmail      string
 	CreatedByName       string
@@ -295,6 +297,9 @@ type VideoGatewayRepository interface {
 	ListUnchargedSucceededVideoTasks(ctx context.Context, limit int) ([]*VideoTask, error)
 	ClaimTaskForSubmit(ctx context.Context, taskID int64) (bool, error)
 	UpdateTask(ctx context.Context, task *VideoTask) error
+	SetTaskLocalAsset(ctx context.Context, taskID int64, path string, savedAt time.Time) error
+	ClearTaskLocalAsset(ctx context.Context, taskID int64) error
+	ListExpiredLocalAssets(ctx context.Context, olderThan time.Time, limit int) ([]*VideoTask, error)
 
 	AddTaskEvent(ctx context.Context, event *VideoTaskEvent) error
 	ListTaskEvents(ctx context.Context, taskID int64, limit int) ([]*VideoTaskEvent, error)

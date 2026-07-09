@@ -25,11 +25,12 @@ func TestVideoGatewayRepositoryListRunnableTasksClaimsRows(t *testing.T) {
 		"aspect_ratio", "duration", "resolution", "generate_audio", "watermark", "camera_fixed", "return_last_frame",
 		"usage_total_tokens", "actual_resolution", "actual_duration", "last_frame_url",
 		"status", "upstream_task_id", "result_url", "error_message", "cost_estimate", "poll_count",
+		"local_asset_path", "local_asset_saved_at",
 		"created_by", "created_at", "updated_at", "completed_at", "display_name", "email", "username",
 	}).AddRow(
 		int64(42), int64(7), service.VideoProviderMock, "mock-video-v1", service.VideoTaskTypeTextToVideo,
 		"claim me", "", "", "", []byte(`[]`), false, "16:9", 5, "720p", nil, nil, nil, nil,
-		nil, nil, nil, nil, service.VideoStatusQueued, "", "", "", 0.0, 0, int64(9), now, now, nil,
+		nil, nil, nil, nil, service.VideoStatusQueued, "", "", "", 0.0, 0, nil, nil, int64(9), now, now, nil,
 		"Mock Provider", "user@example.test", "operator",
 	)
 
@@ -184,11 +185,12 @@ func TestVideoGatewayRepositoryListUnchargedSucceededVideoTasks(t *testing.T) {
 		"aspect_ratio", "duration", "resolution", "generate_audio", "watermark", "camera_fixed", "return_last_frame",
 		"usage_total_tokens", "actual_resolution", "actual_duration", "last_frame_url",
 		"status", "upstream_task_id", "result_url", "error_message", "cost_estimate", "poll_count",
+		"local_asset_path", "local_asset_saved_at",
 		"created_by", "created_at", "updated_at", "completed_at", "display_name", "email", "username",
 	}).AddRow(
 		int64(42), int64(7), service.VideoProviderSeedance, "doubao-seedance-2-0-260128", service.VideoTaskTypeTextToVideo,
 		"charge me", "", "", "", []byte(`[]`), false, "16:9", 5, "720p", nil, nil, nil, nil,
-		int64(102960), "720p", nil, nil, service.VideoStatusSucceeded, "upstream-42", "https://result.example/video.mp4", "", 4.73616, 2, int64(9), now, now, now,
+		int64(102960), "720p", nil, nil, service.VideoStatusSucceeded, "upstream-42", "https://result.example/video.mp4", "", 4.73616, 2, nil, nil, int64(9), now, now, now,
 		"Seedance", "user@example.test", "operator",
 	)
 

@@ -127,6 +127,7 @@ func RegisterUserRoutes(
 				tasks.GET("", h.Video.ListTasks)
 				tasks.POST("", h.Video.CreateTask)
 				tasks.GET("/:id", h.Video.GetTask)
+				tasks.GET("/:id/local-asset", h.Video.DownloadLocalAsset)
 				tasks.POST("/:id/cancel", h.Video.CancelTask)
 			}
 		}

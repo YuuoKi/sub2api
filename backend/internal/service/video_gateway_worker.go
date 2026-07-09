@@ -459,6 +459,7 @@ func (s *VideoGatewayService) pollTask(ctx context.Context, adapter VideoAdapter
 		if status == VideoStatusSucceeded {
 			s.chargeForVideo(ctx, task)
 			s.CollectVideoTaskGenerationContent(ctx, task)
+			s.ArchiveSucceededVideoResult(ctx, task)
 		}
 	}
 	return nil

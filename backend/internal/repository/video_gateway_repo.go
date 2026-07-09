@@ -35,6 +35,7 @@ const videoTaskSelectColumns = `
 		vt.generate_audio, vt.watermark, vt.camera_fixed, vt.return_last_frame,
 		vt.usage_total_tokens, vt.actual_resolution, vt.actual_duration, vt.last_frame_url,
 		vt.status, vt.upstream_task_id, vt.result_url, vt.error_message, vt.cost_estimate, vt.poll_count,
+		vt.local_asset_path, vt.local_asset_saved_at,
 		vt.created_by, vt.created_at, vt.updated_at, vt.completed_at,
 		COALESCE(vpa.display_name, ''), COALESCE(u.email, ''), COALESCE(u.username, '')
 `
@@ -534,6 +535,59 @@ func (r *videoGatewayRepository) UpdateTask(ctx context.Context, task *service.V
 	return nil
 }
 
+func (r *videoGatewayRepository) SetTaskLocalAsset(ctx context.Context, taskID int64, path string, savedAt time.Time) error {
+	const q = `
+		UPDATE video_tasks
+		SET local_asset_path = $2,
+		    local_asset_saved_at = $3,
+		    updated_at = NOW()
+		WHERE id = $1
+	`
+	res, err := r.db.ExecContext(ctx, q, taskID, path, savedAt)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return service.ErrVideoTaskNotFound
+	}
+	return nil
+}
+
+func (r *videoGatewayRepository) ClearTaskLocalAsset(ctx context.Context, taskID int64) error {
+	const q = `
+		UPDATE video_tasks
+		SET local_asset_path = NULL,
+		    local_asset_saved_at = NULL,
+		    updated_at = NOW()
+		WHERE id = $1
+	`
+	_, err := r.db.ExecContext(ctx, q, taskID)
+	return err
+}
+
+func (r *videoGatewayRepository) ListExpiredLocalAssets(ctx context.Context, olderThan time.Time, limit int) ([]*service.VideoTask, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	q := `
+		SELECT ` + videoTaskSelectColumns + `
+		` + videoTaskJoinSQL + `
+		WHERE vt.local_asset_path IS NOT NULL
+		  AND vt.local_asset_path <> ''
+		  AND vt.local_asset_saved_at IS NOT NULL
+		  AND vt.local_asset_saved_at < $1
+		ORDER BY vt.local_asset_saved_at ASC
+		LIMIT $2
+	`
+	rows, err := r.db.QueryContext(ctx, q, olderThan, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanVideoTaskRows(rows)
+}
+
 func (r *videoGatewayRepository) AddTaskEvent(ctx context.Context, event *service.VideoTaskEvent) error {
 	payload, err := marshalJSONMap(event.Payload)
 	if err != nil {
@@ -839,6 +893,8 @@ func scanVideoTask(row scanner) (*service.VideoTask, error) {
 	var usageTotalTokens sql.NullInt64
 	var actualResolution, lastFrameURL sql.NullString
 	var actualDuration sql.NullInt64
+	var localAssetPath sql.NullString
+	var localAssetSavedAt sql.NullTime
 	err := row.Scan(
 		&task.ID,
 		&task.ProviderAccountID,
@@ -868,6 +924,8 @@ func scanVideoTask(row scanner) (*service.VideoTask, error) {
 		&task.ErrorMessage,
 		&task.CostEstimate,
 		&task.PollCount,
+		&localAssetPath,
+		&localAssetSavedAt,
 		&task.CreatedBy,
 		&task.CreatedAt,
 		&task.UpdatedAt,
@@ -894,6 +952,13 @@ func scanVideoTask(row scanner) (*service.VideoTask, error) {
 	task.ActualDuration = intPtrFromNullInt64(actualDuration)
 	if lastFrameURL.Valid {
 		task.LastFrameURL = lastFrameURL.String
+	}
+	if localAssetPath.Valid {
+		task.LocalAssetPath = localAssetPath.String
+	}
+	if localAssetSavedAt.Valid {
+		t := localAssetSavedAt.Time
+		task.LocalAssetSavedAt = &t
 	}
 	return task, nil
 }

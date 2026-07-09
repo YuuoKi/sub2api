@@ -1,10 +1,24 @@
-# Runs tools/secret_scan.py from the repository root.
-# Exits 0 when clean; exits 2 to block when secrets are found (Cursor hook convention).
+# Runs tools/secret_scan.py from the repository root before `git push`.
+# Emits beforeShellExecution JSON: allow on clean scan, deny when secrets/errors.
 param()
 
 $ErrorActionPreference = 'Stop'
 
-$stdin = [Console]::In.ReadToEnd()
+function Write-HookResult {
+    param(
+        [Parameter(Mandatory = $true)][ValidateSet('allow', 'deny', 'ask')][string]$Permission,
+        [string]$UserMessage = '',
+        [string]$AgentMessage = ''
+    )
+    $payload = [ordered]@{ permission = $Permission }
+    if ($UserMessage) { $payload.user_message = $UserMessage }
+    if ($AgentMessage) { $payload.agent_message = $AgentMessage }
+    $payload | ConvertTo-Json -Compress
+}
+
+# Consume Cursor hook stdin JSON (command metadata); ignore contents for this gate.
+$null = [Console]::In.ReadToEnd()
+
 $repoRoot = if ($env:CURSOR_PROJECT_DIR) { $env:CURSOR_PROJECT_DIR } else { (Get-Location).Path }
 Set-Location $repoRoot
 
@@ -32,22 +46,29 @@ function Find-Python {
 
 $python = Find-Python
 if (-not $python) {
-    $ErrorActionPreference = 'Continue'
-    Write-Error "secret-scan requires Python (python3/python/py). Install Python and retry, or run: make secret-scan"
-    exit 2
+    Write-HookResult -Permission deny `
+        -UserMessage 'secret-scan requires Python (python3/python/py). Install Python and retry, or run: make secret-scan' `
+        -AgentMessage 'Push blocked: secret-scan hook could not find a non-WindowsApps Python.'
+    exit 0
 }
 
 $scanner = Join-Path $repoRoot 'tools\secret_scan.py'
 if (-not (Test-Path $scanner)) {
-    $ErrorActionPreference = 'Continue'
-    Write-Error "secret-scan scanner missing at tools\secret_scan.py"
-    exit 2
+    Write-HookResult -Permission deny `
+        -UserMessage 'secret-scan scanner missing at tools/secret_scan.py' `
+        -AgentMessage 'Push blocked: tools/secret_scan.py is missing.'
+    exit 0
 }
 
-& $python $scanner --include-untracked
+# Capture scanner stdout/stderr so only JSON reaches Cursor on this script's stdout.
+$output = & $python $scanner --include-untracked 2>&1 | Out-String
 $exitCode = $LASTEXITCODE
 if ($exitCode -ne 0) {
-    Write-Error "secret-scan found potential secrets. Run: make secret-scan"
-    exit 2
+    Write-HookResult -Permission deny `
+        -UserMessage 'secret-scan found potential secrets. Run: make secret-scan' `
+        -AgentMessage ("Push blocked by secret-scan.`n" + $output.Trim())
+    exit 0
 }
+
+Write-HookResult -Permission allow
 exit 0

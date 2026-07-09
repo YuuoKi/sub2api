@@ -9,13 +9,32 @@ const (
 	VideoPricingCurrencyCNY           = BillingCurrencyCNY
 	VideoPricingVersionSeedance202603 = "ark-seedance-2026-03"
 	// VideoPricingVersionKling202607 is the Kling video catalog stamp.
-	// PLACEHOLDER: CNY-per-second rates below are provisional until official
-	// Kling credentials/pricing are confirmed; replace before production billing.
+	// PLACEHOLDER / provisional: CNY-per-second rates below are NOT official
+	// tariffs. Production settle must fail-closed while this version is in use;
+	// tiny_real may still estimate. Replace rates and bump the version stamp
+	// only after official Kling credentials/pricing are confirmed.
 	VideoPricingVersionKling202607 = "kling-video-2026-07"
 	videoSeedancePricingVersion    = VideoPricingVersionSeedance202603
 	videoKlingPricingVersion       = VideoPricingVersionKling202607
 	videoTokensPerMillion          = 1000000.0
 )
+
+// IsKlingPricingProvisional reports whether the Kling catalog stamp is still a
+// PLACEHOLDER / provisional version that must not be used for production settle.
+func IsKlingPricingProvisional(version string) bool {
+	v := strings.TrimSpace(version)
+	if v == "" {
+		v = VideoPricingVersionKling202607
+	}
+	switch v {
+	case VideoPricingVersionKling202607:
+		return true
+	default:
+		// Future official stamps (e.g. kling-video-2026-08-official) are non-provisional.
+		return strings.Contains(strings.ToLower(v), "placeholder") ||
+			strings.Contains(strings.ToLower(v), "provisional")
+	}
+}
 
 type VideoPricingEntry struct {
 	Provider                   string

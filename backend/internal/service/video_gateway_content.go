@@ -96,10 +96,13 @@ func normalizeVideoTaskContent(p VideoTaskCreateParams) ([]VideoTaskContentItem,
 
 func normalizeVideoContentItem(raw VideoTaskContentItem, taskType string) (VideoTaskContentItem, error) {
 	item := VideoTaskContentItem{
-		Type: strings.ToLower(strings.TrimSpace(raw.Type)),
-		Role: strings.ToLower(strings.TrimSpace(raw.Role)),
-		URL:  strings.TrimSpace(raw.URL),
-		Text: strings.TrimSpace(raw.Text),
+		Type:     strings.ToLower(strings.TrimSpace(raw.Type)),
+		Role:     strings.ToLower(strings.TrimSpace(raw.Role)),
+		URL:      strings.TrimSpace(raw.URL),
+		Text:     strings.TrimSpace(raw.Text),
+		VideoID:  strings.TrimSpace(raw.VideoID),
+		AudioID:  strings.TrimSpace(raw.AudioID),
+		Metadata: raw.Metadata,
 	}
 	if item.Type == "" {
 		return item, badVideoContent("content item type is required")
@@ -109,6 +112,8 @@ func normalizeVideoContentItem(raw VideoTaskContentItem, taskType string) (Video
 	case VideoContentTypeText:
 		item.Role = ""
 		item.URL = ""
+		item.VideoID = ""
+		item.AudioID = ""
 	case VideoContentTypeImageURL:
 		if item.Role == "" {
 			item.Role = VideoContentRoleReferenceImage
@@ -129,8 +134,14 @@ func normalizeVideoContentItem(raw VideoTaskContentItem, taskType string) (Video
 		if item.Role != VideoContentRoleReferenceVideo {
 			return item, badVideoContent("video_url role must be reference_video")
 		}
-		if err := validateContentURL(item.URL, "video_url"); err != nil {
-			return item, err
+		// Allow video_id-only items (Kling extend) without an HTTP URL.
+		if item.URL == "" && item.VideoID == "" {
+			return item, badVideoContent("video_url url or video_id is required")
+		}
+		if item.URL != "" {
+			if err := validateContentURL(item.URL, "video_url"); err != nil {
+				return item, err
+			}
 		}
 	case VideoContentTypeAudioURL:
 		if item.Role == "" {
@@ -139,8 +150,14 @@ func normalizeVideoContentItem(raw VideoTaskContentItem, taskType string) (Video
 		if item.Role != VideoContentRoleReferenceAudio {
 			return item, badVideoContent("audio_url role must be reference_audio")
 		}
-		if err := validateContentURL(item.URL, "audio_url"); err != nil {
-			return item, err
+		// Allow audio_id-only items (Kling avatar) without an HTTP URL.
+		if item.URL == "" && item.AudioID == "" {
+			return item, badVideoContent("audio_url url or audio_id is required")
+		}
+		if item.URL != "" {
+			if err := validateContentURL(item.URL, "audio_url"); err != nil {
+				return item, err
+			}
 		}
 	default:
 		return item, badVideoContent("content item type must be text, image_url, video_url, or audio_url")
@@ -251,6 +268,16 @@ func validateVideoGenerationContract(provider, model string, duration int, resol
 		return nil
 	}
 	if strings.TrimSpace(provider) == VideoProviderKling {
+		modelLower := strings.ToLower(strings.TrimSpace(model))
+		omni := strings.Contains(modelLower, "omni") || strings.Contains(modelLower, "kling-video-o1") || modelLower == "kling-o1"
+		if omni {
+			// Official omni duration is wider than classic t2v/i2v (5|10).
+			// Documented allow-range used here: 3–15 seconds inclusive.
+			if duration < 3 || duration > 15 {
+				return badVideoContent("kling omni duration must be between 3 and 15 seconds")
+			}
+			return nil
+		}
 		if duration != 5 && duration != 10 {
 			return badVideoContent("kling duration must be 5 or 10 seconds")
 		}

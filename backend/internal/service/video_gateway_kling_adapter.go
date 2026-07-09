@@ -226,11 +226,14 @@ func (a *klingVideoAdapter) PollTask(ctx context.Context, account *VideoProvider
 		return nil, fmt.Errorf("kling: parse poll response: %w", err)
 	}
 	resultURL := ""
+	upstreamVideoID := ""
 	if len(parsed.Data.TaskResult.Videos) > 0 {
 		resultURL = strings.TrimSpace(parsed.Data.TaskResult.Videos[0].URL)
+		upstreamVideoID = strings.TrimSpace(parsed.Data.TaskResult.Videos[0].ID)
 	}
 	if videoProviderUpstreamEchoedCredential(account, parsed.Data.TaskID) ||
-		videoProviderUpstreamEchoedCredential(account, resultURL) {
+		videoProviderUpstreamEchoedCredential(account, resultURL) ||
+		videoProviderUpstreamEchoedCredential(account, upstreamVideoID) {
 		return nil, infraerrorsUnavailable("KLING_UPSTREAM_ECHOED_CREDENTIAL",
 			"Kling poll aborted: upstream id/result_url echoed the configured credential; refusing to persist it (key value intentionally not included)")
 	}
@@ -243,8 +246,9 @@ func (a *klingVideoAdapter) PollTask(ctx context.Context, account *VideoProvider
 		}
 	}
 	result := &VideoAdapterResult{
-		UpstreamTaskID: polledID,
-		Status:         status,
+		UpstreamTaskID:  polledID,
+		UpstreamVideoID: upstreamVideoID,
+		Status:          status,
 		Payload: map[string]any{
 			"provider":          "kling",
 			"normalized_status": status,
@@ -253,6 +257,9 @@ func (a *klingVideoAdapter) PollTask(ctx context.Context, account *VideoProvider
 			"path":              path,
 			"polled_at":         time.Now().UTC().Format(time.RFC3339),
 		},
+	}
+	if upstreamVideoID != "" {
+		result.Payload["upstream_video_id"] = upstreamVideoID
 	}
 	if parsed.Code != 0 {
 		result.Status = VideoStatusFailed
@@ -462,7 +469,7 @@ func buildKlingCreateRequestPayload(account *VideoProviderAccount, task *VideoTa
 	if strings.TrimSpace(task.NegativePrompt) != "" {
 		payload["negative_prompt"] = task.NegativePrompt
 	}
-	durationStr, err := klingDurationString(task.Duration)
+	durationStr, err := klingDurationStringForTask(task)
 	if err != nil {
 		return nil, err
 	}
@@ -504,42 +511,16 @@ func buildKlingCreateRequestPayload(account *VideoProviderAccount, task *VideoTa
 		}
 		payload["image_list"] = list
 	case klingPathOmniVideo:
-		images, err := klingCollectReferenceImages(account, task)
+		if err := klingApplyOmniMediaLists(account, task, payload); err != nil {
+			return nil, err
+		}
+		klingApplyOmniOptionalPassthrough(task, payload)
+	case klingPathVideoExtend:
+		videoID, err := klingResolveExtendVideoID(task)
 		if err != nil {
 			return nil, err
 		}
-		if len(images) > 0 {
-			list := make([]map[string]any, 0, len(images))
-			for _, u := range images {
-				list = append(list, map[string]any{"image_url": u})
-			}
-			payload["image_list"] = list
-		}
-		if task.ReferenceVideoURL != "" {
-			if err := validateExternalVideoURL(task.ReferenceVideoURL); err != nil {
-				return nil, infraerrors.BadRequest("VIDEO_UNSAFE_REFERENCE_URL",
-					"reference_video_url failed SSRF/allowlist validation: "+klingRedactBody(account, err.Error()))
-			}
-			payload["video_list"] = []map[string]any{{"video_url": task.ReferenceVideoURL}}
-		}
-	case klingPathVideoExtend:
-		videoURL := strings.TrimSpace(task.ReferenceVideoURL)
-		if videoURL == "" {
-			for _, item := range task.Content {
-				if item.Type == VideoContentTypeVideoURL && strings.TrimSpace(item.URL) != "" {
-					videoURL = strings.TrimSpace(item.URL)
-					break
-				}
-			}
-		}
-		if videoURL == "" {
-			return nil, infraerrors.BadRequest("KLING_MISSING_VIDEO", "video_extend requires reference_video_url")
-		}
-		if err := validateExternalVideoURL(videoURL); err != nil {
-			return nil, infraerrors.BadRequest("VIDEO_UNSAFE_REFERENCE_URL",
-				"reference_video_url failed SSRF/allowlist validation: "+klingRedactBody(account, err.Error()))
-		}
-		payload["video_url"] = videoURL
+		payload["video_id"] = videoID
 	case klingPathAvatar:
 		imageURL, _, err := klingResolveImagePair(account, task)
 		if err != nil {
@@ -548,22 +529,232 @@ func buildKlingCreateRequestPayload(account *VideoProviderAccount, task *VideoTa
 		if imageURL != "" {
 			payload["image"] = imageURL
 		}
-		audioURL := ""
-		for _, item := range task.Content {
-			if item.Type == VideoContentTypeAudioURL && strings.TrimSpace(item.URL) != "" {
-				audioURL = strings.TrimSpace(item.URL)
-				break
-			}
-		}
-		if audioURL != "" {
-			if err := validateExternalVideoURL(audioURL); err != nil {
-				return nil, infraerrors.BadRequest("VIDEO_UNSAFE_REFERENCE_URL",
-					"audio_url failed SSRF/allowlist validation: "+klingRedactBody(account, err.Error()))
-			}
-			payload["audio_url"] = audioURL
+		if err := klingApplyAvatarAudio(account, task, payload); err != nil {
+			return nil, err
 		}
 	}
 	return payload, nil
+}
+
+// klingResolveExtendVideoID returns the official Kling video_id for video-extend.
+// Order: task.UpstreamVideoID → content[].VideoID / metadata.video_id →
+// non-HTTP ReferenceVideoURL / content URL treated as id. Pure HTTP URLs without
+// an id fail closed with KLING_MISSING_VIDEO_ID (official API rejects video_url).
+func klingResolveExtendVideoID(task *VideoTask) (string, error) {
+	if task == nil {
+		return "", infraerrors.BadRequest("KLING_MISSING_VIDEO_ID", "video_extend requires upstream_video_id")
+	}
+	if id := strings.TrimSpace(task.UpstreamVideoID); id != "" {
+		if isHTTPContentURL(id) {
+			return "", infraerrors.BadRequest("KLING_MISSING_VIDEO_ID",
+				"upstream_video_id must be a Kling video asset id, not an HTTP URL")
+		}
+		return id, nil
+	}
+	for _, item := range task.Content {
+		if id := strings.TrimSpace(item.VideoID); id != "" {
+			if isHTTPContentURL(id) {
+				return "", infraerrors.BadRequest("KLING_MISSING_VIDEO_ID",
+					"content.video_id must be a Kling video asset id, not an HTTP URL")
+			}
+			return id, nil
+		}
+		if item.Metadata != nil {
+			if id := strings.TrimSpace(fmt.Sprint(item.Metadata["video_id"])); id != "" && id != "<nil>" {
+				if isHTTPContentURL(id) {
+					return "", infraerrors.BadRequest("KLING_MISSING_VIDEO_ID",
+						"content.metadata.video_id must be a Kling video asset id, not an HTTP URL")
+				}
+				return id, nil
+			}
+		}
+	}
+	// Non-HTTP reference_video_url / content video URL may be a bare asset id.
+	candidates := []string{strings.TrimSpace(task.ReferenceVideoURL)}
+	for _, item := range task.Content {
+		if item.Type == VideoContentTypeVideoURL {
+			candidates = append(candidates, strings.TrimSpace(item.URL))
+		}
+	}
+	sawHTTPOnly := false
+	for _, c := range candidates {
+		if c == "" {
+			continue
+		}
+		if isHTTPContentURL(c) {
+			sawHTTPOnly = true
+			continue
+		}
+		return c, nil
+	}
+	if sawHTTPOnly {
+		return "", infraerrors.BadRequest("KLING_MISSING_VIDEO_ID",
+			"video_extend requires upstream_video_id (Kling video asset id); HTTP video_url alone is not accepted")
+	}
+	return "", infraerrors.BadRequest("KLING_MISSING_VIDEO_ID", "video_extend requires upstream_video_id")
+}
+
+func klingApplyAvatarAudio(account *VideoProviderAccount, task *VideoTask, payload map[string]any) error {
+	audioID := ""
+	if task != nil {
+		audioID = strings.TrimSpace(task.AudioID)
+		if audioID == "" {
+			for _, item := range task.Content {
+				if id := strings.TrimSpace(item.AudioID); id != "" {
+					audioID = id
+					break
+				}
+				if item.Metadata != nil {
+					if id := strings.TrimSpace(fmt.Sprint(item.Metadata["audio_id"])); id != "" && id != "<nil>" {
+						audioID = id
+						break
+					}
+				}
+			}
+		}
+	}
+	soundFile := ""
+	if task != nil {
+		for _, item := range task.Content {
+			if item.Type == VideoContentTypeAudioURL && strings.TrimSpace(item.URL) != "" {
+				soundFile = strings.TrimSpace(item.URL)
+				break
+			}
+		}
+	}
+	if audioID != "" && soundFile != "" {
+		return infraerrors.BadRequest("KLING_AVATAR_AUDIO_CONFLICT",
+			"avatar accepts either audio_id or sound_file (content audio_url), not both")
+	}
+	if audioID != "" {
+		if isHTTPContentURL(audioID) {
+			return infraerrors.BadRequest("KLING_INVALID_AUDIO_ID",
+				"audio_id must be a Kling audio asset id, not an HTTP URL")
+		}
+		payload["audio_id"] = audioID
+		return nil
+	}
+	if soundFile != "" {
+		if err := validateExternalVideoURL(soundFile); err != nil {
+			return infraerrors.BadRequest("VIDEO_UNSAFE_REFERENCE_URL",
+				"sound_file failed SSRF/allowlist validation: "+klingRedactBody(account, err.Error()))
+		}
+		payload["sound_file"] = soundFile
+	}
+	return nil
+}
+
+func klingApplyOmniMediaLists(account *VideoProviderAccount, task *VideoTask, payload map[string]any) error {
+	images, err := klingCollectReferenceImages(account, task)
+	if err != nil {
+		return err
+	}
+	if len(images) > 0 {
+		list := make([]map[string]any, 0, len(images))
+		for _, u := range images {
+			entry := map[string]any{"image_url": u}
+			klingMergeOmniItemMetadata(task, VideoContentTypeImageURL, u, entry)
+			list = append(list, entry)
+		}
+		payload["image_list"] = list
+	}
+	videos, err := klingCollectReferenceVideos(account, task)
+	if err != nil {
+		return err
+	}
+	if len(videos) > 0 {
+		list := make([]map[string]any, 0, len(videos))
+		for _, u := range videos {
+			entry := map[string]any{"video_url": u}
+			klingMergeOmniItemMetadata(task, VideoContentTypeVideoURL, u, entry)
+			list = append(list, entry)
+		}
+		payload["video_list"] = list
+	}
+	return nil
+}
+
+// Known omni optional keys that may already appear on task/content metadata.
+// Do not invent unknown fields — only whitelist passthrough.
+var klingOmniPassthroughKeys = []string{
+	"type",
+	"refer_type",
+	"keep_original_sound",
+}
+
+func klingApplyOmniOptionalPassthrough(task *VideoTask, payload map[string]any) {
+	if task == nil {
+		return
+	}
+	// Task-level: PricingSource is not used; content item metadata is the clean path.
+	// Also accept top-level keys mirrored into the first content item's Metadata by clients.
+	for _, item := range task.Content {
+		if item.Metadata == nil {
+			continue
+		}
+		for _, key := range klingOmniPassthroughKeys {
+			if _, exists := payload[key]; exists {
+				continue
+			}
+			if v, ok := item.Metadata[key]; ok && v != nil {
+				payload[key] = v
+			}
+		}
+	}
+}
+
+func klingMergeOmniItemMetadata(task *VideoTask, contentType, url string, entry map[string]any) {
+	if task == nil {
+		return
+	}
+	for _, item := range task.Content {
+		if item.Type != contentType || strings.TrimSpace(item.URL) != url || item.Metadata == nil {
+			continue
+		}
+		for _, key := range klingOmniPassthroughKeys {
+			if v, ok := item.Metadata[key]; ok && v != nil {
+				entry[key] = v
+			}
+		}
+		return
+	}
+}
+
+func klingCollectReferenceVideos(account *VideoProviderAccount, task *VideoTask) ([]string, error) {
+	out := make([]string, 0, 4)
+	seen := map[string]struct{}{}
+	add := func(u string) error {
+		u = strings.TrimSpace(u)
+		if u == "" {
+			return nil
+		}
+		if err := validateExternalVideoURL(u); err != nil {
+			return infraerrors.BadRequest("VIDEO_UNSAFE_REFERENCE_URL",
+				"reference video failed SSRF/allowlist validation: "+klingRedactBody(account, err.Error()))
+		}
+		if _, ok := seen[u]; ok {
+			return nil
+		}
+		seen[u] = struct{}{}
+		out = append(out, u)
+		return nil
+	}
+	if task != nil {
+		for _, item := range task.Content {
+			if item.Type != VideoContentTypeVideoURL {
+				continue
+			}
+			if err := add(item.URL); err != nil {
+				return nil, err
+			}
+		}
+		if len(out) == 0 {
+			if err := add(task.ReferenceVideoURL); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return out, nil
 }
 
 func klingModeFromTask(task *VideoTask) string {
@@ -681,6 +872,7 @@ type klingEnvelope struct {
 		TaskStatusMsg string `json:"task_status_msg"`
 		TaskResult    struct {
 			Videos []struct {
+				ID  string `json:"id"`
 				URL string `json:"url"`
 			} `json:"videos"`
 		} `json:"task_result"`
@@ -753,7 +945,14 @@ func klingSmokeGateBlockedReasons(account *VideoProviderAccount, task *VideoTask
 	if task != nil {
 		duration = task.Duration
 	}
-	if duration != 5 && duration != 10 {
+	if klingTaskUsesOmniPath(task) {
+		// Omni official range is wider (3–15); keep smoke non-production at 5 only.
+		if duration < 3 || duration > 15 {
+			reasons = append(reasons, "kling omni duration must be between 3 and 15 seconds")
+		} else if !productionAuthorized && duration != 5 {
+			reasons = append(reasons, "single smoke duration must be 5 seconds")
+		}
+	} else if duration != 5 && duration != 10 {
 		reasons = append(reasons, "kling duration must be 5 or 10 seconds")
 	} else if !productionAuthorized && duration != 5 {
 		reasons = append(reasons, "single smoke duration must be 5 seconds")
@@ -762,7 +961,7 @@ func klingSmokeGateBlockedReasons(account *VideoProviderAccount, task *VideoTask
 }
 
 // klingDurationString maps task.Duration to the official Kling string enum.
-// Only "5" and "10" are accepted; all other values fail closed at payload build.
+// Non-omni: only "5" and "10". Omni: "3".."15" (official wider range).
 func klingDurationString(duration int) (string, error) {
 	switch duration {
 	case 5, 10:
@@ -770,6 +969,32 @@ func klingDurationString(duration int) (string, error) {
 	default:
 		return "", infraerrors.BadRequest("KLING_INVALID_DURATION", "kling duration must be 5 or 10 seconds")
 	}
+}
+
+func klingDurationStringForTask(task *VideoTask) (string, error) {
+	if task == nil {
+		return klingDurationString(0)
+	}
+	if klingTaskUsesOmniPath(task) {
+		if task.Duration < 3 || task.Duration > 15 {
+			return "", infraerrors.BadRequest("KLING_INVALID_DURATION",
+				"kling omni duration must be between 3 and 15 seconds")
+		}
+		return strconv.Itoa(task.Duration), nil
+	}
+	return klingDurationString(task.Duration)
+}
+
+func klingTaskUsesOmniPath(task *VideoTask) bool {
+	if task == nil {
+		return false
+	}
+	modelName, err := mapKlingUpstreamModelName(task.Model)
+	if err != nil {
+		return false
+	}
+	path, err := klingCreatePath(task, modelName)
+	return err == nil && path == klingPathOmniVideo
 }
 
 func klingRealCallAuthorized(account *VideoProviderAccount) bool {

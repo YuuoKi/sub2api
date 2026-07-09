@@ -143,8 +143,25 @@ func (s *VideoGatewayService) estimateKlingCostPerSecond(task *VideoTask) float6
 
 // calculateKlingActualCost settles Kling on duration × catalog CNY/sec (no token usage).
 // Prefer ActualDuration when present; otherwise request Duration.
+//
+// Fail-closed for production settle while PricingVersion is still PLACEHOLDER /
+// provisional (VideoPricingVersionKling202607). Estimates (budget gate / tiny_real)
+// still use estimateKlingCostPerSecond and are unaffected. Seedance is untouched.
 func (s *VideoGatewayService) calculateKlingActualCost(task *VideoTask) float64 {
 	if task == nil || task.Status != VideoStatusSucceeded {
+		return 0
+	}
+	version := strings.TrimSpace(task.PricingVersion)
+	if version == "" {
+		if _, v, ok := s.videoPricingCatalog().RateCNYPerSecond(task); ok {
+			version = v
+		}
+		if version == "" {
+			version = VideoPricingVersionKling202607
+		}
+	}
+	if IsKlingPricingProvisional(version) {
+		// Do not settle production as if official tariffs were confirmed.
 		return 0
 	}
 	rate := s.estimateKlingCostPerSecond(task)

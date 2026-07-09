@@ -34,7 +34,7 @@ const videoTaskSelectColumns = `
 		vt.aspect_ratio, vt.duration, vt.resolution,
 		vt.generate_audio, vt.watermark, vt.camera_fixed, vt.return_last_frame,
 		vt.usage_total_tokens, vt.actual_resolution, vt.actual_duration, vt.last_frame_url,
-		vt.status, vt.upstream_task_id, vt.result_url, vt.error_message, vt.cost_estimate, vt.poll_count,
+		vt.status, vt.upstream_task_id, vt.upstream_video_id, vt.audio_id, vt.result_url, vt.error_message, vt.cost_estimate, vt.poll_count,
 		vt.local_asset_path, vt.local_asset_saved_at,
 		vt.created_by, vt.created_at, vt.updated_at, vt.completed_at,
 		COALESCE(vpa.display_name, ''), COALESCE(u.email, ''), COALESCE(u.username, '')
@@ -51,8 +51,8 @@ const createVideoTaskSQL = `
 		provider_account_id, provider, model, task_type, prompt, negative_prompt,
 		reference_image_url, reference_video_url, content_json, has_video_input,
 		aspect_ratio, duration, resolution, generate_audio, watermark, camera_fixed,
-		return_last_frame, status, created_by
-	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+		return_last_frame, status, created_by, upstream_video_id, audio_id
+	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
 	RETURNING id, created_at, updated_at
 `
 
@@ -185,6 +185,8 @@ func (r *videoGatewayRepository) CreateTask(ctx context.Context, task *service.V
 		nullableBoolValue(task.ReturnLastFrame),
 		task.Status,
 		task.CreatedBy,
+		nullableNonEmptyString(task.UpstreamVideoID),
+		nullableNonEmptyString(task.AudioID),
 	), task)
 }
 
@@ -233,6 +235,8 @@ func (r *videoGatewayRepository) CreateDailyTrialTask(ctx context.Context, task 
 		nullableBoolValue(task.ReturnLastFrame),
 		task.Status,
 		task.CreatedBy,
+		nullableNonEmptyString(task.UpstreamVideoID),
+		nullableNonEmptyString(task.AudioID),
 	), task); err != nil {
 		return false, err
 	}
@@ -497,15 +501,17 @@ func (r *videoGatewayRepository) UpdateTask(ctx context.Context, task *service.V
 		UPDATE video_tasks
 		SET status = $2,
 		    upstream_task_id = $3,
-		    result_url = $4,
-		    error_message = $5,
-		    cost_estimate = $6,
-		    completed_at = $7,
-		    poll_count = $8,
-		    usage_total_tokens = $9,
-		    actual_resolution = $10,
-		    actual_duration = $11,
-		    last_frame_url = $12,
+		    upstream_video_id = $4,
+		    audio_id = $5,
+		    result_url = $6,
+		    error_message = $7,
+		    cost_estimate = $8,
+		    completed_at = $9,
+		    poll_count = $10,
+		    usage_total_tokens = $11,
+		    actual_resolution = $12,
+		    actual_duration = $13,
+		    last_frame_url = $14,
 		    worker_claimed_at = NULL,
 		    worker_claimed_until = NULL,
 		    updated_at = NOW()
@@ -520,6 +526,8 @@ func (r *videoGatewayRepository) UpdateTask(ctx context.Context, task *service.V
 		task.ID,
 		task.Status,
 		task.UpstreamTaskID,
+		nullableNonEmptyString(task.UpstreamVideoID),
+		nullableNonEmptyString(task.AudioID),
 		task.ResultURL,
 		task.ErrorMessage,
 		task.CostEstimate,
@@ -891,7 +899,7 @@ func scanVideoTask(row scanner) (*service.VideoTask, error) {
 	var contentJSON []byte
 	var generateAudio, watermark, cameraFixed, returnLastFrame sql.NullBool
 	var usageTotalTokens sql.NullInt64
-	var actualResolution, lastFrameURL sql.NullString
+	var actualResolution, lastFrameURL, upstreamVideoID, audioID sql.NullString
 	var actualDuration sql.NullInt64
 	var localAssetPath sql.NullString
 	var localAssetSavedAt sql.NullTime
@@ -920,6 +928,8 @@ func scanVideoTask(row scanner) (*service.VideoTask, error) {
 		&lastFrameURL,
 		&task.Status,
 		&task.UpstreamTaskID,
+		&upstreamVideoID,
+		&audioID,
 		&task.ResultURL,
 		&task.ErrorMessage,
 		&task.CostEstimate,
@@ -952,6 +962,12 @@ func scanVideoTask(row scanner) (*service.VideoTask, error) {
 	task.ActualDuration = intPtrFromNullInt64(actualDuration)
 	if lastFrameURL.Valid {
 		task.LastFrameURL = lastFrameURL.String
+	}
+	if upstreamVideoID.Valid {
+		task.UpstreamVideoID = upstreamVideoID.String
+	}
+	if audioID.Valid {
+		task.AudioID = audioID.String
 	}
 	if localAssetPath.Valid {
 		task.LocalAssetPath = localAssetPath.String

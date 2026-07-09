@@ -205,6 +205,7 @@ func TestKlingCreateOmniReferencePayload(t *testing.T) {
 		Content: []VideoTaskContentItem{
 			{Type: VideoContentTypeText, Text: "omni scene"},
 			{Type: VideoContentTypeImageURL, Role: VideoContentRoleReferenceImage, URL: "https://cdn.example.com/ref.png"},
+			{Type: VideoContentTypeVideoURL, Role: VideoContentRoleReferenceVideo, URL: "https://cdn.example.com/ref.mp4"},
 		},
 	})
 	if err != nil {
@@ -215,6 +216,18 @@ func TestKlingCreateOmniReferencePayload(t *testing.T) {
 	}
 	if gotBody["model_name"] != "kling-v3-omni" {
 		t.Fatalf("model_name=%v want kling-v3-omni", gotBody["model_name"])
+	}
+	imgList, ok := gotBody["image_list"].([]any)
+	if !ok || len(imgList) != 1 {
+		t.Fatalf("image_list=%v", gotBody["image_list"])
+	}
+	vidList, ok := gotBody["video_list"].([]any)
+	if !ok || len(vidList) != 1 {
+		t.Fatalf("video_list=%v", gotBody["video_list"])
+	}
+	vid0, _ := vidList[0].(map[string]any)
+	if vid0["video_url"] != "https://cdn.example.com/ref.mp4" {
+		t.Fatalf("video_list[0]=%v", vidList[0])
 	}
 }
 
@@ -316,11 +329,11 @@ func TestKlingCreateVideoExtendViaModelAlias(t *testing.T) {
 
 	// DB-safe task_type stays reference_to_video; model alias selects video-extend.
 	res, err := adapter.CreateTask(context.Background(), acc, &VideoTask{
-		Model:             klingModelVideoExtend,
-		TaskType:          VideoTaskTypeReferenceToVideo,
-		Prompt:            "continue the clip",
-		Duration:          5,
-		ReferenceVideoURL: "https://cdn.example.com/clip.mp4",
+		Model:           klingModelVideoExtend,
+		TaskType:        VideoTaskTypeReferenceToVideo,
+		Prompt:          "continue the clip",
+		Duration:        5,
+		UpstreamVideoID: "kling-vid-extend-src-1",
 	})
 	if err != nil {
 		t.Fatalf("CreateTask extend: %v", err)
@@ -328,8 +341,11 @@ func TestKlingCreateVideoExtendViaModelAlias(t *testing.T) {
 	if gotPath != "/v1/videos/video-extend" {
 		t.Fatalf("path=%q want /v1/videos/video-extend", gotPath)
 	}
-	if gotBody["video_url"] != "https://cdn.example.com/clip.mp4" {
-		t.Fatalf("video_url=%v", gotBody["video_url"])
+	if gotBody["video_id"] != "kling-vid-extend-src-1" {
+		t.Fatalf("video_id=%v", gotBody["video_id"])
+	}
+	if _, hasURL := gotBody["video_url"]; hasURL {
+		t.Fatalf("video_url must not be sent on extend, got %v", gotBody["video_url"])
 	}
 	if res.UpstreamTaskID != "kt-extend-1" {
 		t.Fatalf("UpstreamTaskID=%q", res.UpstreamTaskID)
@@ -366,8 +382,11 @@ func TestKlingCreateAvatarViaModelAlias(t *testing.T) {
 	if gotBody["image"] != "https://cdn.example.com/face.png" {
 		t.Fatalf("image=%v", gotBody["image"])
 	}
-	if gotBody["audio_url"] != "https://cdn.example.com/voice.mp3" {
-		t.Fatalf("audio_url=%v", gotBody["audio_url"])
+	if gotBody["sound_file"] != "https://cdn.example.com/voice.mp3" {
+		t.Fatalf("sound_file=%v", gotBody["sound_file"])
+	}
+	if _, hasAudioURL := gotBody["audio_url"]; hasAudioURL {
+		t.Fatalf("audio_url must not be sent on avatar, got %v", gotBody["audio_url"])
 	}
 	if res.UpstreamTaskID != "kt-avatar-1" {
 		t.Fatalf("UpstreamTaskID=%q", res.UpstreamTaskID)
@@ -727,5 +746,116 @@ func TestKlingCreateWritesRedactedAuditLog(t *testing.T) {
 	}
 	if !strings.Contains(string(raw), `"provider":"kling"`) && !strings.Contains(string(raw), `"provider": "kling"`) {
 		t.Fatalf("audit log should record kling provider: %s", raw)
+	}
+}
+
+func TestKlingCreateVideoExtendRejectsHTTPURLWithoutID(t *testing.T) {
+	called := false
+	adapter, acc, _ := newSmokeGatedKlingFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"code":0,"data":{"task_id":"x","task_status":"submitted"}}`))
+	})
+	_, err := adapter.CreateTask(context.Background(), acc, &VideoTask{
+		Model:             klingModelVideoExtend,
+		TaskType:          VideoTaskTypeReferenceToVideo,
+		Prompt:            "continue",
+		Duration:          5,
+		ReferenceVideoURL: "https://cdn.example.com/clip.mp4",
+	})
+	if err == nil {
+		t.Fatal("expected KLING_MISSING_VIDEO_ID")
+	}
+	if !strings.Contains(err.Error(), "KLING_MISSING_VIDEO_ID") && !strings.Contains(err.Error(), "upstream_video_id") {
+		t.Fatalf("want missing video id error, got %v", err)
+	}
+	if called {
+		t.Fatal("must not open network without video_id")
+	}
+}
+
+func TestKlingCreateAvatarAudioIDXorSoundFile(t *testing.T) {
+	var gotBody map[string]any
+	adapter, acc, _ := newSmokeGatedKlingFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&gotBody)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"code":0,"data":{"task_id":"kt-avatar-id-1","task_status":"submitted"}}`))
+	})
+	_, err := adapter.CreateTask(context.Background(), acc, &VideoTask{
+		Model:    klingModelAvatar,
+		TaskType: VideoTaskTypeImageToVideo,
+		Prompt:   "speak",
+		Duration: 5,
+		AudioID:  "kling-audio-1",
+		Content: []VideoTaskContentItem{
+			{Type: VideoContentTypeText, Text: "speak"},
+			{Type: VideoContentTypeImageURL, Role: VideoContentRoleFirstFrame, URL: "https://cdn.example.com/face.png"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateTask avatar audio_id: %v", err)
+	}
+	if gotBody["audio_id"] != "kling-audio-1" {
+		t.Fatalf("audio_id=%v", gotBody["audio_id"])
+	}
+	if _, has := gotBody["sound_file"]; has {
+		t.Fatalf("sound_file must be absent when audio_id set, got %v", gotBody["sound_file"])
+	}
+
+	_, err = adapter.CreateTask(context.Background(), acc, &VideoTask{
+		Model:    klingModelAvatar,
+		TaskType: VideoTaskTypeImageToVideo,
+		Prompt:   "speak",
+		Duration: 5,
+		AudioID:  "kling-audio-1",
+		Content: []VideoTaskContentItem{
+			{Type: VideoContentTypeText, Text: "speak"},
+			{Type: VideoContentTypeImageURL, Role: VideoContentRoleFirstFrame, URL: "https://cdn.example.com/face.png"},
+			{Type: VideoContentTypeAudioURL, Role: VideoContentRoleReferenceAudio, URL: "https://cdn.example.com/voice.mp3"},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected audio_id/sound_file conflict")
+	}
+	if !strings.Contains(err.Error(), "KLING_AVATAR_AUDIO_CONFLICT") && !strings.Contains(err.Error(), "audio_id") {
+		t.Fatalf("want conflict error, got %v", err)
+	}
+}
+
+func TestKlingPollPersistsUpstreamVideoID(t *testing.T) {
+	adapter, acc, _ := newSmokeGatedKlingFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"code":0,"message":"ok","data":{"task_id":"kt-poll-1","task_status":"succeed","task_result":{"videos":[{"id":"kling-vid-out-9","url":"https://cdn.example.com/out.mp4"}]}}}`))
+	})
+	res, err := adapter.PollTask(context.Background(), acc, &VideoTask{
+		Model:          "kling-v1",
+		TaskType:       VideoTaskTypeTextToVideo,
+		Duration:       5,
+		UpstreamTaskID: "kt-poll-1",
+	})
+	if err != nil {
+		t.Fatalf("PollTask: %v", err)
+	}
+	if res.UpstreamVideoID != "kling-vid-out-9" {
+		t.Fatalf("UpstreamVideoID=%q", res.UpstreamVideoID)
+	}
+	if res.ResultURL != "https://cdn.example.com/out.mp4" {
+		t.Fatalf("ResultURL=%q", res.ResultURL)
+	}
+}
+
+func TestKlingOmniDurationAllowsWiderRange(t *testing.T) {
+	if err := validateVideoGenerationContract(VideoProviderKling, "kling-3.0-omni", 8, "720p"); err != nil {
+		t.Fatalf("omni duration 8 should pass: %v", err)
+	}
+	if err := validateVideoGenerationContract(VideoProviderKling, "kling-v1", 8, "720p"); err == nil {
+		t.Fatal("non-omni duration 8 must fail")
+	}
+	got, err := klingDurationStringForTask(&VideoTask{Model: "kling-3.0-omni", Duration: 8, TaskType: VideoTaskTypeReferenceToVideo})
+	if err != nil {
+		t.Fatalf("klingDurationStringForTask: %v", err)
+	}
+	if got != "8" {
+		t.Fatalf("got %q want 8", got)
 	}
 }

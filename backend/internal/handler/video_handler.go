@@ -31,6 +31,8 @@ type videoTaskCreateRequest struct {
 	NegativePrompt    string                         `json:"negative_prompt" binding:"omitempty,max=4000"`
 	ReferenceImageURL string                         `json:"reference_image_url" binding:"omitempty,max=1000"`
 	ReferenceVideoURL string                         `json:"reference_video_url" binding:"omitempty,max=1000"`
+	UpstreamVideoID   string                         `json:"upstream_video_id" binding:"omitempty,max=200"`
+	AudioID           string                         `json:"audio_id" binding:"omitempty,max=200"`
 	Content           []service.VideoTaskContentItem `json:"content" binding:"omitempty,dive"`
 	AspectRatio       string                         `json:"aspect_ratio" binding:"omitempty,max=20"`
 	Duration          int                            `json:"duration" binding:"omitempty"`
@@ -50,6 +52,8 @@ type apiKeyVideoTaskCreateRequest struct {
 	NegativePrompt    string                         `json:"negative_prompt" binding:"omitempty,max=4000"`
 	ReferenceImageURL string                         `json:"reference_image_url" binding:"omitempty,max=1000"`
 	ReferenceVideoURL string                         `json:"reference_video_url" binding:"omitempty,max=1000"`
+	UpstreamVideoID   string                         `json:"upstream_video_id" binding:"omitempty,max=200"`
+	AudioID           string                         `json:"audio_id" binding:"omitempty,max=200"`
 	Content           []service.VideoTaskContentItem `json:"content" binding:"omitempty,dive"`
 	AspectRatio       string                         `json:"aspect_ratio" binding:"omitempty,max=20"`
 	Duration          int                            `json:"duration" binding:"omitempty"`
@@ -71,6 +75,8 @@ type videoTaskResponse struct {
 	NegativePrompt        string                         `json:"negative_prompt"`
 	ReferenceImageURL     string                         `json:"reference_image_url"`
 	ReferenceVideoURL     string                         `json:"reference_video_url"`
+	UpstreamVideoID       string                         `json:"upstream_video_id,omitempty"`
+	AudioID               string                         `json:"audio_id,omitempty"`
 	Content               []service.VideoTaskContentItem `json:"content,omitempty"`
 	HasVideoInput         bool                           `json:"has_video_input"`
 	AspectRatio           string                         `json:"aspect_ratio"`
@@ -229,6 +235,8 @@ func (h *VideoHandler) CreateTask(c *gin.Context) {
 		NegativePrompt:           req.NegativePrompt,
 		ReferenceImageURL:        req.ReferenceImageURL,
 		ReferenceVideoURL:        req.ReferenceVideoURL,
+		UpstreamVideoID:          req.UpstreamVideoID,
+		AudioID:                  req.AudioID,
 		Content:                  req.Content,
 		AspectRatio:              req.AspectRatio,
 		Duration:                 req.Duration,
@@ -335,6 +343,8 @@ func (h *VideoHandler) CreateAPIKeyVideoTask(c *gin.Context) {
 			NegativePrompt:    req.NegativePrompt,
 			ReferenceImageURL: req.ReferenceImageURL,
 			ReferenceVideoURL: req.ReferenceVideoURL,
+			UpstreamVideoID:   req.UpstreamVideoID,
+			AudioID:           req.AudioID,
 			Content:           req.Content,
 			AspectRatio:       req.AspectRatio,
 			Duration:          req.Duration,
@@ -353,6 +363,8 @@ func (h *VideoHandler) CreateAPIKeyVideoTask(c *gin.Context) {
 			NegativePrompt:    req.NegativePrompt,
 			ReferenceImageURL: req.ReferenceImageURL,
 			ReferenceVideoURL: req.ReferenceVideoURL,
+			UpstreamVideoID:   req.UpstreamVideoID,
+			AudioID:           req.AudioID,
 			Content:           req.Content,
 			AspectRatio:       req.AspectRatio,
 			Duration:          req.Duration,
@@ -371,6 +383,8 @@ func (h *VideoHandler) CreateAPIKeyVideoTask(c *gin.Context) {
 			NegativePrompt:    req.NegativePrompt,
 			ReferenceImageURL: req.ReferenceImageURL,
 			ReferenceVideoURL: req.ReferenceVideoURL,
+			UpstreamVideoID:   req.UpstreamVideoID,
+			AudioID:           req.AudioID,
 			Content:           req.Content,
 			AspectRatio:       req.AspectRatio,
 			Duration:          req.Duration,
@@ -389,6 +403,8 @@ func (h *VideoHandler) CreateAPIKeyVideoTask(c *gin.Context) {
 			NegativePrompt:    req.NegativePrompt,
 			ReferenceImageURL: req.ReferenceImageURL,
 			ReferenceVideoURL: req.ReferenceVideoURL,
+			UpstreamVideoID:   req.UpstreamVideoID,
+			AudioID:           req.AudioID,
 			Content:           req.Content,
 			AspectRatio:       req.AspectRatio,
 			Duration:          req.Duration,
@@ -407,6 +423,8 @@ func (h *VideoHandler) CreateAPIKeyVideoTask(c *gin.Context) {
 			NegativePrompt:    req.NegativePrompt,
 			ReferenceImageURL: req.ReferenceImageURL,
 			ReferenceVideoURL: req.ReferenceVideoURL,
+			UpstreamVideoID:   req.UpstreamVideoID,
+			AudioID:           req.AudioID,
 			Content:           req.Content,
 			AspectRatio:       req.AspectRatio,
 			Duration:          req.Duration,
@@ -639,6 +657,8 @@ func videoTaskToResponse(task *service.VideoTask, events []*service.VideoTaskEve
 		NegativePrompt:        task.NegativePrompt,
 		ReferenceImageURL:     task.ReferenceImageURL,
 		ReferenceVideoURL:     task.ReferenceVideoURL,
+		UpstreamVideoID:       task.UpstreamVideoID,
+		AudioID:               task.AudioID,
 		Content:               task.Content,
 		HasVideoInput:         task.HasVideoInput,
 		AspectRatio:           task.AspectRatio,

@@ -126,7 +126,7 @@ func (s *VideoGatewayService) CreateProviderAccount(ctx context.Context, p Video
 		BaseURL:            strings.TrimSpace(p.BaseURL),
 		DefaultModel:       firstNonEmptyVideo(strings.TrimSpace(p.DefaultModel), defaultVideoModel(p.Provider)),
 		RateLimitPerMinute: defaultVideoRateLimit(p.RateLimitPerMinute),
-		Metadata:           p.Metadata,
+		Metadata:           sanitizeVideoProviderMetadata(p.Metadata),
 	}
 	if account.Provider == VideoProviderKling {
 		if err := s.applyKlingCredentials(account, p.AccessKey, p.SecretKey, false); err != nil {
@@ -168,7 +168,7 @@ func (s *VideoGatewayService) UpdateProviderAccount(ctx context.Context, id int6
 		account.RateLimitPerMinute = defaultVideoRateLimit(*p.RateLimitPerMinute)
 	}
 	if p.Metadata != nil {
-		account.Metadata = *p.Metadata
+		account.Metadata = sanitizeVideoProviderMetadata(*p.Metadata)
 	}
 	if account.Provider == VideoProviderKling {
 		ak := ""
@@ -1014,6 +1014,8 @@ func (s *VideoGatewayService) createTaskWithRoute(ctx context.Context, p VideoTa
 		NegativePrompt:      strings.TrimSpace(p.NegativePrompt),
 		ReferenceImageURL:   strings.TrimSpace(p.ReferenceImageURL),
 		ReferenceVideoURL:   strings.TrimSpace(p.ReferenceVideoURL),
+		UpstreamVideoID:     strings.TrimSpace(p.UpstreamVideoID),
+		AudioID:             strings.TrimSpace(p.AudioID),
 		Content:             content,
 		HasVideoInput:       hasVideoInput,
 		AspectRatio:         firstNonEmptyVideo(strings.TrimSpace(p.AspectRatio), "16:9"),
@@ -1588,6 +1590,7 @@ func (s *VideoGatewayService) prepareProviderForResponse(account *VideoProviderA
 	if account == nil {
 		return
 	}
+	account.Metadata = sanitizeVideoProviderMetadata(account.Metadata)
 	account.APIKeyConfigured = strings.TrimSpace(account.EncryptedAPIKey) != ""
 	account.AuthMode = videoProviderAuthMode(account.Provider, account.APIKeyConfigured)
 	if account.APIKeyConfigured && account.Provider == VideoProviderKling && strings.TrimSpace(account.MaskedKey) == "" {
@@ -1601,6 +1604,64 @@ func (s *VideoGatewayService) prepareProviderForResponse(account *VideoProviderA
 	account.PlainAPIKey = ""
 	account.PlainAccessKey = ""
 	account.PlainSecretKey = ""
+}
+
+func sanitizeVideoProviderMetadata(metadata map[string]any) map[string]any {
+	if metadata == nil {
+		return nil
+	}
+	out := make(map[string]any, len(metadata))
+	for key, value := range metadata {
+		if isSensitiveVideoProviderMetadataKey(key) {
+			continue
+		}
+		out[key] = sanitizeVideoProviderMetadataValue(value)
+	}
+	return out
+}
+
+func sanitizeVideoProviderMetadataValue(value any) any {
+	switch v := value.(type) {
+	case map[string]any:
+		return sanitizeVideoProviderMetadata(v)
+	case []any:
+		out := make([]any, len(v))
+		for i, item := range v {
+			out[i] = sanitizeVideoProviderMetadataValue(item)
+		}
+		return out
+	case []map[string]any:
+		out := make([]map[string]any, len(v))
+		for i, item := range v {
+			out[i] = sanitizeVideoProviderMetadata(item)
+		}
+		return out
+	default:
+		return value
+	}
+}
+
+func isSensitiveVideoProviderMetadataKey(key string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(key))
+	normalized = strings.NewReplacer("_", "", "-", "", ".", "", " ", "").Replace(normalized)
+	for _, fragment := range []string{
+		"apikey",
+		"accesskey",
+		"secretkey",
+		"authorization",
+		"bearer",
+		"password",
+		"credentials",
+		"credential",
+		"token",
+		"jwt",
+		"secret",
+	} {
+		if strings.Contains(normalized, fragment) {
+			return true
+		}
+	}
+	return false
 }
 
 func videoMetadataString(metadata map[string]any, key string) string {

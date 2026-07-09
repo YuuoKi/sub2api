@@ -551,11 +551,6 @@ func TestKlingSucceededTaskSettlesPerSecondCostAndCarriesPricingVersion(t *testi
 		CreatedBy:  8,
 	}
 
-	cost := svc.chargeableVideoCost(task)
-	if cost <= 0 {
-		t.Fatalf("kling settle cost must be non-zero, got %.4f", cost)
-	}
-
 	svc.applyVideoBillingMetadata(task)
 	if task.PricingVersion != VideoPricingVersionKling202607 {
 		t.Fatalf("PricingVersion = %q, want %q", task.PricingVersion, VideoPricingVersionKling202607)
@@ -564,10 +559,46 @@ func TestKlingSucceededTaskSettlesPerSecondCostAndCarriesPricingVersion(t *testi
 		t.Fatalf("Currency = %q, want CNY", task.Currency)
 	}
 
-	// Settle must match estimate for the same task shape (Kling has no token usage).
+	// PLACEHOLDER / provisional catalog: production settle must fail-closed (cost 0).
+	// tiny_real / budget estimates may still use estimateVideoCost.
+	cost := svc.chargeableVideoCost(task)
+	if cost != 0 {
+		t.Fatalf("kling provisional settle must be 0 (fail-closed), got %.4f", cost)
+	}
+	estimate := svc.estimateVideoCost(task)
+	if estimate <= 0 {
+		t.Fatalf("kling estimate must remain non-zero for tiny_real/budget, got %.4f", estimate)
+	}
+	if !IsKlingPricingProvisional(task.PricingVersion) {
+		t.Fatalf("expected provisional pricing version %q", task.PricingVersion)
+	}
+}
+
+func TestKlingSettleUsesOfficialPricingVersionWhenNotProvisional(t *testing.T) {
+	svc := NewVideoGatewayService(newMemoryVideoGatewayRepo(), noopVideoKeyEncryptor{}, nil)
+	svc.SetVideoPricingCatalog(NewVideoPricingCatalog([]VideoPricingEntry{{
+		Provider:        VideoProviderKling,
+		ModelMatch:      "kling-v2-6",
+		StdCNYPerSecond: 0.8,
+		ProCNYPerSecond: 1.6,
+		PricingVersion:  "kling-video-official-test",
+	}}))
+	task := &VideoTask{
+		Provider:       VideoProviderKling,
+		Model:          "kling-v2-6",
+		Status:         VideoStatusSucceeded,
+		Duration:       5,
+		Resolution:     "720p",
+		PricingVersion: "kling-video-official-test",
+		CreatedBy:      8,
+	}
+	cost := svc.chargeableVideoCost(task)
+	if cost <= 0 {
+		t.Fatalf("official kling settle must be non-zero, got %.4f", cost)
+	}
 	estimate := svc.estimateVideoCost(task)
 	if !approxEqual(cost, estimate) {
-		t.Fatalf("settle=%.8f estimate=%.8f; kling settle should equal per-second estimate", cost, estimate)
+		t.Fatalf("settle=%.8f estimate=%.8f", cost, estimate)
 	}
 }
 

@@ -132,25 +132,31 @@ type VideoTask struct {
 	ReturnLastFrame     *bool
 	Status              string
 	UpstreamTaskID      string
-	ResultURL           string
-	UsageTotalTokens    *int64
-	ActualResolution    string
-	ActualDuration      *int
-	LastFrameURL        string
-	ErrorMessage        string
-	CostEstimate        float64
-	Currency            string
-	PricingSource       string
-	PricingVersion      string
-	PollCount           int
-	LocalAssetPath      string
-	LocalAssetSavedAt   *time.Time
-	CreatedBy           int64
-	CreatedByEmail      string
-	CreatedByName       string
-	CreatedAt           time.Time
-	UpdatedAt           time.Time
-	CompletedAt         *time.Time
+	// UpstreamVideoID is the provider asset id for a generated video (e.g. Kling
+	// task_result.videos[].id). Required for video-extend; distinct from UpstreamTaskID.
+	UpstreamVideoID string
+	// AudioID is an optional Kling avatar audio asset id (mutually exclusive with
+	// content[] audio_url → sound_file on the wire).
+	AudioID           string
+	ResultURL         string
+	UsageTotalTokens  *int64
+	ActualResolution  string
+	ActualDuration    *int
+	LastFrameURL      string
+	ErrorMessage      string
+	CostEstimate      float64
+	Currency          string
+	PricingSource     string
+	PricingVersion    string
+	PollCount         int
+	LocalAssetPath    string
+	LocalAssetSavedAt *time.Time
+	CreatedBy         int64
+	CreatedByEmail    string
+	CreatedByName     string
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	CompletedAt       *time.Time
 }
 
 type VideoTaskContentItem struct {
@@ -158,6 +164,13 @@ type VideoTaskContentItem struct {
 	Role string `json:"role,omitempty"`
 	URL  string `json:"url,omitempty"`
 	Text string `json:"text,omitempty"`
+	// VideoID is an optional Kling video asset id for extend (content metadata).
+	VideoID string `json:"video_id,omitempty"`
+	// AudioID is an optional Kling audio asset id for avatar (content metadata).
+	AudioID string `json:"audio_id,omitempty"`
+	// Metadata carries optional provider-specific passthrough keys (e.g. omni
+	// refer_type / keep_original_sound). Unknown keys are ignored by adapters.
+	Metadata map[string]any `json:"metadata,omitempty"`
 }
 
 type VideoTaskEvent struct {
@@ -269,6 +282,8 @@ type VideoTaskCreateParams struct {
 	NegativePrompt                         string
 	ReferenceImageURL                      string
 	ReferenceVideoURL                      string
+	UpstreamVideoID                        string // Kling extend: official video_id
+	AudioID                                string // Kling avatar: official audio_id (xor sound_file)
 	Content                                []VideoTaskContentItem
 	AspectRatio                            string
 	Duration                               int

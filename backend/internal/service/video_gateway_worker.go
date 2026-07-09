@@ -402,6 +402,9 @@ func (s *VideoGatewayService) pollTask(ctx context.Context, adapter VideoAdapter
 	if result.ResultURL != "" {
 		task.ResultURL = result.ResultURL
 	}
+	if strings.TrimSpace(result.UpstreamVideoID) != "" {
+		task.UpstreamVideoID = strings.TrimSpace(result.UpstreamVideoID)
+	}
 	if result.UsageTotalTokens != nil {
 		v := *result.UsageTotalTokens
 		task.UsageTotalTokens = &v

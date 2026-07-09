@@ -25,6 +25,7 @@ type VideoAdapter interface {
 
 type VideoAdapterResult struct {
 	UpstreamTaskID   string
+	UpstreamVideoID  string // provider video asset id (e.g. Kling videos[].id)
 	Status           string
 	ResultURL        string
 	UsageTotalTokens *int64

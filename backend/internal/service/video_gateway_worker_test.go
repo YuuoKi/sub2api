@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"sort"
 	"strings"
 	"testing"
@@ -1018,22 +1020,60 @@ func TestVideoAdapterContractSafeProviderBehavior(t *testing.T) {
 		if _, err := adapter.CreateTask(ctx, &VideoProviderAccount{Provider: provider, Enabled: true}, task); err == nil || !strings.Contains(err.Error(), "api key is not configured") {
 			t.Fatalf("%s without key should be safely disabled, err=%v", provider, err)
 		}
-		_, err := adapter.CreateTask(ctx, &VideoProviderAccount{
-			Provider:         provider,
-			Enabled:          true,
-			APIKeyConfigured: true,
-			PlainAPIKey:      "placeholder-key-should-not-leak",
-		}, task)
-		if err == nil {
-			t.Fatalf("%s with placeholder key should return error", provider)
+		if provider == VideoProviderSeedance {
+			_, err := adapter.CreateTask(ctx, &VideoProviderAccount{
+				Provider:         provider,
+				Enabled:          true,
+				APIKeyConfigured: true,
+				PlainAPIKey:      "placeholder-key-should-not-leak",
+			}, task)
+			if err == nil {
+				t.Fatalf("%s with placeholder key should return error", provider)
+			}
+			errLower := strings.ToLower(err.Error())
+			if !strings.Contains(errLower, "smoke") && !strings.Contains(errLower, "authorization") {
+				t.Fatalf("%s real call should remain behind the single-smoke gate, err=%v", provider, err)
+			}
 		}
-		errLower := strings.ToLower(err.Error())
-		if provider == VideoProviderKling && !strings.Contains(errLower, "disabled") {
-			t.Fatalf("%s real call should remain disabled, err=%v", provider, err)
-		}
-		if provider == VideoProviderSeedance && !strings.Contains(errLower, "smoke") && !strings.Contains(errLower, "authorization") {
-			t.Fatalf("%s real call should remain behind the single-smoke gate, err=%v", provider, err)
-		}
+	}
+
+	// Kling configured path: smoke-gated real adapter must reach httptest (not a hard disable).
+	klingCalled := false
+	klingSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		klingCalled = true
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"code":0,"message":"ok","data":{"task_id":"kt-worker-1","task_status":"submitted"}}`))
+	}))
+	t.Cleanup(klingSrv.Close)
+	t.Setenv("SUB2API_VIDEO_REAL_SMOKE_ENABLED", "1")
+	t.Setenv("SUB2API_VIDEO_REDACTED_EVENT_LOG", t.TempDir()+"/kling-worker-redacted.log")
+	t.Setenv("SUB2API_VIDEO_URL_ALLOWLIST", "klingai.com,example.com")
+	klingAdapter := registry[VideoProviderKling]
+	klingResult, klingErr := klingAdapter.CreateTask(ctx, &VideoProviderAccount{
+		Provider:         VideoProviderKling,
+		Enabled:          true,
+		APIKeyConfigured: true,
+		PlainAccessKey:   "ak-kling-worker-001122334455",
+		PlainSecretKey:   "sk-kling-worker-556677889900",
+		BaseURL:          klingSrv.URL,
+		Metadata:         map[string]any{"single_smoke_authorized": true},
+	}, &VideoTask{
+		ID:          42,
+		Model:       "kling-v1",
+		TaskType:    VideoTaskTypeTextToVideo,
+		Prompt:      "kling configured create should reach upstream",
+		AspectRatio: "16:9",
+		Duration:    5,
+		Resolution:  "720p",
+	})
+	if klingErr != nil {
+		t.Fatalf("kling configured create should succeed against httptest, err=%v", klingErr)
+	}
+	if !klingCalled {
+		t.Fatal("kling configured create should hit httptest upstream")
+	}
+	if klingResult.UpstreamTaskID != "kt-worker-1" || klingResult.Status != VideoStatusSubmitted {
+		t.Fatalf("unexpected kling create result: %#v", klingResult)
 	}
 }
 

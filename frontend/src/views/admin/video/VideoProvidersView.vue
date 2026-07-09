@@ -5,7 +5,7 @@
         <div>
           <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? '生成通道' : '模型通道' }}</h1>
           <p class="mt-1 max-w-4xl text-sm text-gray-500 dark:text-gray-400">
-            {{ isVideoGatewayDemoMode ? '管理员看 Seedance / Kling / 演示通道的能力边界、切换状态和真实验证缺口。' : '管理演示通道与未来真实模型通道的启用状态和调用凭证。' }}
+            {{ isVideoGatewayDemoMode ? '管理员看 Seedance / Kling / 演示通道的能力边界、切换状态和授权 gate 缺口。' : '管理演示通道与真实模型通道（含 Kling AK+SK）的启用状态和调用凭证。' }}
           </p>
         </div>
         <button class="btn btn-outline" type="button" :disabled="loading" @click="loadProviders">
@@ -35,7 +35,7 @@
       <section v-if="isVideoGatewayDemoMode" class="rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-800">
         <div class="border-b border-gray-200 px-5 py-4 dark:border-dark-700">
           <h2 class="text-base font-semibold text-gray-900 dark:text-white">引擎能力矩阵</h2>
-          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Seedance、Kling、官方接口、内部授权通道和演示通道分开管理；真实生成通道当前均需授权验证。</p>
+          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Seedance、Kling、官方接口、内部授权通道和演示通道分开管理；真实通道已接入，调用前仍需凭证与 smoke/production gate。</p>
         </div>
         <div class="overflow-x-auto">
           <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-dark-700">
@@ -146,7 +146,19 @@
               <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">{{ isVideoGatewayDemoMode ? '默认模型' : '默认模型' }}</label>
               <input v-model="form.default_model" class="input" maxlength="200" />
             </div>
-            <div>
+            <template v-if="selected.provider === 'kling'">
+              <div>
+                <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Access Key</label>
+                <input v-model="form.access_key" class="input" type="password" autocomplete="off" placeholder="留空表示保留当前 Access Key" maxlength="4000" />
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">当前：{{ providerKeyLabel(selected.api_key_configured, selected.masked_key, selected.key_status, selected.provider) }}</p>
+              </div>
+              <div>
+                <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Secret Key</label>
+                <input v-model="form.secret_key" class="input" type="password" autocomplete="off" placeholder="留空表示保留当前 Secret Key" maxlength="4000" />
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Secret Key 不会回显；留空表示保留现有值。</p>
+              </div>
+            </template>
+            <div v-else>
               <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">调用凭证（API Key）</label>
               <input v-model="form.api_key" class="input" type="password" autocomplete="off" placeholder="留空表示保留当前凭证" maxlength="4000" />
               <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">当前：{{ providerKeyLabel(selected.api_key_configured, selected.masked_key, selected.key_status, selected.provider) }}</p>
@@ -280,15 +292,15 @@ const engineMatrix = [
     mode: '文生 / 图生 / 参考生成',
     bestFor: 'AI 中剧、AI 短剧、全局参考、多模态 reference、多镜头潜力',
     capabilities: '全局参考、图片 / 视频 / 音频参考、运镜 / 表演 / 光影控制',
-    status: '待授权验证',
+    status: '已接入 · 待 gate',
     safe: false,
   },
   {
     provider: 'Kling',
-    mode: '文生 / 图生 / 动作控制 / 口型同步',
+    mode: '文生 / 图生 / 多图 / 全能 / 延长 / 数字人',
     bestFor: '真人短剧、漫剧、真人转漫剧、情绪爆发、动作冲突、多角色对话',
-    capabilities: '首尾帧、动作控制、口型同步、真人、漫剧、多角色、对话 / 声音模式',
-    status: '待授权验证',
+    capabilities: 'JWT AK+SK、首尾帧、多图参考、omni、extend、avatar；时长 5|10',
+    status: '已接入 · 待 AK/SK',
     safe: false,
   },
   {
@@ -321,6 +333,8 @@ const form = reactive({
   display_name: '',
   enabled: false,
   api_key: '',
+  access_key: '',
+  secret_key: '',
   base_url: '',
   default_model: '',
   rate_limit_per_minute: 60,
@@ -331,6 +345,8 @@ function selectProvider(provider: VideoProviderAccount) {
   form.display_name = providerDisplayName(provider)
   form.enabled = provider.enabled
   form.api_key = ''
+  form.access_key = ''
+  form.secret_key = ''
   form.base_url = provider.base_url
   form.default_model = provider.default_model
   form.rate_limit_per_minute = provider.rate_limit_per_minute
@@ -359,15 +375,26 @@ async function saveProvider() {
   if (!selected.value) return
   saving.value = true
   try {
+    const credentialPayload =
+      selected.value.provider === 'kling'
+        ? {
+            ...(form.access_key.trim() ? { access_key: form.access_key.trim() } : {}),
+            ...(form.secret_key.trim() ? { secret_key: form.secret_key.trim() } : {}),
+          }
+        : {
+            ...(form.api_key.trim() ? { api_key: form.api_key.trim() } : {}),
+          }
     await adminAPI.video.updateProvider(selected.value.id, {
       display_name: form.display_name,
       enabled: form.enabled,
       base_url: form.base_url,
       default_model: form.default_model,
       rate_limit_per_minute: form.rate_limit_per_minute,
-      ...(form.api_key.trim() ? { api_key: form.api_key.trim() } : {}),
+      ...credentialPayload,
     })
     form.api_key = ''
+    form.access_key = ''
+    form.secret_key = ''
     appStore.showSuccess(isVideoGatewayDemoMode ? '生成通道配置已保存' : '通道配置已保存')
     await loadProviders()
   } catch (err) {

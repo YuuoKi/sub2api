@@ -53,8 +53,11 @@ type VideoProviderAccount struct {
 	Enabled             bool
 	EncryptedAPIKey     string
 	PlainAPIKey         string `json:"-"` // decrypted transient credential; never serialize
+	PlainAccessKey      string `json:"-"` // Kling AK (transient); never serialize
+	PlainSecretKey      string `json:"-"` // Kling SK (transient); never serialize
 	APIKeyConfigured    bool
 	APIKeyDecryptFailed bool
+	AuthMode            string // "bearer" | "kling_aksk" (response hint; never a secret)
 	MaskedKey           string
 	BaseURL             string
 	DefaultModel        string
@@ -76,22 +79,22 @@ type VideoProviderAccount struct {
 	UpdatedAt           time.Time
 }
 
-// String implements fmt.Stringer so that the transient plaintext API key is
-// never rendered by %v/%+v/%s formatting (defensive bottom: PlainAPIKey is the
-// decrypted upstream credential and must not land in logs, panics or dumps).
+// String implements fmt.Stringer so that the transient plaintext credentials are
+// never rendered by %v/%+v/%s formatting (defensive bottom: PlainAPIKey /
+// PlainAccessKey / PlainSecretKey must not land in logs, panics or dumps).
 func (a VideoProviderAccount) String() string {
-	return fmt.Sprintf("VideoProviderAccount{ID:%d, Provider:%q, DisplayName:%q, Enabled:%t, APIKeyConfigured:%t, MaskedKey:%q, PlainAPIKey:[REDACTED]}",
-		a.ID, a.Provider, a.DisplayName, a.Enabled, a.APIKeyConfigured, a.MaskedKey)
+	return fmt.Sprintf("VideoProviderAccount{ID:%d, Provider:%q, DisplayName:%q, Enabled:%t, APIKeyConfigured:%t, AuthMode:%q, MaskedKey:%q, PlainAPIKey:[REDACTED], PlainAccessKey:[REDACTED], PlainSecretKey:[REDACTED]}",
+		a.ID, a.Provider, a.DisplayName, a.Enabled, a.APIKeyConfigured, a.AuthMode, a.MaskedKey)
 }
 
 // GoString implements fmt.GoStringer so the %#v verb (Go-syntax dump) also masks
-// the plaintext key instead of printing every struct field verbatim.
+// the plaintext credentials instead of printing every struct field verbatim.
 func (a VideoProviderAccount) GoString() string {
 	return a.String()
 }
 
 // LogValue implements slog.LogValuer so that structured logging of the account
-// (e.g. slog.Any("account", acc)) never exposes the plaintext API key.
+// (e.g. slog.Any("account", acc)) never exposes plaintext credentials.
 func (a VideoProviderAccount) LogValue() slog.Value {
 	return slog.GroupValue(
 		slog.Int64("id", a.ID),
@@ -99,8 +102,11 @@ func (a VideoProviderAccount) LogValue() slog.Value {
 		slog.String("display_name", a.DisplayName),
 		slog.Bool("enabled", a.Enabled),
 		slog.Bool("api_key_configured", a.APIKeyConfigured),
+		slog.String("auth_mode", a.AuthMode),
 		slog.String("masked_key", a.MaskedKey),
 		slog.String("plain_api_key", "[REDACTED]"),
+		slog.String("plain_access_key", "[REDACTED]"),
+		slog.String("plain_secret_key", "[REDACTED]"),
 	)
 }
 
@@ -226,6 +232,8 @@ type VideoProviderCreateParams struct {
 	DisplayName        string
 	Enabled            bool
 	APIKey             string
+	AccessKey          string // Kling AK; ignored for seedance/mock
+	SecretKey          string // Kling SK; ignored for seedance/mock
 	BaseURL            string
 	DefaultModel       string
 	RateLimitPerMinute int
@@ -236,6 +244,8 @@ type VideoProviderUpdateParams struct {
 	DisplayName        *string
 	Enabled            *bool
 	APIKey             *string
+	AccessKey          *string // nil/empty = keep existing (Kling)
+	SecretKey          *string // nil/empty = keep existing (Kling)
 	BaseURL            *string
 	DefaultModel       *string
 	RateLimitPerMinute *int

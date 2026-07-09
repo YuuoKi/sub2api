@@ -4,12 +4,15 @@ export type VideoProvider = 'mock' | 'seedance' | 'kling'
 export type VideoTaskType = 'text_to_video' | 'image_to_video' | 'reference_to_video'
 export type VideoTaskStatus = 'queued' | 'submitted' | 'running' | 'succeeded' | 'failed' | 'cancelled'
 
+export type VideoProviderAuthMode = 'bearer' | 'kling_aksk'
+
 export interface VideoProviderAccount {
   id: number
   provider: VideoProvider
   display_name: string
   enabled: boolean
   api_key_configured: boolean
+  auth_mode?: VideoProviderAuthMode | string
   masked_key: string
   base_url: string
   default_model: string
@@ -36,6 +39,8 @@ export interface VideoProviderPayload {
   display_name?: string
   enabled?: boolean
   api_key?: string
+  access_key?: string
+  secret_key?: string
   base_url?: string
   default_model?: string
   rate_limit_per_minute?: number

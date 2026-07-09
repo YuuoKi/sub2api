@@ -261,7 +261,31 @@
                 <input v-model="providerForm.display_name" class="input" maxlength="120" placeholder="例如：Seedance 主通道" />
               </div>
             </div>
-            <div>
+            <template v-if="providerForm.provider === 'kling'">
+              <div>
+                <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Access Key</label>
+                <input
+                  v-model="providerForm.access_key"
+                  class="input"
+                  type="password"
+                  autocomplete="off"
+                  maxlength="4000"
+                  :placeholder="editingProvider ? '留空表示保留当前 Access Key' : 'Kling Access Key'"
+                />
+              </div>
+              <div>
+                <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Secret Key</label>
+                <input
+                  v-model="providerForm.secret_key"
+                  class="input"
+                  type="password"
+                  autocomplete="off"
+                  maxlength="4000"
+                  :placeholder="editingProvider ? '留空表示保留当前 Secret Key' : 'Kling Secret Key'"
+                />
+              </div>
+            </template>
+            <div v-else>
               <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">API Key</label>
               <input
                 v-model="providerForm.api_key"
@@ -408,6 +432,8 @@ function openCreate() {
     providerForm.provider = 'seedance'
     providerForm.display_name = ''
     providerForm.api_key = ''
+    providerForm.access_key = ''
+    providerForm.secret_key = ''
     providerForm.base_url = ''
     providerForm.default_model = ''
     providerForm.enabled = false
@@ -525,6 +551,8 @@ const providerForm = reactive({
   provider: 'seedance' as VideoProvider,
   display_name: '',
   api_key: '',
+  access_key: '',
+  secret_key: '',
   base_url: '',
   default_model: '',
   enabled: false,
@@ -535,6 +563,8 @@ function openEditProvider(provider: VideoProviderAccount) {
   providerForm.provider = provider.provider
   providerForm.display_name = provider.display_name
   providerForm.api_key = ''
+  providerForm.access_key = ''
+  providerForm.secret_key = ''
   providerForm.base_url = provider.base_url
   providerForm.default_model = provider.default_model
   providerForm.enabled = provider.enabled
@@ -549,12 +579,21 @@ function closeProviderModal() {
 async function saveProvider() {
   savingProvider.value = true
   try {
+    const credentialPayload =
+      providerForm.provider === 'kling'
+        ? {
+            ...(providerForm.access_key.trim() ? { access_key: providerForm.access_key.trim() } : {}),
+            ...(providerForm.secret_key.trim() ? { secret_key: providerForm.secret_key.trim() } : {}),
+          }
+        : {
+            ...(providerForm.api_key.trim() ? { api_key: providerForm.api_key.trim() } : {}),
+          }
     const payload = {
       display_name: providerForm.display_name.trim(),
       enabled: providerForm.enabled,
       base_url: providerForm.base_url.trim(),
       default_model: providerForm.default_model.trim(),
-      ...(providerForm.api_key.trim() ? { api_key: providerForm.api_key.trim() } : {}),
+      ...credentialPayload,
     }
     if (editingProvider.value) {
       await adminAPI.video.updateProvider(editingProvider.value.id, payload)

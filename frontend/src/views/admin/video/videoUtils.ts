@@ -160,12 +160,12 @@ export function providerDescription(provider: string): string {
         : '演示通道用于本地闭环验证，不调用外部模型。'
     case 'seedance':
       return isVideoGatewayDemoMode
-        ? 'Seedance 2.0 预留生成通道，待授权验证后启用。'
-        : 'Seedance 2.0 预留通道，待配置调用凭证后启用真实调用。'
+        ? 'Seedance 2.0 真实生成通道已接入，需配置凭证并通过试跑/正式授权 gate 后调用。'
+        : 'Seedance 2.0 真实通道已接入；配置 API Key 并满足 smoke/production gate 后可调用。'
     case 'kling':
       return isVideoGatewayDemoMode
-        ? 'Kling 预留生成通道，待授权验证后启用。'
-        : 'Kling 预留通道，待配置调用凭证后启用真实调用。'
+        ? 'Kling 真实生成通道已接入（JWT AK+SK），需配置双密钥并通过试跑/正式授权 gate 后调用。'
+        : 'Kling 真实通道已接入；配置 Access Key + Secret Key，并满足 tiny_real / production gate 后可调用。'
     default:
       return isVideoGatewayDemoMode ? '视频生成通道' : '视频模型通道'
   }
@@ -452,7 +452,7 @@ export function providerTestMessage(message: string): string {
       ? '演示通道可用：任务流转验证已就绪，不连接真实生成通道。'
       : '演示通道可用：本地任务流转验证已就绪，不调用外部模型。'
   }
-  if (normalized.includes('api key is not configured')) return '真实通道未配置调用凭证：待授权配置后再启用。'
+  if (normalized.includes('api key is not configured')) return '真实通道未配置调用凭证：请先填写密钥，再打开试跑/正式授权 gate。'
   if (normalized.includes('real network test is disabled')) return '真实通道已映射：当前演示不发起外部网络调用。'
   return message || '暂无测试结果'
 }

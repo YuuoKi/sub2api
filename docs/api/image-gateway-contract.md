@@ -2,7 +2,7 @@
 
 > Status: internal / ready for integrators  
 > Audience: QCanvas / TapCanvas / future internal clients  
-> Last updated: 2026-07-09  
+> Last updated: 2026-07-10  
 > Related: `docs/superpowers/codex-handoff/CODEX_TASK_API_CONTRACT.md`, `docs/superpowers/codex-handoff/CODEX_TASK_BILLING.md`
 
 This document freezes Sub2API image generation/edit contracts for:
@@ -18,7 +18,7 @@ This document freezes Sub2API image generation/edit contracts for:
 | GPT Image 2 | **`POST /v1/images/generations`** and **`POST /v1/images/edits`** | Model id `gpt-image-2` is in OpenAI default model constants. OpenAI bills **token-based** (not a flat per-image list price). Packaged pricing includes a `gpt-image-2` entry; if that key is missing at runtime, pricing lookup falls back **`gpt-image-2` → `gpt-image-1.5` → `gpt-image-1`**. |
 | Jimeng / 即梦 | **Not in Sub2API this round** | Out of scope for the dual-surface alignment pass; do not assume a Sub2API route. |
 
-Kling / 可灵 video remains disabled/skeleton this round (see video contract / integration guide). LLM productization is out of scope here.
+Kling / 可灵 video is live-but-gated on the video gateway (JWT AK+SK + tiny_real/production); see [video-gateway-contract.md](./video-gateway-contract.md) §4.2 and [qcanvas-integration-guide.md](./qcanvas-integration-guide.md). Real smoke remains `blocked: awaiting AK/SK`. LLM productization is out of scope here.
 
 ## 1. Endpoints
 

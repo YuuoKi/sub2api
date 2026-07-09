@@ -1,11 +1,11 @@
 # Video Gateway Contract
 
-> 鐘舵€侊細鍐呴儴鍙敤 / 寰呭鏍? 
-> 閫傜敤鏂癸細QCanvas / TapCanvas / 鏈潵鍐呴儴鎺ュ叆鏂? 
-> 鏈€鍚庢洿鏂帮細2026-07-05  
-> 鍏宠仈浠诲姟涔︼細`docs/superpowers/codex-handoff/CODEX_TASK_API_CONTRACT.md`銆乣docs/superpowers/codex-handoff/CODEX_TASK_BILLING.md`
+> Status: internal / ready for integrators  
+> Audience: QCanvas / TapCanvas / future internal clients  
+> Last updated: 2026-07-10  
+> Related: `docs/superpowers/codex-handoff/CODEX_TASK_API_CONTRACT.md`, `docs/superpowers/codex-handoff/CODEX_TASK_BILLING.md`
 
-鏈枃妗ｅ浐鍖?Sub2API 瑙嗛缃戝叧瀵瑰濂戠害銆侶TTP 鍝嶅簲缁熶竴鍖呬竴灞傦細
+This document freezes Sub2API video gateway contracts. HTTP responses wrap a single envelope:
 
 ```json
 {
@@ -15,7 +15,8 @@
 }
 ```
 
-閿欒鍝嶅簲锛?
+Error response:
+
 ```json
 {
   "code": 400,
@@ -40,7 +41,7 @@
 
 | 瀛楁 | 绫诲瀷 | 蹇呭～ | 璇存槑 |
 |------|------|------|------|
-| `provider` | string | 鍚?| API Key 璺緞鍙紶 `mock` / `seedance` / `kling`锛涘綋鍓?mock-only 杈圭晫涓嬬湡瀹?provider 浼氳 gate 鎷︽埅銆?|
+| `provider` | string | no | API Key path accepts `mock` / `seedance` / `kling`. Real providers require credentials + smoke/production gates (see §4.1 / §4.2). |
 | `task_type` | string | 鏄?| `text_to_video` / `image_to_video` / `reference_to_video`銆傛樉寮?`content[]` 浼氭帹瀵兼ā寮忥紝涓嶅尮閰嶆椂鎶?400銆?|
 | `model` | string | 鍚?| provider 妯″瀷锛屽 `doubao-seedance-2-0-260128`銆?|
 | `prompt` | string | 鏄?| 鏂囨湰鎻愮ず璇嶏紝鏈€闀?8000銆傛湇鍔＄浼氭妸瀹冧綔涓?`content[0]` 鐨?`text` 鏉＄洰淇濆瓨鍜岃浆鍙戯紝闄ら潪璇锋眰宸叉樉寮忎紶 text 鏉＄洰銆?|
@@ -117,7 +118,80 @@
 - API-key `/v1/video/tasks`：`provider:"seedance"` 且不带 `trial_mode` 时走正式路径，要求 `provider_account.metadata.production_authorized=true`；`trial_mode:"tiny_real"` 仍走每日 1 次试跑 gate。
 - 媒体 URL allowlist 优先读取 `SUB2API_MEDIA_URL_ALLOWLIST`，未配置时 fallback 到旧 `SUB2API_VIDEO_URL_ALLOWLIST`。
 - `duration=-1`（自动时长）会**显式**写入 Ark create payload 的 `duration` 字段，不再省略；`duration=0` / 未设置才省略该字段。
-- `provider:"kling"`：本轮 API-key 视频网关保持 **disabled / skeleton**（不可真实调用）。可灵为下轮必接项，勿当作当前可用能力。
+
+## 4.2 Kling / 可灵（真实适配已接入，fail-closed gate）
+
+`provider:"kling"` 已从 disabled/skeleton 升级为**可真实调用**路径，鉴权与 gate 与 Seedance 对称，但凭证形态与时长枚举不同。
+
+### 鉴权（JWT AK+SK）
+
+- Admin 配置 **Access Key + Secret Key**（`auth_mode=kling_aksk`），服务端打包为版本化 blob 写入既有 `encrypted_api_key` 字段。
+- 出站请求：`Authorization: Bearer <JWT>`，JWT 由 `klingMintJWT(AK, SK)` 现场签发（HS256，`iss=AK`，`exp≈now+1800`，`nbf≈now-5`），进程内缓存至 `exp-60s`，**不落库**。
+- 响应与审计日志对 AK / SK / 派生 JWT 做脱敏；上游回显凭证时 fail-closed 中止。
+
+### 模式与端点
+
+DB `task_type` 仍限制在 `text_to_video` / `image_to_video` / `reference_to_video`。扩展端点通过 **model 别名** 或 `PricingSource` hint 选择，不扩展 DB enum：
+
+| 模式 | 选择方式 | 上游 path |
+|------|----------|-----------|
+| 文生视频 t2v | `task_type=text_to_video` + 非 omni 模型 | `/v1/videos/text2video` |
+| 图生视频 i2v | `task_type=image_to_video` + 非 omni 模型 | `/v1/videos/image2video` |
+| 多图参考 multi | `task_type=reference_to_video` + 非 omni 模型 | `/v1/videos/multi-image2video` |
+| 全能 omni | 上游模型 `kling-v3-omni` / `kling-video-o1`（见下表） | `/v1/videos/omni-video` |
+| 视频延长 extend | model=`kling-video-extend` 或 `PricingSource=kling_mode:video_extend` | `/v1/videos/video-extend` |
+| 数字人/口型 avatar | model=`kling-avatar` / `kling-lip-sync` 或 `PricingSource=kling_mode:avatar` | `/v1/videos/avatar` |
+
+### Duration
+
+- Kling **仅允许** `duration=5` 或 `10`（字符串枚举下发上游）。
+- 试跑（无 `production_authorized`）：仅允许 `5`。
+- 正式（`production_authorized=true`）：允许 `5` 或 `10`。
+
+### Smoke / production gates
+
+与 Seedance 同族 fail-closed 条件（任一不满足则不发起真实 HTTP）：
+
+- `SUB2API_VIDEO_REAL_SMOKE_ENABLED=1`
+- 账号 metadata：`single_smoke_authorized` / `real_smoke_authorized`（试跑）或 `production_authorized`（正式）
+- `SUB2API_VIDEO_REDACTED_EVENT_LOG` 已配置
+- 媒体 URL allowlist（`SUB2API_MEDIA_URL_ALLOWLIST` 或 fallback `SUB2API_VIDEO_URL_ALLOWLIST`）
+- 显式、allowlist 内的 Kling model
+- duration 规则见上
+
+API-key `/v1/video/tasks`：
+
+- `provider:"kling"` + `trial_mode:"tiny_real"` → 试跑路径（每日限额与 Seedance tiny trial 对称）
+- `provider:"kling"` 且不带 `trial_mode` → 正式路径，要求 `production_authorized=true`
+
+**真实付费冒烟状态：** `blocked: awaiting AK/SK`（官方 Access Key / Secret Key 尚未到位；代码与契约已就绪，配置密钥并打开上述 gate 后即可冒烟）。
+
+### Model ID map（fail-closed）
+
+| 请求 `model`（catalog / 别名） | 上游 `model_name` | 备注 |
+|-------------------------------|-------------------|------|
+| `kling-v1` | `kling-v1` | 基础 |
+| `kling-2.6-pro` / `kling-v2-6` / `kling-3.0` | `kling-v2-6` | `kling-2.6-pro` 暗示 `mode=pro` |
+| `kling-3.0-omni` | `kling-v3-omni` | 走 omni-video |
+| `kling-o1` | `kling-video-o1` | 走 omni-video |
+| `kling-video-extend` | `kling-v1`（路由别名） | 选 video-extend 端点 |
+| `kling-avatar` / `kling-lip-sync` | `kling-v1`（路由别名） | 选 avatar 端点 |
+| 其他 | — | `KLING_MODEL_NOT_ALLOWED` |
+
+Kling tiny_real 请求示例：
+
+```json
+{
+  "provider": "kling",
+  "trial_mode": "tiny_real",
+  "task_type": "text_to_video",
+  "model": "kling-v1",
+  "prompt": "A short cinematic shot of rain on a city street at night.",
+  "duration": 5,
+  "aspect_ratio": "16:9",
+  "resolution": "720p"
+}
+```
 
 智能画布通过 `/v1/video/tasks` 调正式 Seedance 的当前请求示例：
 
@@ -148,7 +222,7 @@
 | 瀛楁 | 绫诲瀷 | 璇存槑 |
 |------|------|------|
 | `id` | number | Sub2API 浠诲姟 ID銆俀Canvas 搴斾紭鍏堢敤瀹冧綔涓?taskId銆?|
-| `provider` | string | `mock` / `seedance` / `kling`銆?|
+| `provider` | string | `mock` / `seedance` / `kling`. |
 | `model` | string | 瀹為檯璁板綍妯″瀷銆?|
 | `task_type` | string | 浠诲姟绫诲瀷銆?|
 | `prompt` | string | 鏂囨湰鎻愮ず璇嶃€?|

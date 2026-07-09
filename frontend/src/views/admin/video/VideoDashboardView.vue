@@ -95,11 +95,11 @@
             <div class="mt-4 grid gap-2 sm:grid-cols-2">
               <div class="rounded-lg border border-teal-200 bg-white/70 p-3 dark:border-teal-500/20 dark:bg-dark-800/60">
                 <div class="text-xs font-semibold text-teal-700 dark:text-teal-200">内部可验收版本</div>
-                <div class="mt-1 text-sm text-gray-700 dark:text-gray-200">演示链路与经验沉淀准备态可验收，但真实生成通道未接入。</div>
+                <div class="mt-1 text-sm text-gray-700 dark:text-gray-200">演示链路可验收；Seedance / Kling 真实适配已接入，调用仍受凭证与 gate 约束。</div>
               </div>
               <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-500/20 dark:bg-amber-500/10">
                 <div class="text-xs font-semibold text-amber-700 dark:text-amber-200">正式上线状态</div>
-                <div class="mt-1 text-sm text-gray-700 dark:text-gray-200">正式上线未开启，待授权验证。</div>
+                <div class="mt-1 text-sm text-gray-700 dark:text-gray-200">正式上线未开启；Kling 真实冒烟 blocked：等待官方 AK/SK。</div>
               </div>
             </div>
             <div class="mt-4 grid gap-2 sm:grid-cols-3">
@@ -451,7 +451,7 @@ const statItems = computed<StatItem[]>(() => {
   const d = dashboard.value
   if (isVideoGatewayDemoMode) {
     return [
-      { label: '已接入生成通道', value: providers.value.length, hint: '演示通道 + 真实通道预留' },
+      { label: '已接入生成通道', value: providers.value.length, hint: '演示通道 + Seedance / Kling 真实通道（gated）' },
       { label: '已配置凭证', value: configuredKeyCount.value, hint: '前端仅展示脱敏状态' },
       { label: '启用通道', value: enabledProviderCount.value, hint: '允许员工试跑任务' },
       { label: '今日试跑任务', value: d?.today_tasks ?? 0, hint: '统一记录任务入口' },
@@ -476,7 +476,7 @@ const gatewayFlowNodes = computed(() => {
   const hasDiagnostics = Boolean((d?.health_diagnostics || []).length)
   return [
     { title: '调用凭证托管', description: '企业统一配置，员工不直接接触底层凭证。', done: configuredKeyCount.value > 0, status: '待配置', arrow: false },
-    { title: '生成通道', description: '演示通道、Seedance、Kling 统一看状态。', done: providers.value.length > 0, status: '待接入', arrow: true },
+    { title: '生成通道', description: '演示通道、Seedance、Kling 统一看状态（真实通道已接入，待凭证/gate）。', done: providers.value.length > 0, status: '待配置', arrow: true },
     { title: '自动调度', description: '系统挑选当前可用且处理中较少的账号。', done: enabledProviderCount.value > 0, status: '待配置', arrow: true },
     { title: '任务执行', description: '员工提交后进入队列并分发。', done: hasTasks, status: '待调用', arrow: true },
     { title: '结果回收', description: '成功结果和失败原因都会回到任务详情。', done: hasResults, status: '待回收', arrow: true },
@@ -490,7 +490,7 @@ const controlItems = computed<Array<{ title: string; description: string; icon: 
   { title: '并发和预算', description: `并发处理中 ${dashboard.value?.running_tasks ?? 0} 个，队列等待 ${dashboard.value?.queued_tasks ?? 0} 个。`, icon: 'clock' },
   { title: '失败模式沉淀', description: `今日失败 ${dashboard.value?.failed_tasks ?? 0} 个，可进入任务详情查看原因并进入经验沉淀。`, icon: 'xCircle' },
   { title: '分析导出', description: '只生成脱敏分析素材，不自动调用外部 AI。', icon: 'externalLink' },
-  { title: '真实生成通道前置条件', description: realChannelConfigured.value ? '已有真实通道配置痕迹，仍需授权验证。' : 'Seedance 2.0 / Kling 均为待授权验证。', icon: 'swap' },
+  { title: '真实生成通道前置条件', description: realChannelConfigured.value ? '已有真实通道配置痕迹；Kling 仍需官方 AK/SK 与 smoke/production gate。' : 'Seedance / Kling 适配已就绪：配置凭证并打开试跑或正式授权后可调用。', icon: 'swap' },
 ])
 
 const skillLearningItems = [
@@ -508,7 +508,7 @@ const workflowSteps = computed(() => {
   return [
     {
       title: '1. 配置模型通道',
-      description: '确认演示通道可用，并了解 Seedance 2.0 与 Kling 的待授权状态。',
+      description: '确认演示通道可用；Seedance / Kling 为已接入但 gated 的真实通道（Kling 需 AK+SK）。',
       action: '去配置通道',
       to: '/admin/video/providers',
       done: hasDemoProvider,

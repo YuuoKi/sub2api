@@ -2,7 +2,7 @@
 
 > Status: internal / current entry  
 > Audience: QCanvas / TapCanvas integrators and agents  
-> Last updated: 2026-07-09  
+> Last updated: 2026-07-10  
 > Related contracts: [video-gateway-contract.md](./video-gateway-contract.md), [image-gateway-contract.md](./image-gateway-contract.md)
 
 ## 1. Product model (locked)
@@ -69,7 +69,33 @@ Stable response fields for QCanvas: `id`, `status`, `result_url`, `error_message
 
 ### Kling / 可灵
 
-**Disabled / skeleton this round** on the API-key video gateway. Do not treat catalog names as callable. **Next-round must-have:** real Kling adapter + product path.
+Kling is **callable** on the API-key video gateway via the same fail-closed gates as Seedance (`tiny_real` trial or `production_authorized` production). It is no longer disabled/skeleton.
+
+#### Credential config (admin)
+
+1. Open Sub2API admin → **Video providers** (or Key Vault).
+2. Select / create a `provider=kling` account.
+3. Enter **Access Key** + **Secret Key** (dual-key UI; Secret Key never echoed).
+4. Save → server packs `auth_mode=kling_aksk` blob and mints outbound JWT at call time.
+5. Set metadata gates as needed: `single_smoke_authorized` / `real_smoke_authorized` for tiny trial, or `production_authorized` for production.
+6. Ensure env: `SUB2API_VIDEO_REAL_SMOKE_ENABLED=1`, redacted event log path, media URL allowlist.
+
+#### Model map (catalog → Sub2API / upstream)
+
+| QCanvas / request model | Sub2API allowlist input | Upstream `model_name` |
+|-------------------------|-------------------------|------------------------|
+| `kling-v1` | `kling-v1` | `kling-v1` |
+| `kling-2.6-pro` / `kling-v2-6` / `kling-3.0` | same aliases | `kling-v2-6` |
+| `kling-3.0-omni` | `kling-3.0-omni` | `kling-v3-omni` (omni endpoint) |
+| `kling-o1` | `kling-o1` | `kling-video-o1` (omni endpoint) |
+| `kling-video-extend` | routing alias | extend endpoint (`model_name` base `kling-v1`) |
+| `kling-avatar` / `kling-lip-sync` | routing alias | avatar endpoint |
+
+Duration: **5 or 10** only; tiny smoke without production auth → **5** only.
+
+Studio ARM (when Kling catalog id selected + armed): dispatch `provider=kling` + `trialMode=tiny_real` + `allowRealCalls=true`.
+
+**Real smoke status:** `blocked: awaiting AK/SK` — official Kling Access Key / Secret Key are not available yet. Do not treat unit/fixture green as paid upstream proof.
 
 ## 5. Image: NB2 + GPT Image 2
 
@@ -88,13 +114,13 @@ QCanvas may still vendor-direct some image/LLM calls today; forcing canvas image
 | `SUB2API_BASE_URL` | Sub2API origin |
 | `SUB2API_API_KEY` | Employee API key (server-side only) |
 | `SUB2API_VIDEO_MOCK_GATEWAY_ENABLED` | Explicit truthy required to open real fetch path |
-| `SUB2API_VIDEO_REAL_SMOKE_ENABLED` / `SUB2API_REAL_HUMAN_AUTHORIZED` / `SUB2API_REAL_*` | Fail-closed real Seedance gates |
+| `SUB2API_VIDEO_REAL_SMOKE_ENABLED` / `SUB2API_REAL_HUMAN_AUTHORIZED` / `SUB2API_REAL_*` | Fail-closed real Seedance **and Kling** gates |
 
 Unset gateway config → dry-run / blocked, not silent production dispatch.
 
 ## 7. Next round (explicit backlog)
 
-1. Kling real adapter + API-key enablement  
+1. Obtain official Kling AK/SK → configure admin dual-key → run paid tiny_real smoke  
 2. Studio omnimodal reference video/audio UI  
 3. Force QCanvas image path through Sub2API Image API  
 4. Jimeng into Sub2API (product decision)  

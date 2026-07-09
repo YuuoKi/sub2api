@@ -38,9 +38,9 @@ func (s *VideoGatewayService) SetBalanceBillingDependencies(userRepo UserReposit
 	s.billingCacheService = billingCacheService
 }
 
-// estimateVideoCost estimates a task's monetary cost for the budget gate. Seedance
-// returns no cost field, so it is duration 脳 the configured per-second rate. With
-// the default rate of 0 the estimate is 0 (gate inert) until a real rate is set.
+// estimateVideoCost estimates a task's monetary cost for the budget gate.
+// Config CostPerSecond overrides catalog rates when set. Otherwise Seedance uses
+// its duration×reference table and Kling uses catalog CNY/sec × duration.
 func (s *VideoGatewayService) estimateVideoCost(task *VideoTask) float64 {
 	if task == nil {
 		return 0
@@ -57,7 +57,12 @@ func (s *VideoGatewayService) estimateVideoCost(task *VideoTask) float64 {
 		duration = 5
 	}
 	if rate == 0 {
-		rate = s.estimateSeedanceCostPerSecond(task)
+		switch strings.ToLower(strings.TrimSpace(task.Provider)) {
+		case VideoProviderSeedance:
+			rate = s.estimateSeedanceCostPerSecond(task)
+		case VideoProviderKling:
+			rate = s.estimateKlingCostPerSecond(task)
+		}
 	}
 	return rate * float64(duration)
 }
@@ -123,12 +128,51 @@ func (s *VideoGatewayService) estimateSeedanceCostPerSecond(task *VideoTask) flo
 	return base
 }
 
+// estimateKlingCostPerSecond returns the catalog CNY/sec for a Kling task.
+// PLACEHOLDER rates — see VideoPricingVersionKling202607.
+func (s *VideoGatewayService) estimateKlingCostPerSecond(task *VideoTask) float64 {
+	if task == nil || !strings.EqualFold(strings.TrimSpace(task.Provider), VideoProviderKling) {
+		return 0
+	}
+	rate, _, ok := s.videoPricingCatalog().RateCNYPerSecond(task)
+	if !ok || rate <= 0 {
+		return 0
+	}
+	return rate
+}
+
+// calculateKlingActualCost settles Kling on duration × catalog CNY/sec (no token usage).
+// Prefer ActualDuration when present; otherwise request Duration.
+func (s *VideoGatewayService) calculateKlingActualCost(task *VideoTask) float64 {
+	if task == nil || task.Status != VideoStatusSucceeded {
+		return 0
+	}
+	rate := s.estimateKlingCostPerSecond(task)
+	if rate <= 0 {
+		return 0
+	}
+	duration := task.Duration
+	if task.ActualDuration != nil && *task.ActualDuration > 0 {
+		duration = *task.ActualDuration
+	}
+	if duration == -1 {
+		duration = 5
+	}
+	if duration <= 0 {
+		return 0
+	}
+	return rate * float64(duration)
+}
+
 func (s *VideoGatewayService) chargeableVideoCost(task *VideoTask) float64 {
 	if task == nil || task.Status != VideoStatusSucceeded {
 		return 0
 	}
 	if task.Provider == VideoProviderSeedance {
 		return s.calculateVideoActualCost(task)
+	}
+	if task.Provider == VideoProviderKling {
+		return s.calculateKlingActualCost(task)
 	}
 	if task.CostEstimate > 0 {
 		return task.CostEstimate

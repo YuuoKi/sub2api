@@ -646,30 +646,21 @@ func buildSeedancePayloadPreviewContent(task *VideoTask) []map[string]any {
 // (12-19 chars / pure-letter / pure-digit). Every adapter path that turns an upstream
 // body or message into stored/returned text goes through here.
 func seedanceRedactBody(account *VideoProviderAccount, s string) string {
-	key := ""
-	if account != nil {
-		key = account.PlainAPIKey
-	}
-	return redactVideoUpstreamSecretsForKey(s, key)
+	return redactVideoUpstreamSecretsForAccount(account, s)
 }
 
-// seedanceUpstreamEchoedKey reports whether the raw upstream body contains the configured
-// key verbatim. A legitimate provider response NEVER echoes your own API key; its presence
-// 闁?whether in a free-text message OR in a STRUCTURAL field the adapter stores raw (the task
-// `id` 闁?upstream_task_id and the create/poll payload `upstream_id`, a result-url path
-// segment, etc.) 闁?signals a hostile or broken upstream. The body/message redactor only
-// covers error STRINGS, not parsed structural fields, so this is the fail-closed backstop
-// that stops the key from ever being PERSISTED via a structural field. (A key shorter than
-// the floor cannot reach here: the pre-arm self-check already aborted such a key.)
+// seedanceUpstreamEchoedKey reports whether the raw upstream body contains any configured
+// account secret verbatim (Seedance PlainAPIKey and/or Kling PlainAccessKey /
+// PlainSecretKey / derived JWT). A legitimate provider response NEVER echoes your own
+// credentials; their presence — whether in a free-text message OR in a STRUCTURAL field
+// the adapter stores raw (the task `id` → upstream_task_id and the create/poll payload
+// `upstream_id`, a result-url path segment, etc.) — signals a hostile or broken upstream.
+// The body/message redactor only covers error STRINGS, not parsed structural fields, so
+// this is the fail-closed backstop that stops secrets from ever being PERSISTED via a
+// structural field. (A key shorter than the floor cannot reach here: the pre-arm
+// self-check already aborted such a key.)
 func seedanceUpstreamEchoedKey(account *VideoProviderAccount, rawBody string) bool {
-	if account == nil {
-		return false
-	}
-	key := strings.TrimSpace(account.PlainAPIKey)
-	if len(key) < videoKnownSecretMinLen {
-		return false
-	}
-	return strings.Contains(rawBody, key)
+	return videoProviderUpstreamEchoedCredential(account, rawBody)
 }
 
 // seedancePreArmRedactionSelfCheck is the FORM-A-path equivalent of the Form B real-
@@ -813,73 +804,6 @@ func qcanvasVideoContractStatus(status string, errorMessage string) string {
 		}
 		return "running"
 	}
-}
-
-type klingVideoAdapter struct{}
-
-func (a *klingVideoAdapter) Provider() string { return VideoProviderKling }
-
-func (a *klingVideoAdapter) CreateTask(_ context.Context, account *VideoProviderAccount, _ *VideoTask) (*VideoAdapterResult, error) {
-	if !account.APIKeyConfigured || strings.TrimSpace(account.PlainAPIKey) == "" {
-		return nil, ErrVideoProviderDisabled.WithMetadata(map[string]string{
-			"provider": "kling",
-			"reason":   "api key is not configured; real call skipped",
-		})
-	}
-	return nil, infraerrorsUnavailable("KLING_REAL_CALL_DISABLED", "Kling adapter skeleton is mapped but real upstream calls are disabled in P0")
-}
-
-func (a *klingVideoAdapter) PollTask(_ context.Context, account *VideoProviderAccount, _ *VideoTask) (*VideoAdapterResult, error) {
-	if !account.APIKeyConfigured || strings.TrimSpace(account.PlainAPIKey) == "" {
-		return nil, ErrVideoProviderDisabled.WithMetadata(map[string]string{
-			"provider": "kling",
-			"reason":   "api key is not configured; poll skipped",
-		})
-	}
-	return nil, infraerrorsUnavailable("KLING_REAL_POLL_DISABLED", "Kling poll skeleton is mapped but real upstream calls are disabled in P0")
-}
-
-func (a *klingVideoAdapter) CancelTask(_ context.Context, _ *VideoProviderAccount, _ *VideoTask) (*VideoAdapterResult, error) {
-	return &VideoAdapterResult{Status: VideoStatusCancelled, Payload: map[string]any{"provider": "kling", "mode": "skeleton"}}, nil
-}
-
-func (a *klingVideoAdapter) NormalizeStatus(upstream string) string {
-	switch strings.ToLower(strings.TrimSpace(upstream)) {
-	case "submitted", "created", "queued", "pending":
-		return VideoStatusSubmitted
-	case "processing", "running":
-		return VideoStatusRunning
-	case "succeed", "succeeded", "success", "completed":
-		return VideoStatusSucceeded
-	case "failed", "fail", "error":
-		return VideoStatusFailed
-	case "cancelled", "canceled":
-		return VideoStatusCancelled
-	default:
-		return VideoStatusRunning
-	}
-}
-
-func (a *klingVideoAdapter) BuildCreatePayload(account *VideoProviderAccount, task *VideoTask) map[string]any {
-	payload := map[string]any{
-		"base_url":        account.BaseURL,
-		"model_name":      task.Model,
-		"prompt":          task.Prompt,
-		"negative_prompt": task.NegativePrompt,
-		"aspect_ratio":    task.AspectRatio,
-		"duration":        task.Duration,
-		"resolution":      task.Resolution,
-		"content":         task.Content,
-		"has_video_input": task.HasVideoInput,
-		"source_docs":     "https://app.klingai.com/cn/dev/document-api/apiReference/updateNotice",
-	}
-	if task.ReferenceImageURL != "" {
-		payload["image"] = task.ReferenceImageURL
-	}
-	if task.ReferenceVideoURL != "" {
-		payload["reference_video"] = task.ReferenceVideoURL
-	}
-	return payload
 }
 
 func normalizeVideoStatus(status string) string {

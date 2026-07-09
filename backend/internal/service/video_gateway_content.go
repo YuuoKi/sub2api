@@ -250,6 +250,12 @@ func validateVideoGenerationContract(provider, model string, duration int, resol
 		}
 		return nil
 	}
+	if strings.TrimSpace(provider) == VideoProviderKling {
+		if duration != 5 && duration != 10 {
+			return badVideoContent("kling duration must be 5 or 10 seconds")
+		}
+		return nil
+	}
 	if duration == -1 {
 		return nil
 	}

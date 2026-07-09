@@ -128,7 +128,11 @@ func (s *VideoGatewayService) CreateProviderAccount(ctx context.Context, p Video
 		RateLimitPerMinute: defaultVideoRateLimit(p.RateLimitPerMinute),
 		Metadata:           p.Metadata,
 	}
-	if strings.TrimSpace(p.APIKey) != "" {
+	if account.Provider == VideoProviderKling {
+		if err := s.applyKlingCredentials(account, p.AccessKey, p.SecretKey, false); err != nil {
+			return nil, err
+		}
+	} else if strings.TrimSpace(p.APIKey) != "" {
 		if err := s.applyProviderAPIKey(account, p.APIKey); err != nil {
 			return nil, err
 		}
@@ -166,7 +170,21 @@ func (s *VideoGatewayService) UpdateProviderAccount(ctx context.Context, id int6
 	if p.Metadata != nil {
 		account.Metadata = *p.Metadata
 	}
-	if p.APIKey != nil && strings.TrimSpace(*p.APIKey) != "" {
+	if account.Provider == VideoProviderKling {
+		ak := ""
+		sk := ""
+		if p.AccessKey != nil {
+			ak = *p.AccessKey
+		}
+		if p.SecretKey != nil {
+			sk = *p.SecretKey
+		}
+		if strings.TrimSpace(ak) != "" || strings.TrimSpace(sk) != "" {
+			if err := s.applyKlingCredentials(account, ak, sk, true); err != nil {
+				return nil, err
+			}
+		}
+	} else if p.APIKey != nil && strings.TrimSpace(*p.APIKey) != "" {
 		if err := s.applyProviderAPIKey(account, *p.APIKey); err != nil {
 			return nil, err
 		}
@@ -210,7 +228,7 @@ func (s *VideoGatewayService) TestProviderAccount(ctx context.Context, id int64)
 			PayloadPreview:   preview,
 		}, nil
 	}
-	if !account.APIKeyConfigured || strings.TrimSpace(account.PlainAPIKey) == "" {
+	if !account.APIKeyConfigured || !videoProviderHasPlainCredentials(account) {
 		return &VideoProviderTestResult{
 			Provider:         account.Provider,
 			Configured:       false,
@@ -224,7 +242,7 @@ func (s *VideoGatewayService) TestProviderAccount(ctx context.Context, id int64)
 		Provider:         account.Provider,
 		Configured:       true,
 		Reachable:        false,
-		Message:          "adapter skeleton is mapped; real network test is disabled in P0",
+		Message:          "real network test not executed in unit TestProviderAccount",
 		NormalizedStatus: adapter.NormalizeStatus("processing"),
 		PayloadPreview:   preview,
 	}, nil
@@ -265,6 +283,8 @@ func (s *VideoGatewayService) ListAPIKeyMockOnlyProviders(ctx context.Context) (
 		item.Enabled = false
 		item.APIKeyConfigured = false
 		item.PlainAPIKey = ""
+		item.PlainAccessKey = ""
+		item.PlainSecretKey = ""
 		item.MaskedKey = ""
 		item.RouteAvailable = false
 		item.RouteSkipReason = "disabled in API-key mock-only gateway"
@@ -343,19 +363,40 @@ func (s *VideoGatewayService) ListAPIKeyTrialProviders(ctx context.Context) ([]*
 	}
 	out = append(out, seedance)
 
-	// Kling — still blocked
+	// Kling — exposed like Seedance (tiny_real_trial_supported + gate readiness)
 	kling := byProvider[VideoProviderKling]
 	if kling == nil {
 		kling = apiKeySyntheticVideoProvider(VideoProviderKling)
+		kling.RouteSkipReason = "kling provider account is not configured"
+	} else {
+		s.decorateProviderForResponse(kling, VideoProviderRuntimeStats{})
+		reasons := []string{}
+		if strings.TrimSpace(os.Getenv("SUB2API_VIDEO_REAL_SMOKE_ENABLED")) != "1" {
+			reasons = append(reasons, "SUB2API_VIDEO_REAL_SMOKE_ENABLED is not 1")
+		}
+		if !klingRealCallAuthorized(kling) {
+			reasons = append(reasons, "provider metadata does not record single smoke authorization or production authorization")
+		}
+		if strings.TrimSpace(os.Getenv("SUB2API_VIDEO_REDACTED_EVENT_LOG")) == "" {
+			reasons = append(reasons, "redacted event log path is missing")
+		}
+		if configuredMediaURLAllowlist() == "" {
+			reasons = append(reasons, mediaURLAllowlistMissingReason())
+		}
+		if len(reasons) > 0 {
+			kling.RouteSkipReason = strings.Join(reasons, "; ")
+		} else {
+			kling.RouteSkipReason = ""
+		}
+		kling.RouteAvailable = false // always false for API-key trial endpoint
+		kling.MaskedKey = ""         // do not expose masked key in API-key trial endpoint
+		if kling.Metadata == nil {
+			kling.Metadata = map[string]any{}
+		}
+		kling.Metadata["tiny_real_trial_supported"] = true
+		kling.Metadata["requires_real_smoke_gate"] = true
+		kling.Metadata["blocked_reasons"] = reasons
 	}
-	kling.Enabled = false
-	kling.APIKeyConfigured = false
-	kling.PlainAPIKey = ""
-	kling.MaskedKey = ""
-	kling.RouteAvailable = false
-	kling.RouteSkipReason = "kling is disabled in API-key video gateway"
-	kling.KeyStatus = videoKeyStatusDisabled
-	kling.HealthStatus = videoHealthStatusDisabled
 	out = append(out, kling)
 
 	return out, nil
@@ -573,6 +614,184 @@ func (s *VideoGatewayService) CreateAPIKeySeedanceProductionTask(ctx context.Con
 	return task, nil
 }
 
+func (s *VideoGatewayService) CreateAPIKeyKlingTinyTrialTask(ctx context.Context, provider string, p VideoTaskCreateParams) (*VideoTask, error) {
+	provider = strings.TrimSpace(provider)
+	if provider != VideoProviderKling {
+		return nil, errVideoProviderBlockedMockOnly(provider)
+	}
+
+	accounts, err := s.ListProviderAccounts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var klingAccount *VideoProviderAccount
+	klingBlockedReason := ""
+	for _, acc := range accounts {
+		if acc != nil && acc.Provider == VideoProviderKling && acc.Enabled {
+			s.decorateProviderForResponse(acc, VideoProviderRuntimeStats{})
+			if acc.RouteAvailable {
+				klingAccount = acc
+				break
+			}
+			if klingBlockedReason == "" {
+				klingBlockedReason = strings.TrimSpace(acc.RouteSkipReason)
+			}
+		}
+	}
+	if klingAccount == nil {
+		metadata := map[string]string{
+			"provider":                     VideoProviderKling,
+			"mock_only":                    "false",
+			"real_provider_dispatch_count": "0",
+		}
+		if klingBlockedReason != "" {
+			metadata["reason"] = klingBlockedReason
+		}
+		return nil, infraerrors.Forbidden("VIDEO_PROVIDER_DISABLED", "kling provider account not available for trial").WithMetadata(metadata)
+	}
+
+	model := firstNonEmptyVideo(strings.TrimSpace(p.Model), klingAccount.DefaultModel, defaultVideoModel(VideoProviderKling))
+	dummyTask := &VideoTask{
+		Provider: klingAccount.Provider,
+		Model:    model,
+		TaskType: p.TaskType,
+		Prompt:   strings.TrimSpace(p.Prompt),
+		Duration: defaultVideoDuration(p.Duration),
+	}
+	blockedReasons := klingSmokeGateBlockedReasons(klingAccount, dummyTask)
+	if len(blockedReasons) > 0 {
+		return nil, infraerrors.Forbidden("VIDEO_TRIAL_BLOCKED", "kling tiny real trial blocked by gate").WithMetadata(map[string]string{
+			"provider":                     VideoProviderKling,
+			"blocked_reasons":              strings.Join(blockedReasons, "; "),
+			"real_provider_dispatch_count": "0",
+		})
+	}
+
+	p.ProviderAccountID = klingAccount.ID
+	route := &videoRouteDecision{
+		Account:  klingAccount,
+		Strategy: "api-key-kling-tiny-trial",
+		Reason:   "kling tiny real trial gate passed",
+	}
+	task, err := s.createTaskWithRoute(ctx, p, route, func(ctx context.Context, task *VideoTask) error {
+		reserved, err := s.repo.CreateDailyTrialTask(ctx, task, VideoProviderKling, task.CreatedBy, timezone.Today())
+		if err != nil {
+			return err
+		}
+		if !reserved {
+			return infraerrors.Forbidden("VIDEO_TRIAL_LIMIT_EXCEEDED", "kling tiny real trial limited to 1 call per day per user").WithMetadata(map[string]string{
+				"provider":                     VideoProviderKling,
+				"real_provider_dispatch_count": "0",
+			})
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	_ = s.repo.AddTaskEvent(ctx, &VideoTaskEvent{
+		VideoTaskID: task.ID,
+		EventType:   "trial_gate",
+		Message:     "kling tiny real trial gate passed",
+		Payload: map[string]any{
+			"provider":                        VideoProviderKling,
+			"trial_mode":                      "tiny_real",
+			"gate_result":                     "passed",
+			"planned_provider_dispatch_count": 1,
+			"real_provider_dispatch_count":    0,
+		},
+	})
+
+	return task, nil
+}
+
+func (s *VideoGatewayService) CreateAPIKeyKlingProductionTask(ctx context.Context, provider string, p VideoTaskCreateParams) (*VideoTask, error) {
+	provider = strings.TrimSpace(provider)
+	if provider != VideoProviderKling {
+		return nil, errVideoProviderBlockedMockOnly(provider)
+	}
+
+	accounts, err := s.ListProviderAccounts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var klingAccount *VideoProviderAccount
+	klingBlockedReason := ""
+	for _, acc := range accounts {
+		if acc != nil && acc.Provider == VideoProviderKling && acc.Enabled {
+			s.decorateProviderForResponse(acc, VideoProviderRuntimeStats{})
+			if acc.RouteAvailable && klingProductionAuthorized(acc) {
+				klingAccount = acc
+				break
+			}
+			if klingBlockedReason == "" {
+				if !klingProductionAuthorized(acc) {
+					klingBlockedReason = "provider metadata production_authorized is not true"
+				} else {
+					klingBlockedReason = strings.TrimSpace(acc.RouteSkipReason)
+				}
+			}
+		}
+	}
+	if klingAccount == nil {
+		metadata := map[string]string{
+			"provider":                     VideoProviderKling,
+			"mock_only":                    "false",
+			"real_provider_dispatch_count": "0",
+			"production_authorized":        "false",
+		}
+		if klingBlockedReason != "" {
+			metadata["reason"] = klingBlockedReason
+		}
+		return nil, infraerrors.Forbidden("VIDEO_PRODUCTION_NOT_AUTHORIZED", "kling production is not authorized for this provider account").WithMetadata(metadata)
+	}
+
+	model := firstNonEmptyVideo(strings.TrimSpace(p.Model), klingAccount.DefaultModel, defaultVideoModel(VideoProviderKling))
+	dummyTask := &VideoTask{
+		Provider: klingAccount.Provider,
+		Model:    model,
+		TaskType: p.TaskType,
+		Prompt:   strings.TrimSpace(p.Prompt),
+		Duration: defaultVideoDuration(p.Duration),
+	}
+	blockedReasons := klingSmokeGateBlockedReasons(klingAccount, dummyTask)
+	if len(blockedReasons) > 0 {
+		return nil, infraerrors.Forbidden("VIDEO_PRODUCTION_BLOCKED", "kling production blocked by gate").WithMetadata(map[string]string{
+			"provider":                     VideoProviderKling,
+			"blocked_reasons":              strings.Join(blockedReasons, "; "),
+			"real_provider_dispatch_count": "0",
+			"production_authorized":        "true",
+		})
+	}
+
+	p.ProviderAccountID = klingAccount.ID
+	route := &videoRouteDecision{
+		Account:  klingAccount,
+		Strategy: "api-key-kling-production",
+		Reason:   "kling production gate passed",
+	}
+	task, err := s.createTaskWithRoute(ctx, p, route, s.repo.CreateTask)
+	if err != nil {
+		return nil, err
+	}
+
+	_ = s.repo.AddTaskEvent(ctx, &VideoTaskEvent{
+		VideoTaskID: task.ID,
+		EventType:   "production_gate",
+		Message:     "kling production gate passed",
+		Payload: map[string]any{
+			"provider":                        VideoProviderKling,
+			"gate_result":                     "passed",
+			"production_authorized":           true,
+			"planned_provider_dispatch_count": 1,
+			"real_provider_dispatch_count":    0,
+		},
+	})
+
+	return task, nil
+}
+
 func (s *VideoGatewayService) GetAPIKeyMockOnlyTask(ctx context.Context, id, userID int64, isAdmin bool) (*VideoTask, []*VideoTaskEvent, error) {
 	task, events, err := s.GetTask(ctx, id, userID, isAdmin)
 	if err != nil {
@@ -603,7 +822,7 @@ func (s *VideoGatewayService) GetAPIKeyTrialTask(ctx context.Context, id, userID
 	if err != nil {
 		return nil, nil, err
 	}
-	if task.Provider != VideoProviderMock && task.Provider != VideoProviderSeedance {
+	if task.Provider != VideoProviderMock && task.Provider != VideoProviderSeedance && task.Provider != VideoProviderKling {
 		return nil, nil, errVideoProviderBlockedMockOnly(task.Provider)
 	}
 	return task, events, nil
@@ -731,6 +950,32 @@ func (s *VideoGatewayService) CreateTask(ctx context.Context, p VideoTaskCreateP
 				if !reserved {
 					return infraerrors.Forbidden("VIDEO_TRIAL_LIMIT_EXCEEDED", "seedance trial limited to 1 call per day per user").WithMetadata(map[string]string{
 						"provider": VideoProviderSeedance,
+					})
+				}
+				return nil
+			}
+		case VideoProviderKling:
+			dummyTask := &VideoTask{
+				Provider: account.Provider,
+				Model:    firstNonEmptyVideo(strings.TrimSpace(p.Model), account.DefaultModel, defaultVideoModel(VideoProviderKling)),
+				TaskType: p.TaskType,
+				Prompt:   strings.TrimSpace(p.Prompt),
+				Duration: defaultVideoDuration(p.Duration),
+			}
+			if blockedReasons := klingSmokeGateBlockedReasons(account, dummyTask); len(blockedReasons) > 0 {
+				return nil, infraerrors.Forbidden("VIDEO_TRIAL_BLOCKED", "kling trial blocked by gate").WithMetadata(map[string]string{
+					"provider":        VideoProviderKling,
+					"blocked_reasons": strings.Join(blockedReasons, "; "),
+				})
+			}
+			createFn = func(ctx context.Context, task *VideoTask) error {
+				reserved, err := s.repo.CreateDailyTrialTask(ctx, task, VideoProviderKling, task.CreatedBy, timezone.Today())
+				if err != nil {
+					return err
+				}
+				if !reserved {
+					return infraerrors.Forbidden("VIDEO_TRIAL_LIMIT_EXCEEDED", "kling trial limited to 1 call per day per user").WithMetadata(map[string]string{
+						"provider": VideoProviderKling,
 					})
 				}
 				return nil
@@ -1296,12 +1541,66 @@ func (s *VideoGatewayService) applyProviderAPIKey(account *VideoProviderAccount,
 	return nil
 }
 
+// applyKlingCredentials packs AK+SK into the versioned JSON blob and encrypts it
+// into encrypted_api_key. When mergeExisting is true, empty AK/SK keep the prior
+// decrypted values (leave-empty semantics).
+func (s *VideoGatewayService) applyKlingCredentials(account *VideoProviderAccount, accessKey, secretKey string, mergeExisting bool) error {
+	if account == nil {
+		return fmt.Errorf("video provider account is required")
+	}
+	accessKey = strings.TrimSpace(accessKey)
+	secretKey = strings.TrimSpace(secretKey)
+	if mergeExisting {
+		existingAK, existingSK := "", ""
+		if strings.TrimSpace(account.EncryptedAPIKey) != "" {
+			plain, err := s.encryptor.Decrypt(account.EncryptedAPIKey)
+			if err != nil {
+				return fmt.Errorf("decrypt existing kling credentials: %w", err)
+			}
+			if ak, sk, ok := unpackKlingCredentialBlob(plain); ok {
+				existingAK, existingSK = ak, sk
+			}
+		}
+		if accessKey == "" {
+			accessKey = existingAK
+		}
+		if secretKey == "" {
+			secretKey = existingSK
+		}
+	}
+	if accessKey == "" && secretKey == "" {
+		return nil
+	}
+	blob, err := packKlingCredentialBlob(accessKey, secretKey)
+	if err != nil {
+		return err
+	}
+	encrypted, err := s.encryptor.Encrypt(blob)
+	if err != nil {
+		return fmt.Errorf("encrypt video provider key: %w", err)
+	}
+	account.EncryptedAPIKey = encrypted
+	account.MaskedKey = MaskVideoAPIKey(accessKey)
+	return nil
+}
+
 func (s *VideoGatewayService) prepareProviderForResponse(account *VideoProviderAccount) {
 	if account == nil {
 		return
 	}
 	account.APIKeyConfigured = strings.TrimSpace(account.EncryptedAPIKey) != ""
+	account.AuthMode = videoProviderAuthMode(account.Provider, account.APIKeyConfigured)
+	if account.APIKeyConfigured && account.Provider == VideoProviderKling && strings.TrimSpace(account.MaskedKey) == "" {
+		// Best-effort: derive masked AK from ciphertext without exposing SK.
+		if plain, err := s.encryptor.Decrypt(account.EncryptedAPIKey); err == nil {
+			if ak, _, ok := unpackKlingCredentialBlob(plain); ok {
+				account.MaskedKey = MaskVideoAPIKey(ak)
+			}
+		}
+	}
 	account.PlainAPIKey = ""
+	account.PlainAccessKey = ""
+	account.PlainSecretKey = ""
 }
 
 func videoMetadataString(metadata map[string]any, key string) string {
@@ -1367,6 +1666,9 @@ func (s *VideoGatewayService) decryptProviderKey(account *VideoProviderAccount) 
 	if account == nil || strings.TrimSpace(account.EncryptedAPIKey) == "" {
 		if account != nil {
 			account.APIKeyConfigured = false
+			account.PlainAPIKey = ""
+			account.PlainAccessKey = ""
+			account.PlainSecretKey = ""
 		}
 		return
 	}
@@ -1376,9 +1678,24 @@ func (s *VideoGatewayService) decryptProviderKey(account *VideoProviderAccount) 
 		slog.Warn("video_gateway: decrypt provider key failed", "provider_id", account.ID, "provider", account.Provider, "error", err)
 		account.APIKeyDecryptFailed = true
 		account.PlainAPIKey = ""
+		account.PlainAccessKey = ""
+		account.PlainSecretKey = ""
+		return
+	}
+	if ak, sk, ok := unpackKlingCredentialBlob(plain); ok {
+		account.PlainAccessKey = ak
+		account.PlainSecretKey = sk
+		account.PlainAPIKey = ""
+		account.AuthMode = videoAuthModeKlingAKSK
+		if strings.TrimSpace(account.MaskedKey) == "" {
+			account.MaskedKey = MaskVideoAPIKey(ak)
+		}
 		return
 	}
 	account.PlainAPIKey = plain
+	account.PlainAccessKey = ""
+	account.PlainSecretKey = ""
+	account.AuthMode = videoAuthModeBearer
 }
 
 func (s *VideoGatewayService) adapterFor(provider string) (VideoAdapter, error) {

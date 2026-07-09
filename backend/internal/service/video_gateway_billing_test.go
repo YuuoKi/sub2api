@@ -499,6 +499,105 @@ func TestSeedanceBudgetEstimateUsesReferenceTableWhenConfigRateUnset(t *testing.
 	}
 }
 
+func TestKlingBudgetEstimateUsesPerSecondCatalogWhenConfigRateUnset(t *testing.T) {
+	svc := NewVideoGatewayService(newMemoryVideoGatewayRepo(), noopVideoKeyEncryptor{}, nil)
+
+	stdCost := svc.estimateVideoCost(&VideoTask{
+		Provider:   VideoProviderKling,
+		Model:      "kling-v1",
+		Duration:   5,
+		Resolution: "720p", // std mode
+	})
+	if stdCost <= 0 {
+		t.Fatalf("kling std estimate must be non-zero, got %.4f", stdCost)
+	}
+
+	proCost := svc.estimateVideoCost(&VideoTask{
+		Provider:   VideoProviderKling,
+		Model:      "kling-2.6-pro",
+		Duration:   5,
+		Resolution: "1080p", // pro mode
+	})
+	if proCost <= 0 {
+		t.Fatalf("kling pro estimate must be non-zero, got %.4f", proCost)
+	}
+	if !(proCost > stdCost) {
+		t.Fatalf("kling pro 5s estimate (%.4f) should exceed std 5s (%.4f)", proCost, stdCost)
+	}
+
+	task := &VideoTask{
+		Provider:   VideoProviderKling,
+		Model:      "kling-v1",
+		Duration:   5,
+		Resolution: "720p",
+	}
+	svc.applyVideoBillingMetadata(task)
+	if task.PricingVersion != VideoPricingVersionKling202607 {
+		t.Fatalf("PricingVersion = %q, want %q", task.PricingVersion, VideoPricingVersionKling202607)
+	}
+	if task.Currency != BillingCurrencyCNY {
+		t.Fatalf("Currency = %q, want CNY", task.Currency)
+	}
+}
+
+func TestKlingSucceededTaskSettlesPerSecondCostAndCarriesPricingVersion(t *testing.T) {
+	svc := NewVideoGatewayService(newMemoryVideoGatewayRepo(), noopVideoKeyEncryptor{}, nil)
+	task := &VideoTask{
+		Provider:   VideoProviderKling,
+		Model:      "kling-v2-6",
+		Status:     VideoStatusSucceeded,
+		Duration:   5,
+		Resolution: "720p",
+		CreatedBy:  8,
+	}
+
+	cost := svc.chargeableVideoCost(task)
+	if cost <= 0 {
+		t.Fatalf("kling settle cost must be non-zero, got %.4f", cost)
+	}
+
+	svc.applyVideoBillingMetadata(task)
+	if task.PricingVersion != VideoPricingVersionKling202607 {
+		t.Fatalf("PricingVersion = %q, want %q", task.PricingVersion, VideoPricingVersionKling202607)
+	}
+	if task.Currency != BillingCurrencyCNY {
+		t.Fatalf("Currency = %q, want CNY", task.Currency)
+	}
+
+	// Settle must match estimate for the same task shape (Kling has no token usage).
+	estimate := svc.estimateVideoCost(task)
+	if !approxEqual(cost, estimate) {
+		t.Fatalf("settle=%.8f estimate=%.8f; kling settle should equal per-second estimate", cost, estimate)
+	}
+}
+
+func TestKlingCatalogRateCNYPerSecondSelectsStdAndPro(t *testing.T) {
+	catalog := NewVideoPricingCatalog(nil)
+	stdRate, version, ok := catalog.RateCNYPerSecond(&VideoTask{
+		Provider:   VideoProviderKling,
+		Model:      "kling-v1",
+		Resolution: "720p",
+	})
+	if !ok || stdRate <= 0 {
+		t.Fatalf("std rate ok=%v rate=%.4f", ok, stdRate)
+	}
+	if version != VideoPricingVersionKling202607 {
+		t.Fatalf("version = %q, want %q", version, VideoPricingVersionKling202607)
+	}
+
+	proRate, _, ok := catalog.RateCNYPerSecond(&VideoTask{
+		Provider:   VideoProviderKling,
+		Model:      "kling-v1",
+		Resolution: "1080p",
+	})
+	if !ok || proRate <= 0 {
+		t.Fatalf("pro rate ok=%v rate=%.4f", ok, proRate)
+	}
+	if !(proRate > stdRate) {
+		t.Fatalf("pro rate %.4f should exceed std rate %.4f", proRate, stdRate)
+	}
+}
+
 // TestVideoBudgetGateAllowsWhenAffordable: sufficient budget => create proceeds and
 // the gate was consulted with the duration-based estimated cost.
 func TestVideoBudgetGateAllowsWhenAffordable(t *testing.T) {

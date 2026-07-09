@@ -105,15 +105,16 @@ type DramaProviderSkip struct {
 }
 
 type DramaProviderRecommendation struct {
-	SelectedProvider    string              `json:"selected_provider"`
-	SelectedModel       string              `json:"selected_model"`
-	SelectedMode        string              `json:"selected_mode"`
-	EngineProfileID     string              `json:"engine_profile_id"`
-	RoutingReason       string              `json:"routing_reason"`
-	SkippedProviders    []DramaProviderSkip `json:"skipped_providers"`
-	FallbackReady       bool                `json:"fallback_ready"`
-	SafeDemoMode        bool                `json:"safe_demo_mode"`
-	NeedsRealValidation bool                `json:"needs_real_validation"`
+	SelectedProvider           string              `json:"selected_provider"`
+	SelectedModel              string              `json:"selected_model"`
+	SelectedMode               string              `json:"selected_mode"`
+	EngineProfileID            string              `json:"engine_profile_id"`
+	RoutingReason              string              `json:"routing_reason"`
+	SkippedProviders           []DramaProviderSkip `json:"skipped_providers"`
+	FallbackReady              bool                `json:"fallback_ready"`
+	SafeDemoMode               bool                `json:"safe_demo_mode"`
+	NeedsRealValidation        bool                `json:"needs_real_validation"`
+	SelectedProviderAccountID  int64               `json:"-"`
 }
 
 type DramaTaskContract struct {
@@ -263,33 +264,76 @@ type DramaSkillAnalysisExport struct {
 	CreatedAt      string            `json:"created_at"`
 }
 
-func (s *VideoGatewayService) DramaEngineCapabilityMatrix() []DramaEngineProfile {
-	return dramaEngineProfiles()
+func (s *VideoGatewayService) DramaEngineCapabilityMatrix(ctx context.Context) []DramaEngineProfile {
+	profiles := dramaEngineProfiles()
+	if s.findAuthorizedHealthyKling(ctx) == nil {
+		return profiles
+	}
+	now := time.Now().UTC().Format("2006-01-02")
+	for i := range profiles {
+		if !strings.HasPrefix(profiles[i].ID, "kling_real_") {
+			continue
+		}
+		profiles[i].RealProviderVerified = true
+		profiles[i].SourceNote = "Kling production_authorized provider account is healthy; real routing enabled."
+		profiles[i].LastVerifiedAt = now
+	}
+	return profiles
 }
 
 func (s *VideoGatewayService) RecommendDramaProvider(ctx context.Context, p DramaProviderRecommendParams) (*DramaProviderRecommendation, error) {
 	family := recommendedDramaFamily(p)
 	mode := recommendedDramaMode(p)
-	selectedProfileID := family + "_safe_demo"
-	if family == VideoProviderKling && mode == VideoTaskTypeTextToVideo {
-		mode = VideoTaskTypeImageToVideo
-	}
-	profile := dramaProfileByID(selectedProfileID)
-	if profile == nil {
-		profile = dramaProfileByID("safe_demo_provider")
-	}
 	skipped := s.dramaSkippedProviders(ctx, family)
-	reason := dramaRoutingReason(p, family, mode)
+
+	var (
+		profile                   *DramaEngineProfile
+		selectedProviderAccountID int64
+		safeDemoMode              bool
+		needsRealValidation       bool
+		reason                    string
+	)
+
+	if family == VideoProviderKling {
+		if kling := s.findAuthorizedHealthyKling(ctx); kling != nil {
+			profileID := dramaKlingRealProfileID(mode)
+			profile = dramaProfileByID(profileID)
+			if profile == nil {
+				profile = dramaProfileByID("kling_real_image_to_video")
+			}
+			selectedProviderAccountID = kling.ID
+			safeDemoMode = false
+			needsRealValidation = false
+			reason = dramaRealRoutingReason(p, family, mode)
+		}
+	}
+
+	if profile == nil {
+		selectedProfileID := family + "_safe_demo"
+		// Safe-demo Kling historically rewrites bare text-to-video to image-to-video.
+		if family == VideoProviderKling && mode == VideoTaskTypeTextToVideo {
+			mode = VideoTaskTypeImageToVideo
+		}
+		profile = dramaProfileByID(selectedProfileID)
+		if profile == nil {
+			profile = dramaProfileByID("safe_demo_provider")
+		}
+		safeDemoMode = profile.InternalSafeModeOnly
+		needsRealValidation = true
+		reason = dramaRoutingReason(p, family, mode)
+	}
+
 	return &DramaProviderRecommendation{
-		SelectedProvider:    profile.ProviderCode,
-		SelectedModel:       profile.ModelName,
-		SelectedMode:        profile.Mode,
-		EngineProfileID:     profile.ID,
-		RoutingReason:       reason,
-		SkippedProviders:    skipped,
-		FallbackReady:       true,
-		SafeDemoMode:        profile.InternalSafeModeOnly,
-		NeedsRealValidation: true,
+		SelectedProvider:          profile.ProviderCode,
+		SelectedModel:             profile.ModelName,
+		SelectedMode:              profile.Mode,
+		EngineProfileID:           profile.ID,
+		RoutingReason:             reason,
+		SkippedProviders:          skipped,
+		FallbackReady:             true,
+		SafeDemoMode:              safeDemoMode,
+		NeedsRealValidation:       needsRealValidation,
+		SelectedProviderAccountID: selectedProviderAccountID,
 	}, nil
 }
 
@@ -311,6 +355,7 @@ func (s *VideoGatewayService) CreateDramaTask(ctx context.Context, p DramaTaskCr
 		return nil, err
 	}
 	task, err := s.CreateTask(ctx, VideoTaskCreateParams{
+		ProviderAccountID: recommendation.SelectedProviderAccountID,
 		TaskType:          dramaModeToVideoTaskType(recommendation.SelectedMode),
 		Model:             recommendation.SelectedModel,
 		Prompt:            p.Prompt,
@@ -499,12 +544,16 @@ func (s *VideoGatewayService) DramaProviderPool(ctx context.Context) ([]DramaPro
 	out := make([]DramaProviderPoolItem, 0, len(providers))
 	for _, provider := range providers {
 		profiles := dramaProfilesByFamily(provider.Provider)
+		realVerified := provider.Provider == VideoProviderKling &&
+			provider.RouteAvailable &&
+			provider.APIKeyConfigured &&
+			klingProductionAuthorized(provider)
 		out = append(out, DramaProviderPoolItem{
 			ProviderAccountStatus: providerRuntimeStatusForPool(provider),
 			ProviderCode:          provider.Provider,
 			DisplayName:           provider.DisplayName,
 			CredentialConfigured:  provider.APIKeyConfigured,
-			RealProviderVerified:  false,
+			RealProviderVerified:  realVerified,
 			LastErrorType:         firstNonEmptyVideo(provider.DiagnosticType, provider.LastError),
 			CooldownUntil:         videoMetadataString(provider.Metadata, "cooldown_until"),
 			FailureCountToday:     provider.TodayFailures,
@@ -744,6 +793,15 @@ func dramaEngineProfiles() []DramaEngineProfile {
 			SourceNote: "NEEDS_REAL_PROVIDER_VALIDATION; split by model version and mode in future authorized tests.", LastVerifiedAt: "NEEDS_AUTHORIZED_TEST",
 		},
 		{
+			ID: "kling_real_text_to_video", ProviderCode: "kling_real", EngineFamily: VideoProviderKling, ModelName: "kling-2.6-pro", ModelVersion: "2.6", Mode: "text-to-video",
+			SupportsTextToVideo: true, SupportsImageToVideo: false, SupportsFirstLastFrame: false, SupportsReferenceImages: false, SupportsReferenceVideo: false, SupportsMotionControl: true,
+			SupportsNativeAudio: true, SupportsLipsync: true, SupportsRealPerson: true, SupportsAnimeDrama: true, SupportsShortDrama: true, SupportsMultiCharacter: true, SupportsDialogue: true, SupportsCameraControl: true,
+			MaxDurationSeconds: 10, AspectRatios: []string{"9:16", "16:9", "1:1"}, BestForSceneTypes: []string{"真人短剧", "漫剧", "情绪爆发", "动作冲突", "文生视频"}, WeakForSceneTypes: []string{"未授权真实 provider 闭环", "强参考图约束镜头"},
+			RecommendedPromptStructure: []string{"character_identity", "scene_context", "dramatic_goal", "shot_type", "camera", "performance", "dialogue", "engine_specific_controls", "negative_prompt"},
+			CommonFailureModes:         []string{"prompt ambiguity", "identity drift without reference image", "needs authorized API verification"}, CredentialRequired: true, RealProviderVerified: false, InternalSafeModeOnly: false,
+			SourceNote: "NEEDS_REAL_PROVIDER_VALIDATION; official Kling text2video path when production_authorized.", LastVerifiedAt: "NEEDS_AUTHORIZED_TEST",
+		},
+		{
 			ID: "official_api_provider_readiness", ProviderCode: "official_api_provider", EngineFamily: "official_api", ModelName: "official-api-profile", ModelVersion: "readiness", Mode: "provider-specific",
 			SupportsTextToVideo: true, SupportsImageToVideo: true, SupportsShortDrama: true, SupportsMiddleDrama: true, MaxDurationSeconds: 10, AspectRatios: []string{"provider_specific"},
 			BestForSceneTypes: []string{"authorized production validation"}, WeakForSceneTypes: []string{"not configured in Phase 4B.3"}, RecommendedPromptStructure: []string{"provider_contract", "scene_context", "result_feedback"},
@@ -831,6 +889,50 @@ func dramaTaskContract(task *VideoTask, events []*VideoTaskEvent) *DramaTaskCont
 	}
 }
 
+func (s *VideoGatewayService) findAuthorizedHealthyKling(ctx context.Context) *VideoProviderAccount {
+	if s == nil {
+		return nil
+	}
+	if _, err := s.adapterFor(VideoProviderKling); err != nil {
+		return nil
+	}
+	items, err := s.ListProviderAccounts(ctx)
+	if err != nil {
+		return nil
+	}
+	var selected *VideoProviderAccount
+	for _, item := range items {
+		if item == nil || item.Provider != VideoProviderKling || !item.Enabled {
+			continue
+		}
+		if !item.RouteAvailable || !item.APIKeyConfigured || !klingProductionAuthorized(item) {
+			continue
+		}
+		if selected == nil ||
+			item.Priority < selected.Priority ||
+			(item.Priority == selected.Priority && item.ID < selected.ID) {
+			selected = item
+		}
+	}
+	return selected
+}
+
+func dramaKlingRealProfileID(mode string) string {
+	switch dramaModeToVideoTaskType(mode) {
+	case VideoTaskTypeTextToVideo:
+		return "kling_real_text_to_video"
+	case VideoTaskTypeReferenceToVideo:
+		return "kling_real_image_to_video"
+	default:
+		return "kling_real_image_to_video"
+	}
+}
+
+func dramaRealRoutingReason(p DramaProviderRecommendParams, family, mode string) string {
+	scene := firstNonEmptyVideo(strings.TrimSpace(p.SceneType), "unknown_scene")
+	return fmt.Sprintf("scene_type=%s mapped to %s/%s; production_authorized kling account healthy, using real provider profile", scene, family, mode)
+}
+
 func (s *VideoGatewayService) dramaSkippedProviders(ctx context.Context, preferredFamily string) []DramaProviderSkip {
 	items, err := s.ListProviderAccounts(ctx)
 	status := map[string]string{}
@@ -843,6 +945,8 @@ func (s *VideoGatewayService) dramaSkippedProviders(ctx context.Context, preferr
 				status[item.Provider] = routeSkipReasonCode(item.RouteSkipReason)
 			} else if !item.APIKeyConfigured {
 				status[item.Provider] = "credential_not_configured"
+			} else if item.Provider == VideoProviderKling && klingProductionAuthorized(item) && item.RouteAvailable {
+				status[item.Provider] = "available"
 			} else {
 				status[item.Provider] = "real_provider_not_verified"
 			}
@@ -850,14 +954,21 @@ func (s *VideoGatewayService) dramaSkippedProviders(ctx context.Context, preferr
 	}
 	reasons := []DramaProviderSkip{}
 	for _, provider := range []string{VideoProviderSeedance, VideoProviderKling} {
+		if status[provider] == "available" {
+			continue
+		}
 		reason := firstNonEmptyVideo(status[provider], "real_provider_not_verified")
 		if provider == preferredFamily && reason == "credential_not_configured" {
 			reason = "real_provider_not_verified"
 		}
+		detail := "Phase 4B.3 does not call real providers; use safe demo profile until authorized validation."
+		if provider == VideoProviderKling {
+			detail = "Kling real routing requires production_authorized=true and a healthy credentialed adapter."
+		}
 		reasons = append(reasons, DramaProviderSkip{
 			Provider: provider + "_real",
 			Reason:   reason,
-			Detail:   "Phase 4B.3 does not call real providers; use safe demo profile until authorized validation.",
+			Detail:   detail,
 		})
 	}
 	return reasons

@@ -179,6 +179,9 @@ func (h *VideoHandler) ListAPIKeyVideoProviders(c *gin.Context) {
 		if item.Provider == service.VideoProviderSeedance && item.RouteSkipReason != "seedance provider account is not configured" {
 			mockOnly = false
 		}
+		if item.Provider == service.VideoProviderKling && item.RouteSkipReason != "kling provider account is not configured" {
+			mockOnly = false
+		}
 	}
 	response.Success(c, gin.H{
 		"items":                        out,
@@ -378,6 +381,42 @@ func (h *VideoHandler) CreateAPIKeyVideoTask(c *gin.Context) {
 			ReturnLastFrame:   req.ReturnLastFrame,
 			CreatedBy:         subject.UserID,
 		})
+	} else if provider == service.VideoProviderKling && req.TrialMode == "tiny_real" {
+		task, err = h.video.CreateAPIKeyKlingTinyTrialTask(c.Request.Context(), req.Provider, service.VideoTaskCreateParams{
+			TaskType:          req.TaskType,
+			Model:             req.Model,
+			Prompt:            req.Prompt,
+			NegativePrompt:    req.NegativePrompt,
+			ReferenceImageURL: req.ReferenceImageURL,
+			ReferenceVideoURL: req.ReferenceVideoURL,
+			Content:           req.Content,
+			AspectRatio:       req.AspectRatio,
+			Duration:          req.Duration,
+			Resolution:        req.Resolution,
+			GenerateAudio:     req.GenerateAudio,
+			Watermark:         req.Watermark,
+			CameraFixed:       req.CameraFixed,
+			ReturnLastFrame:   req.ReturnLastFrame,
+			CreatedBy:         subject.UserID,
+		})
+	} else if provider == service.VideoProviderKling {
+		task, err = h.video.CreateAPIKeyKlingProductionTask(c.Request.Context(), req.Provider, service.VideoTaskCreateParams{
+			TaskType:          req.TaskType,
+			Model:             req.Model,
+			Prompt:            req.Prompt,
+			NegativePrompt:    req.NegativePrompt,
+			ReferenceImageURL: req.ReferenceImageURL,
+			ReferenceVideoURL: req.ReferenceVideoURL,
+			Content:           req.Content,
+			AspectRatio:       req.AspectRatio,
+			Duration:          req.Duration,
+			Resolution:        req.Resolution,
+			GenerateAudio:     req.GenerateAudio,
+			Watermark:         req.Watermark,
+			CameraFixed:       req.CameraFixed,
+			ReturnLastFrame:   req.ReturnLastFrame,
+			CreatedBy:         subject.UserID,
+		})
 	} else {
 		response.ErrorFrom(c, infraerrors.Forbidden(
 			"VIDEO_PROVIDER_DISABLED",
@@ -539,7 +578,7 @@ func (h *VideoHandler) RecommendDramaProvider(c *gin.Context) {
 }
 
 func (h *VideoHandler) DramaEngineCapabilityMatrix(c *gin.Context) {
-	response.Success(c, gin.H{"items": h.video.DramaEngineCapabilityMatrix()})
+	response.Success(c, gin.H{"items": h.video.DramaEngineCapabilityMatrix(c.Request.Context())})
 }
 
 func videoTaskToResponse(task *service.VideoTask, events []*service.VideoTaskEvent) videoTaskResponse {
@@ -646,6 +685,9 @@ func apiKeyVideoTaskToResponse(task *service.VideoTask, events []*service.VideoT
 
 	if task != nil && task.Provider == service.VideoProviderSeedance {
 		boundary = "api-key-video-seedance-tiny-trial"
+	}
+	if task != nil && task.Provider == service.VideoProviderKling {
+		boundary = "api-key-video-kling-tiny-trial"
 	}
 
 	for _, ev := range events {

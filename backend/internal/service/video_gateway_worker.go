@@ -426,6 +426,8 @@ func (s *VideoGatewayService) pollTask(ctx context.Context, adapter VideoAdapter
 		if status == VideoStatusSucceeded {
 			if actualCost := s.calculateVideoActualCost(task); actualCost > 0 {
 				task.CostEstimate = actualCost
+			} else if actualCost := s.calculateKlingActualCost(task); actualCost > 0 {
+				task.CostEstimate = actualCost
 			}
 		} else {
 			task.CostEstimate = 0

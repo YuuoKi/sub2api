@@ -119,7 +119,43 @@ func stripKnownVideoSecret(s, key string) string {
 // Use this — not the bare redactVideoUpstreamSecrets — wherever an upstream body or
 // message can reach the DB, an API response, an error string, or the audit log.
 func redactVideoUpstreamSecretsForKey(s, key string) string {
-	return redactVideoUpstreamSecrets(stripKnownVideoSecret(s, key))
+	return redactVideoUpstreamSecretsForKeys(s, key)
+}
+
+// redactVideoUpstreamSecretsForKeys strips every known secret (Seedance API key,
+// Kling AK/SK, and any derived JWT) before running the pattern redactor.
+func redactVideoUpstreamSecretsForKeys(s string, keys ...string) string {
+	out := s
+	for _, key := range keys {
+		out = stripKnownVideoSecret(out, key)
+	}
+	return redactVideoUpstreamSecrets(out)
+}
+
+// redactVideoUpstreamSecretsForAccount strips PlainAPIKey and/or Kling AK/SK plus a
+// freshly minted JWT (when AK+SK are present) from an upstream body.
+//
+// Fail-closed: known secrets are always exact-stripped first. Pattern redaction
+// (including JWT-shaped tokens and Bearer prefixes) ALWAYS runs afterward — even when
+// klingMintJWT fails — so a mint error cannot leave a JWT echo inspectable. For Kling
+// accounts (or bodies that already look like a JWT) the pattern pass is applied a second
+// time as a belt-and-suspenders guard against future refactors skipping it.
+func redactVideoUpstreamSecretsForAccount(account *VideoProviderAccount, s string) string {
+	if account == nil {
+		return redactVideoUpstreamSecrets(s)
+	}
+	keys := videoProviderKnownSecrets(account)
+	out := redactVideoUpstreamSecretsForKeys(s, keys...)
+	if account.Provider == VideoProviderKling || looksLikeJWTInBody(s) {
+		out = redactVideoUpstreamSecrets(out)
+	}
+	return out
+}
+
+// looksLikeJWTInBody is a cheap pre-check used only to decide whether to re-run the
+// pattern redactor fail-closed. It does not itself redact.
+func looksLikeJWTInBody(s string) bool {
+	return strings.Contains(s, "eyJ")
 }
 
 // redactVideoUpstreamSecrets strips credentials (Bearer tokens, Authorization
@@ -178,6 +214,21 @@ func redactVideoUpstreamSecrets(s string) string {
 // run). This closes the leak path where a blind-spot-shaped key echoed in a 401/200
 // error body would otherwise survive into the audit file.
 func appendRedactedVideoEvent(key, phase string, statusCode int, rawBody string) error {
+	return appendRedactedVideoEventRecord(VideoProviderSeedance, phase, statusCode, redactVideoUpstreamSecretsForKey(rawBody, key))
+}
+
+// appendRedactedVideoEventForAccount is the account-aware audit writer used by
+// Kling (and any future multi-secret provider). It records the real provider
+// name and strips every known account secret (API key / AK / SK / JWT).
+func appendRedactedVideoEventForAccount(account *VideoProviderAccount, phase string, statusCode int, rawBody string) error {
+	provider := VideoProviderSeedance
+	if account != nil && strings.TrimSpace(account.Provider) != "" {
+		provider = strings.TrimSpace(account.Provider)
+	}
+	return appendRedactedVideoEventRecord(provider, phase, statusCode, redactVideoUpstreamSecretsForAccount(account, rawBody))
+}
+
+func appendRedactedVideoEventRecord(provider, phase string, statusCode int, redactedBody string) error {
 	path := strings.TrimSpace(os.Getenv("SUB2API_VIDEO_REDACTED_EVENT_LOG"))
 	if path == "" {
 		return nil
@@ -185,10 +236,10 @@ func appendRedactedVideoEvent(key, phase string, statusCode int, rawBody string)
 
 	record := map[string]any{
 		"ts":          time.Now().UTC().Format(time.RFC3339Nano),
-		"provider":    VideoProviderSeedance,
+		"provider":    provider,
 		"phase":       phase,
 		"status_code": statusCode,
-		"body":        truncate(redactVideoUpstreamSecretsForKey(rawBody, key), 1000),
+		"body":        truncate(redactedBody, 1000),
 	}
 	line, err := json.Marshal(record)
 	if err != nil {

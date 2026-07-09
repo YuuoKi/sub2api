@@ -23,6 +23,8 @@ type videoProviderRequest struct {
 	DisplayName        string          `json:"display_name" binding:"omitempty,max=120"`
 	Enabled            *bool           `json:"enabled"`
 	APIKey             string          `json:"api_key" binding:"omitempty,max=4000"`
+	AccessKey          string          `json:"access_key" binding:"omitempty,max=4000"`
+	SecretKey          string          `json:"secret_key" binding:"omitempty,max=4000"`
 	BaseURL            string          `json:"base_url" binding:"omitempty,max=500"`
 	DefaultModel       string          `json:"default_model" binding:"omitempty,max=200"`
 	RateLimitPerMinute *int            `json:"rate_limit_per_minute" binding:"omitempty,min=0,max=100000"`
@@ -35,6 +37,7 @@ type videoProviderResponse struct {
 	DisplayName        string         `json:"display_name"`
 	Enabled            bool           `json:"enabled"`
 	APIKeyConfigured   bool           `json:"api_key_configured"`
+	AuthMode           string         `json:"auth_mode,omitempty"`
 	MaskedKey          string         `json:"masked_key"`
 	BaseURL            string         `json:"base_url"`
 	DefaultModel       string         `json:"default_model"`
@@ -162,6 +165,8 @@ func (h *VideoHandler) CreateProvider(c *gin.Context) {
 		DisplayName:        req.DisplayName,
 		Enabled:            enabled,
 		APIKey:             req.APIKey,
+		AccessKey:          req.AccessKey,
+		SecretKey:          req.SecretKey,
 		BaseURL:            req.BaseURL,
 		DefaultModel:       req.DefaultModel,
 		RateLimitPerMinute: rateLimit,
@@ -192,6 +197,14 @@ func (h *VideoHandler) UpdateProvider(c *gin.Context) {
 	if req.APIKey != "" {
 		apiKey = &req.APIKey
 	}
+	var accessKey *string
+	if req.AccessKey != "" {
+		accessKey = &req.AccessKey
+	}
+	var secretKey *string
+	if req.SecretKey != "" {
+		secretKey = &req.SecretKey
+	}
 	var baseURL *string
 	if req.BaseURL != "" {
 		baseURL = &req.BaseURL
@@ -204,6 +217,8 @@ func (h *VideoHandler) UpdateProvider(c *gin.Context) {
 		DisplayName:        displayName,
 		Enabled:            req.Enabled,
 		APIKey:             apiKey,
+		AccessKey:          accessKey,
+		SecretKey:          secretKey,
 		BaseURL:            baseURL,
 		DefaultModel:       defaultModel,
 		RateLimitPerMinute: req.RateLimitPerMinute,
@@ -286,7 +301,7 @@ func (h *VideoHandler) SkillAnalysisExport(c *gin.Context) {
 }
 
 func (h *VideoHandler) DramaEngineCapabilityMatrix(c *gin.Context) {
-	response.Success(c, gin.H{"items": h.video.DramaEngineCapabilityMatrix()})
+	response.Success(c, gin.H{"items": h.video.DramaEngineCapabilityMatrix(c.Request.Context())})
 }
 
 func videoProviderToResponse(item *service.VideoProviderAccount) videoProviderResponse {
@@ -299,6 +314,7 @@ func videoProviderToResponse(item *service.VideoProviderAccount) videoProviderRe
 		DisplayName:        item.DisplayName,
 		Enabled:            item.Enabled,
 		APIKeyConfigured:   item.APIKeyConfigured,
+		AuthMode:           item.AuthMode,
 		MaskedKey:          item.MaskedKey,
 		BaseURL:            item.BaseURL,
 		DefaultModel:       item.DefaultModel,

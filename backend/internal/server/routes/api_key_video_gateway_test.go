@@ -499,17 +499,79 @@ func TestAPIKeyVideoGatewayBlocksSeedanceWithoutTrialMode(t *testing.T) {
 	require.Equal(t, 0, repo.realProviderTaskCount())
 }
 
-func TestAPIKeyVideoGatewayBlocksKling(t *testing.T) {
+func TestAPIKeyVideoGatewayAllowsKlingTinyTrial(t *testing.T) {
+	setEnv(t, "SUB2API_VIDEO_REAL_SMOKE_ENABLED", "1")
+	setEnv(t, "SUB2API_VIDEO_REDACTED_EVENT_LOG", "/tmp/redacted.log")
+	setEnv(t, "SUB2API_VIDEO_URL_ALLOWLIST", "klingai.com")
 	repo := newAPIKeyVideoGatewayMemoryRepo()
 	repo.seedProvider(service.VideoProviderMock, true, map[string]any{"key_status": "normal", "health_status": "healthy"})
-	repo.seedProvider(service.VideoProviderKling, true, map[string]any{"key_status": "normal", "health_status": "healthy"})
+	klingID := repo.seedProvider(service.VideoProviderKling, true, map[string]any{
+		"key_status":              "normal",
+		"health_status":           "healthy",
+		"single_smoke_authorized": true,
+	})
+	repo.providers[klingID].DefaultModel = "kling-v1"
+	router := newAPIKeyVideoGatewayTestRouter(repo)
+
+	rec := apiKeyVideoGatewayRequest(router, http.MethodPost, "/v1/video/tasks", []byte(`{
+		"provider":"kling",
+		"trial_mode":"tiny_real",
+		"task_type":"text_to_video",
+		"prompt":"successful kling tiny real trial",
+		"duration":5
+	}`))
+
+	require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
+	var body apiKeyVideoGatewayTaskEnvelope
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.Equal(t, 0, body.Code)
+	require.Equal(t, service.VideoProviderKling, body.Data.Provider)
+	require.False(t, body.Data.MockOnly)
+	require.Equal(t, "api-key-video-kling-tiny-trial", body.Data.ProviderBoundary)
+	require.Equal(t, 0, body.Data.RealProviderDispatchCount)
+	require.Equal(t, 1, repo.realProviderTaskCount())
+
+	secondRec := apiKeyVideoGatewayRequest(router, http.MethodPost, "/v1/video/tasks", []byte(`{
+		"provider":"kling",
+		"trial_mode":"tiny_real",
+		"task_type":"text_to_video",
+		"prompt":"second kling tiny real trial must stay blocked",
+		"duration":5
+	}`))
+	require.Equal(t, http.StatusForbidden, secondRec.Code, secondRec.Body.String())
+	var secondBody struct {
+		Code     int               `json:"code"`
+		Reason   string            `json:"reason"`
+		Metadata map[string]string `json:"metadata"`
+	}
+	require.NoError(t, json.Unmarshal(secondRec.Body.Bytes(), &secondBody))
+	require.Equal(t, "VIDEO_TRIAL_LIMIT_EXCEEDED", secondBody.Reason)
+	require.Equal(t, "0", secondBody.Metadata["real_provider_dispatch_count"])
+	require.Equal(t, 1, repo.realProviderTaskCount())
+
+	getRec := apiKeyVideoGatewayRequest(router, http.MethodGet, fmt.Sprintf("/v1/video/tasks/%d", body.Data.ID), nil)
+	require.Equal(t, http.StatusOK, getRec.Code, getRec.Body.String())
+	require.Contains(t, getRec.Body.String(), "trial_gate")
+
+	var getBody apiKeyVideoGatewayTaskEnvelope
+	require.NoError(t, json.Unmarshal(getRec.Body.Bytes(), &getBody))
+	require.Equal(t, 0, getBody.Data.RealProviderDispatchCount)
+	require.Equal(t, "tiny_real", getBody.Data.TrialMode)
+	require.Equal(t, "passed", getBody.Data.TrialGateResult)
+}
+
+func TestAPIKeyVideoGatewayBlocksKlingWithoutProductionAuth(t *testing.T) {
+	repo := newAPIKeyVideoGatewayMemoryRepo()
+	repo.seedProvider(service.VideoProviderMock, true, map[string]any{"key_status": "normal", "health_status": "healthy"})
+	klingID := repo.seedProvider(service.VideoProviderKling, true, map[string]any{"key_status": "normal", "health_status": "healthy"})
+	repo.providers[klingID].DefaultModel = "kling-v1"
 	router := newAPIKeyVideoGatewayTestRouter(repo)
 
 	rec := apiKeyVideoGatewayRequest(
 		router,
 		http.MethodPost,
 		"/v1/video/tasks",
-		[]byte(`{"provider":"kling","task_type":"text_to_video","prompt":"must stay blocked"}`),
+		[]byte(`{"provider":"kling","task_type":"text_to_video","prompt":"must require production auth","duration":5}`),
 	)
 
 	require.Equal(t, http.StatusForbidden, rec.Code, rec.Body.String())
@@ -521,7 +583,7 @@ func TestAPIKeyVideoGatewayBlocksKling(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
 	require.Equal(t, http.StatusForbidden, body.Code)
-	require.Equal(t, "VIDEO_PROVIDER_DISABLED", body.Reason)
+	require.Equal(t, "VIDEO_PRODUCTION_NOT_AUTHORIZED", body.Reason)
 	require.Equal(t, service.VideoProviderKling, body.Metadata["provider"])
 	require.Equal(t, "0", body.Metadata["real_provider_dispatch_count"])
 	require.Equal(t, 0, repo.realProviderTaskCount())

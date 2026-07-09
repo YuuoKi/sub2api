@@ -553,8 +553,110 @@ func (a *seedanceVideoAdapter) PollTask(ctx context.Context, account *VideoProvi
 	return result, nil
 }
 
-func (a *seedanceVideoAdapter) CancelTask(_ context.Context, _ *VideoProviderAccount, _ *VideoTask) (*VideoAdapterResult, error) {
-	return &VideoAdapterResult{Status: VideoStatusCancelled, Payload: map[string]any{"provider": "seedance", "mode": "skeleton"}}, nil
+func (a *seedanceVideoAdapter) CancelTask(ctx context.Context, account *VideoProviderAccount, task *VideoTask) (*VideoAdapterResult, error) {
+	if task == nil || strings.TrimSpace(task.UpstreamTaskID) == "" {
+		return &VideoAdapterResult{
+			Status: VideoStatusCancelled,
+			Payload: map[string]any{
+				"provider": "seedance",
+				"mode":     "local_cancel_no_upstream_id",
+			},
+		}, nil
+	}
+	if account == nil || !account.APIKeyConfigured || strings.TrimSpace(account.PlainAPIKey) == "" {
+		return nil, ErrVideoProviderDisabled.WithMetadata(map[string]string{
+			"provider": "seedance",
+			"reason":   "api key is not configured; cancel skipped",
+		})
+	}
+	if reasons := seedanceSmokeGateBlockedReasons(account, task); len(reasons) > 0 {
+		return nil, ErrVideoProviderDisabled.WithMetadata(map[string]string{
+			"provider":           "seedance",
+			"reason":             strings.Join(reasons, "; "),
+			"real_call_executed": "false",
+		})
+	}
+	if err := seedancePreArmRedactionSelfCheck(account); err != nil {
+		return nil, err
+	}
+
+	baseURL := account.BaseURL
+	if baseURL == "" {
+		baseURL = "https://ark.cn-beijing.volces.com/api/v3"
+	}
+
+	upstreamID := strings.TrimSpace(task.UpstreamTaskID)
+	url := strings.TrimRight(baseURL, "/") + "/contents/generations/tasks/" + upstreamID
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("seedance: build cancel request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+account.PlainAPIKey)
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, infraerrorsUnavailable("SEEDANCE_CANCEL_HTTP_ERROR", "Seedance cancel task HTTP error: "+err.Error())
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("seedance: read cancel response: %w", err)
+	}
+
+	if auditErr := appendRedactedVideoEvent(account.PlainAPIKey, "cancel", resp.StatusCode, string(respBody)); auditErr != nil {
+		return nil, infraerrorsUnavailable("SEEDANCE_AUDIT_LOG_FAILED", "Seedance cancel: redacted audit log unavailable: "+auditErr.Error())
+	}
+	if seedanceUpstreamEchoedKey(account, string(respBody)) {
+		return nil, infraerrorsUnavailable("SEEDANCE_UPSTREAM_ECHOED_CREDENTIAL",
+			"Seedance cancel aborted: upstream response echoed the configured credential in a stored field; refusing to persist it (key value intentionally not included)")
+	}
+
+	payload := map[string]any{
+		"provider":         "seedance",
+		"upstream_task_id": upstreamID,
+		"http_status":      resp.StatusCode,
+		"redacted_event":   true,
+		"cancelled_at":     time.Now().UTC().Format(time.RFC3339),
+	}
+
+	// Success and already-terminal / already-deleted responses all map to local cancelled.
+	switch {
+	case resp.StatusCode >= 200 && resp.StatusCode < 300:
+		payload["mode"] = "upstream_deleted"
+		return &VideoAdapterResult{Status: VideoStatusCancelled, Payload: payload}, nil
+	case resp.StatusCode == http.StatusNotFound:
+		payload["mode"] = "upstream_already_gone"
+		return &VideoAdapterResult{Status: VideoStatusCancelled, Payload: payload}, nil
+	case resp.StatusCode == http.StatusConflict:
+		payload["mode"] = "upstream_already_terminal"
+		return &VideoAdapterResult{Status: VideoStatusCancelled, Payload: payload}, nil
+	}
+
+	var parsed struct {
+		Status string `json:"status"`
+		Error  struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	_ = json.Unmarshal(respBody, &parsed)
+	normalized := a.NormalizeStatus(parsed.Status)
+	if IsTerminalVideoStatus(normalized) {
+		payload["mode"] = "upstream_already_terminal"
+		payload["upstream_status"] = normalized
+		return &VideoAdapterResult{Status: VideoStatusCancelled, Payload: payload}, nil
+	}
+	lowerBody := strings.ToLower(string(respBody))
+	if strings.Contains(lowerBody, "already") || strings.Contains(lowerBody, "not found") ||
+		strings.Contains(lowerBody, "deleted") || strings.Contains(lowerBody, "cancelled") ||
+		strings.Contains(lowerBody, "canceled") {
+		payload["mode"] = "upstream_already_terminal"
+		return &VideoAdapterResult{Status: VideoStatusCancelled, Payload: payload}, nil
+	}
+
+	return nil, infraerrorsUnavailable("SEEDANCE_CANCEL_UPSTREAM_ERROR",
+		fmt.Sprintf("Seedance cancel task returned %d (%s): %s", resp.StatusCode, seedanceHTTPErrorType(resp.StatusCode, string(respBody)), truncate(seedanceRedactBody(account, string(respBody)), 500)))
 }
 
 func (a *seedanceVideoAdapter) NormalizeStatus(upstream string) string {

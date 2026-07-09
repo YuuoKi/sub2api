@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -135,6 +136,17 @@ func TestVideoGatewayCreateTaskRejectsInvalidContentContracts(t *testing.T) {
 				},
 			},
 			wantErr: "task_type",
+		},
+		{
+			name: "last_frame without first_frame",
+			params: VideoTaskCreateParams{
+				TaskType: VideoTaskTypeImageToVideo,
+				Prompt:   "tail only",
+				Content: []VideoTaskContentItem{
+					{Type: "image_url", Role: "last_frame", URL: "https://assets.example.com/last.png"},
+				},
+			},
+			wantErr: "last_frame requires first_frame",
 		},
 	}
 
@@ -326,5 +338,134 @@ func TestSeedanceCreatePayloadSnapshotMatchesArkContract(t *testing.T) {
 	}
 	if content[2]["type"] != VideoContentTypeImageURL || content[2]["role"] != VideoContentRoleLastFrame {
 		t.Fatalf("last frame content mismatch: %#v", content[2])
+	}
+}
+
+func TestValidateVideoContentContractRejectsLastFrameWithoutFirstFrame(t *testing.T) {
+	err := validateVideoContentContract(VideoTaskTypeImageToVideo, []VideoTaskContentItem{
+		{Type: VideoContentTypeText, Text: "animate"},
+		{Type: VideoContentTypeImageURL, Role: VideoContentRoleLastFrame, URL: "https://assets.example.com/last.png"},
+	}, true)
+	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "last_frame requires first_frame") {
+		t.Fatalf("expected last_frame requires first_frame, got %v", err)
+	}
+}
+
+type stubMediaHEADClient struct {
+	status      int
+	contentLen  string
+	contentType string
+	err         error
+	lastMethod  string
+	lastURL     string
+}
+
+func (c *stubMediaHEADClient) Do(req *http.Request) (*http.Response, error) {
+	c.lastMethod = req.Method
+	c.lastURL = req.URL.String()
+	if c.err != nil {
+		return nil, c.err
+	}
+	header := make(http.Header)
+	if c.contentLen != "" {
+		header.Set("Content-Length", c.contentLen)
+	}
+	if c.contentType != "" {
+		header.Set("Content-Type", c.contentType)
+	}
+	status := c.status
+	if status == 0 {
+		status = http.StatusOK
+	}
+	return &http.Response{
+		StatusCode: status,
+		Header:     header,
+		Body:       io.NopCloser(strings.NewReader("")),
+		Request:    req,
+	}, nil
+}
+
+func withStubMediaHEADClient(t *testing.T, client *stubMediaHEADClient) {
+	t.Helper()
+	prev := videoMediaHTTPClient
+	videoMediaHTTPClient = client
+	t.Cleanup(func() { videoMediaHTTPClient = prev })
+}
+
+func TestValidateContentURLRejectsOversizeImageViaHEAD(t *testing.T) {
+	t.Setenv("SUB2API_VIDEO_URL_ALLOWLIST", "example.com")
+	client := &stubMediaHEADClient{
+		status:     http.StatusOK,
+		contentLen: "31457281", // 30MB + 1
+		contentType: "image/png",
+	}
+	withStubMediaHEADClient(t, client)
+
+	err := validateContentURL("https://assets.example.com/big.png", "image_url")
+	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "size limit") {
+		t.Fatalf("expected oversize rejection, got %v", err)
+	}
+	if client.lastMethod != http.MethodHead {
+		t.Fatalf("method=%q want HEAD", client.lastMethod)
+	}
+}
+
+func TestValidateContentURLRejectsOversizeVideoAndAudioViaHEAD(t *testing.T) {
+	t.Setenv("SUB2API_VIDEO_URL_ALLOWLIST", "example.com")
+	cases := []struct {
+		label string
+		url   string
+		bytes string
+	}{
+		{label: "video_url", url: "https://assets.example.com/big.mp4", bytes: "52428801"},
+		{label: "audio_url", url: "https://assets.example.com/big.mp3", bytes: "15728641"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.label, func(t *testing.T) {
+			client := &stubMediaHEADClient{status: http.StatusOK, contentLen: tc.bytes}
+			withStubMediaHEADClient(t, client)
+			err := validateContentURL(tc.url, tc.label)
+			if err == nil || !strings.Contains(strings.ToLower(err.Error()), "size limit") {
+				t.Fatalf("expected oversize rejection for %s, got %v", tc.label, err)
+			}
+		})
+	}
+}
+
+func TestValidateContentURLHEADFailureIsFailClosed(t *testing.T) {
+	t.Setenv("SUB2API_VIDEO_URL_ALLOWLIST", "example.com")
+	client := &stubMediaHEADClient{err: context.DeadlineExceeded}
+	withStubMediaHEADClient(t, client)
+
+	err := validateContentURL("https://assets.example.com/missing.png", "image_url")
+	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "fail-closed") {
+		t.Fatalf("expected fail-closed HEAD error, got %v", err)
+	}
+}
+
+func TestValidateContentURLSkipsHEADWithoutAllowlist(t *testing.T) {
+	t.Setenv("SUB2API_VIDEO_URL_ALLOWLIST", "")
+	t.Setenv("SUB2API_MEDIA_URL_ALLOWLIST", "")
+	client := &stubMediaHEADClient{err: context.DeadlineExceeded}
+	withStubMediaHEADClient(t, client)
+
+	if err := validateContentURL("https://assets.example.com/ok.png", "image_url"); err != nil {
+		t.Fatalf("without allowlist HEAD must be skipped, got %v", err)
+	}
+	if client.lastMethod != "" {
+		t.Fatalf("HEAD must not run without allowlist, got method=%q", client.lastMethod)
+	}
+}
+
+func TestValidateContentURLAcceptsWithinLimitViaHEAD(t *testing.T) {
+	t.Setenv("SUB2API_VIDEO_URL_ALLOWLIST", "example.com")
+	client := &stubMediaHEADClient{
+		status:      http.StatusOK,
+		contentLen:  "1024",
+		contentType: "image/jpeg",
+	}
+	withStubMediaHEADClient(t, client)
+	if err := validateContentURL("https://assets.example.com/ok.jpg", "image_url"); err != nil {
+		t.Fatalf("expected accept, got %v", err)
 	}
 }

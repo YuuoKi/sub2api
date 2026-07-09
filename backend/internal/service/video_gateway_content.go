@@ -1,11 +1,31 @@
 package service
 
 import (
+	"context"
 	"fmt"
+	"io"
+	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
+
+const (
+	videoMediaMaxImageBytes = 30 * 1024 * 1024
+	videoMediaMaxVideoBytes = 50 * 1024 * 1024
+	videoMediaMaxAudioBytes = 15 * 1024 * 1024
+	videoMediaHEADTimeout   = 5 * time.Second
+)
+
+// videoMediaHTTPDoer is the injectable HEAD client used by media physical checks.
+// Tests replace videoMediaHTTPClient so unit suites never hit the network.
+type videoMediaHTTPDoer interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
+var videoMediaHTTPClient videoMediaHTTPDoer = &http.Client{Timeout: videoMediaHEADTimeout}
 
 const (
 	VideoContentTypeText     = "text"
@@ -172,7 +192,87 @@ func validateContentURL(rawURL, label string) error {
 	if err := validateExternalVideoURL(rawURL); err != nil {
 		return infraerrors.BadRequest("VIDEO_UNSAFE_REFERENCE_URL", label+" failed SSRF/allowlist validation: "+err.Error())
 	}
+	// Physical size/MIME probe only after SSRF/allowlist validation, and only when an
+	// allowlist is configured (production posture). Without an allowlist we refuse to
+	// open outbound HEAD sockets from the gateway (fail-closed for probe amplification).
+	if configuredMediaURLAllowlist() == "" {
+		return nil
+	}
+	if err := probeVideoMediaConstraints(rawURL, label); err != nil {
+		return err
+	}
 	return nil
+}
+
+func probeVideoMediaConstraints(rawURL, label string) error {
+	maxBytes, wantKind := videoMediaLimitsForLabel(label)
+	ctx, cancel := context.WithTimeout(context.Background(), videoMediaHEADTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, rawURL, nil)
+	if err != nil {
+		return badVideoContent(fmt.Sprintf("%s media HEAD probe failed: %v", label, err))
+	}
+	resp, err := videoMediaHTTPClient.Do(req)
+	if err != nil {
+		return badVideoContent(fmt.Sprintf("%s media HEAD probe failed (fail-closed): %v", label, err))
+	}
+	defer func() { _ = resp.Body.Close() }()
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1024))
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return badVideoContent(fmt.Sprintf("%s media HEAD probe returned HTTP %d (fail-closed)", label, resp.StatusCode))
+	}
+
+	if cl := strings.TrimSpace(resp.Header.Get("Content-Length")); cl != "" {
+		n, err := strconv.ParseInt(cl, 10, 64)
+		if err != nil || n < 0 {
+			return badVideoContent(fmt.Sprintf("%s media Content-Length is invalid (fail-closed)", label))
+		}
+		if n > maxBytes {
+			return badVideoContent(fmt.Sprintf("%s media exceeds %s size limit (%d bytes > %d)", label, wantKind, n, maxBytes))
+		}
+	}
+
+	if ct := strings.TrimSpace(resp.Header.Get("Content-Type")); ct != "" {
+		if err := validateVideoMediaContentType(ct, wantKind, label); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func videoMediaLimitsForLabel(label string) (maxBytes int64, kind string) {
+	switch strings.ToLower(strings.TrimSpace(label)) {
+	case "video_url", "video":
+		return videoMediaMaxVideoBytes, "video"
+	case "audio_url", "audio":
+		return videoMediaMaxAudioBytes, "audio"
+	default:
+		return videoMediaMaxImageBytes, "image"
+	}
+}
+
+func validateVideoMediaContentType(contentType, kind, label string) error {
+	mediaType := strings.ToLower(strings.TrimSpace(strings.Split(contentType, ";")[0]))
+	if mediaType == "" || mediaType == "application/octet-stream" {
+		return nil
+	}
+	switch kind {
+	case "image":
+		if strings.HasPrefix(mediaType, "image/") {
+			return nil
+		}
+	case "video":
+		if strings.HasPrefix(mediaType, "video/") {
+			return nil
+		}
+	case "audio":
+		if strings.HasPrefix(mediaType, "audio/") {
+			return nil
+		}
+	}
+	return badVideoContent(fmt.Sprintf("%s media Content-Type %q is not a valid %s type (fail-closed)", label, mediaType, kind))
 }
 
 func isHTTPContentURL(rawURL string) bool {
@@ -219,6 +319,9 @@ func validateVideoContentContract(taskType string, items []VideoTaskContentItem,
 	}
 	if firstFrameCount > 1 || lastFrameCount > 1 || firstFrameCount+lastFrameCount > 2 {
 		return badVideoContent("first/last frame image mode allows at most one first_frame and one last_frame")
+	}
+	if lastFrameCount > 0 && firstFrameCount == 0 {
+		return badVideoContent("last_frame requires first_frame")
 	}
 	if referenceImageCount > 9 {
 		return badVideoContent("reference_image content is limited to 9 images")

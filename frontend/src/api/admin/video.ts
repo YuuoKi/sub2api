@@ -316,6 +316,13 @@ async function cancelTask(id: number): Promise<VideoTask> {
   return data
 }
 
+async function getLocalAssetBlob(taskId: number): Promise<Blob> {
+  const { data } = await apiClient.get<Blob>(`/video/tasks/${taskId}/local-asset`, {
+    responseType: 'blob',
+  })
+  return data
+}
+
 /** Authenticated local archive preview/download path (relative to API base). */
 export function localAssetURL(taskId: number): string {
   return `/video/tasks/${taskId}/local-asset`
@@ -341,6 +348,7 @@ export const videoTaskAPI = {
   get: getTask,
   cancel: cancelTask,
   localAssetURL,
+  getLocalAssetBlob,
 }
 
 export default videoAdminAPI

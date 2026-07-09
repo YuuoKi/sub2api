@@ -39,6 +39,14 @@
             <button v-if="task.result_url" class="btn btn-sm btn-outline" type="button" @click="copyResultUrl">
               复制结果链接
             </button>
+            <button
+              v-if="task.local_asset_available"
+              class="btn btn-sm btn-outline"
+              type="button"
+              @click="openLocalAsset"
+            >
+              打开本地归档
+            </button>
             <button class="btn btn-sm btn-outline" type="button" @click="copyToCreate">
               {{ isVideoGatewayDemoMode ? '复制参数重新提交' : '复制参数' }}
             </button>
@@ -50,6 +58,18 @@
           :class="resultExpiryNear ? 'text-yellow-600 dark:text-yellow-300' : 'text-gray-500 dark:text-gray-400'"
         >
           {{ resultExpiryHint }}
+        </p>
+        <div v-if="task.result_url" class="mt-4 overflow-hidden rounded-lg border border-gray-200 dark:border-dark-700">
+          <video
+            class="max-h-80 w-full bg-black object-contain"
+            :src="task.result_url"
+            controls
+            preload="metadata"
+            playsinline
+          />
+        </div>
+        <p v-if="task.local_asset_available" class="mt-2 text-xs text-emerald-700 dark:text-emerald-300">
+          本机已归档{{ task.local_asset_saved_at ? `（${task.local_asset_saved_at}）` : '' }}，上游链接过期后仍可打开本地文件。
         </p>
         <div class="mt-4 grid gap-4 lg:grid-cols-[0.7fr_1.2fr_1fr]">
           <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-700">
@@ -343,6 +363,18 @@ async function copyText(value: string, successMessage: string) {
 function copyResultUrl() {
   if (!task.value?.result_url) return
   copyText(task.value.result_url, '结果链接已复制。')
+}
+
+async function openLocalAsset() {
+  if (!task.value?.local_asset_available) return
+  try {
+    const blob = await videoTaskAPI.getLocalAssetBlob(task.value.id)
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank', 'noopener,noreferrer')
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, '打开本地归档失败'))
+  }
 }
 
 function copyToCreate() {

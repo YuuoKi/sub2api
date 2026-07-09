@@ -106,11 +106,33 @@
                   {{ formatTaskCost(task) }}
                 </td>
                 <td class="px-5 py-3">
-                  <div v-if="task.result_url" class="space-y-1">
-                    <a class="inline-flex items-center gap-1 text-primary-600 hover:text-primary-700 dark:text-primary-300" :href="task.result_url" target="_blank" rel="noreferrer">
-                      <Icon name="externalLink" size="xs" />
-                      打开结果
-                    </a>
+                  <div v-if="task.result_url || task.local_asset_available" class="space-y-2">
+                    <video
+                      v-if="task.result_url"
+                      class="h-16 w-28 rounded border border-gray-200 object-cover dark:border-dark-600"
+                      :src="task.result_url"
+                      preload="metadata"
+                      muted
+                      playsinline
+                    />
+                    <div class="flex flex-wrap items-center gap-2">
+                      <a
+                        v-if="task.result_url"
+                        class="inline-flex items-center gap-1 text-primary-600 hover:text-primary-700 dark:text-primary-300"
+                        :href="task.result_url"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <Icon name="externalLink" size="xs" />
+                        打开结果
+                      </a>
+                      <span
+                        v-if="task.local_asset_available"
+                        class="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-200"
+                      >
+                        已归档
+                      </span>
+                    </div>
                     <div
                       v-if="resultExpiryLabel(task)"
                       class="text-xs"
@@ -132,6 +154,14 @@
                     <a v-if="task.result_url" class="btn btn-sm btn-outline" :href="task.result_url" target="_blank" rel="noreferrer">打开结果</a>
                     <button v-if="task.result_url" class="btn btn-sm btn-outline" type="button" @click="copyResultUrl(task)">
                       复制链接
+                    </button>
+                    <button
+                      v-if="task.local_asset_available"
+                      class="btn btn-sm btn-outline"
+                      type="button"
+                      @click="openLocalAsset(task)"
+                    >
+                      本地归档
                     </button>
                     <button class="btn btn-sm btn-outline" type="button" @click="copyToCreate(task)">
                       {{ isVideoGatewayDemoMode ? '复制参数重新提交' : '复制参数' }}
@@ -296,6 +326,18 @@ async function copyResultUrl(task: VideoTask) {
     appStore.showSuccess('结果链接已复制。')
   } catch {
     appStore.showError('复制失败，请手动选择链接。')
+  }
+}
+
+async function openLocalAsset(task: VideoTask) {
+  if (!task.local_asset_available) return
+  try {
+    const blob = await videoTaskAPI.getLocalAssetBlob(task.id)
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank', 'noopener,noreferrer')
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, '打开本地归档失败'))
   }
 }
 

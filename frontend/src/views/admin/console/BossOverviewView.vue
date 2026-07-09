@@ -84,6 +84,25 @@
         </div>
       </section>
 
+      <!-- P2-4：备份超期黄条 -->
+      <section
+        v-if="backupStale"
+        class="flex flex-col gap-3 rounded-lg border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-500/30 dark:bg-yellow-500/10 sm:flex-row sm:items-center sm:justify-between"
+        role="status"
+      >
+        <div class="min-w-0">
+          <p class="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+            {{ backupStaleMessage }}
+          </p>
+          <p class="mt-1 text-xs text-gray-600 dark:text-gray-400">
+            建议到数据管理做一次备份，避免故障时无法回滚。
+          </p>
+        </div>
+        <RouterLink class="btn btn-sm btn-outline shrink-0" to="/admin/settings">
+          去系统设置
+        </RouterLink>
+      </section>
+
       <!-- G2：公司月度总预算进度 -->
       <section
         v-if="monthlyBudgetCNY > 0"
@@ -418,6 +437,8 @@ const monthlySpendCNY = ref(0)
 const monthlyBudgetUsagePercent = ref(0)
 const budgetDraft = ref(0)
 const budgetSaving = ref(false)
+const backupStale = ref(false)
+const backupStaleMessage = ref('')
 
 const rangeOptions: Array<{ key: ConsoleRangeKey; label: string }> = [
   { key: '7d', label: '近 7 天' },
@@ -649,6 +670,38 @@ async function saveMonthlyBudget() {
   }
 }
 
+async function loadBackupStale() {
+  backupStale.value = false
+  backupStaleMessage.value = ''
+  try {
+    const res = await adminAPI.dataManagement.listBackupJobs({ page_size: 20 })
+    const items = res.items || []
+    const succeeded = items.filter((job) => job.status === 'succeeded')
+    if (!succeeded.length) {
+      backupStale.value = true
+      backupStaleMessage.value = '超过 7 天未检测到成功备份（或尚无备份记录）'
+      return
+    }
+    const latest = succeeded
+      .map((job) => new Date(job.finished_at || job.started_at || 0).getTime())
+      .filter((ts) => Number.isFinite(ts) && ts > 0)
+      .sort((a, b) => b - a)[0]
+    if (!latest) {
+      backupStale.value = true
+      backupStaleMessage.value = '超过 7 天未检测到成功备份（或尚无备份记录）'
+      return
+    }
+    const ageMs = Date.now() - latest
+    if (ageMs > 7 * 24 * 60 * 60 * 1000) {
+      const days = Math.floor(ageMs / (24 * 60 * 60 * 1000))
+      backupStale.value = true
+      backupStaleMessage.value = `最近一次成功备份已过去 ${days} 天`
+    }
+  } catch {
+    // 数据管理未配置/无权限时静默，不挡总览
+  }
+}
+
 async function loadAll() {
   loading.value = true
   const { start, end } = getConsoleRange(rangeKey.value)
@@ -678,6 +731,7 @@ async function loadAll() {
       combined_cost: rankingRes.total_combined_actual_cost || 0,
     }
     videoDashboard.value = videoRes
+    void loadBackupStale()
   } catch (err) {
     appStore.showError(extractApiErrorMessage(err, '加载总览数据失败'))
   } finally {

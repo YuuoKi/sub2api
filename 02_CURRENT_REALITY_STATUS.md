@@ -15,7 +15,8 @@
 - 2026-07-12 新鲜门禁：Go 最低门禁通过；前端 lint/typecheck、视频 8 tests 与 production build 通过；repository integration 35 cases 实际执行并通过、无 skip。
 - Windows 页面图片路径在 `EvalSymlinks` 被拒绝时已增加逐段 `Lstat` fail-closed fallback，并有定向与完整 handler 回归。
 - 普通员工侧栏已有“视频试跑 / 任务记录”；管理员视频导航中文业务化；系统检查改为 admin-only。
-- `realsmoke` 专用测试 harness 会话硬门默认关闭，限制图片 4 次、视频 4 次、累计预留 ¥60。12 子进程竞争测试证明跨进程次数与预算上限；`ReserveBefore` 测试及 Form A 代码位置分别证明拒绝发生在 callback/socket/create 前。Seedance Form A 测试 harness 已接入；Gemini/Nano Banana 尚无同等级安全真实 harness。
+- `realsmoke` 专用测试 harness 会话硬门默认关闭，限制图片 4 次、视频 4 次、累计预留 ¥60。12 子进程竞争测试证明跨进程次数与预算上限；`ReserveBefore` 测试及 Form A 代码位置分别证明拒绝发生在 callback/socket/create 前。Seedance 与 Gemini/Nano Banana Form A 测试 harness 均已接入。
+- Gemini harness 固定每次预留 ¥5，模型保持仓内契约 `gemini-3.1-flash-image-preview`，严格单 item；fake 产品流覆盖 Submit→Get→OpenResult、失败 Cancel、取消未确认标记和真实图片解码。普通 AI Studio Key 的真实 Batch 兼容性仍待实证。
 
 ## 本轮已收口
 
@@ -29,7 +30,7 @@
 ## 尚未证明 / 边界
 
 - 真实 Seedance / 其他付费 Provider。
-- Gemini/Nano Banana 真实图片生成、计费与资产下载。
+- Gemini/Nano Banana 真实图片生成、实际账单与资产下载（安全 harness 已就绪，真实兼容性未验证）。
 - 真实支付、生产数据、生产部署、公网暴露。
 - 2026-07-12 本轮 presence-check 未检测到 `GEMINI_API_KEY` / `SUB2API_SEEDANCE_SMOKE_API_KEY`（未读取值）；聊天中的临时密钥未写入命令、文件或日志。恢复后需重新检查。
 - 2026-07-12 当前 Codex 执行上下文的 `wsl.exe --list --quiet` 无输出；这与真实用户上下文已完成 WSL integration 的证据并存，说明当前上下文不可见发行版，不能泛化为机器未安装 WSL。恢复后需重新检查。

@@ -9,15 +9,16 @@
 
 ## 已完成
 
-- 当前分支本地提交：`1145f850` Windows 页面路径安全 fallback；`70d9d516` 员工视频入口与权限语义；`06020077` realsmoke 会话次数/预算硬门。
+- 当前分支本地提交：`1145f850` Windows 页面路径安全 fallback；`70d9d516` 员工视频入口与权限语义；`06020077` realsmoke 会话次数/预算硬门；`be346bb9` Gemini/Nano Banana 安全产品流 harness。
 - Go 最低门禁、前端 lint/typecheck/视频测试/build 通过。
 - repository integration 35 cases 实际执行并通过、无 skip。
 - Seedance Form A 专用测试 harness 在读取 Key、构造客户端和 create 前先占用会话次数与预算。
+- Gemini Form A 专用测试 harness 固定每次预留 ¥5，并在读 Key/建客户端前占用图片次数与共享预算；fake 覆盖 Submit→Get→OpenResult、取消和图片解码。
 
 ## 当前阻断
 
 - 2026-07-12 本轮 presence-check 未检测到 `GEMINI_API_KEY` 与 `SUB2API_SEEDANCE_SMOKE_API_KEY`（未读取值）；不得把聊天中的密钥拼入命令，恢复后需重新检查。
-- Gemini/Nano Banana 缺少与 Seedance Form A 同等级的安全真实产品链 harness。
+- Gemini/Nano Banana 普通 AI Studio Key 对现有异步 Batch 文件链的真实兼容性尚未实证；harness 已就绪但默认关闭。
 - 当前 Codex 执行上下文不可见 WSL 发行版；真实用户上下文曾完成 WSL integration。官方 Dockerfile 又被基础镜像代理 HTTP 429 阻断。
 - 因本地服务未能启动，mock/真实三角色浏览器截图和资产下载复用尚未执行。
 

@@ -10,7 +10,7 @@
 | Sub2API 工程门禁 | 内部可用 | Go、前端、35 cases repository integration 新鲜通过 |
 | 老板/管理员/员工视频入口 | 待复核 | 路由与侧栏已修复并测试；无浏览器三角色截图 |
 | Seedance 2.0 正式链 | 待复核 | Seedance 专用 realsmoke 测试 harness 已接入 4 次/¥60 会话硬门；当前未获得安全环境变量 |
-| Gemini/Nano Banana 正式链 | 已阻塞 | 有产品入口，但缺同等级安全真实 harness，未真实出图 |
+| Gemini/Nano Banana 正式链 | 待复核 | 安全 realsmoke harness 已接入固定 ¥5/图及共享 4+4/¥60 门；普通 AI Studio Key 的 Batch 兼容、真实出图和账单未验证 |
 | 真实计费与对账 | 待复核 | 本轮未产生 Provider usage、用户余额和总览三方对账 |
 | 结果资产预览/下载/复用 | 待复核 | 静态接线存在；未验证真实资产归档与长期可用 |
 

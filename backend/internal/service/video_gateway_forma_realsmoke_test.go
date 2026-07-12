@@ -17,13 +17,13 @@
 //
 // This is the B-2 "switch": built here, INERT until armed. Arming requires ALL of:
 //
-//	1. compile WITH the tag:   go test -tags realsmoke ...
-//	2. set the run flag:        SUB2API_SEEDANCE_FORMA_REAL_SMOKE_RUN=1   (else t.Skip)
-//	3. the real key in env:     SUB2API_SEEDANCE_SMOKE_API_KEY=...        (read, never logged)
-//	4. the adapter smoke gates (asserted, not set, inside the chain):
-//	     SUB2API_VIDEO_REAL_SMOKE_ENABLED=1
-//	     SUB2API_VIDEO_REDACTED_EVENT_LOG=<git-ignored path>
-//	     SUB2API_VIDEO_URL_ALLOWLIST=<trusted Ark CDN suffix(es)>
+//  1. compile WITH the tag:   go test -tags realsmoke ...
+//  2. set the run flag:        SUB2API_SEEDANCE_FORMA_REAL_SMOKE_RUN=1   (else t.Skip)
+//  3. the real key in env:     SUB2API_SEEDANCE_SMOKE_API_KEY=...        (read, never logged)
+//  4. the adapter smoke gates (asserted, not set, inside the chain):
+//     SUB2API_VIDEO_REAL_SMOKE_ENABLED=1
+//     SUB2API_VIDEO_REDACTED_EVENT_LOG=<git-ignored path>
+//     SUB2API_VIDEO_URL_ALLOWLIST=<trusted Ark CDN suffix(es)>
 //
 // Absent ANY of 1-4 the test is inert: no socket is opened, no key is read. The budget
 // gate is ARMED from cost/cap (defaults 1.5 / 30, env-overridable) so a normal single 5s
@@ -47,6 +47,35 @@ func TestSeedanceSingleRealSmokeFormA(t *testing.T) {
 	if strings.TrimSpace(os.Getenv("SUB2API_SEEDANCE_FORMA_REAL_SMOKE_RUN")) != "1" {
 		t.Skip("form A real smoke disarmed: set SUB2API_SEEDANCE_FORMA_REAL_SMOKE_RUN=1 to arm the single billed call through the full product chain")
 	}
+	duration := 5
+	if v := strings.TrimSpace(os.Getenv("SUB2API_SEEDANCE_SMOKE_DURATION")); v != "" {
+		if d, err := strconv.Atoi(v); err == nil {
+			duration = d
+		}
+	}
+	model := strings.TrimSpace(os.Getenv("SUB2API_SEEDANCE_SMOKE_MODEL"))
+	if model == "" {
+		model = "doubao-seedance-2-0-260128"
+	}
+	cost := envFloatOr(t, "SUB2API_SEEDANCE_FORMA_COST_PER_SECOND", 1.5)
+	perCallCap := envFloatOr(t, "SUB2API_SEEDANCE_FORMA_PER_CALL_BUDGET", 30.0)
+	if cost <= 0 || perCallCap <= 0 {
+		t.Fatalf("refusing to arm a REAL smoke with a neutralized budget gate (cost/s=%.3f, per_call_cap=%.3f); both must be > 0", cost, perCallCap)
+	}
+	estimatedCNY := cost * float64(duration)
+	if estimatedCNY <= 0 || estimatedCNY > perCallCap {
+		t.Fatalf("budget gate misconfigured for a single clip: estimate %.3f (cost %.3f × %ds) must be in (0, cap %.3f]", estimatedCNY, cost, duration, perCallCap)
+	}
+
+	// Reserve the attempt and its estimated cost before reading the key or constructing any
+	// adapter/client. Failed calls deliberately keep this reservation in the explicit state file.
+	reviewGuard := newRealReviewSessionGuard(
+		strings.TrimSpace(os.Getenv("SUB2API_REAL_REVIEW_SESSION_STATE_PATH")),
+		strings.TrimSpace(os.Getenv("SUB2API_REAL_REVIEW_SESSION_ENABLED")) == "1",
+	)
+	if err := reviewGuard.Reserve(realReviewVideo, estimatedCNY); err != nil {
+		t.Fatalf("real review session hard gate rejected Form A before key/socket/create: %v", err)
+	}
 
 	apiKey := strings.TrimSpace(os.Getenv("SUB2API_SEEDANCE_SMOKE_API_KEY"))
 	if apiKey == "" {
@@ -63,32 +92,13 @@ func TestSeedanceSingleRealSmokeFormA(t *testing.T) {
 	// The adapter (seedancePreArmRedactionSelfCheck) re-checks fail-closed that THIS key is
 	// stripped in every echo shape before opening a socket; arming a sub-floor key aborts there.
 
-	duration := 5
-	if v := strings.TrimSpace(os.Getenv("SUB2API_SEEDANCE_SMOKE_DURATION")); v != "" {
-		if d, err := strconv.Atoi(v); err == nil {
-			duration = d
-		}
-	}
-	model := strings.TrimSpace(os.Getenv("SUB2API_SEEDANCE_SMOKE_MODEL"))
-	if model == "" {
-		model = "doubao-seedance-2-0-260128"
-	}
-
 	// Budget gate ARMED from config (defaults match the B-2 production config: cost 1.5,
 	// cap 30 — admits a single 5s clip at 7.5, rejects an over-budget burst).
-	cost := envFloatOr(t, "SUB2API_SEEDANCE_FORMA_COST_PER_SECOND", 1.5)
-	perCallCap := envFloatOr(t, "SUB2API_SEEDANCE_FORMA_PER_CALL_BUDGET", 30.0)
 	// Refuse to fire a REAL billed call with the budget gate neutralized: a non-positive cap
 	// leaves the guard nil (unarmed), and a non-positive cost makes every estimate 0 (gate can
 	// never brake). Both must be strictly positive so the gate genuinely guards this real shot.
-	if cost <= 0 || perCallCap <= 0 {
-		t.Fatalf("refusing to arm a REAL smoke with a neutralized budget gate (cost/s=%.3f, per_call_cap=%.3f); both must be > 0", cost, perCallCap)
-	}
 	// The estimate (cost × duration) must be a positive number the cap can actually brake on,
 	// and within the cap so the legitimate single clip is admitted (not silently rejected).
-	if est := cost * float64(duration); est <= 0 || est > perCallCap {
-		t.Fatalf("budget gate misconfigured for a single clip: estimate %.3f (cost %.3f × %ds) must be in (0, cap %.3f]", est, cost, duration, perCallCap)
-	}
 
 	// Poll cadence: real Ark must not be hammered. Default 5s, floor 2s.
 	pollInterval := 5 * time.Second

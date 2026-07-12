@@ -41,10 +41,15 @@ type GeminiUploadedFile struct {
 type GeminiBatchJob struct {
 	Name     string               `json:"name"`
 	State    string               `json:"state"`
+	Metadata *GeminiBatchMetadata `json:"metadata"`
 	Dest     *GeminiBatchDest     `json:"dest"`
 	Response *GeminiBatchResponse `json:"response"`
 	Error    *GeminiBatchError    `json:"error"`
 	Raw      map[string]any       `json:"-"`
+}
+
+type GeminiBatchMetadata struct {
+	State string `json:"state"`
 }
 
 type GeminiBatchDest struct {
@@ -347,6 +352,9 @@ func batchImageGeminiParts(prompt string, refs []BatchImageReference) ([]geminiP
 
 func mapGeminiBatchState(batch *GeminiBatchJob) *BatchProviderStatus {
 	state := strings.TrimSpace(batch.State)
+	if state == "" && batch.Metadata != nil {
+		state = strings.TrimSpace(batch.Metadata.State)
+	}
 	normalized := strings.ToUpper(state)
 	status := &BatchProviderStatus{
 		RawState:              state,
@@ -355,22 +363,22 @@ func mapGeminiBatchState(batch *GeminiBatchJob) *BatchProviderStatus {
 	}
 
 	switch normalized {
-	case "JOB_STATE_PENDING", "JOB_STATE_QUEUED":
+	case "JOB_STATE_PENDING", "JOB_STATE_QUEUED", "BATCH_STATE_PENDING", "BATCH_STATE_QUEUED":
 		status.InternalState = BatchProviderStateQueued
-	case "JOB_STATE_RUNNING":
+	case "JOB_STATE_RUNNING", "BATCH_STATE_RUNNING":
 		status.InternalState = BatchProviderStateRunning
-	case "JOB_STATE_SUCCEEDED":
+	case "JOB_STATE_SUCCEEDED", "BATCH_STATE_SUCCEEDED":
 		status.InternalState = BatchProviderStateSucceeded
 		status.Done = true
-	case "JOB_STATE_FAILED":
+	case "JOB_STATE_FAILED", "BATCH_STATE_FAILED":
 		status.InternalState = BatchProviderStateFailed
 		status.Done = true
 		status.ErrorCode = "GEMINI_BATCH_FAILED"
-	case "JOB_STATE_CANCELLED":
+	case "JOB_STATE_CANCELLED", "BATCH_STATE_CANCELLED":
 		status.InternalState = BatchProviderStateCancelled
 		status.Done = true
 		status.ErrorCode = "GEMINI_BATCH_CANCELLED"
-	case "JOB_STATE_EXPIRED":
+	case "JOB_STATE_EXPIRED", "BATCH_STATE_EXPIRED":
 		status.InternalState = BatchProviderStateExpired
 		status.Done = true
 		status.ErrorCode = "GEMINI_BATCH_EXPIRED"

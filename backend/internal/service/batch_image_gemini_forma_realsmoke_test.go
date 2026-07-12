@@ -399,6 +399,38 @@ func TestGeminiNB2SingleRealReviewFormA(t *testing.T) {
 	}
 }
 
+func TestGeminiNB2RecoverExistingRealReview(t *testing.T) {
+	if strings.TrimSpace(os.Getenv("SUB2API_GEMINI_NB2_RECOVER_REAL_SMOKE_RUN")) != "1" {
+		t.Skip("disabled; recovery reads an existing upstream task and never creates one")
+	}
+	apiKey := strings.TrimSpace(os.Getenv("GEMINI_API_KEY"))
+	jobName := strings.TrimSpace(os.Getenv("SUB2API_GEMINI_NB2_RECOVER_JOB_NAME"))
+	if apiKey == "" || jobName == "" {
+		t.Fatal("recovery requires a non-empty API key and existing job name; values intentionally not logged")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	provider := NewGeminiAPIBatchImageProvider(NewGeminiBatchHTTPClient("", nil))
+	job := &BatchImageJob{Provider: BatchImageProviderGeminiAPI, Model: geminiNB2RealReviewModel, ProviderJobName: &jobName}
+	account := &Account{Platform: PlatformGemini, Type: AccountTypeAPIKey, Credentials: map[string]any{"api_key": apiKey}}
+	status, err := provider.Get(ctx, job, account)
+	if err != nil {
+		t.Fatalf("Get existing task: %v", err)
+	}
+	if !status.Done || status.InternalState != BatchProviderStateSucceeded || status.ProviderOutputRef == "" {
+		t.Fatalf("existing task is not deliverable: state=%q done=%t output=%t", status.InternalState, status.Done, status.ProviderOutputRef != "")
+	}
+	job.ProviderOutputRef = &status.ProviderOutputRef
+	result, _, err := provider.OpenResult(ctx, job, account)
+	if err != nil {
+		t.Fatalf("OpenResult existing task: %v", err)
+	}
+	defer result.Close()
+	if err := validateGeminiNB2ResultJSONL(result); err != nil {
+		t.Fatalf("validate existing task result: %v", err)
+	}
+}
+
 func requiredPositiveEnvFloat(t *testing.T, name string) float64 {
 	t.Helper()
 	v, err := strconv.ParseFloat(strings.TrimSpace(os.Getenv(name)), 64)

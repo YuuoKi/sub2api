@@ -128,7 +128,10 @@ func TestGeminiProvider_GetMapsStates(t *testing.T) {
 		wantCode  string
 	}{
 		{name: "running", job: &GeminiBatchJob{Name: "batches/1", State: "JOB_STATE_RUNNING"}, wantState: BatchProviderStateRunning},
+		{name: "real api running", job: &GeminiBatchJob{Name: "batches/1", State: "BATCH_STATE_RUNNING"}, wantState: BatchProviderStateRunning},
 		{name: "succeeded_dest_fileName", job: &GeminiBatchJob{Name: "batches/1", State: "JOB_STATE_SUCCEEDED", Dest: &GeminiBatchDest{FileName: "files/out"}}, wantState: BatchProviderStateSucceeded, wantDone: true, wantRef: "files/out"},
+		{name: "real api succeeded", job: &GeminiBatchJob{Name: "batches/1", State: "BATCH_STATE_SUCCEEDED", Dest: &GeminiBatchDest{FileName: "files/out"}}, wantState: BatchProviderStateSucceeded, wantDone: true, wantRef: "files/out"},
+		{name: "real operation envelope succeeded", job: &GeminiBatchJob{Name: "batches/1", Metadata: &GeminiBatchMetadata{State: "BATCH_STATE_SUCCEEDED"}, Response: &GeminiBatchResponse{ResponsesFile: "files/out"}}, wantState: BatchProviderStateSucceeded, wantDone: true, wantRef: "files/out"},
 		{name: "failed", job: &GeminiBatchJob{Name: "batches/1", State: "JOB_STATE_FAILED", Error: &GeminiBatchError{Code: "BAD_PROMPT", Message: "bad prompt"}}, wantState: BatchProviderStateFailed, wantDone: true, wantCode: "BAD_PROMPT"},
 		{name: "cancelled", job: &GeminiBatchJob{Name: "batches/1", State: "JOB_STATE_CANCELLED"}, wantState: BatchProviderStateCancelled, wantDone: true, wantCode: "GEMINI_BATCH_CANCELLED"},
 		{name: "expired", job: &GeminiBatchJob{Name: "batches/1", State: "JOB_STATE_EXPIRED"}, wantState: BatchProviderStateExpired, wantDone: true, wantCode: "GEMINI_BATCH_EXPIRED"},

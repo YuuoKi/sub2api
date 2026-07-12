@@ -11,8 +11,8 @@
 <body>
   <h1>Sub2API 真实图片、视频与前端用户闭环复核</h1>
   <p><strong>状态：待复核</strong></p>
-  <p>边界：内部 mock 可演示；真实图片、真实视频和生产可用性未验证。</p>
-  <div class="warn">本轮没有执行真实 Provider 请求：2026-07-12 当前 Codex 执行上下文的 presence-check 未检测到两项临时凭证（未读取值），且该上下文不可见 WSL 发行版；真实用户上下文此前已完成 WSL integration，不能泛化为机器未安装 WSL。官方 Dockerfile 被基础镜像代理 HTTP 429 阻断。聊天中的临时密钥未写入命令、文件、日志或截图。恢复环境后必须重新检查。</div>
+  <p>边界：真实 Gemini 单图与 Seedance 5 秒视频上游链已局部通过；资产、账务、浏览器闭环和生产可用性未验证。</p>
+  <div class="warn">已执行受控真实请求：Gemini 图片 1/4、Seedance 视频 1/4，累计硬门预留 ¥12.5。两项任务均在上游 succeeded；Gemini 首次暴露 operation 状态误判并已修复。当前仍缺 outbox 资产归档、真实账单/余额对账和浏览器三角色证据，因此整体保持“待复核”。</div>
 
   <h2>目标与边界</h2>
   <p>执行目录 <code>D:\sub2api-trunk</code>，分支 <code>wujie/video-capture-moat-20260702</code>，起始 HEAD <code>4231fc2e</code>。授权上限为 Gemini/Nano Banana 图片最多 4 次、Seedance 视频最多 4 次、累计 ¥60；不 push、不部署、不使用生产用户数据、不公开服务。</p>
@@ -23,7 +23,8 @@
     <tr><td><code>1145f850</code></td><td>Windows <code>EvalSymlinks</code> 被拒绝时，用 containment + 逐段 <code>Lstat</code> 的 fail-closed fallback 解析页面图片。</td><td>定向与完整 handler 包通过；Windows symlink/junction 动态用例因权限 skip。</td></tr>
     <tr><td><code>70d9d516</code></td><td>普通员工侧栏加入视频试跑/任务记录；管理员视频导航中文业务化；系统检查改为 admin-only。</td><td>相关和相邻测试通过；尚无真实浏览器点击证据。</td></tr>
     <tr><td><code>06020077</code></td><td><code>realsmoke</code> 专用测试 harness 会话硬门：图片 4、视频 4、累计预留 ¥60；状态原子替换、锁记录 PID/UTC。</td><td>Seedance Form A 测试 harness 已在 Key/socket/create 前接入；Gemini 接入见后续提交。</td></tr>
-    <tr><td><code>be346bb9</code></td><td>Gemini/Nano Banana Form A 安全 harness：固定 ¥5/图预留、单 item、共享会话门、完整 fake 产品流、失败 Cancel、严格 JSONL 与真实图片解码。</td><td>代码与无网络测试通过；普通 AI Studio Key 的异步 Batch 兼容性、真实出图、账单和资产仍待复核。</td></tr>
+    <tr><td><code>be346bb9</code></td><td>Gemini/Nano Banana Form A 安全 harness：固定 ¥5/图预留、单 item、共享会话门、完整 fake 产品流、失败 Cancel、严格 JSONL 与真实图片解码。</td><td>首个真实 Batch 已使用该门禁。</td></tr>
+    <tr><td><code>0b277da5</code></td><td>解析真实 Gemini operation envelope 的 <code>metadata.state</code> 与 <code>BATCH_STATE_*</code>。</td><td>失败测试先复现 succeeded 被误判 running；修复后对既有任务 Get→OpenResult→图片解码 PASS，未新增 create。</td></tr>
   </table>
 
   <h2>验证命令与结果</h2>
@@ -38,19 +39,20 @@
     <tr><td>Gemini/NB2 harness</td><td><code>go test -tags realsmoke ./internal/service -run '^(TestGeminiNB2|TestRunGeminiNB2|TestValidateGeminiNB2)' -count=1 -v</code><br>2026-07-12 exit 0；preflight、fake Submit→Get→OpenResult、失败 Cancel、取消未确认、单 JSONL item、PNG/JPEG/GIF 解码与垃圾图片拒绝 PASS；真实 Form A 未 armed，明确 SKIP、无网络。</td></tr>
     <tr><td>官方根 Dockerfile</td><td>失败于解析 <code>docker/dockerfile:1.7</code>：镜像代理 HTTP 429；未进入源码构建。</td></tr>
     <tr><td>浏览器三角色路径</td><td>未运行：本地服务未能在当前环境启动。</td></tr>
-    <tr><td>真实 Gemini / Seedance</td><td>未运行：凭证环境变量不存在；真实复核开关与状态路径未配置。</td></tr>
+    <tr><td>真实 Gemini</td><td>1 次 create；上游约 107 秒 succeeded。原流程因 operation 状态解析缺陷持续轮询并触发 10 分钟测试超时；修复后只读恢复既有任务，Get→OpenResult→真实图片解码 PASS。</td></tr>
+    <tr><td>真实 Seedance</td><td>5 秒、720p、16:9、24fps；1 次 create、46 次 poll、约 234 秒 succeeded，usage 108900。审计 47 行，两项 Key presence 均为 false，结果 URL 已脱敏。</td></tr>
   </table>
 
   <h2>真实用户路径判定</h2>
   <ul>
-    <li>用户动作、真实任务编号、后台真实执行、Provider 状态回传：<strong>待复核</strong>。</li>
+    <li>真实任务编号、后台执行和 Provider 状态回传：Gemini/Seedance 各 1 次已证实；浏览器用户动作仍<strong>待复核</strong>。</li>
     <li>结果预览、下载、归档、资产级复用：静态接线存在，真实资产闭环<strong>待复核</strong>。</li>
     <li>失败原因：组件与单测有人话映射，真实浏览器展示<strong>待复核</strong>。</li>
     <li>老板/管理员/员工入口：代码与测试已收口，真实角色登录和点击链<strong>待复核</strong>。</li>
   </ul>
 
   <h2>风险与阻断</h2>
-  <div class="bad"><strong>不得开始付费扩大走查：</strong>当前进程缺凭证；Gemini/Nano Banana harness 虽已就绪，但普通 AI Studio Key 的现有 Batch 产品链兼容性未实证；Docker/浏览器环境未恢复。</div>
+  <div class="bad"><strong>暂不扩大付费走查：</strong>先让 Form A 驱动 reliability-core outbox 并证明本地资产归档，再使用剩余额度；同时补 Provider 账单/系统账本/用户余额对账和三角色浏览器路径。</div>
   <ul>
     <li>真实会话锁崩溃后保持 fail-closed，必须人工审计 state 与锁内 PID/时间后处理，禁止自动删除。</li>
     <li>硬门原子性证据限本机 Windows 本地文件系统；未做掉电故障注入或网络共享盘验证。</li>

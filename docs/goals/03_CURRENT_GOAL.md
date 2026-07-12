@@ -9,7 +9,7 @@
 
 ## 已完成
 
-- 当前分支本地提交：`1145f850` Windows 页面路径安全 fallback；`70d9d516` 员工视频入口与权限语义；`06020077` realsmoke 会话次数/预算硬门；`be346bb9` Gemini/Nano Banana 安全产品流 harness。
+- 当前分支本地提交：`1145f850` Windows 页面路径安全 fallback；`70d9d516` 员工视频入口与权限语义；`06020077` realsmoke 会话次数/预算硬门；`be346bb9` Gemini/Nano Banana 安全产品流 harness；`0b277da5` 真实 Gemini operation 状态解析与既有任务恢复验证。
 - Go 最低门禁、前端 lint/typecheck/视频测试/build 通过。
 - repository integration 35 cases 实际执行并通过、无 skip。
 - Seedance Form A 专用测试 harness 在读取 Key、构造客户端和 create 前先占用会话次数与预算。
@@ -18,8 +18,9 @@
 ## 当前阻断
 
 - 2026-07-12 本轮 presence-check 未检测到 `GEMINI_API_KEY` 与 `SUB2API_SEEDANCE_SMOKE_API_KEY`（未读取值）；不得把聊天中的密钥拼入命令，恢复后需重新检查。
-- Gemini/Nano Banana 普通 AI Studio Key 对现有异步 Batch 文件链的真实兼容性尚未实证；harness 已就绪但默认关闭。
-- 当前 Codex 执行上下文不可见 WSL 发行版；真实用户上下文曾完成 WSL integration。官方 Dockerfile 又被基础镜像代理 HTTP 429 阻断。
+- Gemini/Nano Banana 首个真实 Batch 已成功并通过结果解码；Seedance 首个 5 秒任务已成功。会话计数图片 1/4、视频 1/4、累计预留 ¥12.5。
+- WSL/Docker 已在真实 Windows 用户上下文恢复；沙箱上下文仍隔离，相关命令需切换到真实用户上下文。
+- reliability-core 终态依赖 outbox 执行内容采集/资产归档，当前 Form A harness 未驱动该消费者，因此首个 Seedance 只证明真实任务与 result URL，不证明本地资产交付。
 - 因本地服务未能启动，mock/真实三角色浏览器截图和资产下载复用尚未执行。
 
 ## 停止条件

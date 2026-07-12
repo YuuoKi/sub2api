@@ -3,7 +3,7 @@
 更新时间：2026-07-12
 状态：**待复核**
 
-边界：mock 可演示；真实图片、真实视频和生产可用性未验证。
+边界：真实 Gemini 单图与 Seedance 5 秒视频上游链已局部通过；资产、账务、浏览器闭环和生产可用性未验证。
 
 ## 已有证据
 
@@ -16,7 +16,8 @@
 - Windows 页面图片路径在 `EvalSymlinks` 被拒绝时已增加逐段 `Lstat` fail-closed fallback，并有定向与完整 handler 回归。
 - 普通员工侧栏已有“视频试跑 / 任务记录”；管理员视频导航中文业务化；系统检查改为 admin-only。
 - `realsmoke` 专用测试 harness 会话硬门默认关闭，限制图片 4 次、视频 4 次、累计预留 ¥60。12 子进程竞争测试证明跨进程次数与预算上限；`ReserveBefore` 测试及 Form A 代码位置分别证明拒绝发生在 callback/socket/create 前。Seedance 与 Gemini/Nano Banana Form A 测试 harness 均已接入。
-- Gemini harness 固定每次预留 ¥5，模型保持仓内契约 `gemini-3.1-flash-image-preview`，严格单 item；fake 产品流覆盖 Submit→Get→OpenResult、失败 Cancel、取消未确认标记和真实图片解码。普通 AI Studio Key 的真实 Batch 兼容性仍待实证。
+- Gemini harness 固定每次预留 ¥5，模型保持仓内契约 `gemini-3.1-flash-image-preview`，严格单 item。首个真实 Batch 在上游约 107 秒成功；真实 operation 返回 `metadata.state=BATCH_STATE_SUCCEEDED`，暴露旧实现持续误判 running。`0b277da5` 增加 operation envelope/`BATCH_STATE_*` 解析，随后对既有任务执行 Get→OpenResult→真实图片解码 PASS，未新增 create。
+- Seedance Form A 首个真实 5 秒任务 PASS：恰好 1 次 create、46 次 poll、约 234 秒 succeeded，720p、16:9、24fps、usage 108900；审计 47 行且两项临时 Key 均未出现。当前会话计数为图片 1/4、视频 1/4、累计预留 ¥12.5。
 
 ## 本轮已收口
 
@@ -29,11 +30,11 @@
 
 ## 尚未证明 / 边界
 
-- 真实 Seedance / 其他付费 Provider。
-- Gemini/Nano Banana 真实图片生成、实际账单与资产下载（安全 harness 已就绪，真实兼容性未验证）。
+- 剩余 Gemini/Nano Banana 场景、剩余 Seedance 规格与其他付费 Provider。
+- 实际 Provider 账单、系统账本、用户余额三方对账，以及真实资产下载/复用。
 - 真实支付、生产数据、生产部署、公网暴露。
 - 2026-07-12 本轮 presence-check 未检测到 `GEMINI_API_KEY` / `SUB2API_SEEDANCE_SMOKE_API_KEY`（未读取值）；聊天中的临时密钥未写入命令、文件或日志。恢复后需重新检查。
-- 2026-07-12 当前 Codex 执行上下文的 `wsl.exe --list --quiet` 无输出；这与真实用户上下文已完成 WSL integration 的证据并存，说明当前上下文不可见发行版，不能泛化为机器未安装 WSL。恢复后需重新检查。
+- 2026-07-12 已在真实 Windows 用户上下文恢复 Ubuntu-24.04、WSL 2.7.10、内核 6.18.33.2 和 Docker Server 29.1.3；沙箱上下文隔离仍存在，因此 Docker/WSL 命令需在真实用户上下文执行。
 - 官方根 Dockerfile 被 `docker/dockerfile:1.7` 镜像代理 HTTP 429 阻断，未产出当前 HEAD 镜像。
 - 冒烟镜像为缓存 `sub2api:local`（可能早于 tip）；未强制重建。
 - 浏览器三角色截图与真实点击链：未补，保持待复核。

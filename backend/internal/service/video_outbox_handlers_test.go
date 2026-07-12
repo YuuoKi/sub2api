@@ -86,3 +86,15 @@ func TestVideoOutboxHandlersCaptureWithoutCollectorIsRetryable(t *testing.T) {
 		t.Fatalf("error = %T %v, want retry", err, err)
 	}
 }
+
+func TestVideoOutboxHandlersCaptureDisabledDoesNotReportSuccess(t *testing.T) {
+	repo := &videoOutboxRepoFake{task: &VideoTask{ID: 7, Status: VideoStatusSucceeded, CaptureStatus: "pending"}}
+	video := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, &config.Config{})
+	video.SetGenerationContentCollector(NewGenerationContentCollector(&fakeGenContentRepo{}, &config.Config{}))
+	h := NewVideoOutboxHandlers(video, nil, nil, nil)
+	err := h.Handle(context.Background(), &DomainOutboxEvent{ID: 1, AggregateID: 7, EventType: VideoOutboxEventCapture})
+	var retry *DomainOutboxRetryError
+	if !errors.As(err, &retry) {
+		t.Fatalf("error = %T %v, want retry instead of false capture success", err, err)
+	}
+}

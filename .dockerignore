@@ -30,6 +30,7 @@ Thumbs.db
 # Build artifacts
 dist/
 build/
+backend/bin/
 
 # Node modules (will be installed in container)
 frontend/node_modules/
@@ -37,6 +38,9 @@ node_modules/
 
 # Go build cache (will be built in container)
 backend/vendor/
+.gocache*/
+**/.gocache/
+.cache/
 
 # Test files
 *_test.go
@@ -61,6 +65,12 @@ logs/
 tmp/
 temp/
 *.tmp
+.delivery-tools/
+.worktrees/
+.superpowers/
+sub2api-delivery/
+output/
+_review/
 
 # Deploy files (not needed in image)
 deploy/install.sh

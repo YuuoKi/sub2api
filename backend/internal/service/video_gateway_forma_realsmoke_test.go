@@ -35,12 +35,71 @@
 package service
 
 import (
+	"context"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestSeedanceRecoverExistingRealAsset(t *testing.T) {
+	if strings.TrimSpace(os.Getenv("SUB2API_SEEDANCE_RECOVER_REAL_SMOKE_RUN")) != "1" {
+		t.Skip("recovery disarmed: reads one existing task and never creates a generation")
+	}
+	apiKey := strings.TrimSpace(os.Getenv("SUB2API_SEEDANCE_SMOKE_API_KEY"))
+	upstreamTaskID := strings.TrimSpace(os.Getenv("SUB2API_SEEDANCE_RECOVER_TASK_ID"))
+	dataDir := strings.TrimSpace(os.Getenv("DATA_DIR"))
+	if apiKey == "" || upstreamTaskID == "" || dataDir == "" {
+		t.Fatal("recovery requires key, existing task id, and DATA_DIR; values intentionally not logged")
+	}
+	realSmokeRequireEnvEquals(t, "SUB2API_VIDEO_REAL_SMOKE_ENABLED", "1")
+	realSmokeRequireEnvSet(t, "SUB2API_VIDEO_REDACTED_EVENT_LOG")
+	realSmokeRequireEnvSet(t, "SUB2API_VIDEO_URL_ALLOWLIST")
+
+	account := &VideoProviderAccount{ID: 1, Provider: VideoProviderSeedance, Enabled: true, APIKeyConfigured: true, PlainAPIKey: apiKey, Metadata: map[string]any{"single_smoke_authorized": true}}
+	task := &VideoTask{ID: 1, Provider: VideoProviderSeedance, Model: "doubao-seedance-2-0-260128", TaskType: VideoTaskTypeTextToVideo, UpstreamTaskID: upstreamTaskID, Duration: 5}
+	result, err := (&seedanceVideoAdapter{}).PollTask(context.Background(), account, task)
+	if err != nil {
+		t.Fatalf("poll existing task: %v", err)
+	}
+	if result.Status != VideoStatusSucceeded || strings.TrimSpace(result.ResultURL) == "" {
+		t.Fatalf("existing task is not deliverable: status=%q result_url_present=%t", result.Status, result.ResultURL != "")
+	}
+	task.Status = result.Status
+	task.ResultURL = result.ResultURL
+	repo := newMemoryVideoGatewayRepo()
+	repo.tasks[task.ID] = cloneVideoTask(task)
+	svc := &VideoGatewayService{repo: repo}
+	if err := svc.ArchiveSucceededVideoResultWithError(context.Background(), task); err != nil {
+		t.Fatalf("archive existing task: %v", err)
+	}
+	if task.LocalAssetPath == "" {
+		t.Fatal("archive succeeded without a local asset path")
+	}
+	abs, err := ResolveLocalAssetAbsPath(task.LocalAssetPath)
+	if err != nil {
+		t.Fatalf("resolve local asset: %v", err)
+	}
+	info, err := os.Stat(abs)
+	if err != nil {
+		t.Fatalf("stat local asset: %v", err)
+	}
+	if info.Size() <= 0 || filepath.Ext(abs) == "" {
+		t.Fatalf("invalid local asset: bytes=%d extension_present=%t", info.Size(), filepath.Ext(abs) != "")
+	}
+	file, err := os.Open(abs)
+	if err != nil {
+		t.Fatalf("open local asset: %v", err)
+	}
+	defer file.Close()
+	header := make([]byte, 12)
+	if n, err := file.Read(header); err != nil || n != len(header) || !strings.Contains(string(header), "ftyp") {
+		t.Fatalf("local asset is not an MP4 container: header_bytes=%d read_error=%t", n, err != nil)
+	}
+	t.Logf("existing Seedance task archived: bytes=%d local_path_present=true", info.Size())
+}
 
 func TestSeedanceSingleRealSmokeFormA(t *testing.T) {
 	// --- Safety layer 2: explicit human run flag (layer 1 is the build tag). ---

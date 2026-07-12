@@ -92,6 +92,9 @@ func (h *VideoOutboxHandlers) capture(ctx context.Context, event *DomainOutboxEv
 	if h.video == nil {
 		return RetryableDomainOutboxError(errors.New("video service is required for capture"))
 	}
+	if !h.video.videoContentCaptureEnabled() {
+		return RetryableDomainOutboxError(errors.New("generation content capture is disabled"))
+	}
 	if h.video.generationCollector == nil {
 		return RetryableDomainOutboxError(errors.New("generation content collector is required for capture"))
 	}

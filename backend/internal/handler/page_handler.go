@@ -143,17 +143,42 @@ func resolvePageImagePath(pagesDir, imagesDir, filename string) (string, bool) {
 
 	realPagesDir, err := filepath.EvalSymlinks(cleanedPagesDir)
 	if err != nil {
-		return "", false
+		return resolvePageImagePathWithoutSymlinks(cleanedPagesDir, cleanedTarget)
 	}
 	realImagesDir, err := filepath.EvalSymlinks(cleanedImagesDir)
-	if err != nil || !isPathWithinBase(realImagesDir, realPagesDir) {
+	if err != nil {
+		return resolvePageImagePathWithoutSymlinks(cleanedPagesDir, cleanedTarget)
+	}
+	if !isPathWithinBase(realImagesDir, realPagesDir) {
 		return "", false
 	}
 	realTarget, err := filepath.EvalSymlinks(cleanedTarget)
-	if err != nil || !isPathWithinBase(realTarget, realImagesDir) {
+	if err != nil {
+		return resolvePageImagePathWithoutSymlinks(cleanedPagesDir, cleanedTarget)
+	}
+	if !isPathWithinBase(realTarget, realImagesDir) {
 		return "", false
 	}
 	return realTarget, true
+}
+
+func resolvePageImagePathWithoutSymlinks(pagesDir, target string) (string, bool) {
+	rel, err := filepath.Rel(pagesDir, target)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", false
+	}
+
+	current := pagesDir
+	for _, part := range strings.Split(rel, string(filepath.Separator)) {
+		if part != "." && part != "" {
+			current = filepath.Join(current, part)
+		}
+		info, err := os.Lstat(current)
+		if err != nil || info.Mode()&os.ModeSymlink != 0 {
+			return "", false
+		}
+	}
+	return target, true
 }
 
 func cleanPageImageRelativePath(filename string) (string, bool) {

@@ -698,6 +698,10 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
   const items: NavItem[] = []
   if (withDashboard) {
     items.push({ path: '/dashboard', label: t('nav.dashboard'), icon: DashboardIcon })
+    items.push(
+      { path: '/admin/video/create', label: '视频试跑', icon: TicketIcon },
+      { path: '/admin/video/tasks', label: '任务记录', icon: OrderListIcon },
+    )
   }
   items.push(
     { path: '/keys', label: t('nav.apiKeys'), icon: KeyIcon },
@@ -769,16 +773,25 @@ const adminNavItems = computed((): NavItem[] => {
     },
     {
       path: '/admin/video',
-      label: 'Video',
+      label: '视频生产',
       icon: BatchImageIcon,
       hideInSimpleMode: true,
       expandOnly: true,
       children: [
-        { path: '/admin/video', label: 'Dashboard', icon: DashboardIcon },
-        { path: '/admin/video/providers', label: 'Providers', icon: GlobeIcon },
-        { path: '/admin/video/create', label: 'Create Task', icon: TicketIcon },
-        { path: '/admin/video/tasks', label: 'Tasks', icon: OrderListIcon },
-        { path: '/admin/video/system-check', label: 'System Check', icon: ShieldIcon },
+        { path: '/admin/video', label: '生产总览', icon: DashboardIcon },
+        { path: '/admin/video/create', label: '视频试跑', icon: TicketIcon },
+        { path: '/admin/video/tasks', label: '任务记录', icon: OrderListIcon },
+      ],
+    },
+    {
+      path: '/admin/video/system',
+      label: '系统',
+      icon: ShieldIcon,
+      hideInSimpleMode: true,
+      expandOnly: true,
+      children: [
+        { path: '/admin/video/providers', label: '生成通道', icon: GlobeIcon },
+        { path: '/admin/video/system-check', label: '系统检查', icon: ShieldIcon },
       ],
     },
     { path: '/admin/subscriptions', label: t('nav.subscriptions'), icon: CreditCardIcon, hideInSimpleMode: true },

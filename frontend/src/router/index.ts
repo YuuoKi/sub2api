@@ -523,7 +523,7 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/admin/video/VideoSystemCheckView.vue'),
     meta: {
       requiresAuth: true,
-      requiresAdmin: false,
+      requiresAdmin: true,
       title: 'Video System Check'
     }
   },

@@ -53,3 +53,20 @@ describe('AppSidebar header styles', () => {
     expect(sidebarBrandBlockMatch?.[0]).not.toContain('overflow: hidden;')
   })
 })
+
+describe('AppSidebar video navigation', () => {
+  it('makes video trial and task records discoverable for regular users', () => {
+    const selfNavBlock = componentSource.match(/function buildSelfNavItems[\s\S]*?return items\n}/)?.[0]
+
+    expect(selfNavBlock).toContain("path: '/admin/video/create', label: '视频试跑'")
+    expect(selfNavBlock).toContain("path: '/admin/video/tasks', label: '任务记录'")
+  })
+
+  it('uses business Chinese for admin video navigation and groups technical pages under system', () => {
+    expect(componentSource).toContain("path: '/admin/video',\n      label: '视频生产'")
+    expect(componentSource).toContain("label: '系统',")
+    expect(componentSource).toContain("{ path: '/admin/video/providers', label: '生成通道'")
+    expect(componentSource).toContain("{ path: '/admin/video/system-check', label: '系统检查'")
+    expect(componentSource).not.toContain("{ path: '/admin/video/create', label: 'Create Task'")
+  })
+})

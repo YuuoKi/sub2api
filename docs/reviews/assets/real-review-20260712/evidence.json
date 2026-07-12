@@ -1,0 +1,298 @@
+{
+  "baseURL": "http://127.0.0.1:18080",
+  "capturedAt": "2026-07-12T16:16:42.194Z",
+  "roles": {
+    "boss": {
+      "route": "/admin/dashboard",
+      "title": "管理控制台 - Sub2API",
+      "url": "http://127.0.0.1:18080/admin/dashboard",
+      "responses": [
+        {
+          "path": "/api/v1/usage/dashboard/stats",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/compliance",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/auth/me",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/subscriptions/active",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/compliance",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/announcements",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/payment/config",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/keys",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/settings",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/dashboard/users-ranking",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/dashboard/users-trend",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/dashboard/snapshot-v2",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/system/check-updates",
+          "status": 200
+        }
+      ]
+    },
+    "adminVideo": {
+      "route": "/admin/video",
+      "title": "Video Dashboard - Sub2API",
+      "url": "http://127.0.0.1:18080/admin/video",
+      "responses": [
+        {
+          "path": "/api/v1/admin/compliance",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/auth/me",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/compliance",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/subscriptions/active",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/payment/config",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/announcements",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/settings",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/keys",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/video/dashboard",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/system/check-updates",
+          "status": 200
+        }
+      ]
+    },
+    "adminUsers": {
+      "route": "/admin/users",
+      "title": "用户管理 - Sub2API",
+      "url": "http://127.0.0.1:18080/admin/users",
+      "responses": [
+        {
+          "path": "/api/v1/admin/compliance",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/auth/me",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/compliance",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/subscriptions/active",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/payment/config",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/announcements",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/settings",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/keys",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/user-attributes",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/users",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/system/check-updates",
+          "status": 200
+        }
+      ]
+    },
+    "employeeCreate": {
+      "route": "/admin/video/create",
+      "title": "Create Video Task - Sub2API",
+      "url": "http://127.0.0.1:18080/admin/video/create",
+      "responses": [
+        {
+          "path": "/api/v1/usage/dashboard/stats",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/auth/me",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/subscriptions/active",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/keys",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/video/providers",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/announcements",
+          "status": 200
+        }
+      ]
+    },
+    "employeeTasks": {
+      "route": "/admin/video/tasks",
+      "title": "Video Tasks - Sub2API",
+      "url": "http://127.0.0.1:18080/admin/video/tasks",
+      "responses": [
+        {
+          "path": "/api/v1/auth/me",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/subscriptions/active",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/keys",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/announcements",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/video/tasks",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/video/mock-assets/1.svg",
+          "status": 200
+        }
+      ]
+    },
+    "employeeTaskDetail": {
+      "route": "/admin/video/tasks/1",
+      "title": "Video Task - Sub2API",
+      "url": "http://127.0.0.1:18080/admin/video/tasks/1",
+      "responses": [
+        {
+          "path": "/api/v1/auth/me",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/subscriptions/active",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/keys",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/announcements",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/video/tasks/1",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/video/mock-assets/1.svg",
+          "status": 200
+        }
+      ]
+    },
+    "employeeMobile": {
+      "route": "/admin/video/tasks",
+      "title": "Video Tasks - Sub2API",
+      "url": "http://127.0.0.1:18080/admin/video/tasks",
+      "responses": [
+        {
+          "path": "/api/v1/auth/me",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/settings/public",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/keys",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/video/tasks",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/announcements",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/subscriptions/active",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/video/mock-assets/1.svg",
+          "status": 200
+        }
+      ]
+    }
+  },
+  "consoleErrors": [
+    {
+      "role": "employee",
+      "path": "/admin/video/tasks",
+      "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-m5H1JFMxniAHlUgXhxjXxw==' https://challenges.cloudflare.com https://static.cloudflareinsights.com https://*.stripe.com https://static.airwallex.com https://checkout.airwallex.com https://static"
+    }
+  ]
+}

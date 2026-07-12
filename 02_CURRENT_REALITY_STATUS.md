@@ -3,7 +3,7 @@
 更新时间：2026-07-12
 状态：**待复核**
 
-边界：真实 Gemini 单图与 Seedance 5 秒视频上游链已局部通过；资产、账务、浏览器闭环和生产可用性未验证。
+边界：真实 Gemini 单图与两条 Seedance 5 秒视频上游链已通过；Seedance 文件归档、当前 HEAD 三角色浏览器路径和员工 mock 用户闭环已通过。真实账务三方对账、付费任务进入本地产品数据库、图片多规格与生产可用性仍未验证。
 
 ## 已有证据
 
@@ -17,7 +17,10 @@
 - 普通员工侧栏已有“视频试跑 / 任务记录”；管理员视频导航中文业务化；系统检查改为 admin-only。
 - `realsmoke` 专用测试 harness 会话硬门默认关闭，限制图片 4 次、视频 4 次、累计预留 ¥60。12 子进程竞争测试证明跨进程次数与预算上限；`ReserveBefore` 测试及 Form A 代码位置分别证明拒绝发生在 callback/socket/create 前。Seedance 与 Gemini/Nano Banana Form A 测试 harness 均已接入。
 - Gemini harness 固定每次预留 ¥5，模型保持仓内契约 `gemini-3.1-flash-image-preview`，严格单 item。首个真实 Batch 在上游约 107 秒成功；真实 operation 返回 `metadata.state=BATCH_STATE_SUCCEEDED`，暴露旧实现持续误判 running。`0b277da5` 增加 operation envelope/`BATCH_STATE_*` 解析，随后对既有任务执行 Get→OpenResult→真实图片解码 PASS，未新增 create。
-- Seedance Form A 首个真实 5 秒任务 PASS：恰好 1 次 create、46 次 poll、约 234 秒 succeeded，720p、16:9、24fps、usage 108900；审计 47 行且两项临时 Key 均未出现。当前会话计数为图片 1/4、视频 1/4、累计预留 ¥12.5。
+- Seedance Form A 已有两条真实 5 秒任务 PASS。首条：1 次 create、46 次 poll、720p、16:9、24fps、usage 108900；第二条：1 次 create、31 次 poll、720p、9:16、24fps、usage 108900。第二条随后只读恢复同一任务并归档为 1,761,009 字节 MP4，未新增 create。当前会话计数为图片 1/4、视频 2/4、累计预留 ¥20。
+- 当前 HEAD `c2566a2b` 已构建为 `sub2api:real-review-c2566a2b`，镜像 ID `sha256:0343f327b95bbd6cfecdc2c7dcc77f4f74bc86b4e6c6c39a63d428b8018edf5f`；容器 healthy，实际 app 进程 UID 1000，仅绑定 `127.0.0.1:18080`。
+- 本地员工 mock 任务 #1 由真实 API 创建并轮询，状态序列 queued→submitted→running→succeeded，`cost_estimate=0`、`settlement_status=not_required`、员工余额保持 ¥100；结果 SVG 证据地址 HTTP 200。前端原先错误使用 video 播放器渲染 SVG，已用失败测试复现并在 `c2566a2b` 修复为图片证据预览。
+- 老板、管理员、员工 7 张真实浏览器截图已完成；58 个业务 API 响应全部 2xx。桌面任务列表、详情、创建页和 390×844 移动端均已留证。
 
 ## 本轮已收口
 
@@ -30,16 +33,15 @@
 
 ## 尚未证明 / 边界
 
-- 剩余 Gemini/Nano Banana 场景、剩余 Seedance 规格与其他付费 Provider。
-- 实际 Provider 账单、系统账本、用户余额三方对账，以及真实资产下载/复用。
+- 剩余 Gemini/Nano Banana 常用规格/参考图场景、Seedance 首帧/尾帧场景与其他付费 Provider。
+- 实际 Provider 账单、系统账本、用户余额三方对账；真实付费任务进入本地产品数据库后的 UI 下载/复用。
 - 真实支付、生产数据、生产部署、公网暴露。
-- 2026-07-12 本轮 presence-check 未检测到 `GEMINI_API_KEY` / `SUB2API_SEEDANCE_SMOKE_API_KEY`（未读取值）；聊天中的临时密钥未写入命令、文件或日志。恢复后需重新检查。
+- 临时凭证已通过 Windows 用户环境安全注入并完成 presence-check；未写入 Git、截图或审查包。用户仍需在真实复核结束后立即废弃。
 - 2026-07-12 已在真实 Windows 用户上下文恢复 Ubuntu-24.04、WSL 2.7.10、内核 6.18.33.2 和 Docker Server 29.1.3；沙箱上下文隔离仍存在，因此 Docker/WSL 命令需在真实用户上下文执行。
-- 官方根 Dockerfile 被 `docker/dockerfile:1.7` 镜像代理 HTTP 429 阻断，未产出当前 HEAD 镜像。
-- 冒烟镜像为缓存 `sub2api:local`（可能早于 tip）；未强制重建。
-- 浏览器三角色截图与真实点击链：未补，保持待复核。
+- 当前 HEAD 的 delivery 镜像已重建并运行；官方根 Dockerfile 的历史代理 429 不再作为本轮当前镜像证据阻断，但官方 Dockerfile 本轮未重新验证。
+- 浏览器业务页面留下 1 条 CSP inline-script 告警；同一 HTTP 响应的 CSP header nonce 与 HTML script nonce 一致，未发现产品 nonce 错配，按无头 Edge/自动化注入残余风险记录。
 - Windows symlink/junction 安全用例因当前账号无创建权限而 skip；不得写成本机已实证。
 
 ## 事实边界
 
-mock 成功不等于生产可用；静态入口/路由测试不等于浏览器用户闭环；`result_url` 存在不等于资产已持久交付。真实调用必须在凭证仅通过安全环境注入、会话硬门已启用且运行环境恢复后执行。
+mock 成功不等于生产可用；当前三角色浏览器路径通过也不等于真实付费产品闭环；`result_url` 存在不等于资产已持久交付。真实调用必须在凭证仅通过安全环境注入、会话硬门已启用且运行环境恢复后执行。

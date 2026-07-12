@@ -9,19 +9,22 @@
 
 ## 已完成
 
-- 当前分支本地提交：`1145f850` Windows 页面路径安全 fallback；`70d9d516` 员工视频入口与权限语义；`06020077` realsmoke 会话次数/预算硬门；`be346bb9` Gemini/Nano Banana 安全产品流 harness；`0b277da5` 真实 Gemini operation 状态解析与既有任务恢复验证。
+- 当前分支本地提交：`1145f850` Windows 页面路径安全 fallback；`70d9d516` 员工视频入口与权限语义；`06020077` realsmoke 会话次数/预算硬门；`be346bb9` Gemini/Nano Banana 安全产品流 harness；`0b277da5` 真实 Gemini operation 状态解析；`798546cf` Seedance 资产恢复与 capture 真相修复；`165d2823` 员工任务页权限/移动端；`ca6829e0` 真实测试签名 URL 脱敏；`c2566a2b` mock SVG 结果正确预览。
 - Go 最低门禁、前端 lint/typecheck/视频测试/build 通过。
 - repository integration 35 cases 实际执行并通过、无 skip。
 - Seedance Form A 专用测试 harness 在读取 Key、构造客户端和 create 前先占用会话次数与预算。
 - Gemini Form A 专用测试 harness 固定每次预留 ¥5，并在读 Key/建客户端前占用图片次数与共享预算；fake 覆盖 Submit→Get→OpenResult、取消和图片解码。
+- Seedance 第二次真实 Form A：5 秒、720p、9:16、24fps，1 次 create、31 次 poll、usage 108900、succeeded；同一任务只读恢复并归档为 1,761,009 字节 MP4，未新增 create。
+- 当前 HEAD `c2566a2b` 本地镜像 ID `sha256:0343f327b95bbd6cfecdc2c7dcc77f4f74bc86b4e6c6c39a63d428b8018edf5f`，健康运行且实际进程 UID 1000；服务只绑定 `127.0.0.1:18080`。
+- 老板、管理员、员工共 7 张真实浏览器截图；58 个业务 API 响应全部 2xx。员工 mock 任务 #1 经 queued→submitted→running→succeeded，结果证据可打开，桌面与移动端均已渲染验证。
 
-## 当前阻断
+## 当前缺口
 
-- 2026-07-12 本轮 presence-check 未检测到 `GEMINI_API_KEY` 与 `SUB2API_SEEDANCE_SMOKE_API_KEY`（未读取值）；不得把聊天中的密钥拼入命令，恢复后需重新检查。
-- Gemini/Nano Banana 首个真实 Batch 已成功并通过结果解码；Seedance 首个 5 秒任务已成功。会话计数图片 1/4、视频 1/4、累计预留 ¥12.5。
-- WSL/Docker 已在真实 Windows 用户上下文恢复；沙箱上下文仍隔离，相关命令需切换到真实用户上下文。
-- reliability-core 终态依赖 outbox 执行内容采集/资产归档，当前 Form A harness 未驱动该消费者，因此首个 Seedance 只证明真实任务与 result URL，不证明本地资产交付。
-- 因本地服务未能启动，mock/真实三角色浏览器截图和资产下载复用尚未执行。
+- Gemini/Nano Banana 仅完成首张真实图片；常用规格、参考图和真实图片资产进入产品数据库尚未验证。
+- Seedance 已完成两次真实生成及本地文件归档，但真实任务由受控 Form A memory repo 驱动，未进入当前本地产品数据库；尚不能证明 UI 创建→真实 Provider→系统账本→用户余额→资产复用的一体链。
+- Provider 账单、系统账本、用户余额和老板总览仍缺真实三方对账，因此不能判定“内部可用”。
+- 浏览器业务页面 58 个 API 均为 2xx；无头 Edge 在员工任务列表产生 1 条 CSP inline-script 告警。同一响应的 header/body nonce 已核对一致，暂按自动化注入噪声记录，但仍保留风险。
+- 当前会话计数图片 1/4、视频 2/4、累计预留 ¥20；剩余额度不代表应继续调用，只有补齐明确缺失证据时才可使用。
 
 ## 停止条件
 

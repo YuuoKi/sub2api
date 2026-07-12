@@ -288,14 +288,15 @@
             <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? '用量审计概览' : '用量概览' }}</h2>
           </div>
           <div class="divide-y divide-gray-100 dark:divide-dark-700">
-            <div v-for="item in dashboard?.usage_overview || []" :key="`${item.provider}-${item.model}-${item.status}`" class="flex items-center justify-between px-5 py-3 text-sm">
+            <div v-for="item in dashboard?.usage_overview || []" :key="`${item.provider}-${item.model}-${item.status}-${item.currency}-${item.pricing_source}-${item.pricing_version}`" class="flex items-center justify-between px-5 py-3 text-sm">
               <div>
                 <span class="font-medium text-gray-900 dark:text-white">{{ providerLabel(item.provider) }}</span>
                 <span class="ml-2 text-gray-500 dark:text-gray-400">{{ modelDisplayName(item.provider, item.model) }}</span>
               </div>
               <div class="flex items-center gap-2">
                 <span class="rounded-md px-2 py-1 text-xs font-medium" :class="statusBadgeClass(item.status)">{{ statusLabel(item.status) }}</span>
-                <span class="text-gray-700 dark:text-gray-200">{{ item.count }}</span>
+                <span class="text-gray-700 dark:text-gray-200">{{ item.count }} 次</span>
+                <span class="font-medium tabular-nums text-gray-900 dark:text-white">{{ formatVideoUsageCost(item.cost_estimate, item.currency) }}</span>
               </div>
             </div>
             <div v-if="!loading && !(dashboard?.usage_overview || []).length" class="space-y-3 px-5 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
@@ -388,6 +389,15 @@ const pageDescription = computed(() =>
     ? '老板看统一入口、中央主机调度、生成能力、经验沉淀和演示状态。'
     : '查看视频任务吞吐、成功率、失败和通道状态。',
 )
+
+function formatVideoUsageCost(amount: number, currency: string): string {
+  if (!Number.isFinite(amount) || amount <= 0) return '—'
+  const normalized = String(currency || '').trim().toUpperCase()
+  if (amount < 0.0001) return `<0.0001 ${normalized || '币种未知'}`
+  if (normalized === 'CNY') return `¥${amount.toFixed(4)}`
+  if (normalized === 'USD') return `$${amount.toFixed(4)}`
+  return `${amount.toFixed(4)} ${normalized || '币种未知'}`
+}
 
 const providers = computed(() => dashboard.value?.provider_status || [])
 const configuredKeyCount = computed(() => providers.value.filter((provider) => provider.api_key_configured).length)

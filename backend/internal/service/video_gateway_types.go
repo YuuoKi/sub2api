@@ -219,12 +219,15 @@ type VideoTaskEvent struct {
 }
 
 type VideoUsageSummary struct {
-	Provider     string
-	Model        string
-	Status       string
-	Count        int64
-	CostEstimate float64
-	Duration     int64
+	Provider       string  `json:"provider"`
+	Model          string  `json:"model"`
+	Status         string  `json:"status"`
+	Count          int64   `json:"count"`
+	CostEstimate   float64 `json:"cost_estimate"`
+	Duration       int64   `json:"duration"`
+	Currency       string  `json:"currency"`
+	PricingSource  string  `json:"pricing_source"`
+	PricingVersion string  `json:"pricing_version"`
 }
 
 type VideoProviderStatus struct {

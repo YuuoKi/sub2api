@@ -146,17 +146,36 @@ func (r *usageLogRepository) GetUserSpendingRanking(ctx context.Context, startTi
 	}
 
 	query := `
-		WITH user_spend AS (
+		WITH spend_rows AS (
 			SELECT
 				u.user_id,
-				COALESCE(us.email, '') as email,
-				COALESCE(SUM(u.actual_cost), 0) as actual_cost,
-				COUNT(*) as requests,
-				COALESCE(SUM(u.input_tokens + u.output_tokens + u.cache_creation_tokens + u.cache_read_tokens), 0) as tokens
+				u.actual_cost,
+				(u.input_tokens + u.output_tokens + u.cache_creation_tokens + u.cache_read_tokens) AS tokens
 			FROM usage_logs u
-			LEFT JOIN users us ON u.user_id = us.id
 			WHERE u.created_at >= $1 AND u.created_at < $2
-			GROUP BY u.user_id, us.email
+			UNION ALL
+			SELECT
+				vt.created_by AS user_id,
+				COALESCE(bt.amount_usd, 0) AS actual_cost,
+				COALESCE(vt.usage_total_tokens, 0) AS tokens
+			FROM video_usage_logs vul
+			JOIN video_tasks vt ON vt.id = vul.video_task_id
+			LEFT JOIN billing_transactions bt
+			  ON bt.source_type = 'video_task'
+			 AND bt.source_id = vt.id
+			 AND bt.transaction_kind = 'charge'
+			WHERE vul.created_at >= $1 AND vul.created_at < $2
+		),
+		user_spend AS (
+			SELECT
+				r.user_id,
+				COALESCE(us.email, '') as email,
+				COALESCE(SUM(r.actual_cost), 0) as actual_cost,
+				COUNT(*) as requests,
+				COALESCE(SUM(r.tokens), 0) as tokens
+			FROM spend_rows r
+			LEFT JOIN users us ON r.user_id = us.id
+			GROUP BY r.user_id, us.email
 		),
 		ranked AS (
 			SELECT

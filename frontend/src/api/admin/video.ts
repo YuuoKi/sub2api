@@ -136,6 +136,9 @@ export interface VideoUsageSummary {
   count: number
   cost_estimate: number
   duration: number
+  currency: string
+  pricing_source: string
+  pricing_version: string
 }
 
 export interface VideoDashboard {

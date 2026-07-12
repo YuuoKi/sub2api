@@ -89,6 +89,9 @@ func (r *usageLogRepository) GetDashboardStats(ctx context.Context) (*DashboardS
 	if err := r.fillDashboardUsageStatsAggregated(ctx, stats, todayStart, now); err != nil {
 		return nil, err
 	}
+	if err := r.fillDashboardVideoStats(ctx, stats, time.Unix(0, 0).UTC(), now.UTC(), todayStart.UTC(), now.UTC()); err != nil {
+		return nil, err
+	}
 
 	rpm, tpm, err := r.getPerformanceStats(ctx, 0)
 	if err != nil {
@@ -117,6 +120,9 @@ func (r *usageLogRepository) GetDashboardStatsWithRange(ctx context.Context, sta
 	if err := r.fillDashboardUsageStatsFromUsageLogs(ctx, stats, startUTC, endUTC, todayStart, now); err != nil {
 		return nil, err
 	}
+	if err := r.fillDashboardVideoStats(ctx, stats, startUTC, endUTC, todayStart.UTC(), now.UTC()); err != nil {
+		return nil, err
+	}
 
 	rpm, tpm, err := r.getPerformanceStats(ctx, 0)
 	if err != nil {
@@ -126,6 +132,80 @@ func (r *usageLogRepository) GetDashboardStatsWithRange(ctx context.Context, sta
 	stats.Tpm = tpm
 
 	return stats, nil
+}
+
+// fillDashboardVideoStats adds reliability-core video calls from their
+// authoritative usage/ledger tables. Video charges are stored in
+// billing_transactions.amount_usd, while video_usage_logs owns call counts and
+// video_tasks owns provider-reported usage tokens. Keeping this as a read model
+// avoids duplicating an immutable video charge into the generic usage ledger.
+func (r *usageLogRepository) fillDashboardVideoStats(ctx context.Context, stats *DashboardStats, startUTC, endUTC, todayUTC, nowUTC time.Time) error {
+	if stats == nil || !endUTC.After(startUTC) {
+		return nil
+	}
+	const totalsQuery = `
+		SELECT
+			COUNT(*) AS requests,
+			COALESCE(SUM(vt.usage_total_tokens), 0) AS tokens,
+			COALESCE(SUM(bt.amount_usd), 0) AS actual_cost
+		FROM video_usage_logs vul
+		JOIN video_tasks vt ON vt.id = vul.video_task_id
+		LEFT JOIN billing_transactions bt
+		  ON bt.source_type = 'video_task'
+		 AND bt.source_id = vt.id
+		 AND bt.transaction_kind = 'charge'
+		WHERE vul.created_at >= $1 AND vul.created_at < $2
+	`
+	var requests, tokens int64
+	var actualCost float64
+	if err := scanSingleRow(ctx, r.sql, totalsQuery, []any{startUTC, endUTC}, &requests, &tokens, &actualCost); err != nil {
+		return err
+	}
+	stats.TotalRequests += requests
+	stats.TotalTokens += tokens
+	stats.TotalCost += actualCost
+	stats.TotalActualCost += actualCost
+
+	todayEnd := endUTC
+	if nowUTC.Before(todayEnd) {
+		todayEnd = nowUTC
+	}
+	todayStart := startUTC
+	if todayUTC.After(todayStart) {
+		todayStart = todayUTC
+	}
+	if todayEnd.After(todayStart) {
+		requests, tokens, actualCost = 0, 0, 0
+		if err := scanSingleRow(ctx, r.sql, totalsQuery, []any{todayStart, todayEnd}, &requests, &tokens, &actualCost); err != nil {
+			return err
+		}
+		stats.TodayRequests += requests
+		stats.TodayTokens += tokens
+		stats.TodayCost += actualCost
+		stats.TodayActualCost += actualCost
+	}
+
+	const activeUsersQuery = `
+		SELECT COUNT(DISTINCT user_id)
+		FROM (
+			SELECT user_id FROM usage_logs WHERE created_at >= $1 AND created_at < $2
+			UNION ALL
+			SELECT vt.created_by AS user_id
+			FROM video_usage_logs vul
+			JOIN video_tasks vt ON vt.id = vul.video_task_id
+			WHERE vul.created_at >= $1 AND vul.created_at < $2
+		) activity
+	`
+	if todayEnd.After(todayUTC) {
+		if err := scanSingleRow(ctx, r.sql, activeUsersQuery, []any{todayUTC, todayEnd}, &stats.ActiveUsers); err != nil {
+			return err
+		}
+	}
+	hourStart := nowUTC.Truncate(time.Hour)
+	if err := scanSingleRow(ctx, r.sql, activeUsersQuery, []any{hourStart, nowUTC}, &stats.HourlyActiveUsers); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (r *usageLogRepository) fillDashboardEntityStats(ctx context.Context, stats *DashboardStats, todayUTC, now time.Time) error {

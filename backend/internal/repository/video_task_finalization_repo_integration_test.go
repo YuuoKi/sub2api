@@ -209,6 +209,28 @@ func TestVideoReliabilityBillableFakeSettlementAndOutboxRetryProof(t *testing.T)
 	require.Equal(t, 1, adapter.callsFor(created.ID).create, "retries never re-dispatch the owned task")
 	require.Equal(t, 1, adapter.callsFor(created.ID).poll, "retries never re-poll the owned task")
 
+	usageRepo := NewUsageLogRepository(testEntClient(t), integrationDB).(*usageLogRepository)
+	rangeStart := created.CreatedAt.Add(-time.Minute)
+	rangeEnd := time.Now().UTC().Add(time.Minute)
+	dashboard, err := usageRepo.GetDashboardStatsWithRange(ctx, rangeStart, rangeEnd)
+	require.NoError(t, err)
+	require.Equal(t, 1.25, dashboard.TotalActualCost, "boss dashboard must include the video ledger exactly once")
+	require.Equal(t, int64(1), dashboard.TotalRequests, "boss dashboard must include the video call exactly once")
+
+	ranking, err := usageRepo.GetUserSpendingRanking(ctx, rangeStart, rangeEnd, 100)
+	require.NoError(t, err)
+	foundOwnedRank := false
+	for _, row := range ranking.Ranking {
+		if row.UserID != user.ID {
+			continue
+		}
+		foundOwnedRank = true
+		require.Equal(t, 1.25, row.ActualCost)
+		require.Equal(t, int64(1), row.Requests)
+		break
+	}
+	require.True(t, foundOwnedRank, "video-spending user must appear in the boss member ranking")
+
 	var completed int
 	require.NoError(t, integrationDB.QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM domain_outbox
@@ -244,7 +266,7 @@ type billableFakeAdapterCallCounts struct {
 }
 
 type billableFakeAdapter struct {
-	mu    sync.Mutex
+	mu     sync.Mutex
 	byTask map[int64]billableFakeAdapterCallCounts
 }
 

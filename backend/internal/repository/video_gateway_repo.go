@@ -1226,10 +1226,11 @@ func (r *videoGatewayRepository) ListRecentTasksByStatus(ctx context.Context, st
 
 func (r *videoGatewayRepository) UsageSummarySince(ctx context.Context, since time.Time) ([]service.VideoUsageSummary, error) {
 	const q = `
-		SELECT provider, model, status, COUNT(*), COALESCE(SUM(cost_estimate), 0), COALESCE(SUM(duration), 0)
+		SELECT provider, model, status, COUNT(*), COALESCE(SUM(cost_estimate), 0), COALESCE(SUM(duration), 0),
+		       currency, pricing_source, COALESCE(pricing_version, '')
 		FROM video_usage_logs
 		WHERE created_at >= $1
-		GROUP BY provider, model, status
+		GROUP BY provider, model, status, currency, pricing_source, pricing_version
 		ORDER BY COUNT(*) DESC, provider, model
 		LIMIT 20
 	`
@@ -1241,7 +1242,7 @@ func (r *videoGatewayRepository) UsageSummarySince(ctx context.Context, since ti
 	var out []service.VideoUsageSummary
 	for rows.Next() {
 		var item service.VideoUsageSummary
-		if err := rows.Scan(&item.Provider, &item.Model, &item.Status, &item.Count, &item.CostEstimate, &item.Duration); err != nil {
+		if err := rows.Scan(&item.Provider, &item.Model, &item.Status, &item.Count, &item.CostEstimate, &item.Duration, &item.Currency, &item.PricingSource, &item.PricingVersion); err != nil {
 			return nil, err
 		}
 		out = append(out, item)

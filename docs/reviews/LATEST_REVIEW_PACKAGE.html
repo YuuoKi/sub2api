@@ -2,57 +2,79 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sub2API Cleanup Merge 审查包</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Sub2API 真实图片、视频与前端闭环复核</title>
   <style>
-    body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;max-width:1040px;margin:40px auto;padding:0 24px;line-height:1.65;color:#172033}code{background:#f2f4f8;padding:.1em .35em;border-radius:4px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #d8deea;padding:8px;vertical-align:top;text-align:left}th{background:#f4f6fa}.warn{border-left:4px solid #b7791f;padding:12px 16px;background:#fffaf0}.ok{border-left:4px solid #2f855a;padding:12px 16px;background:#f0fff4}
+    body{font-family:system-ui,"Segoe UI",sans-serif;max-width:1080px;margin:36px auto;padding:0 22px;line-height:1.65;color:#172033}code{background:#f2f4f8;padding:.1em .35em;border-radius:4px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #d8deea;padding:8px;vertical-align:top;text-align:left}th{background:#f4f6fa}.ok,.warn,.bad{padding:12px 16px;margin:14px 0}.ok{border-left:4px solid #2f855a;background:#f0fff4}.warn{border-left:4px solid #b7791f;background:#fffaf0}.bad{border-left:4px solid #c53030;background:#fff5f5}li{margin:.3em 0}
   </style>
 </head>
 <body>
-  <h1>Sub2API 脏树清理与本地收口</h1>
-  <p><strong>状态：</strong>条件通过（内部 mock 可演示；非生产 READY）</p>
-  <div class="warn">Windows Testcontainers 因 rootless Docker panic 记为 INTEGRATION_BLOCKED；Docker 新镜像门禁因镜像代理 HTTP 429 未重试；本轮未做浏览器截图。本页不声称真实 Provider、真实支付、生产部署或公网路径 READY。</div>
+  <h1>Sub2API 真实图片、视频与前端用户闭环复核</h1>
+  <p><strong>状态：待复核</strong></p>
+  <p>边界：内部 mock 可演示；真实图片、真实视频和生产可用性未验证。</p>
+  <div class="warn">本轮没有执行真实 Provider 请求：2026-07-12 presence-check 未检测到两项临时凭证（未读取值）；WSL 本轮无发行版；官方 Dockerfile 被基础镜像代理 HTTP 429 阻断。聊天中的临时密钥未写入命令、文件、日志或截图。恢复环境后必须重新检查。</div>
 
-  <h2>目标与执行目录</h2>
-  <p>执行目录 <code>D:\sub2api-trunk</code>，分支 <code>wujie/video-capture-moat-20260702</code>，起始 HEAD <code>36de34b8</code>。目标是把脏工作树整理为分批本地 commits 并 Git clean；不 merge main、不 push、不部署。</p>
+  <h2>目标与边界</h2>
+  <p>执行目录 <code>D:\sub2api-trunk</code>，分支 <code>wujie/video-capture-moat-20260702</code>，起始 HEAD <code>4231fc2e</code>。授权上限为 Gemini/Nano Banana 图片最多 4 次、Seedance 视频最多 4 次、累计 ¥60；不 push、不部署、不使用生产用户数据、不公开服务。</p>
 
-  <h2>本轮关键修复</h2>
-  <ul>
-    <li>Cancel provenance：取消响应保留 tiny trial / production events；lookup 失败不得默认 production。</li>
-    <li>Integration isolation：删除全表 DELETE 与批量取消其他任务；按用例 ID cleanup/assert；Docker 缺失 fail-closed。</li>
-    <li>视频契约：UTF-8 完整恢复 admin/QCanvas 端点、字段、计费与三种 provider boundary。</li>
-    <li>配置/Compose/专用加密密钥、worker 可观测性、前端视频 console 缺失模块一并收口。</li>
-    <li>本地敏感交付包仅 ignore，未读取、未删除。</li>
-  </ul>
-
-  <h2>验证证据</h2>
-  <div class="ok">后端 <code>go vet ./...</code> 与 <code>go test ./...</code>、前端 lint/typecheck/vitest(145/928)/build 通过；integration 与新镜像动态门禁保留外部门禁。</div>
+  <h2>变更清单</h2>
   <table>
-    <tr><th>验证</th><th>结果</th></tr>
-    <tr><td>Go vet + <code>go test ./...</code></td><td>退出码 0</td></tr>
-    <tr><td>Cancel provenance / contract / policy 定向测试</td><td>退出码 0</td></tr>
-    <tr><td>Windows Testcontainers 目标 integration</td><td>退出码 1；rootless Docker panic → INTEGRATION_BLOCKED</td></tr>
-    <tr><td>前端 lint / typecheck / vitest / build</td><td>退出码 0；145 files / 928 tests</td></tr>
-    <tr><td>Compose config（合成 env）</td><td>退出码 0</td></tr>
-    <tr><td>Docker 新镜像 /health</td><td>未重试；保留 HTTP 429 外部门禁</td></tr>
-    <tr><td>浏览器截图</td><td>未启动合成 mock 环境</td></tr>
+    <tr><th>提交</th><th>实现</th><th>结果</th></tr>
+    <tr><td><code>1145f850</code></td><td>Windows <code>EvalSymlinks</code> 被拒绝时，用 containment + 逐段 <code>Lstat</code> 的 fail-closed fallback 解析页面图片。</td><td>定向与完整 handler 包通过；Windows symlink/junction 动态用例因权限 skip。</td></tr>
+    <tr><td><code>70d9d516</code></td><td>普通员工侧栏加入视频试跑/任务记录；管理员视频导航中文业务化；系统检查改为 admin-only。</td><td>相关和相邻测试通过；尚无真实浏览器点击证据。</td></tr>
+    <tr><td><code>06020077</code></td><td><code>realsmoke</code> 专用测试 harness 会话硬门：图片 4、视频 4、累计预留 ¥60；状态原子替换、锁记录 PID/UTC。</td><td>Seedance Form A 测试 harness 已在 Key/socket/create 前接入；Gemini 安全真实 harness 尚缺。</td></tr>
   </table>
 
-  <h2>风险、回滚与下一步</h2>
+  <h2>验证命令与结果</h2>
+  <table>
+    <tr><th>验证</th><th>新鲜结果</th></tr>
+    <tr><td>Go vet + 最低 Go packages</td><td><code>cd backend; go vet ./internal/config ./internal/service ./internal/handler ./internal/repository ./cmd/server; go test ./internal/config ./internal/service ./internal/handler ./internal/server/routes ./cmd/server -count=1</code><br>2026-07-12 exit 0；config/service/handler/routes/server 全部 PASS。</td></tr>
+    <tr><td>前端 lint / typecheck</td><td><code>corepack pnpm run lint:check</code>；<code>node_modules/.bin/vue-tsc.CMD --noEmit</code><br>2026-07-12 exit 0。</td></tr>
+    <tr><td>视频前端 Vitest</td><td><code>node_modules/.bin/vitest.CMD run src/views/admin/video --reporter=basic</code> → 3 files / 8 tests PASS。<br><code>node_modules/.bin/vitest.CMD run src/components/layout/__tests__/AppSidebar.spec.ts src/router/__tests__/video-route-access.spec.ts --reporter=basic</code> → 2 files / 10 tests PASS。<br><code>node_modules/.bin/vitest.CMD run src/components/layout/__tests__/AppSidebar.spec.ts src/router/__tests__/video-route-access.spec.ts src/router/__tests__/guards.spec.ts --reporter=basic</code> → 3 files / 44 tests PASS。</td></tr>
+    <tr><td>前端 production build</td><td><code>node_modules/.bin/vue-tsc.CMD -b</code> + <code>node_modules/.bin/vite.CMD build</code><br>920 modules transformed，exit 0；保留 chunk size 与旧 browserslist warning。</td></tr>
+    <tr><td>Repository integration</td><td><code>env -u SUB2API_ALLOW_INTEGRATION_SKIP CI=1 GOTOOLCHAIN=auto go test -tags=integration ./internal/repository -run 'Test(BillingReservationRepositoryReap|ExpiredInFlightReservation|ReliabilityReconciliation|VideoReliabilityBillableFake|VideoTaskFinalization)' -count=1 -v</code><br>2026-07-12 exit 0；35 cases 实际执行，日志无 SKIP。</td></tr>
+    <tr><td>realsmoke guard</td><td><code>go test -tags realsmoke ./internal/service -run '^(TestRealReviewSessionGuard|TestSeedanceSingleRealSmokeFormA)' -count=1 -v</code><br>2026-07-12 exit 0；7 顶层测试及 2 个竞争子测试 PASS；Form A 因未 armed 明确 SKIP、无网络；12 子进程下视频最多 4 次，¥20/次时最多 3 次即 ¥60。测试源见 <code>real_review_session_guard_realsmoke_test.go</code>。</td></tr>
+    <tr><td>官方根 Dockerfile</td><td>失败于解析 <code>docker/dockerfile:1.7</code>：镜像代理 HTTP 429；未进入源码构建。</td></tr>
+    <tr><td>浏览器三角色路径</td><td>未运行：本地服务未能在当前环境启动。</td></tr>
+    <tr><td>真实 Gemini / Seedance</td><td>未运行：凭证环境变量不存在；真实复核开关与状态路径未配置。</td></tr>
+  </table>
+
+  <h2>真实用户路径判定</h2>
+  <ul>
+    <li>用户动作、真实任务编号、后台真实执行、Provider 状态回传：<strong>待复核</strong>。</li>
+    <li>结果预览、下载、归档、资产级复用：静态接线存在，真实资产闭环<strong>待复核</strong>。</li>
+    <li>失败原因：组件与单测有人话映射，真实浏览器展示<strong>待复核</strong>。</li>
+    <li>老板/管理员/员工入口：代码与测试已收口，真实角色登录和点击链<strong>待复核</strong>。</li>
+  </ul>
+
+  <h2>风险与阻断</h2>
+  <div class="bad"><strong>不得开始付费扩大走查：</strong>当前进程缺凭证；Gemini/Nano Banana 没有与 Seedance Form A 同等级的安全真实 harness；Docker/浏览器环境未恢复。</div>
+  <ul>
+    <li>真实会话锁崩溃后保持 fail-closed，必须人工审计 state 与锁内 PID/时间后处理，禁止自动删除。</li>
+    <li>硬门原子性证据限本机 Windows 本地文件系统；未做掉电故障注入或网络共享盘验证。</li>
+    <li>静态路由测试不能替代真实角色渲染；缓存镜像不能代表当前 HEAD。</li>
+  </ul>
+
+  <h2>回滚</h2>
+  <p>按提交使用 <code>git revert 06020077</code>、<code>git revert 70d9d516</code>、<code>git revert 1145f850</code>；禁止 reset/clean。真实复核 state/lock 不进 Git，只有人工确认无进程、账单和任务后才可处理。</p>
+
+  <h2>下一步</h2>
   <ol>
-    <li>在 Linux/CI 真跑目标 repository integration。</li>
-    <li>镜像代理恢复后补跑 mock-only 镜像、<code>/health</code> 与 create/poll。</li>
-    <li>人工审查后决定是否 push / 开 PR；本轮不执行。</li>
+    <li>由用户在安全本机环境注入两项临时凭证，不再通过聊天传递；配置显式 review state 绝对路径并启用硬门。</li>
+    <li>恢复 WSL/Docker 或提供可运行的受控本地环境，重新构建当前 HEAD 并完成 mock 三角色浏览器截图。</li>
+    <li>先补 Gemini/Nano Banana 安全真实 harness，再按序执行真实图片；Seedance 使用 Form A。</li>
+    <li>逐条核对 Provider usage、系统账本、用户余额、总览、资产预览/下载/复用；任一异常立即停止。</li>
   </ol>
-  <p>回滚使用定向 <code>git revert &lt;exact-commit&gt;</code>；不得 reset、clean、删除 <code>.worktrees/</code> 或交付包。</p>
 
   <h2>文件索引</h2>
   <ul>
-    <li><a href="../../00_START_HERE.md">单一真相源入口</a></li>
+    <li><a href="../../00_START_HERE.md">当前入口</a></li>
+    <li><a href="../../02_CURRENT_REALITY_STATUS.md">当前现实</a></li>
     <li><a href="../goals/03_CURRENT_GOAL.md">当前目标</a></li>
-    <li><a href="../superpowers/codex-handoff/deliverables/2026-07-11-GROK-CLEANUP-MERGE-review.md">完整 Markdown 审查包</a></li>
-    <li><a href="../superpowers/codex-handoff/CODEX_TASK_GROK_CLEANUP_MERGE_20260711.md">Cleanup 任务书</a></li>
+    <li><a href="NORTH_STAR_V5_REAL_REVIEW_UPDATE_DRAFT_20260712.md">北极星更新草案（本轮强制纳入 Git 交付）</a></li>
   </ul>
-  <p><strong>产品状态：</strong>内部 mock 可演示 / 非生产 READY。</p>
+
+  <h2>可复制后续提示词</h2>
+  <pre>继续 D:\sub2api-trunk 的真实复核。先只做凭证 presence-check、WSL/Docker health 和 review-session state 检查，不打印任何值。只有 Gemini/Seedance 凭证、4+4/¥60 硬门、当前 HEAD 镜像和浏览器环境全部就绪才允许真实调用；否则保持待复核并更新审查包。</pre>
 </body>
 </html>

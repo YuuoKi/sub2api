@@ -15,7 +15,7 @@
 - 2026-07-12 新鲜门禁：Go 最低门禁通过；前端 lint/typecheck、视频 8 tests 与 production build 通过；repository integration 35 cases 实际执行并通过、无 skip。
 - Windows 页面图片路径在 `EvalSymlinks` 被拒绝时已增加逐段 `Lstat` fail-closed fallback，并有定向与完整 handler 回归。
 - 普通员工侧栏已有“视频试跑 / 任务记录”；管理员视频导航中文业务化；系统检查改为 admin-only。
-- `realsmoke` 专用测试 harness 会话硬门默认关闭，限制图片 4 次、视频 4 次、累计预留 ¥60；12 子进程竞争测试证明次数与预算均在 socket/create 前 fail-closed。Seedance Form A 测试 harness 已接入；Gemini/Nano Banana 尚无同等级安全真实 harness。
+- `realsmoke` 专用测试 harness 会话硬门默认关闭，限制图片 4 次、视频 4 次、累计预留 ¥60。12 子进程竞争测试证明跨进程次数与预算上限；`ReserveBefore` 测试及 Form A 代码位置分别证明拒绝发生在 callback/socket/create 前。Seedance Form A 测试 harness 已接入；Gemini/Nano Banana 尚无同等级安全真实 harness。
 
 ## 本轮已收口
 
@@ -32,7 +32,7 @@
 - Gemini/Nano Banana 真实图片生成、计费与资产下载。
 - 真实支付、生产数据、生产部署、公网暴露。
 - 2026-07-12 本轮 presence-check 未检测到 `GEMINI_API_KEY` / `SUB2API_SEEDANCE_SMOKE_API_KEY`（未读取值）；聊天中的临时密钥未写入命令、文件或日志。恢复后需重新检查。
-- 2026-07-12 本轮 `wsl.exe --list --quiet` 无发行版；无法重跑 Docker/mock 浏览器环境。恢复后需重新检查。
+- 2026-07-12 当前 Codex 执行上下文的 `wsl.exe --list --quiet` 无输出；这与真实用户上下文已完成 WSL integration 的证据并存，说明当前上下文不可见发行版，不能泛化为机器未安装 WSL。恢复后需重新检查。
 - 官方根 Dockerfile 被 `docker/dockerfile:1.7` 镜像代理 HTTP 429 阻断，未产出当前 HEAD 镜像。
 - 冒烟镜像为缓存 `sub2api:local`（可能早于 tip）；未强制重建。
 - 浏览器三角色截图与真实点击链：未补，保持待复核。

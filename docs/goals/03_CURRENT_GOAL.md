@@ -18,7 +18,7 @@
 
 - 2026-07-12 本轮 presence-check 未检测到 `GEMINI_API_KEY` 与 `SUB2API_SEEDANCE_SMOKE_API_KEY`（未读取值）；不得把聊天中的密钥拼入命令，恢复后需重新检查。
 - Gemini/Nano Banana 缺少与 Seedance Form A 同等级的安全真实产品链 harness。
-- WSL 当前无发行版；官方 Dockerfile 又被基础镜像代理 HTTP 429 阻断。
+- 当前 Codex 执行上下文不可见 WSL 发行版；真实用户上下文曾完成 WSL integration。官方 Dockerfile 又被基础镜像代理 HTTP 429 阻断。
 - 因本地服务未能启动，mock/真实三角色浏览器截图和资产下载复用尚未执行。
 
 ## 停止条件

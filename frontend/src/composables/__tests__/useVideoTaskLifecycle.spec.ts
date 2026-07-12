@@ -1,6 +1,6 @@
 import { effectScope } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { preferredVideoTaskAsset, useVideoTaskLifecycle } from '../useVideoTaskLifecycle'
+import { preferredVideoTaskAsset, useVideoTaskLifecycle, videoTaskResultMediaKind } from '../useVideoTaskLifecycle'
 import type { VideoTask } from '@/api/admin/video'
 
 const processingTask = { id: 1, status: 'running', delivery_status: 'processing' } as VideoTask
@@ -139,5 +139,12 @@ describe('useVideoTaskLifecycle', () => {
       local_asset_available: false,
       delivery_status: 'delivery_failed',
     })).toEqual({ kind: 'unavailable', url: '' })
+  })
+
+  it('renders mock SVG evidence as an image while keeping real assets on the video path', () => {
+    expect(videoTaskResultMediaKind('/api/v1/video/mock-assets/42.svg')).toBe('image')
+    expect(videoTaskResultMediaKind('/api/v1/video/mock-assets/42.svg?review=1')).toBe('image')
+    expect(videoTaskResultMediaKind('https://example.invalid/result.mp4?token=redacted')).toBe('video')
+    expect(videoTaskResultMediaKind('/video/tasks/42/local-asset')).toBe('video')
   })
 })

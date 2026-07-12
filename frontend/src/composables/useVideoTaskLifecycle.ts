@@ -182,6 +182,13 @@ function isOnlyTerminalArchiving(value: unknown): boolean {
 
 export type VideoTaskAssetKind = 'local' | 'remote' | 'unavailable'
 
+export type VideoTaskResultMediaKind = 'image' | 'video'
+
+export function videoTaskResultMediaKind(url: string | null | undefined): VideoTaskResultMediaKind {
+  const path = String(url || '').split(/[?#]/, 1)[0].toLowerCase()
+  return path.endsWith('.svg') ? 'image' : 'video'
+}
+
 export function preferredVideoTaskAsset(task: VideoTask | null | undefined): { kind: VideoTaskAssetKind; url: string } {
   if (!task) return { kind: 'unavailable', url: '' }
   if (task.local_asset_available) return { kind: 'local', url: `/video/tasks/${task.id}/local-asset` }

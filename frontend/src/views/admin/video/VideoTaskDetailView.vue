@@ -64,7 +64,14 @@
           {{ resultExpiryHint }}
         </p>
         <div v-if="remoteAssetAvailable" class="mt-4 overflow-hidden rounded-lg border border-gray-200 dark:border-dark-700">
+          <img
+            v-if="videoTaskResultMediaKind(task.result_url) === 'image'"
+            class="max-h-80 w-full bg-gray-950 object-contain"
+            :src="task.result_url"
+            alt="试跑任务结果证据"
+          />
           <video
+            v-else
             class="max-h-80 w-full bg-black object-contain"
             :src="task.result_url"
             controls
@@ -199,7 +206,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { videoTaskAPI, type VideoTask } from '@/api/admin/video'
-import { preferredVideoTaskAsset, useVideoTaskLifecycle } from '@/composables/useVideoTaskLifecycle'
+import { preferredVideoTaskAsset, useVideoTaskLifecycle, videoTaskResultMediaKind } from '@/composables/useVideoTaskLifecycle'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import { isVideoGatewayDemoMode } from '@/utils/productMode'

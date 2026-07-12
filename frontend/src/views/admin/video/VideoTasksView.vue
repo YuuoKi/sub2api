@@ -154,8 +154,14 @@
                 </td>
                 <td class="px-5 py-3">
                   <div v-if="hasDeliverableAsset(task)" class="space-y-2">
+                    <img
+                      v-if="hasUsableRemoteAsset(task) && videoTaskResultMediaKind(task.result_url) === 'image'"
+                      class="h-16 w-28 rounded border border-gray-200 object-cover dark:border-dark-600"
+                      :src="task.result_url"
+                      alt="试跑任务结果证据"
+                    />
                     <video
-                      v-if="hasUsableRemoteAsset(task)"
+                      v-else-if="hasUsableRemoteAsset(task)"
                       class="h-16 w-28 rounded border border-gray-200 object-cover dark:border-dark-600"
                       :src="task.result_url"
                       preload="metadata"
@@ -249,7 +255,7 @@ import { RouterLink, useRouter } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { videoTaskAPI, type VideoProvider, type VideoTask, type VideoTaskListParams, type VideoTaskStatus } from '@/api/admin/video'
-import { preferredVideoTaskAsset, useVideoTaskLifecycle } from '@/composables/useVideoTaskLifecycle'
+import { preferredVideoTaskAsset, useVideoTaskLifecycle, videoTaskResultMediaKind } from '@/composables/useVideoTaskLifecycle'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { extractApiErrorMessage } from '@/utils/apiError'

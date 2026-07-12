@@ -190,8 +190,9 @@ func TestSeedanceSingleRealSmokeFormA(t *testing.T) {
 	}
 
 	t.Logf("=== FORM A SMOKE DONE: status=%q poll_count=%d ===", res.task.Status, res.task.PollCount)
-	// result_url is the SSRF/allowlist-validated, playable Ark CDN URL (not a secret).
-	t.Logf("RESULT URL (validated, playable): %q", res.task.ResultURL)
+	// Signed result URLs contain temporary credentials in their query string. Keep the
+	// evidence useful without copying that credential-bearing URL into test output.
+	t.Logf("RESULT URL validated and present: %t", strings.TrimSpace(res.task.ResultURL) != "")
 	if res.task.ErrorMessage != "" {
 		t.Logf("LAST ERROR MESSAGE (already redacted): %q", res.task.ErrorMessage)
 	}

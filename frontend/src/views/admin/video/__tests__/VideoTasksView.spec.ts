@@ -3,9 +3,10 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 
 import VideoTasksView from '../VideoTasksView.vue'
 
-const { listTasks, loadUsdCnyRate } = vi.hoisted(() => ({
+const { listTasks, loadUsdCnyRate, authState } = vi.hoisted(() => ({
   listTasks: vi.fn(),
   loadUsdCnyRate: vi.fn().mockResolvedValue(undefined),
+  authState: { isAdmin: true },
 }))
 
 vi.mock('@/api/admin/video', async (importOriginal) => {
@@ -34,9 +35,7 @@ vi.mock('@/stores/app', () => ({
 }))
 
 vi.mock('@/stores/auth', () => ({
-  useAuthStore: () => ({
-    isAdmin: true,
-  }),
+  useAuthStore: () => authState,
 }))
 
 vi.mock('@/utils/productMode', async (importOriginal) => {
@@ -101,6 +100,7 @@ describe('VideoTasksView polling', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.clearAllMocks()
+    authState.isAdmin = true
     listTasks.mockResolvedValue({
       items: [runningTaskFixture()],
       total: 1,
@@ -108,6 +108,56 @@ describe('VideoTasksView polling', () => {
       page_size: 20,
       pages: 1,
     })
+  })
+
+  it('does not request the admin-only currency rate for an employee', async () => {
+    authState.isAdmin = false
+    wrapper = mount(VideoTasksView, {
+      global: {
+        stubs: {
+          AppLayout: AppLayoutStub,
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+    expect(listTasks).toHaveBeenCalledTimes(1)
+    expect(loadUsdCnyRate).not.toHaveBeenCalled()
+  })
+
+  it('renders a dedicated mobile task list instead of squeezing the desktop table', async () => {
+    authState.isAdmin = false
+    wrapper = mount(VideoTasksView, {
+      global: {
+        stubs: {
+          AppLayout: AppLayoutStub,
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+    expect(wrapper.find('[data-testid="video-task-mobile-list"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="video-task-desktop-table"]').classes()).toContain('hidden')
+    expect(wrapper.find('[data-testid="video-task-mobile-list"]').text()).toContain('#42')
+  })
+
+  it('shows the mobile empty action without meaningless pagination', async () => {
+    authState.isAdmin = false
+    listTasks.mockResolvedValueOnce({ items: [], total: 0, page: 1, page_size: 20, pages: 1 })
+    wrapper = mount(VideoTasksView, {
+      global: {
+        stubs: {
+          AppLayout: AppLayoutStub,
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+    expect(wrapper.find('[data-testid="video-task-mobile-list"]').text()).toContain('当前还没有任务记录')
+    expect(wrapper.find('[data-testid="video-task-mobile-pagination"]').exists()).toBe(false)
   })
 
   afterEach(() => {
@@ -128,6 +178,7 @@ describe('VideoTasksView polling', () => {
 
     await flushPromises()
     expect(listTasks).toHaveBeenCalledTimes(1)
+    expect(loadUsdCnyRate).toHaveBeenCalledTimes(1)
 
     await vi.advanceTimersByTimeAsync(4000)
     await flushPromises()

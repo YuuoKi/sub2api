@@ -60,7 +60,51 @@
         </div>
       </section>
 
-      <section class="rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-800">
+      <section data-testid="video-task-mobile-list" class="space-y-3 md:hidden">
+        <article
+          v-for="task in tasks"
+          :key="task.id"
+          class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800"
+        >
+          <div class="flex items-start justify-between gap-3">
+            <RouterLink class="font-semibold text-gray-900 dark:text-white" :to="`/admin/video/tasks/${task.id}`">
+              #{{ task.id }} · {{ taskTypeLabel(task.task_type) }}
+            </RouterLink>
+            <span class="shrink-0 rounded-md px-2 py-1 text-xs font-medium" :class="statusBadgeClass(task.status)">
+              {{ statusLabel(task.status) }}
+            </span>
+          </div>
+          <p class="mt-2 line-clamp-2 text-sm text-gray-500 dark:text-gray-400">{{ promptDisplayText(task.prompt) }}</p>
+          <dl class="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+            <div><dt class="text-gray-400">任务来源</dt><dd class="mt-0.5 text-gray-700 dark:text-gray-200">{{ providerLabel(task.provider) }}</dd></div>
+            <div><dt class="text-gray-400">花费</dt><dd class="mt-0.5 text-teal-600 dark:text-teal-300">{{ formatTaskCost(task) }}</dd></div>
+            <div><dt class="text-gray-400">处理账号</dt><dd class="mt-0.5 truncate text-gray-700 dark:text-gray-200">{{ routeAccountLabel(task) }}</dd></div>
+            <div><dt class="text-gray-400">创建时间</dt><dd class="mt-0.5 text-gray-700 dark:text-gray-200">{{ formatDate(task.created_at) }}</dd></div>
+          </dl>
+          <div v-if="task.error_message" class="mt-3 rounded-md bg-red-50 p-2 text-xs text-red-700 dark:bg-red-500/10 dark:text-red-300">
+            {{ errorMessageLabel(task.error_message) }}
+          </div>
+          <div class="mt-4 flex flex-wrap gap-2">
+            <button v-if="task.local_asset_available" class="btn btn-sm btn-outline" type="button" @click="openLocalAsset(task)">本地资产</button>
+            <button class="btn btn-sm btn-outline" type="button" @click="copyToCreate(task)">复制参数</button>
+            <RouterLink class="btn btn-sm btn-outline" :to="`/admin/video/tasks/${task.id}`">查看详情</RouterLink>
+          </div>
+        </article>
+        <div v-if="!loading && !tasks.length" class="rounded-xl border border-gray-200 bg-white px-5 py-10 text-center text-sm text-gray-500 dark:border-dark-700 dark:bg-dark-800 dark:text-gray-400">
+          <p>当前还没有任务记录。</p>
+          <RouterLink class="btn btn-sm btn-primary mt-4" to="/admin/video/create">试跑一条任务</RouterLink>
+        </div>
+        <div v-if="tasks.length" data-testid="video-task-mobile-pagination" class="flex items-center justify-between rounded-lg bg-white px-4 py-3 text-sm dark:bg-dark-800">
+          <span class="text-gray-500">共 {{ pagination.total }} 条</span>
+          <div class="flex items-center gap-2">
+            <button class="btn btn-sm btn-outline" type="button" :disabled="pagination.page <= 1" @click="changePage(pagination.page - 1)">上一页</button>
+            <span>{{ pagination.page }} / {{ pagination.pages }}</span>
+            <button class="btn btn-sm btn-outline" type="button" :disabled="pagination.page >= pagination.pages" @click="changePage(pagination.page + 1)">下一页</button>
+          </div>
+        </div>
+      </section>
+
+      <section data-testid="video-task-desktop-table" class="hidden rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-800 md:block">
         <div class="overflow-x-auto">
           <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-dark-700">
             <thead class="bg-gray-50 text-left text-xs uppercase text-gray-500 dark:bg-dark-700/40 dark:text-gray-400">
@@ -384,7 +428,9 @@ async function openLocalAsset(task: VideoTask) {
 }
 
 onMounted(() => {
-  void loadUsdCnyRate()
+  if (authStore.isAdmin) {
+    void loadUsdCnyRate()
+  }
   void loadTasks()
 })
 </script>

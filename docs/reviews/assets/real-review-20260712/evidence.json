@@ -1,6 +1,6 @@
 {
   "baseURL": "http://127.0.0.1:18080",
-  "capturedAt": "2026-07-12T16:16:42.194Z",
+  "capturedAt": "2026-07-12T17:03:48.024Z",
   "roles": {
     "boss": {
       "route": "/admin/dashboard",
@@ -20,11 +20,11 @@
           "status": 200
         },
         {
-          "path": "/api/v1/subscriptions/active",
+          "path": "/api/v1/admin/compliance",
           "status": 200
         },
         {
-          "path": "/api/v1/admin/compliance",
+          "path": "/api/v1/subscriptions/active",
           "status": 200
         },
         {
@@ -44,11 +44,11 @@
           "status": 200
         },
         {
-          "path": "/api/v1/admin/dashboard/users-ranking",
+          "path": "/api/v1/admin/dashboard/users-trend",
           "status": 200
         },
         {
-          "path": "/api/v1/admin/dashboard/users-trend",
+          "path": "/api/v1/admin/dashboard/users-ranking",
           "status": 200
         },
         {
@@ -87,11 +87,11 @@
           "status": 200
         },
         {
-          "path": "/api/v1/announcements",
+          "path": "/api/v1/admin/settings",
           "status": 200
         },
         {
-          "path": "/api/v1/admin/settings",
+          "path": "/api/v1/announcements",
           "status": 200
         },
         {
@@ -134,7 +134,7 @@
           "status": 200
         },
         {
-          "path": "/api/v1/announcements",
+          "path": "/api/v1/keys",
           "status": 200
         },
         {
@@ -142,7 +142,7 @@
           "status": 200
         },
         {
-          "path": "/api/v1/keys",
+          "path": "/api/v1/announcements",
           "status": 200
         },
         {
@@ -181,11 +181,11 @@
           "status": 200
         },
         {
-          "path": "/api/v1/video/providers",
+          "path": "/api/v1/announcements",
           "status": 200
         },
         {
-          "path": "/api/v1/announcements",
+          "path": "/api/v1/video/providers",
           "status": 200
         }
       ]
@@ -208,11 +208,11 @@
           "status": 200
         },
         {
-          "path": "/api/v1/announcements",
+          "path": "/api/v1/video/tasks",
           "status": 200
         },
         {
-          "path": "/api/v1/video/tasks",
+          "path": "/api/v1/announcements",
           "status": 200
         },
         {
@@ -235,15 +235,15 @@
           "status": 200
         },
         {
+          "path": "/api/v1/video/tasks/1",
+          "status": 200
+        },
+        {
           "path": "/api/v1/keys",
           "status": 200
         },
         {
           "path": "/api/v1/announcements",
-          "status": 200
-        },
-        {
-          "path": "/api/v1/video/tasks/1",
           "status": 200
         },
         {
@@ -262,7 +262,7 @@
           "status": 200
         },
         {
-          "path": "/api/v1/settings/public",
+          "path": "/api/v1/subscriptions/active",
           "status": 200
         },
         {
@@ -278,7 +278,7 @@
           "status": 200
         },
         {
-          "path": "/api/v1/subscriptions/active",
+          "path": "/api/v1/settings/public",
           "status": 200
         },
         {
@@ -292,7 +292,7 @@
     {
       "role": "employee",
       "path": "/admin/video/tasks",
-      "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-m5H1JFMxniAHlUgXhxjXxw==' https://challenges.cloudflare.com https://static.cloudflareinsights.com https://*.stripe.com https://static.airwallex.com https://checkout.airwallex.com https://static"
+      "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-zLDLUjVvS7JsUe8aXFbjtQ==' https://challenges.cloudflare.com https://static.cloudflareinsights.com https://*.stripe.com https://static.airwallex.com https://checkout.airwallex.com https://static"
     }
   ]
 }

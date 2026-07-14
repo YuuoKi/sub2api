@@ -54,6 +54,7 @@ type BatchImageSubmitRequest struct {
 	TaskName         string                 `json:"task_name"`
 	ParentBatchID    string                 `json:"parent_batch_id"`
 	Provider         string                 `json:"provider"`
+	ExecutionMode    string                 `json:"execution_mode"`
 	Items            []BatchImageSubmitItem `json:"items"`
 	ResponseMimeType string                 `json:"response_mime_type"`
 	AspectRatio      string                 `json:"aspect_ratio"`
@@ -222,6 +223,19 @@ func (s *BatchImagePublicService) Submit(ctx context.Context, owner BatchImageOw
 	if err != nil {
 		return nil, err
 	}
+	mode, err := NormalizeExecutionMode(normalized.ExecutionMode)
+	if err != nil {
+		return nil, err
+	}
+	normalized.ExecutionMode = mode
+	if mode == ExecutionModeMock && normalized.Provider == "" {
+		normalized.Provider = BatchImageProviderMock
+	}
+	if mode == ExecutionModeReviewReal {
+		if err := s.ensureReviewRealSessionArmed(ctx); err != nil {
+			return nil, err
+		}
+	}
 	// 与 ListModels 使用同一鉴权谓词（AllowBatchImageGeneration + Platform==Gemini），
 	// 避免两个入口校验口径不一致留下防御纵深缺口。
 	if err := s.ensureGroupAllowsBatchImage(ctx, owner.GroupID); err != nil {
@@ -248,7 +262,7 @@ func (s *BatchImagePublicService) Submit(ctx context.Context, owner BatchImageOw
 		}
 	}
 
-	provider, account, err := s.selectProviderAndAccount(ctx, owner, normalized.Provider, normalized.Model)
+	provider, account, err := s.selectProviderAndAccountForMode(ctx, owner, normalized.Provider, normalized.Model, mode)
 	if err != nil {
 		return nil, err
 	}
@@ -271,14 +285,18 @@ func (s *BatchImagePublicService) Submit(ctx context.Context, owner BatchImageOw
 		return nil, err
 	}
 	apiKeyID := owner.APIKeyID
-	accountID := account.ID
+	var accountIDPtr *int64
+	if account != nil && account.ID > 0 {
+		accountID := account.ID
+		accountIDPtr = &accountID
+	}
 	holdID := BatchImageHoldRequestID(batchID)
 	holdAmount := pricingSnapshot.HoldAmount
 	job, err := s.Repo.CreateBatchImageJob(ctx, CreateBatchImageJobParams{
 		BatchID:                 batchID,
 		UserID:                  owner.UserID,
 		APIKeyID:                &apiKeyID,
-		AccountID:               &accountID,
+		AccountID:               accountIDPtr,
 		Provider:                provider.Name(),
 		Model:                   normalized.Model,
 		TaskName:                normalized.TaskName,
@@ -299,11 +317,19 @@ func (s *BatchImagePublicService) Submit(ctx context.Context, owner BatchImageOw
 		HoldID:                  &holdID,
 		IdempotencyKey:          batchImageOptionalStringPtr(idempotencyKey),
 		RequestHash:             batchImageStringPtr(requestHash),
+		ExecutionMode:           mode,
 	})
 	if err != nil {
 		return nil, err
 	}
-	if err := reserveBatchImageBalanceHold(ctx, s.BillingRepo, job, requestHash); err != nil {
+	job.ExecutionMode = mode
+	mockSettlement := mode == ExecutionModeMock || provider.Name() == BatchImageProviderMock
+	if mockSettlement {
+		// Product mock path: no balance hold; settlement is not_required.
+		holdAmount = 0
+		job.HoldAmount = &holdAmount
+		job.EstimatedCost = 0
+	} else if err := reserveBatchImageBalanceHold(ctx, s.BillingRepo, job, requestHash); err != nil {
 		code := "BILLING_HOLD_FAILED"
 		if errors.Is(err, ErrBatchImageInsufficientBalance) {
 			code = "INSUFFICIENT_BALANCE"
@@ -312,10 +338,14 @@ func (s *BatchImagePublicService) Submit(ctx context.Context, owner BatchImageOw
 		s.hidePreUpstreamSubmitFailure(ctx, owner, job)
 		return nil, err
 	}
-	s.invalidateAuthCache(ctx, owner.UserID)
+	if !mockSettlement {
+		s.invalidateAuthCache(ctx, owner.UserID)
+	}
 	if err := s.createPendingItems(ctx, job.BatchID, requestHash, normalized.Items); err != nil {
-		if releaseErr := s.releaseFailedSubmitHold(ctx, job, requestHash); releaseErr != nil {
-			return nil, releaseErr
+		if !mockSettlement {
+			if releaseErr := s.releaseFailedSubmitHold(ctx, job, requestHash); releaseErr != nil {
+				return nil, releaseErr
+			}
 		}
 		_ = s.Repo.RecordBatchImageJobSubmitFailure(ctx, job.BatchID, "ITEM_CREATE_FAILED", sanitizeBatchImagePublicMessage(err.Error()), true)
 		s.hidePreUpstreamSubmitFailure(ctx, owner, job)
@@ -431,6 +461,12 @@ func (s *BatchImagePublicService) Submit(ctx context.Context, owner BatchImageOw
 }
 
 func (s *BatchImagePublicService) releaseFailedSubmitHold(ctx context.Context, job *BatchImageJob, requestHash string) error {
+	if job != nil && (job.ExecutionMode == ExecutionModeMock || job.Provider == BatchImageProviderMock) {
+		return nil
+	}
+	if job != nil && (job.HoldAmount == nil || *job.HoldAmount <= 0) {
+		return nil
+	}
 	if err := releaseBatchImageBalanceHold(ctx, s.BillingRepo, job, requestHash); err != nil {
 		_ = s.Repo.RecordBatchImageJobSubmitFailure(ctx, job.BatchID, "BILLING_RELEASE_FAILED", sanitizeBatchImagePublicMessage(err.Error()), true)
 		s.enqueueBillingRetry(ctx, job.BatchID)
@@ -442,6 +478,17 @@ func (s *BatchImagePublicService) releaseFailedSubmitHold(ctx context.Context, j
 
 func (s *BatchImagePublicService) reserveRealCreateBeforeImageProvider(ctx context.Context, job *BatchImageJob, pricing BatchImagePricingSnapshot) error {
 	if s == nil || s.RealCreateGuard == nil || job == nil {
+		return nil
+	}
+	// Session 4+4/¥60 guard is ONLY for execution_mode=review_real.
+	mode := strings.TrimSpace(job.ExecutionMode)
+	if mode == "" {
+		mode = ExecutionModeMock
+	}
+	if mode != ExecutionModeReviewReal {
+		return nil
+	}
+	if job.Provider == BatchImageProviderMock {
 		return nil
 	}
 	reservedCNY, err := s.realCreateReservedCNYForImage(ctx, pricing.HoldAmount)
@@ -1002,8 +1049,41 @@ func maxBatchImageReferenceImagesForModel(model string) int {
 }
 
 func (s *BatchImagePublicService) selectProviderAndAccount(ctx context.Context, owner BatchImageOwner, requestedProvider, model string) (BatchImageProvider, *Account, error) {
+	return s.selectProviderAndAccountForMode(ctx, owner, requestedProvider, model, ExecutionModeMock)
+}
+
+func (s *BatchImagePublicService) ensureReviewRealSessionArmed(ctx context.Context) error {
+	if s == nil || s.RealCreateGuard == nil {
+		return ErrReviewRealSessionDisabled
+	}
+	if _, ok := s.RealCreateGuard.(*reviewguard.FailClosedGuard); ok {
+		return ErrReviewRealSessionDisabled
+	}
+	if s.Config == nil || !s.Config.RealReviewSessionActive() {
+		return ErrReviewRealSessionDisabled
+	}
+	if _, err := s.RealCreateGuard.Snapshot(ctx); err != nil {
+		return ErrReviewRealSessionDisabled
+	}
+	return nil
+}
+
+func (s *BatchImagePublicService) selectProviderAndAccountForMode(ctx context.Context, owner BatchImageOwner, requestedProvider, model, mode string) (BatchImageProvider, *Account, error) {
+	mode, err := NormalizeExecutionMode(mode)
+	if err != nil {
+		return nil, nil, err
+	}
+	if mode == ExecutionModeMock {
+		requestedProvider = BatchImageProviderMock
+	}
 	providers := batchImageProviderSelectionOrder(requestedProvider)
 	for _, providerName := range providers {
+		if mode == ExecutionModeMock && providerName != BatchImageProviderMock {
+			continue
+		}
+		if mode != ExecutionModeMock && providerName == BatchImageProviderMock {
+			continue
+		}
 		provider, ok := s.ProviderRegistry.Get(providerName)
 		if !ok || provider == nil {
 			continue
@@ -1023,15 +1103,50 @@ func (s *BatchImagePublicService) selectProviderAndAccount(ctx context.Context, 
 			if !account.IsSchedulable() || !account.IsModelSupported(model) {
 				continue
 			}
+			switch mode {
+			case ExecutionModeReviewReal:
+				if !isReviewOnlyImageAccount(&account) {
+					continue
+				}
+			case ExecutionModeInternalReal:
+				if isReviewOnlyImageAccount(&account) {
+					continue
+				}
+			case ExecutionModeMock:
+				// mock provider accounts are synthetic / local
+			}
 			if provider.SupportsAccount(&account) {
 				return provider, &account, nil
 			}
 		}
+		if mode == ExecutionModeMock && providerName == BatchImageProviderMock {
+			synthetic := localMockBatchImageAccount()
+			if provider.SupportsAccount(synthetic) {
+				return provider, synthetic, nil
+			}
+		}
 	}
-	if requestedProvider != "" {
+	switch mode {
+	case ExecutionModeReviewReal:
+		return nil, nil, ErrReviewRealAccountUnavailable
+	case ExecutionModeInternalReal:
+		return nil, nil, ErrInternalRealChannelMissing
+	default:
 		return nil, nil, ErrBatchImageNoAccountAvailable
 	}
-	return nil, nil, ErrBatchImageNoAccountAvailable
+}
+
+func localMockBatchImageAccount() *Account {
+	return &Account{
+		ID:          0,
+		Name:        "local-mock-image",
+		Platform:    PlatformGemini,
+		Type:        AccountTypeAPIKey,
+		Status:      StatusActive,
+		Schedulable: true,
+		Credentials: map[string]any{"api_key": "local-mock"},
+		Extra:       map[string]any{"mock_provider": true},
+	}
 }
 
 func (s *BatchImagePublicService) listCandidateAccounts(ctx context.Context, groupID *int64, platform string) ([]Account, error) {

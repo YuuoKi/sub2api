@@ -37,6 +37,13 @@ func (s *VideoGatewayService) SetBudgetGuard(g VideoBudgetGuard) {
 // SetRealCreateGuard wires the shared real-review session budget gate. Wire always
 // injects a non-nil guard (file-backed or fail-closed). Nil is reserved for unit
 // tests that construct services without DI and should not exercise the gate.
+func (s *VideoGatewayService) SetRealAccessPolicyRepository(repo ProviderRealAccessPolicyRepository) {
+	if s == nil {
+		return
+	}
+	s.realAccessPolicyRepo = repo
+}
+
 func (s *VideoGatewayService) SetRealCreateGuard(g reviewguard.RealCreateGuard) {
 	s.realCreateGuard = g
 }

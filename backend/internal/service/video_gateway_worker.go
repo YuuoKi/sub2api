@@ -523,6 +523,20 @@ func (s *VideoGatewayService) reserveRealCreateBeforeVideoProvider(ctx context.C
 	if task.Provider == VideoProviderMock {
 		return nil
 	}
+	// Session 4+4/¥60 guard is ONLY for execution_mode=review_real.
+	// internal_real uses policy reservation; mock never reserves.
+	mode := strings.TrimSpace(task.ExecutionMode)
+	if mode == "" {
+		// Infer from account metadata when older rows lack execution_mode.
+		if account, err := s.repo.GetProviderAccount(ctx, task.ProviderAccountID); err == nil && isReviewOnlyVideoAccount(account) {
+			mode = ExecutionModeReviewReal
+		} else {
+			mode = ExecutionModeInternalReal
+		}
+	}
+	if mode != ExecutionModeReviewReal {
+		return nil
+	}
 	reservedCNY, err := s.realCreateReservedCNYForVideo(ctx, task)
 	if err != nil {
 		return err

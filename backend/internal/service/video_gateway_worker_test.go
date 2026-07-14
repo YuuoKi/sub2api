@@ -733,6 +733,7 @@ func TestVideoRealCreateGuardRejectsBeforeAdapterCreate(t *testing.T) {
 	repo.nextProviderID++
 	repo.providers[providerID] = &VideoProviderAccount{
 		ID: providerID, Provider: VideoProviderSeedance, DisplayName: "Seedance", Enabled: true, DefaultModel: "seedance-1-0-pro",
+		Metadata: map[string]any{"review_only": true},
 	}
 	task := &VideoTask{
 		ID:                9401,
@@ -747,6 +748,7 @@ func TestVideoRealCreateGuardRejectsBeforeAdapterCreate(t *testing.T) {
 		Currency:          "CNY",
 		PricingSource:     "seedance_catalog",
 		PricingVersion:    "v1",
+		ExecutionMode:     ExecutionModeReviewReal,
 		CreatedAt:         time.Now().UTC(),
 	}
 	repo.tasks[task.ID] = cloneVideoTask(task)

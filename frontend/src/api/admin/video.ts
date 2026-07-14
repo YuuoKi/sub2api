@@ -176,8 +176,17 @@ export interface VideoTask extends VideoTaskSummary {
   events?: VideoTaskEvent[]
 }
 
+export type VideoExecutionMode = 'mock' | 'review_real' | 'internal_real'
+
+export interface VideoExecutionCapabilities {
+  mock?: boolean
+  review_real?: boolean
+  internal_real?: boolean
+}
+
 export interface VideoTaskCreatePayload {
   provider_account_id?: number
+  execution_mode?: VideoExecutionMode
   task_type: VideoTaskType
   model?: string
   prompt: string
@@ -309,8 +318,8 @@ async function createSkillAnalysisExport(payload: { target_ai_model: 'gemini' | 
   return data
 }
 
-async function listTaskProviders(): Promise<{ items: VideoProviderAccount[] }> {
-  const { data } = await apiClient.get<{ items: VideoProviderAccount[] }>('/video/providers')
+async function listTaskProviders(): Promise<{ items: VideoProviderAccount[]; execution_capabilities?: VideoExecutionCapabilities }> {
+  const { data } = await apiClient.get<{ items: VideoProviderAccount[]; execution_capabilities?: VideoExecutionCapabilities }>('/video/providers')
   return data
 }
 
@@ -319,8 +328,12 @@ async function listTasks(params: VideoTaskListParams = {}, signal?: AbortSignal)
   return data
 }
 
-async function createTask(payload: VideoTaskCreatePayload): Promise<VideoTask> {
-  const { data } = await apiClient.post<VideoTask>('/video/tasks', payload)
+async function createTask(payload: VideoTaskCreatePayload, idempotencyKey?: string): Promise<VideoTask> {
+  const headers: Record<string, string> = {}
+  if (idempotencyKey) {
+    headers['Idempotency-Key'] = idempotencyKey
+  }
+  const { data } = await apiClient.post<VideoTask>('/video/tasks', payload, { headers })
   return data
 }
 

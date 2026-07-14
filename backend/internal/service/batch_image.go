@@ -13,6 +13,7 @@ import (
 const (
 	BatchImageProviderGeminiAPI = "gemini_api"
 	BatchImageProviderVertex    = "vertex"
+	BatchImageProviderMock      = "mock"
 )
 
 const (
@@ -156,6 +157,9 @@ type BatchImageJob struct {
 	StartedAt   *time.Time
 	FinishedAt  *time.Time
 	SettledAt   *time.Time
+
+	// ExecutionMode is mock | review_real | internal_real (empty treated as mock).
+	ExecutionMode string
 }
 
 type CreateBatchImageJobParams struct {
@@ -200,6 +204,7 @@ type CreateBatchImageJobParams struct {
 	RetryCount int
 
 	OutputExpiresAt *time.Time
+	ExecutionMode   string
 }
 
 type BatchImageItem struct {
@@ -350,7 +355,7 @@ func NewBatchImageID() (string, error) {
 
 func IsSupportedBatchImageProvider(provider string) bool {
 	switch provider {
-	case BatchImageProviderGeminiAPI, BatchImageProviderVertex:
+	case BatchImageProviderGeminiAPI, BatchImageProviderVertex, BatchImageProviderMock:
 		return true
 	default:
 		return false

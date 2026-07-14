@@ -135,6 +135,7 @@ func registerAdminComplianceRoutes(admin *gin.RouterGroup, h *handler.Handlers) 
 		compliance.POST("/accept", h.Admin.Compliance.Accept)
 	}
 	admin.GET("/real-review-session", h.Admin.RealReviewSession.GetStatus)
+	admin.POST("/real-review-session/bootstrap", h.Admin.RealReviewSession.BootstrapCredentials)
 }
 
 func registerContentModerationRoutes(admin *gin.RouterGroup, h *handler.Handlers) {

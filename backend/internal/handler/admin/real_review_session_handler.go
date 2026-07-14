@@ -1,6 +1,8 @@
 package admin
 
 import (
+	"net/http"
+
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -52,4 +54,31 @@ func (h *RealReviewSessionHandler) GetStatus(c *gin.Context) {
 	out.RemainingCNY = snap.RemainingCNY.String()
 	out.PricingVersion = snap.PricingVersion
 	response.Success(c, out)
+}
+
+// BootstrapCredentials upserts review_only accounts from env key presence.
+// Response never includes secret values.
+func (h *RealReviewSessionHandler) BootstrapCredentials(c *gin.Context) {
+	if _, ok := middleware.GetAuthSubjectFromContext(c); !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	if h.video == nil {
+		response.ErrorFrom(c, service.ErrReviewRealSessionDisabled)
+		return
+	}
+	result, err := h.video.ReviewCredentialBootstrap(c.Request.Context())
+	if result == nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{
+			"code":    "REAL_REVIEW_SESSION_DISABLED",
+			"message": err.Error(),
+			"data":    result,
+		})
+		return
+	}
+	response.Success(c, result)
 }

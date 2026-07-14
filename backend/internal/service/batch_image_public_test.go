@@ -715,18 +715,53 @@ func TestBatchImageRealCreateGuardRejectsBeforeProviderSubmit(t *testing.T) {
 	svc, repo, queue, gemini, _ := newTestBatchImagePublicService(true)
 	svc.SetRealCreateGuard(reviewguard.NewFailClosedGuard())
 
-	_, err := svc.Submit(ctx, testBatchImageOwner(), validBatchImageSubmitRequest(), "idem-real-create-guard")
+	req := validBatchImageSubmitRequest()
+	req.ExecutionMode = ExecutionModeReviewReal
+	_, err := svc.Submit(ctx, testBatchImageOwner(), req, "idem-real-create-guard")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "REAL_REVIEW_SESSION_DISABLED")
 	require.Empty(t, gemini.submits)
 	require.Empty(t, queue.enqueued)
 	billing := svc.BillingRepo.(*fakeBatchImageBillingRepo)
-	require.Len(t, billing.reserves, 1)
-	require.Len(t, billing.releases, 1)
-	for _, job := range repo.jobs {
-		require.NotNil(t, job.UserDeletedAt, "pre-upstream guard reject must hide the job")
-		require.Nil(t, job.ProviderJobName)
-	}
+	require.Empty(t, billing.reserves, "session-disabled review_real must fail closed before hold/create")
+	require.Empty(t, billing.releases)
+	require.Empty(t, repo.jobs, "create=0 when real review session is disabled")
+}
+
+func TestBatchImageMockModeSkipsRealCreateGuard(t *testing.T) {
+	ctx := context.Background()
+	svc, _, queue, gemini, _ := newTestBatchImagePublicService(true)
+	svc.SetRealCreateGuard(reviewguard.NewFailClosedGuard())
+	mock := &publicBatchImageProvider{name: BatchImageProviderMock}
+	svc.ProviderRegistry = NewBatchImageProviderRegistry(mock, gemini)
+
+	req := validBatchImageSubmitRequest()
+	req.Provider = BatchImageProviderMock
+	req.ExecutionMode = ExecutionModeMock
+	got, err := svc.Submit(ctx, testBatchImageOwner(), req, "idem-mock-mode")
+	require.NoError(t, err)
+	require.Equal(t, BatchImageProviderMock, got.Provider)
+	require.Len(t, queue.enqueued, 1)
+	require.Empty(t, gemini.submits)
+	require.Len(t, mock.submits, 1)
+}
+
+func TestBatchImageReviewRealSessionDisabledCreateZero(t *testing.T) {
+	ctx := context.Background()
+	svc, repo, queue, gemini, _ := newTestBatchImagePublicService(true)
+	svc.SetRealCreateGuard(reviewguard.NewFailClosedGuard())
+	reviewAccount := testBatchImageAccount(303, AccountTypeAPIKey)
+	reviewAccount.Extra = map[string]any{"review_only": true}
+	svc.AccountRepo = &publicBatchImageAccountRepo{accounts: []Account{reviewAccount}}
+
+	req := validBatchImageSubmitRequest()
+	req.ExecutionMode = ExecutionModeReviewReal
+	_, err := svc.Submit(ctx, testBatchImageOwner(), req, "idem-review-disabled")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "REAL_REVIEW_SESSION_DISABLED")
+	require.Empty(t, gemini.submits)
+	require.Empty(t, queue.enqueued)
+	require.Empty(t, repo.jobs)
 }
 
 func newTestBatchImagePublicService(enabled bool) (*BatchImagePublicService, *fakeBatchImageRepository, *publicBatchImageQueue, *publicBatchImageProvider, *publicBatchImageProvider) {

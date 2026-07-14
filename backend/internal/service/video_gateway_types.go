@@ -204,6 +204,9 @@ type VideoTask struct {
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
 	CompletedAt         *time.Time
+	// ExecutionMode is mock | review_real | internal_real. Persisted in-process for
+	// worker session-guard gating; DB column optional (inferred from review_only when absent).
+	ExecutionMode string
 }
 
 type VideoTaskContentItem struct {
@@ -316,6 +319,7 @@ type VideoProviderTestResult struct {
 type VideoTaskCreateParams struct {
 	APIKeyID                               *int64
 	ProviderAccountID                      int64
+	ExecutionMode                          string // mock | review_real | internal_real; empty => mock
 	TaskType                               string
 	Model                                  string
 	Prompt                                 string
@@ -336,6 +340,9 @@ type VideoTaskCreateParams struct {
 	EnforceRealProviderTrial               bool // JWT user paths: seedance requires daily trial + smoke gate
 	RequireSeedanceProductionAuthorization bool // Admin production path: seedance requires provider metadata production_authorized=true
 	SafeDemoOnly                           bool // Drama safe demo: route only to mock provider
+	// AllowExplicitProviderAccount lets admin/internal tooling honor ProviderAccountID.
+	// Ordinary employee paths must leave this false so bare IDs cannot enumerate routes.
+	AllowExplicitProviderAccount bool
 }
 
 // PricingSnapshot freezes the non-float pricing identity used for both creation

@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
 
@@ -44,12 +43,8 @@ func NewDefaultBatchImageProviderRegistry() *BatchImageProviderRegistry {
 	)
 }
 
-func NewBatchImageProviderRegistryFromConfig(cfg *config.Config) *BatchImageProviderRegistry {
-	return NewBatchImageProviderRegistry(
-		NewGeminiAPIBatchImageProvider(nil),
-		NewVertexBatchImageProviderFromConfig(cfg, nil, nil, nil),
-	)
-}
+// NewBatchImageProviderRegistryFromConfig is defined in batch_image_provider_mock.go
+// so local/review builds can optionally register the product mock provider.
 
 func (r *BatchImageProviderRegistry) Get(provider string) (BatchImageProvider, bool) {
 	if r == nil {

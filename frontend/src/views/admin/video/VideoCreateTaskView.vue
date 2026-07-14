@@ -71,6 +71,16 @@
         <section class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
           <form class="space-y-4" @submit.prevent="submitTask">
             <div>
+              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">执行模式</label>
+              <select v-model="executionMode" class="input">
+                <option value="mock">免费试跑</option>
+                <option value="review_real" :disabled="!reviewRealAvailable">一次真实复核</option>
+                <option value="internal_real" :disabled="!internalRealAvailable">内部真实调用</option>
+              </select>
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">默认免费试跑；真实模式不会因为“偏好 mock”而误路由到真实账号。</p>
+            </div>
+
+            <div>
               <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">任务类型</label>
               <select v-model="form.task_type" class="input">
                 <option v-for="item in taskTypeOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
@@ -147,10 +157,33 @@
 
             <button class="btn btn-primary" type="submit" :disabled="submitting || Boolean(validationMessage)">
               <Icon name="play" size="sm" />
-              {{ isVideoGatewayDemoMode ? '试跑一条任务' : '创建任务' }}
+              {{ submitting ? '提交中…' : (executionMode === 'mock' ? (isVideoGatewayDemoMode ? '试跑一条任务' : '免费试跑') : '创建真实任务') }}
             </button>
-            <p v-if="isVideoGatewayDemoMode" class="text-xs text-gray-500 dark:text-gray-400">这次只检查系统接收、处理和记录能力，不会调用真实生成服务。</p>
+            <p v-if="executionMode === 'mock'" class="text-xs text-gray-500 dark:text-gray-400">这次只检查系统接收、处理和记录能力，不会调用真实生成服务。</p>
           </form>
+
+          <div
+            v-if="confirmRealOpen"
+            class="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4"
+            role="dialog"
+            aria-modal="true"
+          >
+            <div class="w-full max-w-md rounded-lg bg-white p-5 shadow-lg dark:bg-dark-800">
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white">确认真实调用</h3>
+              <ul class="mt-3 space-y-1 text-sm text-gray-600 dark:text-gray-300">
+                <li>模型：{{ form.model || '默认' }}</li>
+                <li>时长：{{ form.duration }} 秒</li>
+                <li>分辨率：{{ form.resolution }}</li>
+                <li>画幅：{{ form.aspect_ratio }}</li>
+                <li>预估上限：{{ estimatedMaxCostLabel() }}</li>
+                <li>次数影响：计入真实复核/内部策略额度</li>
+              </ul>
+              <div class="mt-5 flex justify-end gap-3">
+                <button class="btn btn-outline" type="button" @click="confirmRealOpen = false">取消</button>
+                <button class="btn btn-primary" type="button" :disabled="submitting" @click="confirmRealOnce">再次确认并提交</button>
+              </div>
+            </div>
+          </div>
         </section>
 
         <div v-if="!isVideoGatewayDemoMode" class="space-y-6">
@@ -203,7 +236,13 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
-import { videoTaskAPI, type VideoProviderAccount, type VideoTaskCreatePayload } from '@/api/admin/video'
+import {
+  videoTaskAPI,
+  type VideoExecutionCapabilities,
+  type VideoExecutionMode,
+  type VideoProviderAccount,
+  type VideoTaskCreatePayload,
+} from '@/api/admin/video'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { extractApiErrorMessage } from '@/utils/apiError'
@@ -227,7 +266,12 @@ const router = useRouter()
 const appStore = useAppStore()
 const authStore = useAuthStore()
 const providers = ref<VideoProviderAccount[]>([])
+const capabilities = ref<VideoExecutionCapabilities>({ mock: true })
+const executionMode = ref<VideoExecutionMode>('mock')
 const submitting = ref(false)
+const pendingIdempotencyKey = ref('')
+const confirmRealOpen = ref(false)
+const confirmRealSecond = ref(false)
 
 const gatewaySubmitSteps = [
   { title: '选择剧种模板' },
@@ -246,7 +290,7 @@ const gatewayReasons = [
 ]
 
 const form = reactive<VideoTaskCreatePayload>({
-  provider_account_id: 0,
+  execution_mode: 'mock',
   task_type: 'text_to_video',
   model: '',
   prompt: isVideoGatewayDemoMode
@@ -260,8 +304,19 @@ const form = reactive<VideoTaskCreatePayload>({
 })
 
 const enabledProviders = computed(() => providers.value.filter((provider) => provider.route_available))
+const reviewRealAvailable = computed(() => Boolean(capabilities.value.review_real))
+const internalRealAvailable = computed(() => Boolean(capabilities.value.internal_real) && authStore.isAdmin)
 const validationMessage = computed(() => {
-  if (!enabledProviders.value.length) return isVideoGatewayDemoMode ? '没有可用生成通道：请先前往生成通道页启用演示通道。' : '没有可用通道：请先前往模型通道页启用演示通道。'
+  const mockOk = capabilities.value.mock !== false || enabledProviders.value.some((p) => p.provider === 'mock')
+  if (executionMode.value === 'mock' && !mockOk && !enabledProviders.value.length) {
+    return isVideoGatewayDemoMode ? '没有可用生成通道：请先前往生成通道页启用演示通道。' : '没有可用通道：请先前往模型通道页启用演示通道。'
+  }
+  if (executionMode.value === 'review_real' && !reviewRealAvailable.value) {
+    return '一次真实复核暂不可用：请联系管理员开启复核会话并完成凭证引导。'
+  }
+  if (executionMode.value === 'internal_real' && !internalRealAvailable.value) {
+    return '内部真实通道未开通：请先完成验收并由管理员配置正式内部通道策略。'
+  }
   if (!form.prompt.trim()) return '提示词不能为空：请描述要生成的视频内容。'
   if ((form.duration || 0) < 1 || (form.duration || 0) > 60) return '时长必须在 1 到 60 秒之间。'
   if (form.reference_image_url && !isValidOptionalUrl(form.reference_image_url)) return '参考图 URL 格式不正确：请使用 http 或 https 链接，或留空。'
@@ -272,6 +327,16 @@ async function loadProviders() {
   try {
     const res = await videoTaskAPI.listProviders()
     providers.value = res.items || []
+    capabilities.value = res.execution_capabilities || {
+      mock: true,
+      review_real: false,
+      internal_real: false,
+    }
+    if (!capabilities.value.mock && enabledProviders.value.some((p) => p.provider === 'mock')) {
+      capabilities.value.mock = true
+    }
+    executionMode.value = 'mock'
+    form.execution_mode = 'mock'
     const first = preferredProvider()
     if (first && !form.model) {
       form.model = defaultModelValue(first)
@@ -288,9 +353,7 @@ function applyTemplate(template: PromptAssetCandidate) {
 }
 
 function syncProviderModel() {
-  const provider = form.provider_account_id
-    ? providers.value.find((item) => item.id === form.provider_account_id)
-    : preferredProvider()
+  const provider = preferredProvider()
   if (provider?.default_model) {
     form.model = defaultModelValue(provider)
   }
@@ -302,9 +365,16 @@ function preferredProvider() {
 
 function selectPreferredProvider() {
   const first = preferredProvider()
+  executionMode.value = 'mock'
+  form.execution_mode = 'mock'
+  delete form.provider_account_id
   if (!first) return
-  form.provider_account_id = 0
   form.model = defaultModelValue(first)
+}
+
+function estimatedMaxCostLabel() {
+  const seconds = form.duration || 5
+  return `约 ¥${(seconds * 1).toFixed(2)}（上限示意，以结算为准）`
 }
 
 function selectMockProvider() {
@@ -329,33 +399,73 @@ function applyMockFailure() {
 }
 
 async function submitTask() {
+  if (submitting.value) return
   if (validationMessage.value) {
     appStore.showWarning(validationMessage.value)
     return
+  }
+  form.execution_mode = executionMode.value
+  if (executionMode.value !== 'mock' && !confirmRealSecond.value) {
+    confirmRealOpen.value = true
+    return
+  }
+  if (!pendingIdempotencyKey.value) {
+    pendingIdempotencyKey.value = crypto.randomUUID()
   }
   submitting.value = true
   try {
     const payload: VideoTaskCreatePayload = {
       ...form,
+      execution_mode: executionMode.value,
       prompt: form.prompt.trim(),
       negative_prompt: form.negative_prompt?.trim(),
       reference_image_url: form.reference_image_url?.trim(),
       model: form.model?.trim(),
     }
-    if (!payload.provider_account_id) {
-      delete payload.provider_account_id
-    }
+    delete payload.provider_account_id
     if (!payload.model) {
       delete payload.model
     }
-    const task = await videoTaskAPI.create(payload)
-    appStore.showSuccess(isVideoGatewayDemoMode ? '试跑任务已提交，系统会检查接收、处理和记录流程。' : '任务已进入队列，可在详情查看处理进度。')
+    const task = await videoTaskAPI.create(payload, pendingIdempotencyKey.value)
+    pendingIdempotencyKey.value = ''
+    confirmRealOpen.value = false
+    confirmRealSecond.value = false
+    appStore.showSuccess(executionMode.value === 'mock'
+      ? (isVideoGatewayDemoMode ? '试跑任务已提交，系统会检查接收、处理和记录流程。' : '免费试跑已进入队列。')
+      : '真实任务已进入队列，可在详情查看处理进度。')
     router.push(`/admin/video/tasks/${task.id}`)
   } catch (err) {
-    appStore.showError(extractApiErrorMessage(err, isVideoGatewayDemoMode ? '试跑任务提交失败' : '创建视频任务失败'))
+    const message = extractApiErrorMessage(err, isVideoGatewayDemoMode ? '试跑任务提交失败' : '创建视频任务失败')
+    appStore.showError(humanizeCreateError(message))
   } finally {
     submitting.value = false
   }
+}
+
+function humanizeCreateError(message: string): string {
+  const lower = message.toLowerCase()
+  if (lower.includes('balance') || message.includes('余额')) {
+    return `${message}。下一步：检查账户余额或改用免费试跑。`
+  }
+  if (lower.includes('rate') || message.includes('限流')) {
+    return `${message}。下一步：稍后重试或降低并发。`
+  }
+  if (lower.includes('budget') || message.includes('预算')) {
+    return `${message}。下一步：联系管理员调整额度或改用免费试跑。`
+  }
+  if (lower.includes('session') || message.includes('复核')) {
+    return `${message}。下一步：联系管理员开启复核会话，或改用免费试跑。`
+  }
+  if (lower.includes('timeout') || message.includes('超时')) {
+    return `${message}。下一步：稍后重试。`
+  }
+  return message
+}
+
+function confirmRealOnce() {
+  confirmRealSecond.value = true
+  confirmRealOpen.value = false
+  void submitTask()
 }
 
 function isValidOptionalUrl(value: string): boolean {
@@ -377,11 +487,8 @@ function applyDraftIfPresent() {
   const draft = loadTaskDraft()
   if (!draft) return
   Object.assign(form, draft)
-  if (!enabledProviders.value.some((provider) => provider.id === form.provider_account_id)) {
-    selectPreferredProvider()
-  } else {
-    syncProviderModel()
-  }
+  selectPreferredProvider()
+  syncProviderModel()
   appStore.showInfo(isVideoGatewayDemoMode ? '已复制参数，可调整后重新发起调用。' : '已复制参数，可调整后重新创建任务。')
 }
 

@@ -16,6 +16,7 @@ import (
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 	"github.com/Wei-Shaw/sub2api/internal/reviewguard"
+	"github.com/shopspring/decimal"
 )
 
 const (
@@ -54,6 +55,8 @@ type VideoGatewayService struct {
 	// production default until phase-2 real billing wires a concrete guard).
 	budget              VideoBudgetGuard
 	realCreateGuard     reviewguard.RealCreateGuard
+	imageReviewBootstrap imageReviewBootstrapFunc
+	realAccessPolicyRepo ProviderRealAccessPolicyRepository
 	userRepo            UserRepository
 	settingService      *SettingService
 	billingCacheService *BillingCacheService
@@ -742,23 +745,59 @@ func (s *VideoGatewayService) CreateTask(ctx context.Context, p VideoTaskCreateP
 	if strings.TrimSpace(p.Prompt) == "" {
 		return nil, ErrVideoMissingPrompt
 	}
+	explicitModeSet := strings.TrimSpace(p.ExecutionMode) != ""
+	mode, err := NormalizeExecutionMode(p.ExecutionMode)
+	if err != nil {
+		return nil, err
+	}
+	// Legacy CreateTask callers pass provider_account_id without execution_mode.
+	// Preserve that admin/tooling path, but keep id==0 auto-route mock-only.
+	if !explicitModeSet && p.ProviderAccountID > 0 {
+		p.AllowExplicitProviderAccount = true
+	}
+	p.ExecutionMode = mode
 	if task, found, err := s.replayExistingVideoTaskCreation(ctx, p); err != nil || found {
 		return task, err
 	}
 	if p.SafeDemoOnly {
+		mode = ExecutionModeMock
+		p.ExecutionMode = mode
+		explicitModeSet = true
 		mock, err := s.resolveAPIKeyMockOnlyRoute(ctx)
 		if err != nil {
 			return nil, err
 		}
 		p.ProviderAccountID = mock.ID
+		p.AllowExplicitProviderAccount = true
 	}
-	route, err := s.resolveVideoRoute(ctx, p.ProviderAccountID)
+	if mode == ExecutionModeReviewReal && explicitModeSet {
+		if err := s.ensureReviewRealSessionArmed(ctx); err != nil {
+			return nil, err
+		}
+	}
+	route, err := s.resolveVideoRouteForExecutionMode(ctx, p)
 	if err != nil {
 		return nil, err
 	}
 	account := route.Account
 	if _, err := s.adapterFor(account.Provider); err != nil {
 		return nil, err
+	}
+	if !explicitModeSet {
+		switch {
+		case account.Provider == VideoProviderMock:
+			p.ExecutionMode = ExecutionModeMock
+		case isReviewOnlyVideoAccount(account):
+			p.ExecutionMode = ExecutionModeReviewReal
+		default:
+			p.ExecutionMode = ExecutionModeInternalReal
+		}
+		mode = p.ExecutionMode
+	}
+	if mode == ExecutionModeInternalReal {
+		if err := s.reserveInternalRealForVideoCreate(ctx, p, account); err != nil {
+			return nil, err
+		}
 	}
 	if account.Provider == VideoProviderSeedance && p.RequireSeedanceProductionAuthorization && !seedanceProductionAuthorized(account) {
 		return nil, infraerrors.Forbidden("VIDEO_PRODUCTION_NOT_AUTHORIZED", "seedance production is not authorized for this provider account").WithMetadata(map[string]string{
@@ -808,6 +847,90 @@ func (s *VideoGatewayService) CreateTask(ctx context.Context, p VideoTaskCreateP
 	return s.createTaskWithRoute(ctx, p, route, createFn)
 }
 
+func (s *VideoGatewayService) ensureReviewRealSessionArmed(ctx context.Context) error {
+	if s == nil || !s.RealReviewSessionEnabled() || s.realCreateGuard == nil {
+		return ErrReviewRealSessionDisabled
+	}
+	if _, ok := s.realCreateGuard.(*reviewguard.FailClosedGuard); ok {
+		return ErrReviewRealSessionDisabled
+	}
+	if _, err := s.realCreateGuard.Snapshot(ctx); err != nil {
+		return ErrReviewRealSessionDisabled
+	}
+	return nil
+}
+
+func (s *VideoGatewayService) reserveInternalRealForVideoCreate(ctx context.Context, p VideoTaskCreateParams, account *VideoProviderAccount) error {
+	if s == nil || s.realAccessPolicyRepo == nil {
+		// Policy repository is optional until admin wires internal_real policies.
+		return nil
+	}
+	if account == nil || isReviewOnlyVideoAccount(account) || account.Provider == VideoProviderMock {
+		return ErrInternalRealChannelMissing
+	}
+	opID := strings.TrimSpace(p.CreationKey)
+	if opID == "" {
+		opID = fmt.Sprintf("video:user:%d:fp:%s", p.CreatedBy, strings.TrimSpace(p.CreationFingerprint))
+	}
+	if opID == "" || opID == fmt.Sprintf("video:user:%d:fp:", p.CreatedBy) {
+		return ErrInternalRealPolicyDenied
+	}
+	estimate := decimal.NewFromFloat(s.estimateVideoCost(&VideoTask{
+		Provider:   account.Provider,
+		Model:      firstNonEmptyVideo(strings.TrimSpace(p.Model), account.DefaultModel, defaultVideoModel(account.Provider)),
+		Duration:   defaultVideoDuration(p.Duration),
+		Resolution: firstNonEmptyVideo(strings.TrimSpace(p.Resolution), "720p"),
+	}))
+	if !estimate.IsPositive() {
+		estimate = decimal.NewFromInt(1)
+	}
+	return s.realAccessPolicyRepo.ReserveInTx(ctx, ProviderRealAccessReservation{
+		OperationID: "internal:" + opID,
+		UserID:      p.CreatedBy,
+		Kind:        "video",
+		ReservedCNY: estimate,
+	})
+}
+
+// SaveRealAccessPolicy persists internal_real policy. Requires at least one
+// enabled, non-review_only, healthy formal provider account.
+func (s *VideoGatewayService) SaveRealAccessPolicy(ctx context.Context, policy *ProviderRealAccessPolicy) error {
+	if s == nil || s.realAccessPolicyRepo == nil || policy == nil {
+		return ErrInternalRealPolicyDenied
+	}
+	if policy.Enabled && !policy.GlobalKillSwitch {
+		ok, err := s.hasFormalInternalVideoChannel(ctx)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return ErrInternalRealChannelMissing
+		}
+	}
+	return s.realAccessPolicyRepo.SavePolicy(ctx, policy)
+}
+
+func (s *VideoGatewayService) hasFormalInternalVideoChannel(ctx context.Context) (bool, error) {
+	accounts, err := s.repo.ListProviderAccounts(ctx)
+	if err != nil {
+		return false, err
+	}
+	stats, err := s.providerRuntimeStats(ctx)
+	if err != nil {
+		return false, err
+	}
+	for _, account := range accounts {
+		s.decorateProviderForResponse(account, stats[account.ID])
+		if account.Provider == VideoProviderMock || isReviewOnlyVideoAccount(account) {
+			continue
+		}
+		if account.RouteAvailable && account.APIKeyConfigured && !account.APIKeyDecryptFailed {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (s *VideoGatewayService) createTaskWithRoute(ctx context.Context, p VideoTaskCreateParams, route *videoRouteDecision, create func(context.Context, *VideoTask) error) (*VideoTask, error) {
 	if route == nil || route.Account == nil {
 		return nil, ErrVideoProviderDisabled
@@ -822,6 +945,10 @@ func (s *VideoGatewayService) createTaskWithRoute(ctx context.Context, p VideoTa
 	}
 	if err := validateVideoGenerationContract(account.Provider, model, duration, resolution); err != nil {
 		return nil, err
+	}
+	executionMode := p.ExecutionMode
+	if executionMode == "" {
+		executionMode = ExecutionModeMock
 	}
 	task := &VideoTask{
 		APIKeyID:            p.APIKeyID,
@@ -850,6 +977,7 @@ func (s *VideoGatewayService) createTaskWithRoute(ctx context.Context, p VideoTa
 		ArchiveStatus:       VideoSideEffectStatusPending,
 		CaptureStatus:       VideoSideEffectStatusPending,
 		CreatedBy:           p.CreatedBy,
+		ExecutionMode:       executionMode,
 	}
 	mockIdempotency := s.cfg != nil && s.cfg.ReliabilityCore.VideoEnabled && account.Provider == VideoProviderMock
 	if mockIdempotency {
@@ -1190,16 +1318,43 @@ func (s *VideoGatewayService) providerRuntimeStats(ctx context.Context) (map[int
 }
 
 func (s *VideoGatewayService) resolveVideoRoute(ctx context.Context, providerAccountID int64) (*videoRouteDecision, error) {
+	return s.resolveVideoRouteForExecutionMode(ctx, VideoTaskCreateParams{
+		ProviderAccountID:            providerAccountID,
+		AllowExplicitProviderAccount: providerAccountID > 0,
+	})
+}
+
+func (s *VideoGatewayService) resolveVideoRouteForExecutionMode(ctx context.Context, p VideoTaskCreateParams) (*videoRouteDecision, error) {
 	stats, err := s.providerRuntimeStats(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if providerAccountID > 0 {
-		account, err := s.repo.GetProviderAccount(ctx, providerAccountID)
+	mode, err := NormalizeExecutionMode(p.ExecutionMode)
+	if err != nil {
+		return nil, err
+	}
+
+	// Explicit account IDs are admin/tooling/legacy only.
+	if p.AllowExplicitProviderAccount && p.ProviderAccountID > 0 {
+		account, err := s.repo.GetProviderAccount(ctx, p.ProviderAccountID)
 		if err != nil {
 			return nil, err
 		}
 		s.decorateProviderForResponse(account, stats[account.ID])
+		switch mode {
+		case ExecutionModeReviewReal, ExecutionModeInternalReal:
+			if err := validateAccountForExecutionMode(account, mode); err != nil {
+				return nil, err
+			}
+		case ExecutionModeMock:
+			// Intentional mock (SafeDemoOnly / employee UI) must not use a real id.
+			if p.SafeDemoOnly {
+				if err := validateAccountForExecutionMode(account, ExecutionModeMock); err != nil {
+					return nil, err
+				}
+			}
+			// Legacy admin/tests: AllowExplicit + empty/normalized mock keeps the account.
+		}
 		if !account.RouteAvailable {
 			return nil, ErrVideoProviderDisabled.WithMetadata(map[string]string{
 				"provider_account_id": fmt.Sprintf("%d", account.ID),
@@ -1217,16 +1372,55 @@ func (s *VideoGatewayService) resolveVideoRoute(ctx context.Context, providerAcc
 	if err != nil {
 		return nil, fmt.Errorf("list video providers: %w", err)
 	}
+	filtered := make([]*VideoProviderAccount, 0, len(accounts))
 	for _, account := range accounts {
 		s.decorateProviderForResponse(account, stats[account.ID])
+		if err := validateAccountForExecutionMode(account, mode); err != nil {
+			continue
+		}
+		filtered = append(filtered, account)
 	}
-	route := selectLeastInflightVideoRoute(accounts)
+	route := selectLeastInflightVideoRoute(filtered)
 	if route == nil {
-		return nil, ErrVideoProviderDisabled.WithMetadata(map[string]string{
-			"reason": "没有可用的视频 API 账号",
-		})
+		switch mode {
+		case ExecutionModeReviewReal:
+			return nil, ErrReviewRealAccountUnavailable
+		case ExecutionModeInternalReal:
+			return nil, ErrInternalRealChannelMissing
+		default:
+			return nil, ErrVideoProviderDisabled.WithMetadata(map[string]string{
+				"reason":          "没有可用的视频 API 账号",
+				"execution_mode":  mode,
+				"provider_filter": VideoProviderMock,
+			})
+		}
 	}
+	route.Strategy = mode + "_least_inflight"
 	return route, nil
+}
+
+func validateAccountForExecutionMode(account *VideoProviderAccount, mode string) error {
+	if account == nil {
+		return ErrVideoProviderDisabled
+	}
+	switch mode {
+	case ExecutionModeMock:
+		if account.Provider != VideoProviderMock {
+			return ErrVideoProviderDisabled.WithMetadata(map[string]string{
+				"reason":         "mock mode only routes mock providers",
+				"execution_mode": mode,
+			})
+		}
+	case ExecutionModeReviewReal:
+		if account.Provider == VideoProviderMock || !isReviewOnlyVideoAccount(account) {
+			return ErrReviewRealAccountUnavailable
+		}
+	case ExecutionModeInternalReal:
+		if account.Provider == VideoProviderMock || isReviewOnlyVideoAccount(account) {
+			return ErrInternalRealChannelMissing
+		}
+	}
+	return nil
 }
 
 func selectLeastInflightVideoRoute(accounts []*VideoProviderAccount) *videoRouteDecision {

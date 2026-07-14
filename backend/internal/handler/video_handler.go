@@ -26,6 +26,7 @@ func NewVideoHandler(video *service.VideoGatewayService) *VideoHandler {
 
 type videoTaskCreateRequest struct {
 	ProviderAccountID int64                          `json:"provider_account_id" binding:"omitempty,min=0"`
+	ExecutionMode     string                         `json:"execution_mode" binding:"omitempty,oneof=mock review_real internal_real"`
 	TaskType          string                         `json:"task_type" binding:"required,oneof=text_to_video image_to_video reference_to_video"`
 	Model             string                         `json:"model" binding:"omitempty,max=200"`
 	Prompt            string                         `json:"prompt" binding:"required,max=8000"`
@@ -251,9 +252,38 @@ type videoTaskEventResponse struct {
 }
 
 func (h *VideoHandler) ListProviders(c *gin.Context) {
+	role, _ := middleware2.GetUserRoleFromContext(c)
 	items, err := h.video.ListProviderAccounts(c.Request.Context())
 	if err != nil {
 		response.ErrorFrom(c, err)
+		return
+	}
+	if role != "admin" {
+		// Employees get capability summary only — never enumerate provider accounts.
+		mockReady := false
+		reviewReady := false
+		internalReady := false
+		for _, item := range items {
+			if item == nil {
+				continue
+			}
+			switch {
+			case item.Provider == service.VideoProviderMock && item.RouteAvailable:
+				mockReady = true
+			case item.RouteAvailable && service.IsReviewOnlyVideoAccount(item):
+				reviewReady = true
+			case item.RouteAvailable && item.Provider != service.VideoProviderMock && !service.IsReviewOnlyVideoAccount(item):
+				internalReady = true
+			}
+		}
+		response.Success(c, gin.H{
+			"items":                 []any{},
+			"execution_capabilities": gin.H{
+				"mock":          mockReady,
+				"review_real":   reviewReady && h.video != nil && h.video.RealReviewSessionEnabled(),
+				"internal_real": internalReady,
+			},
+		})
 		return
 	}
 	out := make([]videoProviderAccountResponse, 0, len(items))
@@ -316,6 +346,15 @@ func (h *VideoHandler) CreateTask(c *gin.Context) {
 	}
 	subject, _ := middleware2.GetAuthSubjectFromContext(c)
 	role, _ := middleware2.GetUserRoleFromContext(c)
+	isAdmin := role == "admin"
+	// Ordinary employees must not select provider accounts via JSON.
+	if !isAdmin && req.ProviderAccountID > 0 {
+		response.ErrorFrom(c, service.ErrExecutionModeProviderAccountForbidden)
+		return
+	}
+	if !isAdmin {
+		req.ProviderAccountID = 0
+	}
 	rawKey, keyHash, fingerprint, err := videoTaskCreationIdentity(c, req, fmt.Sprintf("user:%d:role:%s", subject.UserID, role))
 	if err != nil {
 		response.ErrorFrom(c, err)
@@ -323,8 +362,9 @@ func (h *VideoHandler) CreateTask(c *gin.Context) {
 	}
 	params := videoTaskCreateParams(req, subject.UserID, nil, keyHash, fingerprint)
 	params.EnforceRealProviderTrial = true
-	if role == "admin" {
+	if isAdmin {
 		params.ProviderAccountID = req.ProviderAccountID
+		params.AllowExplicitProviderAccount = true
 		params.EnforceRealProviderTrial = false
 		params.RequireSeedanceProductionAuthorization = true
 	}
@@ -459,6 +499,7 @@ func videoTaskCreateParams(req videoTaskCreateRequest, createdBy int64, apiKeyID
 	return service.VideoTaskCreateParams{
 		APIKeyID:            apiKeyID,
 		ProviderAccountID:   req.ProviderAccountID,
+		ExecutionMode:       req.ExecutionMode,
 		TaskType:            req.TaskType,
 		Model:               req.Model,
 		Prompt:              req.Prompt,

@@ -27,11 +27,14 @@ export interface BatchImageReferenceImage {
   file_uri?: string
 }
 
+export type BatchImageExecutionMode = 'mock' | 'review_real' | 'internal_real'
+
 export interface BatchImageSubmitRequest {
   model: string
   task_name?: string
   parent_batch_id?: string
-  provider?: '' | 'gemini_api' | 'vertex' | string
+  provider?: '' | 'gemini_api' | 'vertex' | 'mock' | string
+  execution_mode?: BatchImageExecutionMode
   image_size?: '1K' | '2K' | '4K' | string
   response_mime_type?: string
   aspect_ratio?: string

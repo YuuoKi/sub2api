@@ -1612,35 +1612,44 @@ function validateForm(): boolean {
   return true
 }
 
+const batchImageExecutionMode = ref<'mock' | 'review_real' | 'internal_real'>('mock')
+const batchImageIdempotencyKey = ref('')
+
 async function submitJob() {
   if (submitting.value) return
   if (promptDraft.value.trim()) addPromptRow()
   if (!validateForm()) return
   const key = requireApiKey()
   if (!key) return
-	  submitting.value = true
-	  try {
-	    const job = await submitBatchImageJob(
-	      key.key,
-	      {
-	        model: form.model,
+  if (!batchImageIdempotencyKey.value) {
+    batchImageIdempotencyKey.value = `sub2api-ui-${key.id}-${form.model}-${form.taskName.trim() || 'default'}-${parsedItems.value.map((item) => item.custom_id).join('|')}`
+  }
+  submitting.value = true
+  try {
+    const job = await submitBatchImageJob(
+      key.key,
+      {
+        model: form.model,
         task_name: form.taskName.trim() || defaultTaskName(),
         image_size: '1K',
         response_mime_type: form.responseMimeType,
+        execution_mode: batchImageExecutionMode.value,
+        provider: batchImageExecutionMode.value === 'mock' ? 'mock' : undefined,
         items: parsedItems.value,
-	      },
-	      `sub2api-ui-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
-	    )
-	    currentJob.value = job
-	    selectedBatchId.value = job.id
-	    selectedBatchApiKeyId.value = key.id
-	    items.value = []
-	    upsertJob(job)
-	    showCreateModal.value = false
-	    resetCreateDraft()
-	    appStore.showSuccess(batchImageText('submitted'))
-	    void loadItems()
-	    startPolling()
+      },
+      batchImageIdempotencyKey.value,
+    )
+    batchImageIdempotencyKey.value = ''
+    currentJob.value = job
+    selectedBatchId.value = job.id
+    selectedBatchApiKeyId.value = key.id
+    items.value = []
+    upsertJob(job)
+    showCreateModal.value = false
+    resetCreateDraft()
+    appStore.showSuccess(batchImageText('submitted'))
+    void loadItems()
+    startPolling()
   } catch (error: any) {
     appStore.showError(batchImageErrorMessage(error, batchImageText('submitFailed')))
   } finally {

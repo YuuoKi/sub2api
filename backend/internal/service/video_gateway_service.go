@@ -15,6 +15,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
+	"github.com/Wei-Shaw/sub2api/internal/reviewguard"
 )
 
 const (
@@ -52,6 +53,7 @@ type VideoGatewayService struct {
 	// budget is the optional VA1 budget gate / billing hook. nil => no gate (current
 	// production default until phase-2 real billing wires a concrete guard).
 	budget              VideoBudgetGuard
+	realCreateGuard     reviewguard.RealCreateGuard
 	userRepo            UserRepository
 	settingService      *SettingService
 	billingCacheService *BillingCacheService

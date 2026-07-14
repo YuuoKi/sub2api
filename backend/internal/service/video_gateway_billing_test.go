@@ -1052,7 +1052,7 @@ func TestProvideVideoGatewayServiceArmsGuardFromConfig(t *testing.T) {
 	ctx := context.Background()
 	repo := newMemoryVideoGatewayRepo()
 	providerID := repo.seedMockProvider()
-	svc := ProvideVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfgWithVideoBudget(1.5, 2.0), nil, nil, nil)
+	svc := ProvideVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfgWithVideoBudget(1.5, 2.0), nil, nil, nil, nil)
 
 	task, err := svc.CreateTask(ctx, VideoTaskCreateParams{
 		ProviderAccountID: providerID,
@@ -1083,7 +1083,7 @@ func TestProvideVideoGatewayServiceUnarmedWhenBudgetZero(t *testing.T) {
 	ctx := context.Background()
 	repo := newMemoryVideoGatewayRepo()
 	providerID := repo.seedMockProvider()
-	svc := ProvideVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfgWithVideoBudget(1.5, 0), nil, nil, nil)
+	svc := ProvideVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfgWithVideoBudget(1.5, 0), nil, nil, nil, nil)
 
 	task, err := svc.CreateTask(ctx, VideoTaskCreateParams{
 		ProviderAccountID: providerID,
@@ -1111,7 +1111,7 @@ func TestProvideVideoGatewayServiceAdmitsNormalClipAtRealCap(t *testing.T) {
 	ctx := context.Background()
 	repo := newMemoryVideoGatewayRepo()
 	providerID := repo.seedMockProvider()
-	svc := ProvideVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfgWithVideoBudget(1.5, 30.0), nil, nil, nil)
+	svc := ProvideVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfgWithVideoBudget(1.5, 30.0), nil, nil, nil, nil)
 
 	task, err := svc.CreateTask(ctx, VideoTaskCreateParams{
 		ProviderAccountID: providerID,

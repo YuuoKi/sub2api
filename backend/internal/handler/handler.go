@@ -38,6 +38,7 @@ type AdminHandlers struct {
 	Payment                *admin.PaymentHandler
 	Affiliate              *admin.AffiliateHandler
 	Compliance             *admin.ComplianceHandler
+	RealReviewSession      *admin.RealReviewSessionHandler
 	Video                  *admin.VideoHandler
 	GenerationContent      *admin.GenerationContentHandler
 }

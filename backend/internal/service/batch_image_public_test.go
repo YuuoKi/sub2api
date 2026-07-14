@@ -13,6 +13,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/reviewguard"
 	"github.com/stretchr/testify/require"
 )
 
@@ -707,6 +708,25 @@ func TestBatchImagePublicService_StatusItemsAndCancel(t *testing.T) {
 		require.Equal(t, "BATCH_IMAGE_CANCEL_FAILED", infraerrors.Reason(err))
 		require.NotContains(t, infraerrors.Message(err), "projects/")
 	})
+}
+
+func TestBatchImageRealCreateGuardRejectsBeforeProviderSubmit(t *testing.T) {
+	ctx := context.Background()
+	svc, repo, queue, gemini, _ := newTestBatchImagePublicService(true)
+	svc.SetRealCreateGuard(reviewguard.NewFailClosedGuard())
+
+	_, err := svc.Submit(ctx, testBatchImageOwner(), validBatchImageSubmitRequest(), "idem-real-create-guard")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "REAL_REVIEW_SESSION_DISABLED")
+	require.Empty(t, gemini.submits)
+	require.Empty(t, queue.enqueued)
+	billing := svc.BillingRepo.(*fakeBatchImageBillingRepo)
+	require.Len(t, billing.reserves, 1)
+	require.Len(t, billing.releases, 1)
+	for _, job := range repo.jobs {
+		require.NotNil(t, job.UserDeletedAt, "pre-upstream guard reject must hide the job")
+		require.Nil(t, job.ProviderJobName)
+	}
 }
 
 func newTestBatchImagePublicService(enabled bool) (*BatchImagePublicService, *fakeBatchImageRepository, *publicBatchImageQueue, *publicBatchImageProvider, *publicBatchImageProvider) {

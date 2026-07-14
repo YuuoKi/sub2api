@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/reviewguard"
 )
 
 func TestVideoGatewayWorkerDisabledIsOperatorVisible(t *testing.T) {
@@ -722,6 +723,61 @@ func seedPendingDispatchTask(repo *memoryVideoGatewayRepo, providerID, taskID in
 	}
 	repo.tasks[task.ID] = cloneVideoTask(task)
 	return task
+}
+
+func TestVideoRealCreateGuardRejectsBeforeAdapterCreate(t *testing.T) {
+	repo := newMemoryVideoGatewayRepo()
+	providerID := repo.nextProviderID
+	repo.nextProviderID++
+	repo.providers[providerID] = &VideoProviderAccount{
+		ID: providerID, Provider: VideoProviderSeedance, DisplayName: "Seedance", Enabled: true, DefaultModel: "seedance-1-0-pro",
+	}
+	task := &VideoTask{
+		ID:                9401,
+		ProviderAccountID: providerID,
+		Provider:          VideoProviderSeedance,
+		Model:             "seedance-1-0-pro",
+		Status:            VideoStatusQueued,
+		Version:           1,
+		DispatchState:     "pending",
+		Duration:          5,
+		CostEstimate:      10,
+		Currency:          "CNY",
+		PricingSource:     "seedance_catalog",
+		PricingVersion:    "v1",
+		CreatedAt:         time.Now().UTC(),
+	}
+	repo.tasks[task.ID] = cloneVideoTask(task)
+	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, &config.Config{})
+	svc.SetRealCreateGuard(reviewguard.NewFailClosedGuard())
+	adapter := &recordingDispatchAdapter{result: &VideoAdapterResult{UpstreamTaskID: "must-not-create", Status: VideoStatusSubmitted}}
+
+	err := svc.submitTask(context.Background(), adapter, repo.providers[providerID], task)
+	if err == nil {
+		t.Fatal("expected fail-closed real-create guard to reject seedance submit")
+	}
+	if !strings.Contains(err.Error(), "REAL_REVIEW_SESSION_DISABLED") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if adapter.calls() != 0 {
+		t.Fatalf("adapter create calls = %d, want 0", adapter.calls())
+	}
+}
+
+func TestVideoRealCreateGuardSkipsMockProvider(t *testing.T) {
+	repo := newMemoryVideoGatewayRepo()
+	providerID := repo.seedMockProvider()
+	task := seedPendingDispatchTask(repo, providerID, 9402)
+	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, &config.Config{})
+	svc.SetRealCreateGuard(reviewguard.NewFailClosedGuard())
+	adapter := &recordingDispatchAdapter{result: &VideoAdapterResult{UpstreamTaskID: "mock-upstream-9402", Status: VideoStatusSubmitted}}
+
+	if err := svc.submitTask(context.Background(), adapter, repo.providers[providerID], task); err != nil {
+		t.Fatalf("mock submit must not be blocked by real-create guard: %v", err)
+	}
+	if adapter.calls() != 1 {
+		t.Fatalf("adapter create calls = %d, want 1", adapter.calls())
+	}
 }
 
 func TestVideoGatewayWorkerDispatchClaimsQueuedPendingOnceAndAccepts(t *testing.T) {

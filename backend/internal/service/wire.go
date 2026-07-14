@@ -10,6 +10,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/sub2api/internal/reviewguard"
 	"github.com/google/wire"
 	"github.com/redis/go-redis/v9"
 )
@@ -621,7 +622,7 @@ var ProviderSet = wire.NewSet(
 	ProvideGatewayService,
 	NewOpenAIGatewayService,
 	ProvideBatchImageModelPricingResolver,
-	NewBatchImagePublicService,
+	ProvideBatchImagePublicService,
 	NewBatchImageDownloadService,
 	ProvideBatchImageCleanupService,
 	ProvideBatchImageWorkerRuntime,
@@ -704,6 +705,7 @@ var ProviderSet = wire.NewSet(
 	ProvideChannelMonitorRunner,
 	NewChannelMonitorRequestTemplateService,
 	ProvideUserPlatformQuotaUsageFlusher,
+	ProvideRealCreateGuard,
 	ProvideVideoGatewayServiceWithContentCollector,
 	ProvideVideoGatewayWorker,
 	ProvideVideoOutboxHandlers,
@@ -720,17 +722,44 @@ func ProvideUserPlatformQuotaUsageFlusher(cfg *config.Config, cache BillingCache
 	return svc
 }
 
-func ProvideVideoGatewayService(repo VideoGatewayRepository, encryptor VideoKeyEncryptor, cfg *config.Config, userRepo UserRepository, settingService *SettingService, billingCacheService *BillingCacheService) *VideoGatewayService {
+func ProvideRealCreateGuard(cfg *config.Config) reviewguard.RealCreateGuard {
+	if cfg != nil && cfg.RealReviewSessionActive() {
+		return reviewguard.NewSessionGuard(cfg.RealReviewSession.StatePath)
+	}
+	return reviewguard.NewFailClosedGuard()
+}
+
+func ProvideBatchImagePublicService(
+	repo BatchImageRepository,
+	accountRepo AccountRepository,
+	groupRepo GroupRepository,
+	userGroupRateRepo UserGroupRateRepository,
+	queue BatchImageQueue,
+	pricing *BatchImageModelPricingResolver,
+	billingRepo UsageBillingRepository,
+	authCache APIKeyAuthCacheInvalidator,
+	cfg *config.Config,
+	realCreate reviewguard.RealCreateGuard,
+	settingService *SettingService,
+) *BatchImagePublicService {
+	svc := NewBatchImagePublicService(repo, accountRepo, groupRepo, userGroupRateRepo, queue, pricing, billingRepo, authCache, cfg)
+	svc.SetRealCreateGuard(realCreate)
+	svc.SetSettingService(settingService)
+	return svc
+}
+
+func ProvideVideoGatewayService(repo VideoGatewayRepository, encryptor VideoKeyEncryptor, cfg *config.Config, userRepo UserRepository, settingService *SettingService, billingCacheService *BillingCacheService, realCreate reviewguard.RealCreateGuard) *VideoGatewayService {
 	svc := NewVideoGatewayService(repo, encryptor, cfg)
 	svc.SetBalanceBillingDependencies(userRepo, settingService, billingCacheService)
+	svc.SetRealCreateGuard(realCreate)
 	if cfg != nil && cfg.VideoGateway.PerCallBudget > 0 && cfg.VideoGateway.CostPerSecond > 0 {
 		svc.SetBudgetGuard(NewStaticBudgetGuard(cfg.VideoGateway.PerCallBudget))
 	}
 	return svc
 }
 
-func ProvideVideoGatewayServiceWithContentCollector(repo VideoGatewayRepository, encryptor VideoKeyEncryptor, cfg *config.Config, userRepo UserRepository, settingService *SettingService, billingCacheService *BillingCacheService, generationContentRepo GenerationContentRepository) *VideoGatewayService {
-	svc := ProvideVideoGatewayService(repo, encryptor, cfg, userRepo, settingService, billingCacheService)
+func ProvideVideoGatewayServiceWithContentCollector(repo VideoGatewayRepository, encryptor VideoKeyEncryptor, cfg *config.Config, userRepo UserRepository, settingService *SettingService, billingCacheService *BillingCacheService, generationContentRepo GenerationContentRepository, realCreate reviewguard.RealCreateGuard) *VideoGatewayService {
+	svc := ProvideVideoGatewayService(repo, encryptor, cfg, userRepo, settingService, billingCacheService, realCreate)
 	svc.SetGenerationContentCollector(NewGenerationContentCollector(generationContentRepo, cfg))
 	return svc
 }

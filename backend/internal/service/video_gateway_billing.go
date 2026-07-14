@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/reviewguard"
 	"github.com/shopspring/decimal"
 )
 
@@ -31,6 +32,26 @@ type VideoBudgetGuard interface {
 // the pre-call cap gate; real post-delivery balance billing is wired separately.
 func (s *VideoGatewayService) SetBudgetGuard(g VideoBudgetGuard) {
 	s.budget = g
+}
+
+// SetRealCreateGuard wires the shared real-review session budget gate. Wire always
+// injects a non-nil guard (file-backed or fail-closed). Nil is reserved for unit
+// tests that construct services without DI and should not exercise the gate.
+func (s *VideoGatewayService) SetRealCreateGuard(g reviewguard.RealCreateGuard) {
+	s.realCreateGuard = g
+}
+
+// RealCreateSnapshot returns the current real-review session counters for admin status.
+func (s *VideoGatewayService) RealCreateSnapshot(ctx context.Context) (reviewguard.RealCreateSnapshot, error) {
+	if s == nil || s.realCreateGuard == nil {
+		return reviewguard.NewFailClosedGuard().Snapshot(ctx)
+	}
+	return s.realCreateGuard.Snapshot(ctx)
+}
+
+// RealReviewSessionEnabled reports whether config armed the file-backed real-create gate.
+func (s *VideoGatewayService) RealReviewSessionEnabled() bool {
+	return s != nil && s.cfg != nil && s.cfg.RealReviewSessionActive()
 }
 
 // SetBalanceBillingDependencies wires the real user-balance billing path used

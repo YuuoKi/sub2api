@@ -3,40 +3,46 @@
 package reviewguard
 
 import (
-	"encoding/json"
+	"context"
 	"errors"
 	"fmt"
-	"math"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/shopspring/decimal"
 )
 
-type Kind string
+// Compatibility aliases and thin adapters for Form A harnesses.
+// Budget/lock/atomic rules live only in session_guard.go.
+
+type Kind = RealCreateKind
 
 const (
-	Image Kind = "image"
-	Video Kind = "video"
+	Image Kind = RealCreateImage
+	Video Kind = RealCreateVideo
 
-	MaxImages = 4
-	MaxVideos = 4
-	MaxCNY    = 60.0
+	MaxCNY = 60.0
 )
 
 type State struct {
-	ImageAttempts int     `json:"image_attempts"`
-	VideoAttempts int     `json:"video_attempts"`
-	ReservedCNY   float64 `json:"reserved_cny"`
+	ImageAttempts int
+	VideoAttempts int
+	ReservedCNY   float64
 }
 
 type Guard struct {
 	statePath string
 	enabled   bool
+	inner     *SessionGuard
 }
 
 func New(statePath string, enabled bool) *Guard {
-	return &Guard{statePath: strings.TrimSpace(statePath), enabled: enabled}
+	path := strings.TrimSpace(statePath)
+	return &Guard{
+		statePath: path,
+		enabled:   enabled,
+		inner:     NewSessionGuard(path),
+	}
 }
 
 func (g *Guard) ReserveBefore(kind Kind, estimatedCNY float64, call func()) error {
@@ -51,136 +57,32 @@ func (g *Guard) Reserve(kind Kind, estimatedCNY float64) error {
 	if g == nil || !g.enabled {
 		return errors.New("REAL_REVIEW_SESSION_DISABLED: explicit review-session guard enablement is required")
 	}
-	if g.statePath == "" || !filepath.IsAbs(g.statePath) {
+	if g.statePath == "" {
 		return errors.New("REAL_REVIEW_STATE_PATH_REQUIRED: an explicit absolute state path is required")
 	}
-	if estimatedCNY <= 0 || math.IsNaN(estimatedCNY) || math.IsInf(estimatedCNY, 0) {
-		return errors.New("REAL_REVIEW_INVALID_COST: estimated CNY must be positive and finite")
-	}
-	if err := os.MkdirAll(filepath.Dir(g.statePath), 0700); err != nil {
-		return fmt.Errorf("REAL_REVIEW_STATE_DIRECTORY_FAILED: %w", err)
-	}
-
-	lockPath := g.statePath + ".lock"
-	lock, err := acquireLock(lockPath, 2*time.Second)
-	if err != nil {
-		return fmt.Errorf("REAL_REVIEW_LOCK_FAILED: %w", err)
-	}
-	defer func() {
-		_ = lock.Close()
-		_ = os.Remove(lockPath)
-	}()
-
-	state, err := g.LoadState()
-	if err != nil {
-		return fmt.Errorf("REAL_REVIEW_STATE_INVALID: %w", err)
-	}
-	next := state
-	switch kind {
-	case Image:
-		if next.ImageAttempts >= MaxImages {
-			return errors.New("REAL_REVIEW_IMAGE_LIMIT: maximum 4 image attempts reached")
-		}
-		next.ImageAttempts++
-	case Video:
-		if next.VideoAttempts >= MaxVideos {
-			return errors.New("REAL_REVIEW_VIDEO_LIMIT: maximum 4 video attempts reached")
-		}
-		next.VideoAttempts++
-	default:
-		return errors.New("REAL_REVIEW_KIND_INVALID: kind must be image or video")
-	}
-	if next.ReservedCNY+estimatedCNY > MaxCNY {
-		return errors.New("REAL_REVIEW_BUDGET_LIMIT: cumulative reserved CNY would exceed 60")
-	}
-	next.ReservedCNY += estimatedCNY
-	return g.storeState(next)
-}
-
-func acquireLock(path string, timeout time.Duration) (*os.File, error) {
-	deadline := time.Now().Add(timeout)
-	for {
-		file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-		if err == nil {
-			payload := fmt.Sprintf("pid=%d\ncreated_at_utc=%s\n", os.Getpid(), time.Now().UTC().Format(time.RFC3339Nano))
-			if _, writeErr := file.WriteString(payload); writeErr != nil {
-				_ = file.Close()
-				_ = os.Remove(path)
-				return nil, writeErr
-			}
-			if syncErr := file.Sync(); syncErr != nil {
-				_ = file.Close()
-				_ = os.Remove(path)
-				return nil, syncErr
-			}
-			return file, nil
-		}
-		if !errors.Is(err, os.ErrExist) || time.Now().After(deadline) {
-			if errors.Is(err, os.ErrExist) {
-				return nil, fmt.Errorf("review lock %q already exists; fail-closed: manually audit the state file and recorded PID/process before removing the lock: %w", path, err)
-			}
-			return nil, err
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
+	cny := decimal.NewFromFloat(estimatedCNY)
+	opID := fmt.Sprintf("realsmoke:%s:%d:%s", kind, time.Now().UnixNano(), cny.String())
+	return g.inner.Reserve(context.Background(), RealCreateReservation{
+		OperationID:    opID,
+		Kind:           kind,
+		ReservedCNY:    cny,
+		PricingSource:  "realsmoke",
+		PricingVersion: "realsmoke",
+	})
 }
 
 func (g *Guard) LoadState() (State, error) {
-	data, err := os.ReadFile(g.statePath)
-	if errors.Is(err, os.ErrNotExist) {
-		return State{}, nil
+	if g == nil || g.inner == nil {
+		return State{}, errors.New("REAL_REVIEW_SESSION_DISABLED: explicit review-session guard enablement is required")
 	}
+	snap, err := g.inner.Snapshot(context.Background())
 	if err != nil {
 		return State{}, err
 	}
-	var state State
-	if err := json.Unmarshal(data, &state); err != nil {
-		return State{}, err
-	}
-	if state.ImageAttempts < 0 || state.ImageAttempts > MaxImages ||
-		state.VideoAttempts < 0 || state.VideoAttempts > MaxVideos ||
-		state.ReservedCNY < 0 || state.ReservedCNY > MaxCNY ||
-		math.IsNaN(state.ReservedCNY) || math.IsInf(state.ReservedCNY, 0) {
-		return State{}, errors.New("state contains invalid counters")
-	}
-	return state, nil
-}
-
-func (g *Guard) storeState(state State) error {
-	if err := os.MkdirAll(filepath.Dir(g.statePath), 0700); err != nil {
-		return err
-	}
-	data, err := json.Marshal(state)
-	if err != nil {
-		return err
-	}
-	file, err := os.CreateTemp(filepath.Dir(g.statePath), ".real-review-state-*.tmp")
-	if err != nil {
-		return err
-	}
-	tempPath := file.Name()
-	committed := false
-	defer func() {
-		if !committed {
-			_ = file.Close()
-			_ = os.Remove(tempPath)
-		}
-	}()
-	if err := file.Chmod(0600); err != nil {
-		return err
-	}
-	if _, err := file.Write(data); err != nil {
-		return err
-	}
-	if err := file.Sync(); err != nil {
-		return err
-	}
-	if err := file.Close(); err != nil {
-		return err
-	}
-	if err := os.Rename(tempPath, g.statePath); err != nil {
-		return err
-	}
-	committed = true
-	return nil
+	value, _ := snap.ReservedCNY.Float64()
+	return State{
+		ImageAttempts: snap.ImageUsed,
+		VideoAttempts: snap.VideoUsed,
+		ReservedCNY:   value,
+	}, nil
 }

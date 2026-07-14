@@ -15,6 +15,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/sub2api/internal/reviewguard"
+	"github.com/shopspring/decimal"
 	"go.uber.org/zap"
 )
 
@@ -91,6 +93,8 @@ type BatchImagePublicService struct {
 	BillingRepo       UsageBillingRepository
 	AuthCache         APIKeyAuthCacheInvalidator
 	Config            *config.Config
+	RealCreateGuard   reviewguard.RealCreateGuard
+	SettingService    *SettingService
 }
 
 type BatchImagePricingSnapshot struct {
@@ -194,6 +198,20 @@ func NewBatchImagePublicService(repo BatchImageRepository, accountRepo AccountRe
 		AuthCache:         authCache,
 		Config:            cfg,
 	}
+}
+
+func (s *BatchImagePublicService) SetRealCreateGuard(g reviewguard.RealCreateGuard) {
+	if s == nil {
+		return
+	}
+	s.RealCreateGuard = g
+}
+
+func (s *BatchImagePublicService) SetSettingService(setting *SettingService) {
+	if s == nil {
+		return
+	}
+	s.SettingService = setting
 }
 
 func (s *BatchImagePublicService) Submit(ctx context.Context, owner BatchImageOwner, req BatchImageSubmitRequest, idempotencyKey string) (*BatchImagePublicBatch, error) {
@@ -345,6 +363,19 @@ func (s *BatchImagePublicService) Submit(ctx context.Context, owner BatchImageOw
 	}
 	job.Status = BatchImageJobStatusUploading
 
+	pricingForGuard := BatchImagePricingSnapshot{}
+	if pricingSnapshot != nil {
+		pricingForGuard = *pricingSnapshot
+	}
+	if err := s.reserveRealCreateBeforeImageProvider(ctx, job, pricingForGuard); err != nil {
+		if releaseErr := s.releaseFailedSubmitHold(ctx, job, requestHash); releaseErr != nil {
+			return nil, releaseErr
+		}
+		_ = s.Repo.RecordBatchImageJobSubmitFailure(ctx, job.BatchID, "REAL_REVIEW_GUARD_REJECTED", sanitizeBatchImagePublicMessage(err.Error()), true)
+		s.hidePreUpstreamSubmitFailure(ctx, owner, job)
+		return nil, err
+	}
+
 	hbCtx, hbCancel := context.WithCancel(ctx)
 	hbDone := make(chan struct{})
 	go s.runSubmitHeartbeat(hbCtx, job.BatchID, hbDone)
@@ -407,6 +438,42 @@ func (s *BatchImagePublicService) releaseFailedSubmitHold(ctx context.Context, j
 	}
 	s.invalidateAuthCache(ctx, job.UserID)
 	return nil
+}
+
+func (s *BatchImagePublicService) reserveRealCreateBeforeImageProvider(ctx context.Context, job *BatchImageJob, pricing BatchImagePricingSnapshot) error {
+	if s == nil || s.RealCreateGuard == nil || job == nil {
+		return nil
+	}
+	reservedCNY, err := s.realCreateReservedCNYForImage(ctx, pricing.HoldAmount)
+	if err != nil {
+		return err
+	}
+	pricingVersion := strconv.Itoa(job.PricingSnapshotVersion)
+	if pricingVersion == "0" {
+		pricingVersion = "1"
+	}
+	return s.RealCreateGuard.Reserve(ctx, reviewguard.RealCreateReservation{
+		OperationID:    "image:" + strings.TrimSpace(job.BatchID),
+		Kind:           reviewguard.RealCreateImage,
+		ReservedCNY:    reservedCNY,
+		PricingSource:  "batch_image_hold",
+		PricingVersion: pricingVersion,
+	})
+}
+
+func (s *BatchImagePublicService) realCreateReservedCNYForImage(ctx context.Context, holdAmountUSD float64) (decimal.Decimal, error) {
+	usd := decimal.NewFromFloat(holdAmountUSD)
+	if !usd.IsPositive() {
+		return decimal.Zero, fmt.Errorf("REAL_REVIEW_INVALID_COST: image hold amount USD must be positive")
+	}
+	rate := decimal.NewFromFloat(DefaultUSDCNYRate)
+	if s.SettingService != nil {
+		if settingRate := s.SettingService.GetUSDCNYRate(ctx); settingRate > 0 {
+			rate = decimal.NewFromFloat(settingRate)
+		}
+	}
+	// HoldAmount is USD; never treat it as CNY.
+	return usd.Mul(rate), nil
 }
 
 // runSubmitHeartbeat 在 provider.Submit 期间周期性刷新 job 的 updated_at，

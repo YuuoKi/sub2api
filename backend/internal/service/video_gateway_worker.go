@@ -5,11 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/reviewguard"
+	"github.com/shopspring/decimal"
 )
 
 const (
@@ -470,6 +473,9 @@ func (s *VideoGatewayService) submitTask(ctx context.Context, adapter VideoAdapt
 		return nil
 	}
 	*task = dispatchingTask
+	if err := s.reserveRealCreateBeforeVideoProvider(ctx, task); err != nil {
+		return err
+	}
 	result, err := adapter.CreateTask(ctx, account, task)
 	if err != nil {
 		if isAmbiguousVideoDispatchError(err) {
@@ -507,6 +513,59 @@ func (s *VideoGatewayService) submitTask(ctx context.Context, adapter VideoAdapt
 	}
 	*task = acceptedTask
 	return nil
+}
+
+func (s *VideoGatewayService) reserveRealCreateBeforeVideoProvider(ctx context.Context, task *VideoTask) error {
+	if s == nil || s.realCreateGuard == nil || task == nil {
+		return nil
+	}
+	// Free mock creates never consume the paid real-review session budget.
+	if task.Provider == VideoProviderMock {
+		return nil
+	}
+	reservedCNY, err := s.realCreateReservedCNYForVideo(ctx, task)
+	if err != nil {
+		return err
+	}
+	pricingSource := strings.TrimSpace(task.PricingSource)
+	if pricingSource == "" {
+		pricingSource = "video_gateway"
+	}
+	pricingVersion := strings.TrimSpace(task.PricingVersion)
+	if pricingVersion == "" {
+		pricingVersion = "1"
+	}
+	return s.realCreateGuard.Reserve(ctx, reviewguard.RealCreateReservation{
+		OperationID:    "video:" + strconv.FormatInt(task.ID, 10),
+		Kind:           reviewguard.RealCreateVideo,
+		ReservedCNY:    reservedCNY,
+		PricingSource:  pricingSource,
+		PricingVersion: pricingVersion,
+	})
+}
+
+func (s *VideoGatewayService) realCreateReservedCNYForVideo(ctx context.Context, task *VideoTask) (decimal.Decimal, error) {
+	if task == nil {
+		return decimal.Zero, fmt.Errorf("REAL_REVIEW_INVALID_COST: video task is required")
+	}
+	amount := decimal.NewFromFloat(task.CostEstimate)
+	if !amount.IsPositive() {
+		amount = decimal.NewFromFloat(s.estimateVideoCost(task))
+	}
+	if !amount.IsPositive() {
+		return decimal.Zero, fmt.Errorf("REAL_REVIEW_INVALID_COST: video estimated CNY must be positive")
+	}
+	currency := NormalizeBillingCurrency(task.Currency)
+	if currency == BillingCurrencyCNY {
+		return amount, nil
+	}
+	rate := decimal.NewFromFloat(DefaultUSDCNYRate)
+	if s.settingService != nil {
+		if settingRate := s.settingService.GetUSDCNYRate(ctx); settingRate > 0 {
+			rate = decimal.NewFromFloat(settingRate)
+		}
+	}
+	return amount.Mul(rate), nil
 }
 
 func (s *VideoGatewayService) submitLegacyMockTask(ctx context.Context, adapter VideoAdapter, account *VideoProviderAccount, task *VideoTask) error {

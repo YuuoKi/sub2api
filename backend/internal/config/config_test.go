@@ -36,9 +36,41 @@ func clearVideoReliabilityEnv(t *testing.T) {
 		"RELIABILITY_CORE_OUTBOX_LEASE_SECONDS",
 		"RELIABILITY_CORE_OUTBOX_MAX_ATTEMPTS",
 		"RELIABILITY_CORE_OUTBOX_RETRY_BACKOFF_SECONDS",
+		"SUB2API_REAL_REVIEW_SESSION_ENABLED",
+		"SUB2API_REAL_REVIEW_SESSION_STATE_PATH",
 	} {
 		t.Setenv(key, "")
 	}
+}
+
+func TestLoadDefaultRealReviewSessionConfig(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	clearVideoReliabilityEnv(t)
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.False(t, cfg.RealReviewSession.Enabled)
+	require.Empty(t, cfg.RealReviewSession.StatePath)
+	require.False(t, cfg.RealReviewSessionActive())
+}
+
+func TestLoadRealReviewSessionConfigFromSub2APIEnv(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	clearVideoReliabilityEnv(t)
+	statePath := filepath.Join(t.TempDir(), "review.json")
+	t.Setenv("SUB2API_REAL_REVIEW_SESSION_ENABLED", "1")
+	t.Setenv("SUB2API_REAL_REVIEW_SESSION_STATE_PATH", statePath)
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.True(t, cfg.RealReviewSession.Enabled)
+	require.Equal(t, statePath, cfg.RealReviewSession.StatePath)
+	require.True(t, cfg.RealReviewSessionActive())
+}
+
+func TestRealReviewSessionActiveRequiresAbsolutePath(t *testing.T) {
+	cfg := &Config{RealReviewSession: RealReviewSessionConfig{Enabled: true, StatePath: "relative.json"}}
+	require.False(t, cfg.RealReviewSessionActive())
 }
 
 func TestLoadDefaultVideoGatewayAndReliabilityCoreConfig(t *testing.T) {

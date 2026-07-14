@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -96,6 +97,14 @@ type Config struct {
 	Update                  UpdateConfig                  `mapstructure:"update"`
 	Idempotency             IdempotencyConfig             `mapstructure:"idempotency"`
 	BatchImage              BatchImageConfig              `mapstructure:"batch_image"`
+	RealReviewSession       RealReviewSessionConfig       `mapstructure:"real_review_session"`
+}
+
+// RealReviewSessionConfig gates paid real-review creates (4 image / 4 video / ¥60).
+// Prefer SUB2API_REAL_REVIEW_SESSION_* env vars; mapstructure keys are secondary.
+type RealReviewSessionConfig struct {
+	Enabled   bool   `mapstructure:"enabled"`
+	StatePath string `mapstructure:"state_path"`
 }
 
 type LogConfig struct {
@@ -1578,6 +1587,7 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 	cfg.Log.Output.FilePath = strings.TrimSpace(cfg.Log.Output.FilePath)
 	cfg.Gateway.ForcedCodexInstructionsTemplateFile = strings.TrimSpace(cfg.Gateway.ForcedCodexInstructionsTemplateFile)
 	cfg.VideoGateway.EncryptionKey = strings.TrimSpace(cfg.VideoGateway.EncryptionKey)
+	applyRealReviewSessionEnvOverrides(&cfg)
 	if cfg.Gateway.ForcedCodexInstructionsTemplateFile != "" {
 		content, err := os.ReadFile(cfg.Gateway.ForcedCodexInstructionsTemplateFile)
 		if err != nil {
@@ -1646,6 +1656,29 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 	}
 
 	return &cfg, nil
+}
+
+func applyRealReviewSessionEnvOverrides(cfg *Config) {
+	if cfg == nil {
+		return
+	}
+	if enabled := strings.TrimSpace(os.Getenv("SUB2API_REAL_REVIEW_SESSION_ENABLED")); enabled != "" {
+		cfg.RealReviewSession.Enabled = enabled == "1"
+	}
+	if path := strings.TrimSpace(os.Getenv("SUB2API_REAL_REVIEW_SESSION_STATE_PATH")); path != "" {
+		cfg.RealReviewSession.StatePath = path
+	}
+	cfg.RealReviewSession.StatePath = strings.TrimSpace(cfg.RealReviewSession.StatePath)
+}
+
+// RealReviewSessionActive reports whether product wiring should inject the file-backed
+// real-create guard (enabled + absolute state path). Otherwise inject fail-closed.
+func (c *Config) RealReviewSessionActive() bool {
+	if c == nil {
+		return false
+	}
+	path := strings.TrimSpace(c.RealReviewSession.StatePath)
+	return c.RealReviewSession.Enabled && path != "" && filepath.IsAbs(path)
 }
 
 func setDefaults() {
@@ -1916,6 +1949,10 @@ func setDefaults() {
 	// VA1: per-call cost cap (currency units) that arms the StaticBudgetGuard brake;
 	// 0 leaves the gate unarmed (no guard injected) — phase-2B sets a real cap.
 	viper.SetDefault("video_gateway.per_call_budget", 0)
+
+	// Real review session budget gate (4/4/¥60). Default off; enable via SUB2API_* env.
+	viper.SetDefault("real_review_session.enabled", false)
+	viper.SetDefault("real_review_session.state_path", "")
 
 	// Reliability core remains dark by default until the offline gates pass.
 	viper.SetDefault("reliability_core.video_enabled", false)

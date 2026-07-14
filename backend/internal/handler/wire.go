@@ -42,6 +42,7 @@ func ProvideAdminHandlers(
 	paymentHandler *admin.PaymentHandler,
 	affiliateHandler *admin.AffiliateHandler,
 	complianceHandler *admin.ComplianceHandler,
+	realReviewSessionHandler *admin.RealReviewSessionHandler,
 	videoHandler *admin.VideoHandler,
 	generationContentHandler *admin.GenerationContentHandler,
 ) *AdminHandlers {
@@ -78,6 +79,7 @@ func ProvideAdminHandlers(
 		Payment:                paymentHandler,
 		Affiliate:              affiliateHandler,
 		Compliance:             complianceHandler,
+		RealReviewSession:      realReviewSessionHandler,
 		Video:                  videoHandler,
 		GenerationContent:      generationContentHandler,
 	}
@@ -214,6 +216,7 @@ var ProviderSet = wire.NewSet(
 	admin.NewPaymentHandler,
 	admin.NewAffiliateHandler,
 	admin.NewComplianceHandler,
+	admin.NewRealReviewSessionHandler,
 	ProvideAdminVideoHandler,
 	ProvideAdminGenerationContentHandler,
 

@@ -452,13 +452,16 @@ func (s *BatchImagePublicService) reserveRealCreateBeforeImageProvider(ctx conte
 	if pricingVersion == "0" {
 		pricingVersion = "1"
 	}
-	return s.RealCreateGuard.Reserve(ctx, reviewguard.RealCreateReservation{
+	if err := s.RealCreateGuard.Reserve(ctx, reviewguard.RealCreateReservation{
 		OperationID:    "image:" + strings.TrimSpace(job.BatchID),
 		Kind:           reviewguard.RealCreateImage,
 		ReservedCNY:    reservedCNY,
 		PricingSource:  "batch_image_hold",
 		PricingVersion: pricingVersion,
-	})
+	}); err != nil {
+		return publicRealCreateGuardError(err)
+	}
+	return nil
 }
 
 func (s *BatchImagePublicService) realCreateReservedCNYForImage(ctx context.Context, holdAmountUSD float64) (decimal.Decimal, error) {

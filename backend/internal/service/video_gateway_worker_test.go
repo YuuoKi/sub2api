@@ -15,6 +15,8 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/reviewguard"
+
+	"github.com/shopspring/decimal"
 )
 
 func TestVideoGatewayWorkerDisabledIsOperatorVisible(t *testing.T) {
@@ -761,6 +763,30 @@ func TestVideoRealCreateGuardRejectsBeforeAdapterCreate(t *testing.T) {
 	}
 	if adapter.calls() != 0 {
 		t.Fatalf("adapter create calls = %d, want 0", adapter.calls())
+	}
+}
+
+func TestVideoRealCreateReservedCNYTreatsSeedanceAsCNYWhenCurrencyUnset(t *testing.T) {
+	svc := NewVideoGatewayService(newMemoryVideoGatewayRepo(), noopVideoKeyEncryptor{}, &config.Config{
+		VideoGateway: config.VideoGatewayConfig{CostPerSecond: 1},
+	})
+	task := &VideoTask{
+		Provider:     VideoProviderSeedance,
+		Model:        "doubao-seedance-2-0",
+		Duration:     5,
+		CostEstimate: 0,
+		Currency:     "",
+	}
+	got, err := svc.realCreateReservedCNYForVideo(context.Background(), task)
+	if err != nil {
+		t.Fatalf("realCreateReservedCNYForVideo: %v", err)
+	}
+	// 5s * 1 CNY/s = 5 CNY; must NOT be multiplied by USD→CNY (~7.2).
+	if !got.Equal(decimal.NewFromInt(5)) {
+		t.Fatalf("reserved CNY = %s, want 5", got.String())
+	}
+	if task.Currency != "CNY" {
+		t.Fatalf("task currency after metadata = %q, want CNY", task.Currency)
 	}
 }
 

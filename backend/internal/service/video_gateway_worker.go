@@ -535,19 +535,25 @@ func (s *VideoGatewayService) reserveRealCreateBeforeVideoProvider(ctx context.C
 	if pricingVersion == "" {
 		pricingVersion = "1"
 	}
-	return s.realCreateGuard.Reserve(ctx, reviewguard.RealCreateReservation{
+	if err := s.realCreateGuard.Reserve(ctx, reviewguard.RealCreateReservation{
 		OperationID:    "video:" + strconv.FormatInt(task.ID, 10),
 		Kind:           reviewguard.RealCreateVideo,
 		ReservedCNY:    reservedCNY,
 		PricingSource:  pricingSource,
 		PricingVersion: pricingVersion,
-	})
+	}); err != nil {
+		return publicRealCreateGuardError(err)
+	}
+	return nil
 }
 
 func (s *VideoGatewayService) realCreateReservedCNYForVideo(ctx context.Context, task *VideoTask) (decimal.Decimal, error) {
 	if task == nil {
 		return decimal.Zero, fmt.Errorf("REAL_REVIEW_INVALID_COST: video task is required")
 	}
+	// Align currency/source with product billing metadata before FX so Seedance
+	// estimates (CNY) are never mis-treated as USD when Currency is unset.
+	s.applyVideoBillingMetadata(task)
 	amount := decimal.NewFromFloat(task.CostEstimate)
 	if !amount.IsPositive() {
 		amount = decimal.NewFromFloat(s.estimateVideoCost(task))
@@ -566,6 +572,39 @@ func (s *VideoGatewayService) realCreateReservedCNYForVideo(ctx context.Context,
 		}
 	}
 	return amount.Mul(rate), nil
+}
+
+func publicRealCreateGuardError(err error) error {
+	if err == nil {
+		return nil
+	}
+	msg := err.Error()
+	switch {
+	case strings.Contains(msg, "REAL_REVIEW_SESSION_DISABLED"):
+		return fmt.Errorf("REAL_REVIEW_SESSION_DISABLED: real review session is not enabled")
+	case strings.Contains(msg, "REAL_REVIEW_STATE_PATH_REQUIRED"):
+		return fmt.Errorf("REAL_REVIEW_STATE_PATH_REQUIRED: real review session is misconfigured")
+	case strings.Contains(msg, "REAL_REVIEW_IMAGE_LIMIT"):
+		return fmt.Errorf("REAL_REVIEW_IMAGE_LIMIT: maximum 4 image attempts reached")
+	case strings.Contains(msg, "REAL_REVIEW_VIDEO_LIMIT"):
+		return fmt.Errorf("REAL_REVIEW_VIDEO_LIMIT: maximum 4 video attempts reached")
+	case strings.Contains(msg, "REAL_REVIEW_BUDGET_LIMIT"):
+		return fmt.Errorf("REAL_REVIEW_BUDGET_LIMIT: cumulative reserved CNY would exceed 60")
+	case strings.Contains(msg, "REAL_REVIEW_IDEMPOTENCY_MISMATCH"):
+		return fmt.Errorf("REAL_REVIEW_IDEMPOTENCY_MISMATCH: operation id reused with different reservation params")
+	case strings.Contains(msg, "REAL_REVIEW_OPERATION_ID_REQUIRED"):
+		return fmt.Errorf("REAL_REVIEW_OPERATION_ID_REQUIRED: operation id is required for idempotent real creates")
+	case strings.Contains(msg, "REAL_REVIEW_INVALID_COST"):
+		return fmt.Errorf("REAL_REVIEW_INVALID_COST: estimated cost is invalid")
+	case strings.Contains(msg, "REAL_REVIEW_LOCK_FAILED"), strings.Contains(msg, "REAL_REVIEW_STATE_INVALID"), strings.Contains(msg, "REAL_REVIEW_STATE_DIRECTORY_FAILED"):
+		return fmt.Errorf("REAL_REVIEW_GUARD_UNAVAILABLE: real review session guard is temporarily unavailable")
+	default:
+		if strings.HasPrefix(msg, "REAL_REVIEW_") {
+			code, _, _ := strings.Cut(msg, ":")
+			return fmt.Errorf("%s: real review session rejected this create", code)
+		}
+		return fmt.Errorf("REAL_REVIEW_GUARD_REJECTED: real review session rejected this create")
+	}
 }
 
 func (s *VideoGatewayService) submitLegacyMockTask(ctx context.Context, adapter VideoAdapter, account *VideoProviderAccount, task *VideoTask) error {

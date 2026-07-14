@@ -65,6 +65,25 @@ func TestVideoTaskFinalizerRejectsNonTerminalStatus(t *testing.T) {
 	}
 }
 
+func TestVideoTaskFinalizerRejectsSucceededWithoutResultURL(t *testing.T) {
+	repo := &recordingVideoTaskFinalizationRepository{}
+	finalizer := NewVideoTaskFinalizer(repo)
+	input := validVideoTaskFinalizationInput(VideoStatusSucceeded)
+	input.ProviderResultURL = ""
+	input.LastFrameURL = ""
+
+	_, err := finalizer.Finalize(context.Background(), input)
+	if err == nil {
+		t.Fatal("Finalize error = nil, want succeeded-without-asset rejection")
+	}
+	if !errors.Is(err, ErrVideoSucceededWithoutAsset) {
+		t.Fatalf("Finalize error = %v, want ErrVideoSucceededWithoutAsset", err)
+	}
+	if len(repo.calls) != 0 {
+		t.Fatalf("repository calls = %d, want 0 (must not settle)", len(repo.calls))
+	}
+}
+
 func TestVideoTaskFinalizerSucceededCallsRepositoryOnce(t *testing.T) {
 	repo := &recordingVideoTaskFinalizationRepository{
 		result: VideoTaskFinalizationResult{Applied: true, Status: VideoStatusSucceeded, Version: 8},

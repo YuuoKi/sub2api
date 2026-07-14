@@ -51,6 +51,10 @@ var (
 	ErrVideoInvalidProvider      = infraerrors.BadRequest("VIDEO_INVALID_PROVIDER", "provider must be one of mock/seedance/kling")
 	ErrVideoInvalidTaskType      = infraerrors.BadRequest("VIDEO_INVALID_TASK_TYPE", "task_type must be one of text_to_video/image_to_video/reference_to_video")
 	ErrVideoInvalidStatus        = infraerrors.BadRequest("VIDEO_INVALID_STATUS", "invalid video task status")
+	ErrVideoSucceededWithoutAsset = infraerrors.BadRequest(
+		"VIDEO_SUCCEEDED_WITHOUT_ASSET",
+		"succeeded video task requires a materialized result_url or last_frame_url before settlement",
+	)
 	ErrVideoTaskTerminalConflict = infraerrors.Conflict(
 		"VIDEO_TASK_TERMINAL_CONFLICT",
 		"video task already has a conflicting terminal status",

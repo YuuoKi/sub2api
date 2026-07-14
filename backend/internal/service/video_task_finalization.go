@@ -243,6 +243,10 @@ func validateVideoTaskFinalizationInput(input *VideoTaskFinalizationInput) error
 	if input.TerminalStatus != VideoStatusSucceeded {
 		return nil
 	}
+	hasAssetURL := strings.TrimSpace(input.ProviderResultURL) != "" || strings.TrimSpace(input.LastFrameURL) != ""
+	if !hasAssetURL {
+		return ErrVideoSucceededWithoutAsset
+	}
 	if input.ActualCostUSD.Currency() != CurrencyUSD || input.ActualCostUSD.IsNegative() {
 		return fmt.Errorf("succeeded video task actual cost must be non-negative USD Money")
 	}

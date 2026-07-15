@@ -18,6 +18,10 @@ import (
 
 func TestDomainOutboxRepository_ClaimLeaseCompleteRetryAndRedaction(t *testing.T) {
 	ctx := context.Background()
+	// ClaimBatch selects global oldest pending rows. Other suites share
+	// integrationDB and may leave domain_outbox leftovers, so isolate first.
+	_, err := integrationDB.ExecContext(ctx, "TRUNCATE TABLE domain_outbox RESTART IDENTITY CASCADE")
+	require.NoError(t, err)
 	repo := NewDomainOutboxRepository(integrationDB)
 	now := time.Now().UTC().Truncate(time.Microsecond)
 
@@ -37,6 +41,8 @@ func TestDomainOutboxRepository_ClaimLeaseCompleteRetryAndRedaction(t *testing.T
 	}
 
 	t.Run("claims only due rows and concurrent workers do not duplicate", func(t *testing.T) {
+		_, err := integrationDB.ExecContext(ctx, "TRUNCATE TABLE domain_outbox RESTART IDENTITY CASCADE")
+		require.NoError(t, err)
 		due := []*service.DomainOutboxEvent{
 			enqueue(t, "due-1", now.Add(-time.Second)),
 			enqueue(t, "due-2", now.Add(-time.Second)),
@@ -82,9 +88,12 @@ func TestDomainOutboxRepository_ClaimLeaseCompleteRetryAndRedaction(t *testing.T
 	})
 
 	t.Run("lease ownership, reaping, and complete are safe", func(t *testing.T) {
+		_, err := integrationDB.ExecContext(ctx, "TRUNCATE TABLE domain_outbox RESTART IDENTITY CASCADE")
+		require.NoError(t, err)
 		event := enqueue(t, "lease", now.Add(-time.Second))
 		claimed, err := repo.ClaimBatch(ctx, "lease-owner", now, 1, time.Minute)
 		require.NoError(t, err)
+		require.Len(t, claimed, 1)
 		require.Equal(t, event.ID, claimed[0].ID)
 
 		other, err := repo.ClaimBatch(ctx, "other-worker", now.Add(30*time.Second), 10, time.Minute)
@@ -110,6 +119,8 @@ func TestDomainOutboxRepository_ClaimLeaseCompleteRetryAndRedaction(t *testing.T
 	})
 
 	t.Run("expired lease rejects completion with a backdated completed time", func(t *testing.T) {
+		_, err := integrationDB.ExecContext(ctx, "TRUNCATE TABLE domain_outbox RESTART IDENTITY CASCADE")
+		require.NoError(t, err)
 		claimAt := time.Now().UTC().Add(-2 * time.Minute).Truncate(time.Microsecond)
 		event := enqueue(t, "expired-complete", claimAt.Add(-time.Second))
 		claimed, err := repo.ClaimBatch(ctx, "expired-owner", claimAt, 1, time.Minute)
@@ -125,6 +136,8 @@ func TestDomainOutboxRepository_ClaimLeaseCompleteRetryAndRedaction(t *testing.T
 	})
 
 	t.Run("enqueue replay remains idempotent after lifecycle changes", func(t *testing.T) {
+		_, err := integrationDB.ExecContext(ctx, "TRUNCATE TABLE domain_outbox RESTART IDENTITY CASCADE")
+		require.NoError(t, err)
 		input := &service.DomainOutboxEvent{
 			AggregateType: "video_task",
 			AggregateID:   time.Now().UnixNano(),
@@ -189,11 +202,14 @@ func TestDomainOutboxRepository_ClaimLeaseCompleteRetryAndRedaction(t *testing.T
 	})
 
 	t.Run("worker dead decision at attempt eight stores only a safe error summary", func(t *testing.T) {
+		_, err := integrationDB.ExecContext(ctx, "TRUNCATE TABLE domain_outbox RESTART IDENTITY CASCADE")
+		require.NoError(t, err)
 		event := enqueue(t, "retry", now.Add(-time.Second))
 		attemptAt := now
 		for attempt := 1; attempt <= 8; attempt++ {
 			claimed, err := repo.ClaimBatch(ctx, "retry-worker", attemptAt, 1, time.Minute)
 			require.NoError(t, err)
+			require.Len(t, claimed, 1)
 			require.Equal(t, event.ID, claimed[0].ID)
 			require.Equal(t, attempt, claimed[0].AttemptCount)
 

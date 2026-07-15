@@ -97,6 +97,7 @@ var (
 	ErrBatchImageCleanupFailed            = infraerrors.New(http.StatusBadGateway, "BATCH_IMAGE_CLEANUP_FAILED", "batch image cleanup failed")
 	ErrBatchImageCleanupUnsafePath        = infraerrors.New(http.StatusBadRequest, "BATCH_IMAGE_CLEANUP_UNSAFE_PATH", "batch image cleanup path is unsafe")
 	ErrBatchImageProviderCleanupFailed    = infraerrors.New(http.StatusBadGateway, "BATCH_IMAGE_PROVIDER_CLEANUP_FAILED", "batch image provider cleanup failed")
+	ErrBatchImageAssetNotOwned            = infraerrors.New(http.StatusForbidden, "BATCH_IMAGE_ASSET_NOT_OWNED", "batch image asset is not owned by current user")
 )
 
 type BatchImageJob struct {
@@ -160,6 +161,10 @@ type BatchImageJob struct {
 
 	// ExecutionMode is mock | review_real | internal_real (empty treated as mock).
 	ExecutionMode string
+
+	ResponseMimeType string
+	AspectRatio      string
+	ImageSize        string
 }
 
 type CreateBatchImageJobParams struct {
@@ -205,6 +210,9 @@ type CreateBatchImageJobParams struct {
 
 	OutputExpiresAt *time.Time
 	ExecutionMode   string
+	ResponseMimeType string
+	AspectRatio      string
+	ImageSize        string
 }
 
 type BatchImageItem struct {
@@ -343,6 +351,12 @@ type BatchImageRepository interface {
 	SetBatchImageOutputExpiresAt(ctx context.Context, batchID string, expiresAt time.Time) error
 	RecordBatchImageCleanupFailure(ctx context.Context, batchID, code, message string) error
 	AppendBatchImageEvent(ctx context.Context, batchID, eventType string, payload any) error
+
+	UpsertBatchImageAsset(ctx context.Context, params UpsertBatchImageAssetParams) (*BatchImageAsset, error)
+	GetBatchImageAssetByItemIndex(ctx context.Context, batchID string, itemID int64, imageIndex int) (*BatchImageAsset, error)
+	GetBatchImageAssetByCustomID(ctx context.Context, batchID, customID string, imageIndex int) (*BatchImageAsset, error)
+	GetBatchImageAssetForOwner(ctx context.Context, userID, apiKeyID, assetID int64) (*BatchImageAsset, error)
+	ListBatchImageAssetsForBatch(ctx context.Context, batchID string) ([]*BatchImageAsset, error)
 }
 
 func NewBatchImageID() (string, error) {

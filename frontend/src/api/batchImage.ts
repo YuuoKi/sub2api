@@ -22,9 +22,10 @@ export interface BatchImageSubmitItem {
 export interface BatchImageReferenceImage {
   id?: string
   type?: string
-  mime_type: string
+  mime_type?: string
   data?: string
   file_uri?: string
+  asset_id?: number
 }
 
 export type BatchImageExecutionMode = 'mock' | 'review_real' | 'internal_real'
@@ -73,11 +74,20 @@ export interface BatchImageItem {
   mime_type: string | null
   file_extension: string | null
   image_count: number
+  assets?: BatchImageAsset[]
   error?: {
     code: string
     message: string
     source?: 'provider' | 'system' | string
   } | null
+}
+
+export interface BatchImageAsset {
+  id: number
+  image_index: number
+  mime_type: string
+  byte_size: number
+  sha256: string
 }
 
 export interface BatchImageItemsResponse {
@@ -234,6 +244,17 @@ export async function getBatchImageItemContent(apiKey: string, batchId: string, 
   })
   if (!response.ok) throw await parseBatchImageError(response)
   return response.blob()
+}
+
+export async function downloadBatchImageItem(
+  apiKey: string,
+  batchId: string,
+  customId: string,
+  imageIndex = 0,
+  filename?: string,
+): Promise<void> {
+  const blob = await getBatchImageItemContent(apiKey, batchId, customId, imageIndex)
+  saveBlob(blob, filename || `${customId || 'image'}.bin`)
 }
 
 export async function deleteBatchImageJobRecord(apiKey: string, batchId: string): Promise<void> {

@@ -75,6 +75,7 @@ type BatchImageReferenceInput struct {
 	MimeType string `json:"mime_type"`
 	Data     []byte `json:"data,omitempty"`
 	FileURI  string `json:"file_uri,omitempty"`
+	AssetID  int64  `json:"asset_id,omitempty"`
 }
 
 type BatchImageOwner struct {
@@ -140,7 +141,16 @@ type BatchImagePublicItem struct {
 	MimeType      *string                `json:"mime_type"`
 	FileExtension *string                `json:"file_extension"`
 	ImageCount    int                    `json:"image_count"`
+	Assets        []BatchImagePublicAsset `json:"assets,omitempty"`
 	Error         *BatchImagePublicError `json:"error"`
+}
+
+type BatchImagePublicAsset struct {
+	ID         int64  `json:"id"`
+	ImageIndex int    `json:"image_index"`
+	MimeType   string `json:"mime_type"`
+	ByteSize   int64  `json:"byte_size"`
+	SHA256     string `json:"sha256"`
 }
 
 type BatchImagePublicError struct {
@@ -420,11 +430,17 @@ func (s *BatchImagePublicService) Submit(ctx context.Context, owner BatchImageOw
 		IdempotencyKey:          batchImageOptionalStringPtr(idempotencyKey),
 		RequestHash:             batchImageStringPtr(requestHash),
 		ExecutionMode:           mode,
+		ResponseMimeType:        normalized.ResponseMimeType,
+		AspectRatio:             normalized.AspectRatio,
+		ImageSize:               normalized.ImageSize,
 	})
 	if err != nil {
 		return nil, err
 	}
 	job.ExecutionMode = mode
+	job.ResponseMimeType = normalized.ResponseMimeType
+	job.AspectRatio = normalized.AspectRatio
+	job.ImageSize = normalized.ImageSize
 	reservedInternalReal := false
 	if mode == ExecutionModeInternalReal {
 		if err := s.reserveInternalRealForImageSubmit(ctx, owner, job, pricingSnapshot); err != nil {
@@ -482,7 +498,34 @@ func (s *BatchImagePublicService) Submit(ctx context.Context, owner BatchImageOw
 	for _, item := range normalized.Items {
 		refs := make([]BatchImageReference, 0, len(item.ReferenceImages))
 		for _, ref := range item.ReferenceImages {
-			refs = append(refs, BatchImageReference(ref))
+			if ref.AssetID > 0 {
+				resolved, err := ResolveOwnedBatchImageAssetBytes(ctx, s.Repo, owner, ref.AssetID)
+				if err != nil {
+					if reservedInternalReal {
+						s.releaseInternalRealImageReservation(ctx, job.BatchID)
+					}
+					if !mockSettlement {
+						if releaseErr := s.releaseFailedSubmitHold(ctx, job, requestHash); releaseErr != nil {
+							return nil, releaseErr
+						}
+					}
+					_ = s.Repo.RecordBatchImageJobSubmitFailure(ctx, job.BatchID, "ASSET_REUSE_DENIED", sanitizeBatchImagePublicMessage(err.Error()), true)
+					s.hidePreUpstreamSubmitFailure(ctx, owner, job)
+					if errors.Is(err, ErrBatchImageAssetNotFound) || errors.Is(err, ErrBatchImageAssetForbidden) {
+						return nil, ErrBatchImageAssetNotOwned
+					}
+					return nil, ErrBatchImageInvalidReferenceImage.WithCause(err)
+				}
+				refs = append(refs, *resolved)
+				continue
+			}
+			refs = append(refs, BatchImageReference{
+				ID:       ref.ID,
+				Type:     ref.Type,
+				MimeType: ref.MimeType,
+				Data:     ref.Data,
+				FileURI:  ref.FileURI,
+			})
 		}
 		input.Items = append(input.Items, BatchImageInputItem{
 			CustomID:        item.CustomID,
@@ -946,9 +989,25 @@ func (s *BatchImagePublicService) ListItems(ctx context.Context, owner BatchImag
 	if err != nil {
 		return nil, err
 	}
+	assets, _ := s.Repo.ListBatchImageAssetsForBatch(ctx, batchID)
+	assetsByItem := map[int64][]BatchImagePublicAsset{}
+	for _, asset := range assets {
+		if asset == nil {
+			continue
+		}
+		assetsByItem[asset.ItemID] = append(assetsByItem[asset.ItemID], BatchImagePublicAsset{
+			ID:         asset.ID,
+			ImageIndex: asset.ImageIndex,
+			MimeType:   asset.MimeType,
+			ByteSize:   asset.ByteSize,
+			SHA256:     asset.SHA256,
+		})
+	}
 	data := make([]BatchImagePublicItem, 0, len(items))
 	for _, item := range items {
-		data = append(data, BatchImageItemToPublic(item))
+		pub := BatchImageItemToPublic(item)
+		pub.Assets = assetsByItem[item.ID]
+		data = append(data, pub)
 	}
 	return &BatchImagePublicItemsResponse{
 		Object:  "list",
@@ -1133,13 +1192,28 @@ func normalizeBatchImageReferenceInputs(model string, item *BatchImageSubmitItem
 		ref.Type = truncateBatchImageMessage(strings.TrimSpace(ref.Type), 40)
 		ref.MimeType = normalizeBatchImageReferenceMimeType(ref.MimeType)
 		ref.FileURI = strings.TrimSpace(ref.FileURI)
+		hasAsset := ref.AssetID > 0
+		hasData := len(ref.Data) > 0
+		hasURI := ref.FileURI != ""
+		setCount := 0
+		if hasAsset {
+			setCount++
+		}
+		if hasData {
+			setCount++
+		}
+		if hasURI {
+			setCount++
+		}
+		if setCount != 1 {
+			return 0, 0, ErrBatchImageInvalidReferenceImage
+		}
+		if hasAsset {
+			// Mime is resolved from the owned local asset at submit time.
+			out = append(out, ref)
+			continue
+		}
 		if ref.MimeType == "" {
-			return 0, 0, ErrBatchImageInvalidReferenceImage
-		}
-		if len(ref.Data) == 0 && ref.FileURI == "" {
-			return 0, 0, ErrBatchImageInvalidReferenceImage
-		}
-		if len(ref.Data) > 0 && ref.FileURI != "" {
 			return 0, 0, ErrBatchImageInvalidReferenceImage
 		}
 		if len(ref.Data) > maxBatchImageReferenceImageBytes {

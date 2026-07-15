@@ -88,6 +88,7 @@ type BatchImageReference struct {
 	MimeType string
 	Data     []byte
 	FileURI  string
+	AssetID  int64
 }
 
 type BatchProviderJob struct {

@@ -136,6 +136,20 @@ func (s *BatchImageDownloadService) OpenItemContent(ctx context.Context, owner B
 		}
 	}()
 
+	if asset, assetErr := s.Repo.GetBatchImageAssetByCustomID(ctx, job.BatchID, item.CustomID, imageIndex); assetErr == nil && asset != nil {
+		rc, contentType, size, openErr := OpenValidatedBatchImageAsset(asset)
+		if openErr == nil {
+			releasePermit = false
+			sizeCopy := size
+			return &BatchImageContentStream{
+				Reader:        &batchImagePermitReadCloser{Reader: rc, permit: permit, closer: rc},
+				ContentType:   contentType,
+				Filename:      BatchImageSafeDownloadFilename(item.CustomID, batchImageFileExtension(contentType)),
+				ContentLength: &sizeCopy,
+			}, nil
+		}
+	}
+
 	provider, account, err := s.providerAndAccount(ctx, job)
 	if err != nil {
 		return nil, err
@@ -167,6 +181,12 @@ func (s *BatchImageDownloadService) OpenItemContent(ctx context.Context, owner B
 	}
 	if extension == "" {
 		extension = "bin"
+	}
+
+	// Best-effort backfill of local archive when provider still has the file.
+	archiver := &BatchImageAssetArchiver{Repo: s.Repo}
+	if _, archiveErr := archiver.ArchiveInline(ctx, job, item, imageIndex, image, batchImageDerefString(job.ProviderOutputRef)); archiveErr != nil {
+		// Keep serving provider bytes even if archive backfill fails.
 	}
 
 	reader := base64.NewDecoder(base64.StdEncoding, strings.NewReader(image.Base64Data))
@@ -646,14 +666,20 @@ func batchImageZipErrorsFromItems(items []*BatchImageItem) []batchImageZipError 
 type batchImagePermitReadCloser struct {
 	io.Reader
 	permit BatchImageDownloadPermit
+	closer io.Closer
 	once   sync.Once
 	err    error
 }
 
 func (r *batchImagePermitReadCloser) Close() error {
 	r.once.Do(func() {
+		if r.closer != nil {
+			r.err = r.closer.Close()
+		}
 		if r.permit != nil {
-			r.err = r.permit.Release(context.Background())
+			if releaseErr := r.permit.Release(context.Background()); r.err == nil {
+				r.err = releaseErr
+			}
 		}
 	})
 	return r.err

@@ -426,7 +426,8 @@
                       v-if="itemPreviewUrls[itemPreviewKey(item)] && !previewErrorIds.has(itemPreviewKey(item))"
                       type="button"
                       class="block h-full w-full overflow-hidden"
-                      :title="`放大压缩预览 ${item.custom_id}`"
+                      :title="`预览 ${item.custom_id}`"
+                      data-testid="batch-image-preview"
                       @click="openImagePreview(item)"
                     >
                       <img
@@ -441,7 +442,8 @@
                       type="button"
                       class="flex h-full w-full items-center justify-center text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 disabled:cursor-wait disabled:opacity-70 dark:text-gray-400 dark:hover:bg-dark-700"
                       :disabled="previewLoadingIds.has(itemPreviewKey(item))"
-                      :title="previewErrorIds.has(itemPreviewKey(item)) ? '重新加载压缩预览' : '加载压缩预览'"
+                      :title="previewErrorIds.has(itemPreviewKey(item)) ? '重新加载预览' : '加载服务器预览'"
+                      data-testid="batch-image-preview"
                       @click="loadItemPreview(item)"
                     >
                       <Icon :name="previewLoadingIds.has(itemPreviewKey(item)) ? 'refresh' : 'eye'" size="sm" :class="previewLoadingIds.has(itemPreviewKey(item)) ? 'animate-spin' : ''" />
@@ -449,6 +451,26 @@
                     <div v-else class="flex h-full w-full items-center justify-center text-gray-400" :title="item.image_count > 0 ? '不可预览' : '无图片'">
                       <Icon name="document" size="sm" />
                     </div>
+                  </div>
+                  <div v-if="canLoadItemPreview(item)" class="mt-2 flex items-center justify-center gap-1">
+                    <button
+                      type="button"
+                      class="btn btn-secondary px-2 py-1 text-xs"
+                      data-testid="batch-image-download-item"
+                      :disabled="itemDownloadingIds.has(itemPreviewKey(item))"
+                      @click="downloadItemImage(item)"
+                    >
+                      下载
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-secondary px-2 py-1 text-xs"
+                      data-testid="batch-image-reuse"
+                      :disabled="!primaryAssetId(item)"
+                      @click="reuseItemAsset(item)"
+                    >
+                      复用
+                    </button>
                   </div>
                 </td>
                 <td class="px-3 py-2.5 text-center">
@@ -511,8 +533,8 @@
 
     <BaseDialog :show="!!previewImageItem" :title="previewImageItem?.custom_id || '图片预览'" width="extra-wide" :z-index="60" @close="closeImagePreview">
       <div class="space-y-3">
-        <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
-          当前显示的是浏览器本地缓存的压缩缩略图，清晰度会有影响；需要查看原图请下载 ZIP。
+        <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-100">
+          预览来自服务器持久化资产，刷新页面后仍可重新加载；可下载原图或复用到新任务。
         </div>
         <div class="flex min-h-[420px] items-center justify-center rounded-lg bg-gray-50 p-4 dark:bg-dark-900">
           <img
@@ -521,6 +543,26 @@
             class="max-h-[70vh] max-w-full rounded-md object-contain"
             :alt="previewImageItem?.custom_id || ''"
           />
+        </div>
+        <div class="flex justify-end gap-2">
+          <button
+            type="button"
+            class="btn btn-secondary"
+            data-testid="batch-image-download-item"
+            :disabled="!previewImageItem || itemDownloadingIds.has(itemPreviewKey(previewImageItem))"
+            @click="previewImageItem && downloadItemImage(previewImageItem)"
+          >
+            下载
+          </button>
+          <button
+            type="button"
+            class="btn btn-secondary"
+            data-testid="batch-image-reuse"
+            :disabled="!previewImageItem || !primaryAssetId(previewImageItem)"
+            @click="previewImageItem && reuseItemAsset(previewImageItem)"
+          >
+            复用
+          </button>
         </div>
       </div>
     </BaseDialog>
@@ -780,6 +822,7 @@ import {
   cancelBatchImageJob,
   deleteBatchImageJobRecord,
   downloadBatchImageZip,
+  downloadBatchImageItem,
   getBatchImageItemContent,
   getBatchImageJob,
   listBatchImageJobs,
@@ -830,13 +873,9 @@ type PreviewCacheRecord = {
   lastAccessedAt: number
 }
 
-type PreviewImageSource = ImageBitmap | HTMLImageElement
-
 const TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled', 'output_deleted'])
 const PREVIEW_CACHE_DB_NAME = 'sub2api-batch-image-preview-cache'
 const PREVIEW_CACHE_STORE_NAME = 'thumbnails'
-const PREVIEW_THUMBNAIL_MAX_EDGE = 360
-const PREVIEW_THUMBNAIL_QUALITY = 0.72
 const PREVIEW_CACHE_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000
 const PREVIEW_CACHE_MAX_ENTRIES = 120
 const PREVIEW_CACHE_MAX_BYTES = 48 * 1024 * 1024
@@ -929,6 +968,9 @@ const outputCountDraft = ref(1)
 const referenceImageDrafts = ref<ReferenceImageDraft[]>([])
 const itemPreviewUrls = reactive<Record<string, string>>({})
 const previewLoadingIds = ref(new Set<string>())
+const itemDownloadingIds = ref(new Set<string>())
+const reusedAssetIds = ref<number[]>([])
+const reusedAssetMime = ref<Record<number, string>>({})
 const previewErrorIds = ref(new Set<string>())
 const previewImageItem = ref<BatchImageItem | null>(null)
 const availableBatchImageModels = ref<Array<{ value: string; label: string }>>([])
@@ -1687,11 +1729,24 @@ async function submitJob() {
         response_mime_type: form.responseMimeType,
         execution_mode: batchImageExecutionMode.value,
         provider: batchImageExecutionMode.value === 'mock' ? 'mock' : undefined,
-        items: parsedItems.value,
+        items: parsedItems.value.map((item, index) => {
+          const refs: BatchImageReferenceImage[] = []
+          if (index === 0) {
+            for (const assetId of reusedAssetIds.value) {
+              refs.push({
+                asset_id: assetId,
+                mime_type: reusedAssetMime.value[assetId] || 'image/png',
+              })
+            }
+          }
+          return refs.length ? { ...item, reference_images: refs } : item
+        }),
       },
       batchImageIdempotencyKey.value,
     )
     batchImageIdempotencyKey.value = ''
+    reusedAssetIds.value = []
+    reusedAssetMime.value = {}
     confirmRealOpen.value = false
     confirmRealSecond.value = false
     currentJob.value = job
@@ -2090,67 +2145,11 @@ function openPreviewCacheDB(): Promise<IDBDatabase | null> {
   return previewCacheDBPromise
 }
 
-async function getCachedPreviewBlob(cacheKey: string): Promise<Blob | null> {
-  const db = await openPreviewCacheDB()
-  if (!db) return null
-  const record = await idbRequest<PreviewCacheRecord | undefined>(
-    db.transaction(PREVIEW_CACHE_STORE_NAME, 'readonly').objectStore(PREVIEW_CACHE_STORE_NAME).get(cacheKey),
-  ).catch(() => undefined)
-  if (!record?.blob) return null
-
-  const now = Date.now()
-  if (now - record.createdAt > PREVIEW_CACHE_MAX_AGE_MS) {
-    void deleteCachedPreview(cacheKey)
-    return null
-  }
-  void touchCachedPreview(cacheKey, now)
-  return record.blob
-}
-
 async function hydrateCachedItemPreviews(detailItems: BatchImageDetailItem[]) {
   const previewableItems = detailItems.filter(item => canLoadItemPreview(item))
-  if (!previewableItems.length || !previewCacheSupported()) return
-
-  await Promise.all(previewableItems.map(async (item) => {
-    const batchId = item.batch_id || selectedBatchId.value || currentJob.value?.id || ''
-    const previewKey = itemPreviewKey(item)
-    if (!batchId || itemPreviewUrls[previewKey] || previewErrorIds.value.has(previewKey)) return
-    const cached = await getCachedPreviewBlob(previewCacheKey(batchId, item.custom_id, 0)).catch(() => null)
-    if (!cached || itemPreviewUrls[previewKey]) return
-    itemPreviewUrls[previewKey] = URL.createObjectURL(cached)
-  }))
-}
-
-async function putCachedPreviewBlob(cacheKey: string, blob: Blob) {
-  const db = await openPreviewCacheDB()
-  if (!db) return
-  const now = Date.now()
-  const record: PreviewCacheRecord = {
-    key: cacheKey,
-    blob,
-    size: blob.size,
-    createdAt: now,
-    lastAccessedAt: now,
-  }
-  await idbRequest(db.transaction(PREVIEW_CACHE_STORE_NAME, 'readwrite').objectStore(PREVIEW_CACHE_STORE_NAME).put(record)).catch(() => null)
-  void cleanupPreviewCache()
-}
-
-async function touchCachedPreview(cacheKey: string, lastAccessedAt: number) {
-  const db = await openPreviewCacheDB()
-  if (!db) return
-  const record = await idbRequest<PreviewCacheRecord | undefined>(
-    db.transaction(PREVIEW_CACHE_STORE_NAME, 'readonly').objectStore(PREVIEW_CACHE_STORE_NAME).get(cacheKey),
-  ).catch(() => undefined)
-  if (!record) return
-  record.lastAccessedAt = lastAccessedAt
-  await idbRequest(db.transaction(PREVIEW_CACHE_STORE_NAME, 'readwrite').objectStore(PREVIEW_CACHE_STORE_NAME).put(record)).catch(() => null)
-}
-
-async function deleteCachedPreview(cacheKey: string) {
-  const db = await openPreviewCacheDB()
-  if (!db) return
-  await idbRequest(db.transaction(PREVIEW_CACHE_STORE_NAME, 'readwrite').objectStore(PREVIEW_CACHE_STORE_NAME).delete(cacheKey)).catch(() => null)
+  if (!previewableItems.length) return
+  // Warm previews from server-side assets so refresh does not depend on IndexedDB.
+  await Promise.all(previewableItems.map(item => loadItemPreview(item).catch(() => undefined)))
 }
 
 async function cleanupPreviewCache() {
@@ -2188,59 +2187,6 @@ async function cleanupPreviewCache() {
   const store = db.transaction(PREVIEW_CACHE_STORE_NAME, 'readwrite').objectStore(PREVIEW_CACHE_STORE_NAME)
   for (const key of deleteKeys) {
     store.delete(key)
-  }
-}
-
-async function createThumbnailBlob(blob: Blob): Promise<Blob> {
-  const source = await loadPreviewImageSource(blob)
-  const width = source.width
-  const height = source.height
-  const scale = Math.min(1, PREVIEW_THUMBNAIL_MAX_EDGE / Math.max(width, height))
-  const targetWidth = Math.max(1, Math.round(width * scale))
-  const targetHeight = Math.max(1, Math.round(height * scale))
-  const canvas = document.createElement('canvas')
-  canvas.width = targetWidth
-  canvas.height = targetHeight
-  const ctx = canvas.getContext('2d')
-  if (!ctx) throw new Error('canvas unavailable')
-  ctx.drawImage(source.image, 0, 0, targetWidth, targetHeight)
-  source.close()
-  return await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((thumbnail) => {
-      if (thumbnail) resolve(thumbnail)
-      else reject(new Error('thumbnail unavailable'))
-    }, 'image/webp', PREVIEW_THUMBNAIL_QUALITY)
-  })
-}
-
-async function loadPreviewImageSource(blob: Blob): Promise<{ image: PreviewImageSource, width: number, height: number, close: () => void }> {
-  if ('createImageBitmap' in window) {
-    const bitmap = await window.createImageBitmap(blob)
-    return {
-      image: bitmap,
-      width: bitmap.width,
-      height: bitmap.height,
-      close: () => bitmap.close(),
-    }
-  }
-
-  const url = URL.createObjectURL(blob)
-  try {
-    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const img = new Image()
-      img.onload = () => resolve(img)
-      img.onerror = () => reject(new Error('image unavailable'))
-      img.src = url
-    })
-    return {
-      image,
-      width: image.naturalWidth || image.width,
-      height: image.naturalHeight || image.height,
-      close: () => URL.revokeObjectURL(url),
-    }
-  } catch (error) {
-    URL.revokeObjectURL(url)
-    throw error
   }
 }
 
@@ -2291,7 +2237,6 @@ async function loadItemPreview(item: BatchImageItem) {
   if (!batchId || !canLoadItemPreview(item) || (itemPreviewUrls[previewKey] && !previewErrorIds.value.has(previewKey))) return
   const key = keyForSelectedBatch() || requireApiKey()
   if (!key) return
-  const cacheKey = previewCacheKey(batchId, item.custom_id, 0)
   previewLoadingIds.value = new Set([...previewLoadingIds.value, previewKey])
   try {
     previewErrorIds.value = new Set([...previewErrorIds.value].filter(id => id !== previewKey))
@@ -2299,17 +2244,9 @@ async function loadItemPreview(item: BatchImageItem) {
       URL.revokeObjectURL(itemPreviewUrls[previewKey])
       delete itemPreviewUrls[previewKey]
     }
-    const cached = await getCachedPreviewBlob(cacheKey)
-    if (cached) {
-      itemPreviewUrls[previewKey] = URL.createObjectURL(cached)
-      return
-    }
+    // Prefer server-side persisted assets so previews survive refresh without IndexedDB.
     const blob = await getBatchImageItemContent(key.key, batchId, item.custom_id, 0)
-    const thumbnail = await createThumbnailBlob(blob).catch(() => blob)
-    itemPreviewUrls[previewKey] = URL.createObjectURL(thumbnail)
-    if (thumbnail !== blob || thumbnail.size <= 1024 * 1024) {
-      void putCachedPreviewBlob(cacheKey, thumbnail)
-    }
+    itemPreviewUrls[previewKey] = URL.createObjectURL(blob)
   } catch (error: any) {
     previewErrorIds.value = new Set([...previewErrorIds.value, previewKey])
     appStore.showError(batchImageErrorMessage(error, batchImageText('loadPreviewFailed')))
@@ -2318,6 +2255,45 @@ async function loadItemPreview(item: BatchImageItem) {
     next.delete(previewKey)
     previewLoadingIds.value = next
   }
+}
+
+function primaryAssetId(item: BatchImageItem | null | undefined): number | null {
+  if (!item?.assets?.length) return null
+  const sorted = [...item.assets].sort((a, b) => a.image_index - b.image_index)
+  return sorted[0]?.id ?? null
+}
+
+async function downloadItemImage(item: BatchImageItem) {
+  const batchId = item.batch_id || selectedBatchId.value || currentJob.value?.id || ''
+  const key = keyForSelectedBatch() || requireApiKey()
+  if (!batchId || !key || !canLoadItemPreview(item)) return
+  const previewKey = itemPreviewKey(item)
+  itemDownloadingIds.value = new Set([...itemDownloadingIds.value, previewKey])
+  try {
+    const ext = item.file_extension || 'png'
+    await downloadBatchImageItem(key.key, batchId, item.custom_id, 0, `${item.custom_id}.${ext}`)
+  } catch (error: any) {
+    appStore.showError(batchImageErrorMessage(error, batchImageText('downloadFailed')))
+  } finally {
+    const next = new Set(itemDownloadingIds.value)
+    next.delete(previewKey)
+    itemDownloadingIds.value = next
+  }
+}
+
+function reuseItemAsset(item: BatchImageItem) {
+  const assetId = primaryAssetId(item)
+  if (!assetId) {
+    appStore.showError('该结果尚无服务器资产，请等待索引完成后再复用')
+    return
+  }
+  if (!reusedAssetIds.value.includes(assetId)) {
+    reusedAssetIds.value = [...reusedAssetIds.value, assetId]
+  }
+  const mime = item.assets?.find(a => a.id === assetId)?.mime_type || item.mime_type || 'image/png'
+  reusedAssetMime.value = { ...reusedAssetMime.value, [assetId]: mime }
+  appStore.showSuccess(`已选择资产 #${assetId}，创建新任务时将作为参考图复用`)
+  showCreateModal.value = true
 }
 
 function openImagePreview(item: BatchImageItem) {

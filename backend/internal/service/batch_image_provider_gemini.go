@@ -271,7 +271,14 @@ type geminiFileData struct {
 }
 
 type geminiGenerationConfig struct {
-	ResponseModalities []string `json:"responseModalities"`
+	ResponseModalities []string           `json:"responseModalities"`
+	ResponseMimeType   string             `json:"responseMimeType,omitempty"`
+	ImageConfig        *geminiImageConfig `json:"imageConfig,omitempty"`
+}
+
+type geminiImageConfig struct {
+	AspectRatio string `json:"aspectRatio,omitempty"`
+	ImageSize   string `json:"imageSize,omitempty"`
 }
 
 func BuildGeminiBatchJSONL(input BatchImageInput) ([]byte, error) {
@@ -304,17 +311,27 @@ func BuildGeminiBatchJSONL(input BatchImageInput) ([]byte, error) {
 			return nil, err
 		}
 
-		// TODO(batch-image): add response_mime_type/aspect_ratio/image_size once the
-		// Gemini batch image REST shape is stabilized for those options.
+		genCfg := geminiGenerationConfig{
+			ResponseModalities: []string{"TEXT", "IMAGE"},
+		}
+		if mime := strings.TrimSpace(input.ResponseMimeType); mime != "" {
+			genCfg.ResponseMimeType = mime
+		}
+		aspect := strings.TrimSpace(input.AspectRatio)
+		size := strings.TrimSpace(input.ImageSize)
+		if aspect != "" || size != "" {
+			genCfg.ImageConfig = &geminiImageConfig{
+				AspectRatio: aspect,
+				ImageSize:   size,
+			}
+		}
 		line := geminiJSONLLine{
 			Key: customID,
 			Request: geminiGenerateRequest{
 				Contents: []geminiContent{{
 					Parts: parts,
 				}},
-				GenerationConfig: geminiGenerationConfig{
-					ResponseModalities: []string{"TEXT", "IMAGE"},
-				},
+				GenerationConfig: genCfg,
 			},
 		}
 		if err := enc.Encode(line); err != nil {

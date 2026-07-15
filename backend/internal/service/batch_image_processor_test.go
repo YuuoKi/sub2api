@@ -385,6 +385,9 @@ type fakeBatchImageRepository struct {
 	counts        map[string]BatchImageCounts
 	transitions   map[string][]string
 	events        map[string][]string
+	assets        map[int64]*BatchImageAsset
+	assetsByKey   map[string]*BatchImageAsset
+	nextAssetID   int64
 	transitionErr error
 	replaceCalls  int
 }
@@ -396,6 +399,9 @@ func newFakeBatchImageRepository() *fakeBatchImageRepository {
 		counts:      make(map[string]BatchImageCounts),
 		transitions: make(map[string][]string),
 		events:      make(map[string][]string),
+		assets:      make(map[int64]*BatchImageAsset),
+		assetsByKey: make(map[string]*BatchImageAsset),
+		nextAssetID: 1,
 	}
 }
 
@@ -426,6 +432,9 @@ func (r *fakeBatchImageRepository) CreateBatchImageJob(_ context.Context, params
 		IdempotencyKey:          params.IdempotencyKey,
 		RequestHash:             params.RequestHash,
 		ExecutionMode:           params.ExecutionMode,
+		ResponseMimeType:        params.ResponseMimeType,
+		AspectRatio:             params.AspectRatio,
+		ImageSize:               params.ImageSize,
 		CreatedAt:               time.Now(),
 	}
 	r.jobs[job.BatchID] = job
@@ -706,6 +715,7 @@ func (r *fakeBatchImageRepository) ListBatchImageItems(_ context.Context, batchI
 			continue
 		}
 		result = append(result, &BatchImageItem{
+			ID:                   int64(len(result) + 1),
 			JobID:                item.JobID,
 			CustomID:             item.CustomID,
 			Status:               item.Status,
@@ -742,11 +752,12 @@ func (r *fakeBatchImageRepository) GetBatchImageJobForDownload(ctx context.Conte
 }
 
 func (r *fakeBatchImageRepository) GetBatchImageItemForDownload(_ context.Context, batchID, customID string) (*BatchImageItem, error) {
-	for _, item := range r.items[batchID] {
+	for idx, item := range r.items[batchID] {
 		if item.CustomID != customID {
 			continue
 		}
 		return &BatchImageItem{
+			ID:                   int64(idx + 1),
 			JobID:                item.JobID,
 			CustomID:             item.CustomID,
 			Status:               item.Status,
@@ -922,6 +933,92 @@ func (r *fakeBatchImageRepository) RecordBatchImageCleanupFailure(_ context.Cont
 func (r *fakeBatchImageRepository) AppendBatchImageEvent(_ context.Context, batchID, eventType string, _ any) error {
 	r.events[batchID] = append(r.events[batchID], eventType)
 	return nil
+}
+
+func (r *fakeBatchImageRepository) UpsertBatchImageAsset(_ context.Context, params UpsertBatchImageAssetParams) (*BatchImageAsset, error) {
+	key := fmt.Sprintf("%s:%d:%d", params.BatchID, params.ItemID, params.ImageIndex)
+	if existing := r.assetsByKey[key]; existing != nil {
+		existing.StorageKey = params.StorageKey
+		existing.MimeType = params.MimeType
+		existing.ByteSize = params.ByteSize
+		existing.SHA256 = params.SHA256
+		existing.ArchivedAt = params.ArchivedAt
+		existing.SourceProvider = params.SourceProvider
+		if params.SourceRef != "" {
+			ref := params.SourceRef
+			existing.SourceRef = &ref
+		}
+		return existing, nil
+	}
+	id := r.nextAssetID
+	r.nextAssetID++
+	asset := &BatchImageAsset{
+		ID:             id,
+		BatchID:        params.BatchID,
+		ItemID:         params.ItemID,
+		ImageIndex:     params.ImageIndex,
+		StorageKey:     params.StorageKey,
+		MimeType:       params.MimeType,
+		ByteSize:       params.ByteSize,
+		SHA256:         params.SHA256,
+		ArchivedAt:     params.ArchivedAt,
+		SourceProvider: params.SourceProvider,
+		CreatedAt:      time.Now().UTC(),
+	}
+	if params.SourceRef != "" {
+		ref := params.SourceRef
+		asset.SourceRef = &ref
+	}
+	r.assets[id] = asset
+	r.assetsByKey[key] = asset
+	r.assetsByKey[fmt.Sprintf("%s:%s:%d", params.BatchID, r.customIDForItem(params.BatchID, params.ItemID), params.ImageIndex)] = asset
+	return asset, nil
+}
+
+func (r *fakeBatchImageRepository) customIDForItem(batchID string, itemID int64) string {
+	items := r.items[batchID]
+	idx := int(itemID - 1)
+	if idx >= 0 && idx < len(items) {
+		return items[idx].CustomID
+	}
+	return ""
+}
+
+func (r *fakeBatchImageRepository) GetBatchImageAssetByItemIndex(_ context.Context, batchID string, itemID int64, imageIndex int) (*BatchImageAsset, error) {
+	key := fmt.Sprintf("%s:%d:%d", batchID, itemID, imageIndex)
+	if asset := r.assetsByKey[key]; asset != nil {
+		return asset, nil
+	}
+	return nil, ErrBatchImageAssetNotFound
+}
+
+func (r *fakeBatchImageRepository) GetBatchImageAssetByCustomID(_ context.Context, batchID, customID string, imageIndex int) (*BatchImageAsset, error) {
+	if asset := r.assetsByKey[fmt.Sprintf("%s:%s:%d", batchID, customID, imageIndex)]; asset != nil {
+		return asset, nil
+	}
+	return nil, ErrBatchImageAssetNotFound
+}
+
+func (r *fakeBatchImageRepository) GetBatchImageAssetForOwner(_ context.Context, userID, apiKeyID, assetID int64) (*BatchImageAsset, error) {
+	asset := r.assets[assetID]
+	if asset == nil {
+		return nil, ErrBatchImageAssetNotFound
+	}
+	job := r.jobs[asset.BatchID]
+	if job == nil || job.UserID != userID || job.APIKeyID == nil || *job.APIKeyID != apiKeyID {
+		return nil, ErrBatchImageAssetNotFound
+	}
+	return asset, nil
+}
+
+func (r *fakeBatchImageRepository) ListBatchImageAssetsForBatch(_ context.Context, batchID string) ([]*BatchImageAsset, error) {
+	var out []*BatchImageAsset
+	for _, asset := range r.assets {
+		if asset != nil && asset.BatchID == batchID {
+			out = append(out, asset)
+		}
+	}
+	return out, nil
 }
 
 var _ BatchImageRepository = (*fakeBatchImageRepository)(nil)

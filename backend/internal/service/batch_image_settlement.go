@@ -260,8 +260,11 @@ func (s *BatchImageSettlementService) recordUsageLog(ctx context.Context, job *B
 	billingMode := string(BillingModeImage)
 	accountRateMultiplier := job.AccountRateMultiplier
 	inboundEndpoint := "/v1/images/batches"
-	upstreamEndpoint := "vertex:batchPredictionJobs"
-	imageSize := "1K"
+	upstreamEndpoint := BatchImageUpstreamEndpoint(job.Provider)
+	imageSize := strings.TrimSpace(job.ImageSize)
+	if imageSize == "" {
+		imageSize = defaultBatchImageImageSize
+	}
 	usageLog := &UsageLog{
 		UserID:                job.UserID,
 		APIKeyID:              *job.APIKeyID,

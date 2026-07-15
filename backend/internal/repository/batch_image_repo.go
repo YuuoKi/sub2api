@@ -740,6 +740,10 @@ func (r *batchImageRepository) AppendBatchImageEvent(ctx context.Context, batchI
 }
 
 func createBatchImageJobWithSQL(ctx context.Context, sqlq batchImageSQLExecutor, params service.CreateBatchImageJobParams) (*service.BatchImageJob, error) {
+	executionMode := params.ExecutionMode
+	if executionMode == "" {
+		executionMode = "mock"
+	}
 	return scanBatchImageJob(sqlq.QueryRowContext(ctx, `
 INSERT INTO batch_image_jobs (
     batch_id, user_id, api_key_id, account_id, provider, model, task_name, parent_batch_id, status,
@@ -750,7 +754,8 @@ INSERT INTO batch_image_jobs (
     batch_discount_multiplier, hold_multiplier, billable_unit_price, hold_unit_price,
     pricing_snapshot_version,
     currency, hold_id,
-    idempotency_key, request_hash, manifest_hash, retry_count, output_expires_at
+    idempotency_key, request_hash, manifest_hash, retry_count, output_expires_at,
+    execution_mode, response_mime_type, aspect_ratio, image_size
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9,
     $10, $11, $12, $13, $14,
@@ -760,7 +765,8 @@ INSERT INTO batch_image_jobs (
     $25, $26, $27, $28,
     $29,
     $30, $31,
-    $32, $33, $34, $35, $36
+    $32, $33, $34, $35, $36,
+    $37, $38, $39, $40
 )
 RETURNING `+batchImageJobColumns,
 		params.BatchID, params.UserID, params.APIKeyID, params.AccountID, params.Provider, params.Model, params.TaskName, params.ParentBatchID, params.Status,
@@ -772,7 +778,15 @@ RETURNING `+batchImageJobColumns,
 		params.PricingSnapshotVersion,
 		params.Currency, params.HoldID,
 		params.IdempotencyKey, params.RequestHash, params.ManifestHash, params.RetryCount, params.OutputExpiresAt,
+		executionMode, nullIfEmpty(params.ResponseMimeType), nullIfEmpty(params.AspectRatio), nullIfEmpty(params.ImageSize),
 	))
+}
+
+func nullIfEmpty(v string) any {
+	if v == "" {
+		return nil
+	}
+	return v
 }
 
 func createBatchImageItemWithSQL(ctx context.Context, sqlq batchImageSQLExecutor, params service.CreateBatchImageItemParams) (*service.BatchImageItem, error) {
@@ -827,7 +841,8 @@ currency, hold_id,
 idempotency_key, request_hash, manifest_hash,
 retry_count, version, output_expires_at, input_deleted_at, output_deleted_at, downloaded_at, user_deleted_at,
 last_error_code, last_error_message,
-created_at, updated_at, submitted_at, started_at, finished_at, settled_at`
+created_at, updated_at, submitted_at, started_at, finished_at, settled_at,
+execution_mode, response_mime_type, aspect_ratio, image_size`
 
 const batchImageJobSelectSQL = `SELECT ` + batchImageJobColumns + ` FROM batch_image_jobs`
 
@@ -841,6 +856,8 @@ func scanBatchImageJob(row rowScanner) (*service.BatchImageJob, error) {
 	var outputExpiresAt, inputDeletedAt, outputDeletedAt, downloadedAt, userDeletedAt sql.NullTime
 	var lastErrorCode, lastErrorMessage sql.NullString
 	var submittedAt, startedAt, finishedAt, settledAt sql.NullTime
+	var executionMode sql.NullString
+	var responseMimeType, aspectRatio, imageSize sql.NullString
 
 	err := row.Scan(
 		&job.ID, &job.BatchID, &job.UserID, &apiKeyID, &accountID, &job.Provider, &job.Model, &job.TaskName, &parentBatchID, &job.Status,
@@ -855,6 +872,7 @@ func scanBatchImageJob(row rowScanner) (*service.BatchImageJob, error) {
 		&job.RetryCount, &job.Version, &outputExpiresAt, &inputDeletedAt, &outputDeletedAt, &downloadedAt, &userDeletedAt,
 		&lastErrorCode, &lastErrorMessage,
 		&job.CreatedAt, &job.UpdatedAt, &submittedAt, &startedAt, &finishedAt, &settledAt,
+		&executionMode, &responseMimeType, &aspectRatio, &imageSize,
 	)
 	if err != nil {
 		return nil, err
@@ -885,6 +903,20 @@ func scanBatchImageJob(row rowScanner) (*service.BatchImageJob, error) {
 	job.StartedAt = batchImageNullTimePtr(startedAt)
 	job.FinishedAt = batchImageNullTimePtr(finishedAt)
 	job.SettledAt = batchImageNullTimePtr(settledAt)
+	if executionMode.Valid && executionMode.String != "" {
+		job.ExecutionMode = executionMode.String
+	} else {
+		job.ExecutionMode = "mock"
+	}
+	if responseMimeType.Valid {
+		job.ResponseMimeType = responseMimeType.String
+	}
+	if aspectRatio.Valid {
+		job.AspectRatio = aspectRatio.String
+	}
+	if imageSize.Valid {
+		job.ImageSize = imageSize.String
+	}
 	return &job, nil
 }
 

@@ -304,6 +304,7 @@ func (i *BatchImageResultIndexer) Index(ctx context.Context, job *BatchImageJob,
 	seen := make(map[string]int)
 	unknownCount := 0
 	var items []CreateBatchImageItemParams
+	pendingImages := make(map[string][]BatchImageInlineImage)
 	result := &BatchImageIndexResult{}
 	lineNumber := 0
 	now := time.Now()
@@ -350,6 +351,9 @@ func (i *BatchImageResultIndexer) Index(ctx context.Context, job *BatchImageJob,
 			item.MimeType = batchImageOptionalStringPtr(parsed.MimeType)
 			item.FileExtension = batchImageOptionalStringPtr(parsed.FileExtension)
 			result.SuccessCount++
+			if images, extractErr := ExtractBatchImagePartsFromResultLine([]byte(line)); extractErr == nil && images != nil && len(images.Images) > 0 {
+				pendingImages[parsed.CustomID] = images.Images
+			}
 		} else {
 			item.ErrorCode = batchImageOptionalStringPtr(parsed.ErrorCode)
 			item.ErrorMessage = batchImageOptionalStringPtr(parsed.ErrorMessage)
@@ -416,7 +420,36 @@ func (i *BatchImageResultIndexer) Index(ctx context.Context, job *BatchImageJob,
 	}); err != nil {
 		return nil, err
 	}
+	i.archivePendingImages(ctx, job, sourceObject, pendingImages)
 	return result, nil
+}
+
+func (i *BatchImageResultIndexer) archivePendingImages(ctx context.Context, job *BatchImageJob, sourceRef string, pending map[string][]BatchImageInlineImage) {
+	if i == nil || i.Repo == nil || job == nil || len(pending) == 0 {
+		return
+	}
+	indexed, err := i.Repo.ListBatchImageItems(ctx, job.BatchID, BatchImageItemFilter{Status: BatchImageItemStatusSuccess, Limit: 10000})
+	if err != nil {
+		logger.L().Warn("batch_image.asset_archive_list_failed", zap.String("batch_id", job.BatchID), zap.Error(err))
+		return
+	}
+	archiver := &BatchImageAssetArchiver{Repo: i.Repo}
+	for _, item := range indexed {
+		if item == nil {
+			continue
+		}
+		images := pending[item.CustomID]
+		for idx, image := range images {
+			if _, err := archiver.ArchiveInline(ctx, job, item, idx, image, sourceRef); err != nil {
+				logger.L().Warn("batch_image.asset_archive_item_failed",
+					zap.String("batch_id", job.BatchID),
+					zap.String("custom_id", item.CustomID),
+					zap.Int("image_index", idx),
+					zap.Error(err),
+				)
+			}
+		}
+	}
 }
 
 // listExpectedCustomIDs 返回该 job 当前 item 表中的全部 custom_id 集合，

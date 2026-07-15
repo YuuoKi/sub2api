@@ -10,7 +10,7 @@
 ## 已完成（无付费）
 
 - G0–G7 开发与自动验证按任务包执行到用户真实测试卡。
-- 代码证据 HEAD：`8296c2a6`。
+- 最终 HEAD：`b1756b0f`；镜像代码证据：`8296c2a6`。
 - 审查包：`docs/reviews/LATEST_REVIEW_PACKAGE.html`。
 - Closeout：`docs/superpowers/codex-handoff/deliverables/2026-07-15-REAL-PRODUCT-READINESS-closeout.md`。
 

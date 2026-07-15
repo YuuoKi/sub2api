@@ -3,7 +3,9 @@
 **Status:** `READY_FOR_USER_REAL_TEST / 待复核`  
 **Not status:** 内部可用  
 **Branch:** `wujie/video-capture-moat-20260702`  
-**HEAD:** `fb92a75dd04c5679d878954658f07c9a30920a49`（代码证据镜像基于 `8296c2a6`）  
+**无付费代码证据 tip:** `8296c2a6`（镜像 `sub2api:real-readiness-8296c2a6` 基于此）  
+**G7 审查包纳入提交:** `a2344431`  
+
 **Workdir:** `D:\sub2api-trunk` (linked worktree)
 
 ## What was completed without paid Provider calls

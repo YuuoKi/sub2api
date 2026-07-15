@@ -11,7 +11,7 @@
 - 执行模式 `mock | review_real | internal_real` 已落地；API-key Seedance 真实创建排除 `review_only` 并强制 `internal_real` 策略预留。
 - Gemini 脱敏 fixture 产品 DB 恢复证明 Submit=0；图片资产可预览/下载/再次引用。
 - Provider 账单导入/规范化/匹配对合成 CSV/XLSX 可用；差异不自动改余额。
-- HEAD `8296c2a6` 镜像 `sub2api:real-readiness-8296c2a6`（`sha256:ad432520f38c60fe67e85aaab7878ab47c901e12847fb5b2eacb9d972e1864fb`）healthy，UID 1000，绑定 `127.0.0.1:18080`。
+- 无付费代码证据 tip `8296c2a6` → 镜像 `sub2api:real-readiness-8296c2a6`（`sha256:ad432520f38c60fe67e85aaab7878ab47c901e12847fb5b2eacb9d972e1864fb`）healthy，UID 1000，绑定 `127.0.0.1:18080`；G7 审查包纳入提交 `a2344431`。
 - 三角色 mock 浏览器：9 截图、79 API 2xx、secretHits 0。
 - 历史真实：Gemini 图片 1/4、Seedance 视频 2/4、累计预留 ¥20；Seedance 产品恢复链与内部账务对齐证据仍成立。
 

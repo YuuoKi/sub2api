@@ -106,7 +106,16 @@ func newFormAHarnessSvc(t *testing.T, baseURL, apiKey string, costPerSecond, per
 	t.Helper()
 	repo := newMemoryVideoGatewayRepo()
 	providerID := seedSmokeAuthorizedSeedanceProvider(repo, apiKey, baseURL)
-	svc := ProvideVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfgWithVideoBudget(costPerSecond, perCallBudget), nil, nil, nil, nil, nil)
+	svc := ProvideVideoGatewayService(
+		repo,
+		noopVideoKeyEncryptor{},
+		cfgWithVideoBudget(costPerSecond, perCallBudget),
+		nil,
+		nil,
+		nil,
+		nil,
+		NewMemoryProviderRealAccessPolicyRepo(nil),
+	)
 	return repo, svc, providerID
 }
 

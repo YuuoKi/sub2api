@@ -1936,10 +1936,10 @@ func TestVideoGatewayAutoRouteSkipsUnavailableAccounts(t *testing.T) {
 	unavailable := []*VideoProviderAccount{
 		{
 			ID:           repo.nextProviderID,
-			Provider:     VideoProviderSeedance,
-			DisplayName:  "Seedance Missing Key",
+			Provider:     VideoProviderMock,
+			DisplayName:  "Mock Missing Key",
 			Enabled:      true,
-			DefaultModel: defaultVideoModel(VideoProviderSeedance),
+			DefaultModel: defaultVideoModel(VideoProviderMock),
 			Metadata: map[string]any{
 				"key_status":      videoKeyStatusMissing,
 				"health_status":   videoHealthStatusNeedsKey,
@@ -1950,10 +1950,10 @@ func TestVideoGatewayAutoRouteSkipsUnavailableAccounts(t *testing.T) {
 		},
 		{
 			ID:           repo.nextProviderID + 1,
-			Provider:     VideoProviderKling,
-			DisplayName:  "Kling Disabled",
+			Provider:     VideoProviderMock,
+			DisplayName:  "Mock Disabled",
 			Enabled:      false,
-			DefaultModel: defaultVideoModel(VideoProviderKling),
+			DefaultModel: defaultVideoModel(VideoProviderMock),
 			Metadata: map[string]any{
 				"key_status":    videoKeyStatusDisabled,
 				"health_status": videoHealthStatusDisabled,
@@ -1963,11 +1963,11 @@ func TestVideoGatewayAutoRouteSkipsUnavailableAccounts(t *testing.T) {
 		},
 		{
 			ID:           repo.nextProviderID + 2,
-			Provider:     VideoProviderSeedance,
-			DisplayName:  "Seedance Auth Failed",
+			Provider:     VideoProviderMock,
+			DisplayName:  "Mock Auth Failed",
 			Enabled:      true,
 			MaskedKey:    "sdnc***demo",
-			DefaultModel: defaultVideoModel(VideoProviderSeedance),
+			DefaultModel: defaultVideoModel(VideoProviderMock),
 			Metadata: map[string]any{
 				"key_status":      videoKeyStatusAuthFailed,
 				"health_status":   videoHealthStatusAuthFailed,
@@ -1978,11 +1978,11 @@ func TestVideoGatewayAutoRouteSkipsUnavailableAccounts(t *testing.T) {
 		},
 		{
 			ID:           repo.nextProviderID + 3,
-			Provider:     VideoProviderKling,
-			DisplayName:  "Kling Rate Limited",
+			Provider:     VideoProviderMock,
+			DisplayName:  "Mock Rate Limited",
 			Enabled:      true,
 			MaskedKey:    "klng***demo",
-			DefaultModel: defaultVideoModel(VideoProviderKling),
+			DefaultModel: defaultVideoModel(VideoProviderMock),
 			Metadata: map[string]any{
 				"key_status":      videoKeyStatusRateLimited,
 				"health_status":   videoHealthStatusRateLimited,
@@ -2023,8 +2023,9 @@ func TestVideoGatewayAutoRouteSkipsUnavailableAccounts(t *testing.T) {
 	if len(events) == 0 || events[0].EventType != "routed" {
 		t.Fatalf("expected first routed event, got %#v", events)
 	}
-	if events[0].Payload["strategy"] != VideoRouteStrategyLeastInflight {
-		t.Fatalf("expected least_inflight strategy, got %#v", events[0].Payload["strategy"])
+	expectedStrategy := ExecutionModeMock + "_" + VideoRouteStrategyLeastInflight
+	if events[0].Payload["strategy"] != expectedStrategy {
+		t.Fatalf("expected %s strategy, got %#v", expectedStrategy, events[0].Payload["strategy"])
 	}
 	skipped, ok := events[0].Payload["skipped_accounts"].([]videoRouteSkip)
 	if !ok {

@@ -5,6 +5,7 @@ package repository
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -32,7 +33,7 @@ import (
 // desensitized recorded fixture client — never a live Provider.
 func TestGeminiBatchImageZeroCreateProductRecovery(t *testing.T) {
 	ctx := context.Background()
-	client := testEntClient(t)
+	db, client := testIsolatedDatabase(t)
 	rdb := testRedis(t) // harness Redis must be live for product download limiter
 
 	fixtureJSONL := mustLoadDesensitizedBatchImageResultJSONL(t)
@@ -83,10 +84,10 @@ func TestGeminiBatchImageZeroCreateProductRecovery(t *testing.T) {
 	requestHashPtr := requestHash
 	holdIDPtr := holdID
 
-	repo := NewBatchImageRepository(integrationDB)
-	billingRepo := NewUsageBillingRepository(client, integrationDB)
-	usageLogRepo := NewUsageLogRepository(client, integrationDB)
-	accountRepo := NewAccountRepository(client, integrationDB, nil)
+	repo := NewBatchImageRepository(db)
+	billingRepo := NewUsageBillingRepository(client, db)
+	usageLogRepo := NewUsageLogRepository(client, db)
+	accountRepo := NewAccountRepository(client, db, nil)
 
 	job, err := repo.CreateBatchImageJob(ctx, service.CreateBatchImageJobParams{
 		BatchID:                 batchID,
@@ -133,7 +134,7 @@ func TestGeminiBatchImageZeroCreateProductRecovery(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.True(t, reserveResult.Applied)
-	assertUserBalances(t, ctx, user.ID, startBalance-holdAmount, holdAmount)
+	assertUserBalances(t, db, ctx, user.ID, startBalance-holdAmount, holdAmount)
 
 	cfg := &config.Config{BatchImage: config.BatchImageConfig{
 		Enabled:                           true,
@@ -203,10 +204,10 @@ func TestGeminiBatchImageZeroCreateProductRecovery(t *testing.T) {
 	require.NotNil(t, settled.SettledAt)
 	require.NotNil(t, settled.OutputExpiresAt)
 
-	assertUserBalances(t, ctx, user.ID, startBalance-expectedActual, 0)
+	assertUserBalances(t, db, ctx, user.ID, startBalance-expectedActual, 0)
 
 	var usageCount int
-	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+	require.NoError(t, db.QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM usage_logs
 		WHERE user_id = $1 AND api_key_id = $2 AND request_id = $3
 	`, user.ID, apiKey.ID, service.BatchImageCaptureRequestID(batchID)).Scan(&usageCount))
@@ -252,8 +253,8 @@ func TestGeminiBatchImageZeroCreateProductRecovery(t *testing.T) {
 	settleAgain, err := processor.SettlementService.Settle(ctx, batchID)
 	require.NoError(t, err)
 	require.True(t, settleAgain.AlreadySettled)
-	assertUserBalances(t, ctx, user.ID, startBalance-expectedActual, 0)
-	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+	assertUserBalances(t, db, ctx, user.ID, startBalance-expectedActual, 0)
+	require.NoError(t, db.QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM usage_logs
 		WHERE user_id = $1 AND api_key_id = $2 AND request_id = $3
 	`, user.ID, apiKey.ID, service.BatchImageCaptureRequestID(batchID)).Scan(&usageCount))
@@ -265,10 +266,10 @@ func TestGeminiBatchImageZeroCreateProductRecovery(t *testing.T) {
 	require.GreaterOrEqual(t, finalOpen, 1)
 }
 
-func assertUserBalances(t *testing.T, ctx context.Context, userID int64, wantBalance, wantFrozen float64) {
+func assertUserBalances(t *testing.T, db *sql.DB, ctx context.Context, userID int64, wantBalance, wantFrozen float64) {
 	t.Helper()
 	var balance, frozen float64
-	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+	require.NoError(t, db.QueryRowContext(ctx, `
 		SELECT balance, COALESCE(frozen_balance, 0) FROM users WHERE id = $1
 	`, userID).Scan(&balance, &frozen))
 	require.InDelta(t, wantBalance, balance, 1e-9, "balance")

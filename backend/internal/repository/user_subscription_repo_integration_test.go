@@ -16,14 +16,19 @@ import (
 
 type UserSubscriptionRepoSuite struct {
 	suite.Suite
-	ctx    context.Context
-	client *dbent.Client
-	repo   *userSubscriptionRepository
+	ctx        context.Context
+	baseClient *dbent.Client
+	client     *dbent.Client
+	repo       *userSubscriptionRepository
+}
+
+func (s *UserSubscriptionRepoSuite) SetupSuite() {
+	_, s.baseClient = testIsolatedDatabase(s.T())
 }
 
 func (s *UserSubscriptionRepoSuite) SetupTest() {
 	s.ctx = context.Background()
-	tx := testEntTx(s.T())
+	tx := testEntTxFromClient(s.T(), s.baseClient)
 	s.client = tx.Client()
 	s.repo = NewUserSubscriptionRepository(s.client).(*userSubscriptionRepository)
 }
@@ -851,7 +856,7 @@ func (s *UserSubscriptionRepoSuite) TestIncrementUsage_Concurrent() {
 }
 
 func (s *UserSubscriptionRepoSuite) TestTxContext_RollbackIsolation() {
-	baseClient := testEntClient(s.T())
+	baseClient := s.baseClient
 	tx, err := baseClient.Tx(context.Background())
 	s.Require().NoError(err, "begin tx")
 	defer func() {

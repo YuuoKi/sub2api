@@ -32,6 +32,10 @@ func TestBatchImageRepository_UpsertAssetIdempotent(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	require.NoError(t, repo.TransitionBatchImageJobStatus(ctx, batchID, service.BatchImageJobStatusSubmitted, service.BatchImageTransitionOptions{
+		EventType: "submitted",
+	}))
+
 	require.NoError(t, repo.TransitionBatchImageJobStatus(ctx, batchID, service.BatchImageJobStatusIndexing, service.BatchImageTransitionOptions{
 		EventType: "indexing_started",
 	}))

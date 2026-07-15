@@ -147,3 +147,7 @@ output/
 /.impeccable/
 /.delivery-tools/
 /_review/
+
+# Local test asset archives (never commit)
+backend/internal/repository/assets/
+

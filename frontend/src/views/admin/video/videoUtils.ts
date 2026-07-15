@@ -255,10 +255,16 @@ export function createdByLabel(task: Partial<VideoTask>): string {
     || (task.created_by ? `用户 #${task.created_by}` : '-')
 }
 
+const automaticRoutingStrategyLabels: Readonly<Record<string, string>> = {
+  mock_least_inflight: '试跑模式 · 处理中最少',
+  review_real_least_inflight: '一次真实复核 · 处理中最少',
+  internal_real_least_inflight: '内部真实调用 · 处理中最少',
+}
+
 export function routingStrategyLabel(strategy?: string): string {
   if (isVideoGatewayDemoMode) return '系统自动安排处理'
-  if (strategy === 'least_inflight') return isVideoGatewayDemoMode ? '系统自动选择处理中最少的可用账号' : 'least_inflight（处理中最少）'
   if (strategy === 'explicit') return '指定账号'
+  if (strategy && automaticRoutingStrategyLabels[strategy]) return automaticRoutingStrategyLabels[strategy]
   return strategy || '-'
 }
 

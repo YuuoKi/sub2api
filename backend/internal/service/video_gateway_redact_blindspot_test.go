@@ -228,7 +228,16 @@ func TestFormABlindSpotKeyNeverLeaksAcrossAllChannels(t *testing.T) {
 			providerID := seedSmokeAuthorizedSeedanceProvider(repo, key, srv.URL)
 			// Real production DI wrapper with the budget gate ARMED (proves the chain does not
 			// bypass the gate): cost 1.5 × 5s = 7.5 <= cap 30 => admitted.
-			svc := ProvideVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfgWithVideoBudget(1.5, 30.0), nil, nil, nil, nil, nil)
+			svc := ProvideVideoGatewayService(
+				repo,
+				noopVideoKeyEncryptor{},
+				cfgWithVideoBudget(1.5, 30.0),
+				nil,
+				nil,
+				nil,
+				nil,
+				NewMemoryProviderRealAccessPolicyRepo(nil),
+			)
 
 			task, err := svc.CreateTask(ctx, VideoTaskCreateParams{
 				ProviderAccountID: providerID,
@@ -312,7 +321,16 @@ func TestFormASuccessBodyEchoingKeyAsStructuralIDNeverLeaks(t *testing.T) {
 	ctx := context.Background()
 	repo := newMemoryVideoGatewayRepo()
 	providerID := seedSmokeAuthorizedSeedanceProvider(repo, key, srv.URL)
-	svc := ProvideVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfgWithVideoBudget(1.5, 30.0), nil, nil, nil, nil, nil)
+	svc := ProvideVideoGatewayService(
+		repo,
+		noopVideoKeyEncryptor{},
+		cfgWithVideoBudget(1.5, 30.0),
+		nil,
+		nil,
+		nil,
+		nil,
+		NewMemoryProviderRealAccessPolicyRepo(nil),
+	)
 
 	task, err := svc.CreateTask(ctx, VideoTaskCreateParams{
 		ProviderAccountID: providerID,

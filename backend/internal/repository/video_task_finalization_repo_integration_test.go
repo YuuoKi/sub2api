@@ -100,11 +100,13 @@ func TestVideoTaskFinalizationReplayIsExactlyOnce(t *testing.T) {
 
 func TestVideoReliabilityBillableFakeSettlementAndOutboxRetryProof(t *testing.T) {
 	ctx := context.Background()
+	resetDisposableIntegrationDatabase(t, integrationDB)
 	user := newVideoTaskCreationUser(t, 10)
 	providerID := newConfiguredVideoTaskCreationProvider(t)
 	repo := NewVideoGatewayRepository(integrationDB)
 	cfg := &config.Config{ReliabilityCore: config.ReliabilityCoreConfig{VideoEnabled: true}}
 	video := service.NewVideoGatewayService(repo, billableFakeEncryptor{}, cfg)
+	video.SetRealAccessPolicyRepository(service.NewMemoryProviderRealAccessPolicyRepo(nil))
 	pricing := billableFakePricing{amount: service.MustUSD("1.25")}
 	video.SetVideoTaskPricing(pricing)
 	adapter := &billableFakeAdapter{}
@@ -364,7 +366,8 @@ func billableFakeFinalizationReplayInput(taskID int64) service.VideoTaskFinaliza
 	price := service.MustUSD("1.25")
 	return service.VideoTaskFinalizationInput{
 		TaskID: taskID, ExpectedVersion: 1, TerminalStatus: service.VideoStatusSucceeded,
-		ActualCostUSD: price, PricingSnapshot: service.PricingSnapshot{AmountOriginal: price, ExchangeRate: "1.0000000000", PricingSource: "billable_fake", PricingVersion: "fixed-v1"},
+		ProviderResultURL: fmt.Sprintf("local://billable-fake/%d/result.mp4", taskID),
+		ActualCostUSD:     price, PricingSnapshot: service.PricingSnapshot{AmountOriginal: price, ExchangeRate: "1.0000000000", PricingSource: "billable_fake", PricingVersion: "fixed-v1"},
 		CompletedAt: time.Now().UTC(),
 	}
 }

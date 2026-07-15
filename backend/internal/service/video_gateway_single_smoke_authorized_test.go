@@ -213,6 +213,7 @@ func TestSeedanceTinySmokeTrialStillAllowedWithoutProductionAuthorized(t *testin
 	repo := newMemoryVideoGatewayRepo()
 	providerID := seedSmokeAuthorizedSeedanceProvider(repo, "seedance-smoke-test-key", "https://ark.example.test")
 	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, nil)
+	svc.SetRealAccessPolicyRepository(NewMemoryProviderRealAccessPolicyRepo(nil))
 
 	task, err := svc.CreateTask(ctx, VideoTaskCreateParams{
 		ProviderAccountID:        providerID,

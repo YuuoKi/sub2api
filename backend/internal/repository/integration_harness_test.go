@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"os/exec"
 	"strconv"
@@ -38,8 +39,10 @@ var (
 	integrationDB        *sql.DB
 	integrationEntClient *dbent.Client
 	integrationRedis     *redisclient.Client
+	integrationDSN       string
 
-	redisNamespaceSeq uint64
+	redisNamespaceSeq   uint64
+	isolatedDatabaseSeq uint64
 )
 
 func TestMain(m *testing.M) {
@@ -89,6 +92,7 @@ func TestMain(m *testing.M) {
 		log.Printf("failed to get postgres dsn: %v", err)
 		os.Exit(1)
 	}
+	integrationDSN = dsn
 
 	integrationDB, err = openSQLWithRetry(ctx, dsn, 30*time.Second)
 	if err != nil {
@@ -208,13 +212,101 @@ func testEntClient(t *testing.T) *dbent.Client {
 // 测试结束后会自动回滚，不会影响数据库状态。
 func testEntTx(t *testing.T) *dbent.Tx {
 	t.Helper()
+	return testEntTxFromClient(t, integrationEntClient)
+}
 
-	tx, err := integrationEntClient.Tx(context.Background())
+func testEntTxFromClient(t *testing.T, client *dbent.Client) *dbent.Tx {
+	t.Helper()
+
+	tx, err := client.Tx(context.Background())
 	require.NoError(t, err, "begin ent tx")
 	t.Cleanup(func() {
 		_ = tx.Rollback()
 	})
 	return tx
+}
+
+// testIsolatedDatabase creates a database inside the package-owned disposable
+// Postgres container. It is reserved for tests whose production code opens and
+// commits its own transactions and therefore cannot use testEntTx.
+func testIsolatedDatabase(t *testing.T) (*sql.DB, *dbent.Client) {
+	t.Helper()
+
+	databaseName := fmt.Sprintf("sub2api_it_%d", atomic.AddUint64(&isolatedDatabaseSeq, 1))
+	_, err := integrationDB.ExecContext(context.Background(), "CREATE DATABASE "+quotePostgresIdentifier(databaseName))
+	require.NoError(t, err, "create isolated integration database")
+
+	var isolatedDB *sql.DB
+	var isolatedClient *dbent.Client
+	t.Cleanup(func() {
+		if isolatedClient != nil {
+			require.NoError(t, isolatedClient.Close(), "close isolated ent client")
+		} else if isolatedDB != nil {
+			require.NoError(t, isolatedDB.Close(), "close isolated sql database")
+		}
+
+		_, dropErr := integrationDB.ExecContext(
+			context.Background(),
+			"DROP DATABASE IF EXISTS "+quotePostgresIdentifier(databaseName)+" WITH (FORCE)",
+		)
+		require.NoError(t, dropErr, "drop isolated integration database")
+	})
+
+	parsedDSN, err := url.Parse(integrationDSN)
+	require.NoError(t, err, "parse Testcontainers postgres DSN")
+	parsedDSN.Path = "/" + databaseName
+
+	isolatedDB, err = openSQLWithRetry(context.Background(), parsedDSN.String(), 30*time.Second)
+	require.NoError(t, err, "open isolated integration database")
+	require.NoError(t, ApplyMigrations(context.Background(), isolatedDB), "migrate isolated integration database")
+
+	drv := entsql.OpenDB(dialect.Postgres, isolatedDB)
+	isolatedClient = dbent.NewClient(dbent.Driver(drv))
+	return isolatedDB, isolatedClient
+}
+
+// resetDisposableIntegrationDatabase removes application rows while preserving
+// migration bookkeeping. It refuses to run outside this harness's disposable
+// Testcontainers databases.
+func resetDisposableIntegrationDatabase(t *testing.T, db *sql.DB) {
+	t.Helper()
+
+	ctx := context.Background()
+	var databaseName string
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT current_database()").Scan(&databaseName), "read integration database name")
+	require.True(t,
+		databaseName == "sub2api_test" || strings.HasPrefix(databaseName, "sub2api_it_"),
+		"refusing to reset non-disposable database %q",
+		databaseName,
+	)
+
+	rows, err := db.QueryContext(ctx, `
+		SELECT tablename
+		FROM pg_tables
+		WHERE schemaname = 'public'
+		  AND tablename NOT IN ('schema_migrations', 'atlas_schema_revisions')
+		ORDER BY tablename
+	`)
+	require.NoError(t, err, "list disposable integration tables")
+
+	tables := make([]string, 0, 64)
+	for rows.Next() {
+		var tableName string
+		require.NoError(t, rows.Scan(&tableName), "scan disposable integration table")
+		tables = append(tables, quotePostgresIdentifier("public")+"."+quotePostgresIdentifier(tableName))
+	}
+	require.NoError(t, rows.Err(), "iterate disposable integration tables")
+	require.NoError(t, rows.Close(), "close disposable integration table rows")
+	if len(tables) == 0 {
+		return
+	}
+
+	_, err = db.ExecContext(ctx, "TRUNCATE TABLE "+strings.Join(tables, ", ")+" RESTART IDENTITY CASCADE")
+	require.NoError(t, err, "reset disposable integration database")
+}
+
+func quotePostgresIdentifier(value string) string {
+	return `"` + strings.ReplaceAll(value, `"`, `""`) + `"`
 }
 
 // testEntSQLTx 已弃用：不要在新测试中使用此函数。

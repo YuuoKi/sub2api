@@ -45,7 +45,10 @@
 1. Real Gemini low-spec image create (1) with preview/download/reuse
 2. Real Seedance 5s 9:16 video create (1, create=1) with play/download/reuse
 3. Upload real Gemini + Seedance billing statements
-4. Human eyeball of generated media and business copy
+4. **Human eyeball (hard gate, not automatable):**
+   - **Media:** real image opens and matches prompt; real video plays ~5s / ~9:16; download opens locally; reuse still resolves
+   - **Copy:** real-mode confirm shows cost/quota impact; list vs detail status agree; currency consistent; no secret/path leaks in failure text
+   - **Known mock-package copy debt (log, do not block real create):** EN page titles on some video admin/employee pages; EN labels on provider-billing form; `$` balance vs CNY policy limits; G6 snapshot 0/0 ≠ historical budget 1/4 · 2/4 · ¥20
 5. Disable review_only accounts and retire temporary keys
 6. Decide whether to enable `internal_real` only after formal non-review_only channels exist
 

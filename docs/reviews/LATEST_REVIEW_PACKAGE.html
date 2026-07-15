@@ -77,12 +77,19 @@
       <li>登录员工账号，选择“一次真实复核”。</li>
       <li>创建 1 张 Gemini 低规格图片；确认 task ID、终态、预览、下载、再次引用。</li>
       <li>创建 1 条 Seedance 5 秒 9:16 视频；确认 task ID、create=1、终态、播放、下载、再次引用。</li>
+      <li><strong>人眼硬项（媒体 + 业务文案）——不可用自动化替代：</strong>
+        <ul>
+          <li><strong>媒体：</strong>真实图片能打开且内容与 prompt 相关；真实视频能播放、时长约 5s、画幅约 9:16、无黑屏/静音异常/明显错片；下载文件可本地打开；“再次引用”后仍指向同一可用资产。</li>
+          <li><strong>文案：</strong>执行模式/确认弹窗标明真实计费与额度影响；任务列表状态与详情一致（勿桌面“处理中”而移动端长期停在“已提交”）；费用展示币种与内部账一致；失败原因可读、无密钥/绝对路径泄露。</li>
+          <li><strong>已知 mock 审查包文案债（本轮可记、不阻塞真实 create）：</strong>部分页眉英文（Video Dashboard / Video Tasks / Create Video Task / Video System Check）；供应商对账表单英文字段（Provider account ID、Period start RFC3339 等）；余额常显 <code>$</code> 而策略限额用 CNY；G6 mock 会话 Snapshot 显示 0/0 属 session 未启用，勿与历史预算 1/4、2/4、¥20 混淆。</li>
+        </ul>
+      </li>
       <li>管理员上传 Gemini 与 Seedance 真实账单明细，确认匹配/差异；若无账单则保留“待账单复核”。</li>
       <li>老板确认总览、成员排行、余额与对账状态符合实际。</li>
       <li>管理员先确认至少一个非 <code>review_only</code> 正式内部 Provider 账号已配置并通过无费用连接检查，再决定是否启用 <code>internal_real</code>（指定成员/分组日/月上限；kill switch 可见）。无正式账号时保持关闭。</li>
       <li>立即禁用 <code>review_only</code> 账号并废弃临时 Gemini/Seedance 密钥。</li>
     </ol>
-    <p><strong>立即停止条件：</strong>鉴权异常、密钥回显、重复 create、未知状态、费用超过剩余 ¥40、URL 不安全、账务不一致、资产不可下载。</p>
+    <p><strong>立即停止条件：</strong>鉴权异常、密钥回显、重复 create、未知状态、费用超过剩余 ¥40、URL 不安全、账务不一致、资产不可下载、<strong>人眼判定媒体不可用或关键业务文案误导真实计费</strong>。</p>
   </div>
 
   <h2>风险与回滚</h2>

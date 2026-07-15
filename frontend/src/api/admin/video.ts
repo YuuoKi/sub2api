@@ -376,6 +376,17 @@ export interface ClearReviewOnlyResult {
   disabled_image_accounts: number
 }
 
+export interface RealReviewSessionSnapshot {
+  enabled: boolean
+  image_used: number
+  image_remaining: number
+  video_used: number
+  video_remaining: number
+  reserved_cny: string
+  remaining_cny: string
+  pricing_version: string
+}
+
 async function getRealAccessPolicy(): Promise<RealAccessPolicy> {
   const { data } = await apiClient.get<RealAccessPolicy>('/admin/real-access-policy')
   return data
@@ -388,6 +399,11 @@ async function putRealAccessPolicy(payload: Partial<RealAccessPolicy>): Promise<
 
 async function putRealAccessKillSwitch(enabled: boolean): Promise<RealAccessPolicy> {
   const { data } = await apiClient.post<RealAccessPolicy>('/admin/real-access-policy/kill-switch', { enabled })
+  return data
+}
+
+async function getRealReviewSessionSnapshot(): Promise<RealReviewSessionSnapshot> {
+  const { data } = await apiClient.get<RealReviewSessionSnapshot>('/admin/real-review-session')
   return data
 }
 
@@ -410,6 +426,7 @@ export const videoAdminAPI = {
   getRealAccessPolicy,
   putRealAccessPolicy,
   putRealAccessKillSwitch,
+  getRealReviewSessionSnapshot,
   clearReviewOnlyBootstrap,
 }
 

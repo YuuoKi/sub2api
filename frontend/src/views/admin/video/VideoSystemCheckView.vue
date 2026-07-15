@@ -41,16 +41,52 @@
         </div>
       </details>
 
-      <details class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
+      <details class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800" open>
+        <summary class="cursor-pointer text-sm font-semibold text-gray-900 dark:text-white">复核 Session 配额</summary>
+        <div class="mt-4 space-y-3 text-sm text-gray-600 dark:text-gray-300">
+          <p>
+            会话：{{ sessionSnapshot?.enabled ? '已启用' : '未启用' }}；
+            图片剩余：{{ sessionSnapshot?.image_remaining ?? '-' }}；
+            视频剩余：{{ sessionSnapshot?.video_remaining ?? '-' }}；
+            金额剩余：{{ sessionSnapshot?.remaining_cny ?? '-' }} CNY
+          </p>
+          <p class="text-xs text-gray-500 dark:text-gray-400">
+            已用 image/video：{{ sessionSnapshot?.image_used ?? 0 }} / {{ sessionSnapshot?.video_used ?? 0 }}；
+            已预留：{{ sessionSnapshot?.reserved_cny ?? '-' }}；
+            pricing：{{ sessionSnapshot?.pricing_version || '-' }}
+          </p>
+          <button class="btn btn-secondary btn-sm" type="button" :disabled="policyBusy" @click="loadSessionSnapshot">
+            刷新 Snapshot
+          </button>
+        </div>
+      </details>
+
+      <details class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800" open>
         <summary class="cursor-pointer text-sm font-semibold text-gray-900 dark:text-white">内部真实策略</summary>
         <div class="mt-4 space-y-3 text-sm text-gray-600 dark:text-gray-300">
           <p>
             策略：{{ policy?.enabled ? '已启用' : '未启用' }}；
-            杀开关：{{ policy?.global_kill_switch ? '开启（阻断）' : '关闭' }}；
-            日限额 image/video：{{ policy?.image_daily_cny || '-' }} / {{ policy?.video_daily_cny || '-' }}
+            杀开关：{{ policy?.global_kill_switch ? '开启（阻断）' : '关闭' }}
           </p>
+          <div class="grid gap-3 md:grid-cols-3">
+            <label class="block text-xs">
+              <span class="mb-1 block text-gray-500">图片日限额 CNY</span>
+              <input v-model="policyDraft.image_daily_cny" class="input input-sm w-full" type="text" />
+            </label>
+            <label class="block text-xs">
+              <span class="mb-1 block text-gray-500">视频日限额 CNY</span>
+              <input v-model="policyDraft.video_daily_cny" class="input input-sm w-full" type="text" />
+            </label>
+            <label class="block text-xs">
+              <span class="mb-1 block text-gray-500">月限额 CNY</span>
+              <input v-model="policyDraft.monthly_cny" class="input input-sm w-full" type="text" />
+            </label>
+          </div>
           <div class="flex flex-wrap gap-2">
             <button class="btn btn-secondary btn-sm" type="button" :disabled="policyBusy" @click="loadPolicy">刷新策略</button>
+            <button class="btn btn-secondary btn-sm" type="button" :disabled="policyBusy || !policy" @click="savePolicyLimits">
+              保存日/月限额
+            </button>
             <button class="btn btn-secondary btn-sm" type="button" :disabled="policyBusy || !policy" @click="togglePolicyEnabled">
               {{ policy?.enabled ? '关闭策略' : '启用策略' }}
             </button>
@@ -81,7 +117,7 @@ import { computed, onMounted, ref } from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { adminAPI } from '@/api/admin'
-import type { RealAccessPolicy } from '@/api/admin/video'
+import type { RealAccessPolicy, RealReviewSessionSnapshot } from '@/api/admin/video'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
 
@@ -91,9 +127,23 @@ const appStore = useAppStore()
 const loading = ref(false)
 const policyBusy = ref(false)
 const policy = ref<RealAccessPolicy | null>(null)
+const sessionSnapshot = ref<RealReviewSessionSnapshot | null>(null)
+const policyDraft = ref({
+  image_daily_cny: '',
+  video_daily_cny: '',
+  monthly_cny: '',
+})
 const serviceReady = ref<CheckState>('unknown')
 const setupReady = ref<CheckState>('unknown')
 const taskCount = ref<number | null>(null)
+
+function syncPolicyDraft(next: RealAccessPolicy | null) {
+  policyDraft.value = {
+    image_daily_cny: next?.image_daily_cny || '',
+    video_daily_cny: next?.video_daily_cny || '',
+    monthly_cny: next?.monthly_cny || '',
+  }
+}
 
 const statusClass = {
   normal: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300',
@@ -140,8 +190,40 @@ async function loadPolicy() {
   policyBusy.value = true
   try {
     policy.value = await adminAPI.video.getRealAccessPolicy()
+    syncPolicyDraft(policy.value)
   } catch (err) {
     appStore.showError(extractApiErrorMessage(err, '加载内部真实策略失败'))
+  } finally {
+    policyBusy.value = false
+  }
+}
+
+async function loadSessionSnapshot() {
+  policyBusy.value = true
+  try {
+    sessionSnapshot.value = await adminAPI.video.getRealReviewSessionSnapshot()
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, '加载复核 Session Snapshot 失败'))
+  } finally {
+    policyBusy.value = false
+  }
+}
+
+async function savePolicyLimits() {
+  if (!policy.value) return
+  policyBusy.value = true
+  try {
+    policy.value = await adminAPI.video.putRealAccessPolicy({
+      ...policy.value,
+      image_daily_cny: policyDraft.value.image_daily_cny,
+      video_daily_cny: policyDraft.value.video_daily_cny,
+      monthly_cny: policyDraft.value.monthly_cny,
+      allow_member: true,
+    })
+    syncPolicyDraft(policy.value)
+    appStore.showSuccess('已保存日/月限额')
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, '保存限额失败'))
   } finally {
     policyBusy.value = false
   }
@@ -155,7 +237,11 @@ async function togglePolicyEnabled() {
       ...policy.value,
       enabled: !policy.value.enabled,
       allow_member: true,
+      image_daily_cny: policyDraft.value.image_daily_cny,
+      video_daily_cny: policyDraft.value.video_daily_cny,
+      monthly_cny: policyDraft.value.monthly_cny,
     })
+    syncPolicyDraft(policy.value)
     appStore.showSuccess(policy.value.enabled ? '已启用内部真实策略' : '已关闭内部真实策略')
   } catch (err) {
     appStore.showError(extractApiErrorMessage(err, '更新策略失败'))
@@ -200,7 +286,7 @@ async function loadChecks() {
     serviceReady.value = healthResponse?.ok ? 'normal' : 'warning'
     setupReady.value = setupResponse?.ok ? 'normal' : 'warning'
     taskCount.value = dashboard?.today_tasks ?? 0
-    await loadPolicy()
+    await Promise.all([loadPolicy(), loadSessionSnapshot()])
   } catch (err) {
     serviceReady.value = 'warning'
     appStore.showError(extractApiErrorMessage(err, '系统检查失败'))

@@ -207,3 +207,74 @@ func TestVideoRealCreateGuardReservesOnlyReviewRealMode(t *testing.T) {
 		t.Fatalf("adapter create calls = %d, want 1", adapter2.calls())
 	}
 }
+
+func TestAPIKeySeedanceRealCreatesExcludeReviewOnlyAndRequireInternalReal(t *testing.T) {
+	t.Setenv("SUB2API_VIDEO_REAL_SMOKE_ENABLED", "1")
+	t.Setenv("SUB2API_VIDEO_REDACTED_EVENT_LOG", t.TempDir()+"/audit.log")
+	t.Setenv("SUB2API_MEDIA_URL_ALLOWLIST", "provider.invalid")
+	repo := newMemoryVideoGatewayRepo()
+	reviewID := repo.nextProviderID
+	repo.nextProviderID++
+	repo.providers[reviewID] = &VideoProviderAccount{
+		ID:               reviewID,
+		Provider:         VideoProviderSeedance,
+		DisplayName:      "Seedance Review Only",
+		Enabled:          true,
+		DefaultModel:     "doubao-seedance-2-0-260128",
+		RouteAvailable:   true,
+		APIKeyConfigured: true,
+		EncryptedAPIKey:  "enc:review",
+		Metadata: map[string]any{
+			"review_only":             true,
+			"production_authorized":   true,
+			"single_smoke_authorized": true,
+		},
+	}
+	formalID := seedSmokeAuthorizedSeedanceProvider(repo, "formal-key", "https://provider.invalid")
+	repo.providers[formalID].Metadata["production_authorized"] = true
+	repo.providers[formalID].RouteAvailable = true
+	repo.providers[formalID].APIKeyConfigured = true
+
+	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, &config.Config{})
+	armPermissiveInternalRealPolicy(svc)
+
+	t.Run("production skips review_only and stores internal_real", func(t *testing.T) {
+		task, err := svc.CreateAPIKeySeedanceProductionTask(context.Background(), VideoProviderSeedance, VideoTaskCreateParams{
+			TaskType:  VideoTaskTypeTextToVideo,
+			Model:     "doubao-seedance-2-0-260128",
+			Prompt:    "api-key production gate",
+			Duration:  5,
+			CreatedBy: 42,
+		})
+		if err != nil {
+			t.Fatalf("CreateAPIKeySeedanceProductionTask: %v", err)
+		}
+		if task.ProviderAccountID != formalID {
+			t.Fatalf("provider_account_id = %d, want formal %d (not review_only %d)", task.ProviderAccountID, formalID, reviewID)
+		}
+		if task.ExecutionMode != ExecutionModeInternalReal {
+			t.Fatalf("execution_mode = %q, want %q", task.ExecutionMode, ExecutionModeInternalReal)
+		}
+	})
+
+	t.Run("trial rejects when only review_only accounts exist", func(t *testing.T) {
+		onlyReview := newMemoryVideoGatewayRepo()
+		id := onlyReview.nextProviderID
+		onlyReview.nextProviderID++
+		onlyReview.providers[id] = &VideoProviderAccount{
+			ID: id, Provider: VideoProviderSeedance, DisplayName: "Review", Enabled: true,
+			DefaultModel: "doubao-seedance-2-0-260128", RouteAvailable: true, APIKeyConfigured: true,
+			EncryptedAPIKey: "enc:review",
+			Metadata:        map[string]any{"review_only": true, "single_smoke_authorized": true},
+		}
+		trialSvc := NewVideoGatewayService(onlyReview, noopVideoKeyEncryptor{}, &config.Config{})
+		armPermissiveInternalRealPolicy(trialSvc)
+		_, err := trialSvc.CreateAPIKeySeedanceTinyTrialTask(context.Background(), VideoProviderSeedance, VideoTaskCreateParams{
+			TaskType: VideoTaskTypeTextToVideo, Model: "doubao-seedance-2-0-260128",
+			Prompt: "must fail", Duration: 5, CreatedBy: 7,
+		})
+		if err == nil {
+			t.Fatal("expected trial create to fail when only review_only accounts exist")
+		}
+	})
+}

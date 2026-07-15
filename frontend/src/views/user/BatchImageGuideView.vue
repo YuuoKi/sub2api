@@ -757,8 +757,15 @@
 
     <BaseDialog :show="confirmRealOpen" title="确认真实调用" @close="confirmRealOpen = false">
       <div class="space-y-3 text-sm text-gray-700 dark:text-gray-200">
-        <p>将按真实通道提交，可能产生费用。</p>
-        <p>预计生成 <strong>{{ estimatedOutputCount }}</strong> 张；模式：{{ batchImageExecutionMode }}。</p>
+        <p>将按真实通道提交，可能产生费用并计入额度。</p>
+        <ul class="space-y-1">
+          <li>模式：{{ batchImageExecutionModeLabel }}</li>
+          <li>模型：{{ form.model || '未选择' }}</li>
+          <li>规格：{{ form.responseMimeType || 'image/png' }} / 1K</li>
+          <li>预计张数：{{ estimatedOutputCount }}</li>
+          <li>预计最高费用（冻结参考）：约 ¥{{ estimatedMaxCostCNYLabel }}</li>
+          <li>次数影响：{{ batchImageExecutionMode === 'review_real' ? '计入一次真实复核额度' : '计入内部真实日/月策略额度' }}</li>
+        </ul>
       </div>
       <template #footer>
         <div class="flex justify-end gap-3">
@@ -1691,6 +1698,27 @@ const confirmRealOpen = ref(false)
 const confirmRealSecond = ref(false)
 const reviewRealAvailable = computed(() => Boolean(batchImageCapabilities.value.review_real))
 const internalRealAvailable = computed(() => Boolean(batchImageCapabilities.value.internal_real))
+const batchImageExecutionModeLabel = computed(() => {
+  switch (batchImageExecutionMode.value) {
+    case 'mock':
+      return '免费试跑'
+    case 'review_real':
+      return '一次真实复核'
+    case 'internal_real':
+      return '内部真实生成'
+    default: {
+      const _exhaustive: never = batchImageExecutionMode.value
+      return String(_exhaustive)
+    }
+  }
+})
+// Confirm dialog uses the same default FX as backend review/session conversion.
+const estimatedMaxCostCNYLabel = computed(() => {
+  const perImageUSD = 0.7
+  const usdCny = 7.2
+  const cny = estimatedOutputCount.value * perImageUSD * usdCny
+  return cny.toFixed(2)
+})
 const executionModeHint = computed(() => {
   if (batchImageExecutionMode.value === 'review_real' && !reviewRealAvailable.value) {
     return '一次真实复核暂不可用：请联系管理员开启复核会话。'

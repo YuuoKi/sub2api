@@ -218,7 +218,9 @@ async function savePolicyLimits() {
       image_daily_cny: policyDraft.value.image_daily_cny,
       video_daily_cny: policyDraft.value.video_daily_cny,
       monthly_cny: policyDraft.value.monthly_cny,
-      allow_member: true,
+      // Preserve membership scope; never silently expand allow_member on limit edits.
+      allow_member: policy.value.allow_member,
+      allow_group: policy.value.allow_group,
     })
     syncPolicyDraft(policy.value)
     appStore.showSuccess('已保存日/月限额')
@@ -236,7 +238,8 @@ async function togglePolicyEnabled() {
     policy.value = await adminAPI.video.putRealAccessPolicy({
       ...policy.value,
       enabled: !policy.value.enabled,
-      allow_member: true,
+      allow_member: policy.value.allow_member,
+      allow_group: policy.value.allow_group,
       image_daily_cny: policyDraft.value.image_daily_cny,
       video_daily_cny: policyDraft.value.video_daily_cny,
       monthly_cny: policyDraft.value.monthly_cny,

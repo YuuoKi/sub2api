@@ -462,15 +462,23 @@ func (s *VideoGatewayService) CreateAPIKeySeedanceTinyTrialTask(ctx context.Cont
 	var seedanceAccount *VideoProviderAccount
 	seedanceBlockedReason := ""
 	for _, acc := range accounts {
-		if acc != nil && acc.Provider == VideoProviderSeedance && acc.Enabled {
-			s.decorateProviderForResponse(acc, VideoProviderRuntimeStats{})
-			if acc.RouteAvailable {
-				seedanceAccount = acc
-				break
-			}
+		if acc == nil || acc.Provider != VideoProviderSeedance || !acc.Enabled {
+			continue
+		}
+		// Temporary review_only bootstrap accounts must never serve API-key real creates.
+		if isReviewOnlyVideoAccount(acc) {
 			if seedanceBlockedReason == "" {
-				seedanceBlockedReason = strings.TrimSpace(acc.RouteSkipReason)
+				seedanceBlockedReason = "review_only account is not eligible for api-key real creates"
 			}
+			continue
+		}
+		s.decorateProviderForResponse(acc, VideoProviderRuntimeStats{})
+		if acc.RouteAvailable {
+			seedanceAccount = acc
+			break
+		}
+		if seedanceBlockedReason == "" {
+			seedanceBlockedReason = strings.TrimSpace(acc.RouteSkipReason)
 		}
 	}
 	if seedanceAccount == nil {
@@ -502,6 +510,8 @@ func (s *VideoGatewayService) CreateAPIKeySeedanceTinyTrialTask(ctx context.Cont
 		})
 	}
 
+	// Real API-key creates must not masquerade as mock; apply internal_real policy reservation.
+	p.ExecutionMode = ExecutionModeInternalReal
 	p.ProviderAccountID = seedanceAccount.ID
 	route := &videoRouteDecision{
 		Account:  seedanceAccount,
@@ -559,18 +569,25 @@ func (s *VideoGatewayService) CreateAPIKeySeedanceProductionTask(ctx context.Con
 	var seedanceAccount *VideoProviderAccount
 	seedanceBlockedReason := ""
 	for _, acc := range accounts {
-		if acc != nil && acc.Provider == VideoProviderSeedance && acc.Enabled {
-			s.decorateProviderForResponse(acc, VideoProviderRuntimeStats{})
-			if acc.RouteAvailable && seedanceProductionAuthorized(acc) {
-				seedanceAccount = acc
-				break
-			}
+		if acc == nil || acc.Provider != VideoProviderSeedance || !acc.Enabled {
+			continue
+		}
+		if isReviewOnlyVideoAccount(acc) {
 			if seedanceBlockedReason == "" {
-				if !seedanceProductionAuthorized(acc) {
-					seedanceBlockedReason = "provider metadata production_authorized is not true"
-				} else {
-					seedanceBlockedReason = strings.TrimSpace(acc.RouteSkipReason)
-				}
+				seedanceBlockedReason = "review_only account is not eligible for api-key real creates"
+			}
+			continue
+		}
+		s.decorateProviderForResponse(acc, VideoProviderRuntimeStats{})
+		if acc.RouteAvailable && seedanceProductionAuthorized(acc) {
+			seedanceAccount = acc
+			break
+		}
+		if seedanceBlockedReason == "" {
+			if !seedanceProductionAuthorized(acc) {
+				seedanceBlockedReason = "provider metadata production_authorized is not true"
+			} else {
+				seedanceBlockedReason = strings.TrimSpace(acc.RouteSkipReason)
 			}
 		}
 	}
@@ -605,6 +622,8 @@ func (s *VideoGatewayService) CreateAPIKeySeedanceProductionTask(ctx context.Con
 		})
 	}
 
+	// Real API-key creates must not masquerade as mock; apply internal_real policy reservation.
+	p.ExecutionMode = ExecutionModeInternalReal
 	p.ProviderAccountID = seedanceAccount.ID
 	route := &videoRouteDecision{
 		Account:  seedanceAccount,

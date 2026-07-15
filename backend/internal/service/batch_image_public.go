@@ -260,18 +260,29 @@ func (s *BatchImagePublicService) reserveInternalRealForImageSubmit(ctx context.
 	if opID == "" {
 		return ErrInternalRealPolicyDenied
 	}
-	estimate := decimal.NewFromFloat(job.EstimatedCost)
-	if pricing != nil && pricing.EstimatedCost > 0 {
-		estimate = decimal.NewFromFloat(pricing.EstimatedCost)
+	holdUSD := 0.0
+	if pricing != nil && pricing.HoldAmount > 0 {
+		holdUSD = pricing.HoldAmount
+	} else if job.HoldAmount != nil && *job.HoldAmount > 0 {
+		holdUSD = *job.HoldAmount
+	} else if pricing != nil && pricing.EstimatedCost > 0 {
+		holdUSD = pricing.EstimatedCost
+	} else {
+		holdUSD = job.EstimatedCost
 	}
-	if !estimate.IsPositive() {
-		estimate = decimal.NewFromInt(1)
+	// Hold/estimate amounts are USD; convert to CNY for policy windows.
+	reservedCNY, err := s.realCreateReservedCNYForImage(ctx, holdUSD)
+	if err != nil {
+		return err
+	}
+	if !reservedCNY.IsPositive() {
+		reservedCNY = decimal.NewFromInt(1)
 	}
 	return s.RealAccessPolicyRepo.ReserveInTx(ctx, ProviderRealAccessReservation{
 		OperationID: opID,
 		UserID:      owner.UserID,
 		Kind:        "image",
-		ReservedCNY: estimate,
+		ReservedCNY: reservedCNY,
 	})
 }
 

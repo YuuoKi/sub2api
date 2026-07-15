@@ -9,6 +9,57 @@ const componentSource = readFileSync(componentPath, 'utf8')
 const stylePath = resolve(dirname(fileURLToPath(import.meta.url)), '../../../style.css')
 const styleSource = readFileSync(stylePath, 'utf8')
 
+function sourceBetween(startMarker: string, endMarker: string): string {
+  const start = componentSource.indexOf(startMarker)
+  const end = componentSource.indexOf(endMarker, start)
+
+  expect(start).toBeGreaterThanOrEqual(0)
+  expect(end).toBeGreaterThan(start)
+
+  return componentSource.slice(start, end)
+}
+
+const selfNavigationSource = sourceBetween('function buildSelfNavItems', 'function finalizeNav')
+const adminNavigationSource = sourceBetween('// Admin navigation items', 'function toggleSidebar')
+const actualNavigationSource = `${selfNavigationSource}\n${adminNavigationSource}`
+
+describe('AppSidebar navigation contract', () => {
+  it('does not expose consumer sales entries in the actual sidebar definitions', () => {
+    const removedSalesPaths = [
+      '/subscriptions',
+      '/purchase',
+      '/orders',
+      '/payment',
+      '/affiliate',
+      '/admin/subscriptions',
+      '/admin/promo-codes',
+      '/admin/affiliates',
+      '/admin/orders',
+      '/admin/payment'
+    ]
+
+    for (const path of removedSalesPaths) {
+      expect(actualNavigationSource).not.toContain(`path: '${path}'`)
+    }
+  })
+
+  it('keeps the complete management surface visible in the sidebar definitions', () => {
+    const requiredManagementPaths = [
+      '/keys',
+      '/usage',
+      '/admin/users',
+      '/admin/accounts',
+      '/admin/groups',
+      '/admin/redeem',
+      '/admin/settings'
+    ]
+
+    for (const path of requiredManagementPaths) {
+      expect(actualNavigationSource).toContain(`path: '${path}'`)
+    }
+  })
+})
+
 describe('AppSidebar custom SVG styles', () => {
   it('does not override uploaded SVG fill or stroke colors', () => {
     expect(componentSource).toContain('.sidebar-svg-icon {')

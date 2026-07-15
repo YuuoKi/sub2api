@@ -125,9 +125,10 @@ func (l ProviderBillingNormalizedLine) MarshalJSON() ([]byte, error) {
 }
 
 type ProviderBillingParseResult struct {
-	Header   ProviderBillingImportHeader
+	Header     ProviderBillingImportHeader
 	FileSHA256 string
-	Lines    []ProviderBillingNormalizedLine
+	Lines      []ProviderBillingNormalizedLine
+	Duplicate  bool
 }
 
 type ProviderBillingImportRecord struct {
@@ -258,8 +259,18 @@ func ParseProviderBillingFile(header ProviderBillingImportHeader, filename strin
 }
 
 func (s *ProviderBillingService) PreviewRawFile(ctx context.Context, header ProviderBillingImportHeader, filename string, raw []byte) (*ProviderBillingParseResult, error) {
-	_ = ctx
-	return ParseProviderBillingFile(header, filename, raw)
+	parsed, err := ParseProviderBillingFile(header, filename, raw)
+	if err != nil {
+		return nil, err
+	}
+	if s != nil && s.store != nil {
+		exists, err := s.store.HasFileSHA256(ctx, parsed.FileSHA256)
+		if err != nil {
+			return nil, err
+		}
+		parsed.Duplicate = exists
+	}
+	return parsed, nil
 }
 
 func (s *ProviderBillingService) ImportRawFile(ctx context.Context, header ProviderBillingImportHeader, filename string, raw []byte, createdBy int64) (*ProviderBillingImportRecord, error) {

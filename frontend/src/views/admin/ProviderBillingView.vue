@@ -63,7 +63,7 @@ async function onPreview() {
     const result = await previewImport(form.value, file.value)
     previewLines.value = result.lines || []
     previewSHA.value = result.file_sha256
-    duplicateBlocked.value = false
+    duplicateBlocked.value = Boolean(result.duplicate)
   } catch (err: any) {
     const code = err?.response?.data?.error?.reason || err?.response?.data?.reason || ''
     if (String(code).includes('DUPLICATE_FILE') || String(err?.message || '').includes('DUPLICATE_FILE')) {
@@ -217,6 +217,29 @@ onMounted(refresh)
           <button class="btn btn-primary" @click="onImport">{{ t('admin.providerBilling.import') }}</button>
         </div>
         <p v-if="previewSHA" class="text-xs text-gray-500">SHA-256: {{ previewSHA }} · lines {{ previewLines.length }}</p>
+        <div v-if="previewLines.length > 0" class="overflow-x-auto">
+          <table class="min-w-full text-xs">
+            <thead>
+              <tr class="text-left text-gray-500">
+                <th class="py-1 pr-2">external_line_id</th>
+                <th class="py-1 pr-2">upstream_task_id</th>
+                <th class="py-1 pr-2">model</th>
+                <th class="py-1 pr-2">gross</th>
+                <th class="py-1 pr-2">currency</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(line, idx) in previewLines.slice(0, 20)" :key="idx" class="border-t border-gray-100 dark:border-dark-600">
+                <td class="py-1 pr-2 font-mono">{{ (line as any).external_line_id || '-' }}</td>
+                <td class="py-1 pr-2 font-mono">{{ (line as any).upstream_task_id || '-' }}</td>
+                <td class="py-1 pr-2">{{ (line as any).model || '-' }}</td>
+                <td class="py-1 pr-2">{{ (line as any).gross_amount || '-' }}</td>
+                <td class="py-1 pr-2">{{ (line as any).currency || '-' }}</td>
+              </tr>
+            </tbody>
+          </table>
+          <p v-if="previewLines.length > 20" class="mt-1 text-xs text-gray-500">Showing first 20 of {{ previewLines.length }} lines</p>
+        </div>
       </section>
 
       <section class="card p-4">

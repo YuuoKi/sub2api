@@ -165,6 +165,12 @@ func TestProviderBillingSHA256_CannotReimportSameRawFile(t *testing.T) {
 	require.NoError(t, err)
 	_, statErr := os.Stat(abs)
 	require.NoError(t, statErr)
+
+	preview, err := svc.PreviewRawFile(t.Context(), header, "a-preview.csv", raw)
+	require.NoError(t, err)
+	require.True(t, preview.Duplicate, "preview must flag already-imported SHA-256")
+	require.Equal(t, hash, preview.FileSHA256)
+	require.NotEmpty(t, preview.Lines)
 }
 
 func TestProviderBillingImport_RejectsDuplicateProviderExternalLineID(t *testing.T) {

@@ -46,7 +46,7 @@ func (h *ProviderBillingHandler) PreviewImport(c *gin.Context) {
 		"file_sha256": parsed.FileSHA256,
 		"line_count":  len(parsed.Lines),
 		"lines":       parsed.Lines,
-		"duplicate":   false,
+		"duplicate":   parsed.Duplicate,
 	})
 }
 

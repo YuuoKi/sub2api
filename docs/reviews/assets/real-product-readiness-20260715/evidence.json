@@ -1,0 +1,750 @@
+{
+  "baseURL": "http://127.0.0.1:18080",
+  "capturedAt": "2026-07-15T09:50:55.473Z",
+  "roles": {
+    "bossDashboard": {
+      "route": "/admin/dashboard",
+      "title": "管理控制台 - Sub2API",
+      "url": "http://127.0.0.1:18080/admin/dashboard",
+      "responses": [
+        {
+          "path": "/api/v1/admin/compliance",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/auth/me",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/compliance",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/subscriptions/active",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/payment/config",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/announcements",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/keys",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/settings",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/dashboard/users-trend",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/dashboard/users-ranking",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/provider-billing/boss-conclusions",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/dashboard/snapshot-v2",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/system/check-updates",
+          "status": 200
+        }
+      ],
+      "screenshot": "01-boss-dashboard.png"
+    },
+    "adminVideo": {
+      "route": "/admin/video",
+      "title": "Video Dashboard - Sub2API",
+      "url": "http://127.0.0.1:18080/admin/video",
+      "responses": [
+        {
+          "path": "/api/v1/admin/compliance",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/auth/me",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/compliance",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/subscriptions/active",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/payment/config",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/settings",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/keys",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/announcements",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/video/dashboard",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/system/check-updates",
+          "status": 200
+        }
+      ],
+      "screenshot": "02-admin-video-dashboard.png"
+    },
+    "adminSystemCheck": {
+      "route": "/admin/video/system-check",
+      "title": "Video System Check - Sub2API",
+      "url": "http://127.0.0.1:18080/admin/video/system-check",
+      "responses": [
+        {
+          "path": "/api/v1/admin/compliance",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/auth/me",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/compliance",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/subscriptions/active",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/payment/config",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/settings",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/announcements",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/keys",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/video/dashboard",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/real-review-session",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/real-access-policy",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/system/check-updates",
+          "status": 200
+        }
+      ],
+      "screenshot": "03-admin-video-system-check.png"
+    },
+    "adminBilling": {
+      "route": "/admin/provider-billing",
+      "title": "供应商对账 - Sub2API",
+      "url": "http://127.0.0.1:18080/admin/provider-billing",
+      "responses": [
+        {
+          "path": "/api/v1/admin/compliance",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/auth/me",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/compliance",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/subscriptions/active",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/payment/config",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/settings",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/provider-billing/imports",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/keys",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/announcements",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/provider-billing/period-summary",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/system/check-updates",
+          "status": 200
+        }
+      ],
+      "screenshot": "04-admin-provider-billing.png"
+    },
+    "adminUsers": {
+      "route": "/admin/users",
+      "title": "用户管理 - Sub2API",
+      "url": "http://127.0.0.1:18080/admin/users",
+      "responses": [
+        {
+          "path": "/api/v1/admin/compliance",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/auth/me",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/compliance",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/subscriptions/active",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/keys",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/announcements",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/settings",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/payment/config",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/user-attributes",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/users",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/admin/system/check-updates",
+          "status": 200
+        }
+      ],
+      "screenshot": "05-admin-users.png"
+    },
+    "employeeCreate": {
+      "route": "/admin/video/create",
+      "title": "Create Video Task - Sub2API",
+      "url": "http://127.0.0.1:18080/admin/video/create",
+      "responses": [
+        {
+          "path": "/api/v1/usage/dashboard/stats",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/auth/me",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/subscriptions/active",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/keys",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/announcements",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/video/providers",
+          "status": 200
+        }
+      ],
+      "screenshot": "06-employee-video-create.png"
+    },
+    "employeeTasks": {
+      "route": "/admin/video/tasks",
+      "title": "Video Tasks - Sub2API",
+      "url": "http://127.0.0.1:18080/admin/video/tasks",
+      "responses": [
+        {
+          "path": "/api/v1/auth/me",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/subscriptions/active",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/announcements",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/video/tasks",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/keys",
+          "status": 200
+        }
+      ],
+      "screenshot": "07-employee-video-tasks.png"
+    },
+    "employeeBatchImage": {
+      "route": "/batch-image",
+      "title": "图片批量生成 - Sub2API",
+      "url": "http://127.0.0.1:18080/batch-image",
+      "responses": [
+        {
+          "path": "/api/v1/auth/me",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/subscriptions/active",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/announcements",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/keys",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/keys",
+          "status": 200
+        }
+      ],
+      "screenshot": "08-employee-batch-image.png"
+    },
+    "employeeMobileTasks": {
+      "route": "/admin/video/tasks",
+      "title": "Video Tasks - Sub2API",
+      "url": "http://127.0.0.1:18080/admin/video/tasks",
+      "responses": [
+        {
+          "path": "/api/v1/auth/me",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/settings/public",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/video/tasks",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/subscriptions/active",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/announcements",
+          "status": 200
+        },
+        {
+          "path": "/api/v1/keys",
+          "status": 200
+        }
+      ],
+      "screenshot": "09-employee-tasks-mobile.png"
+    }
+  },
+  "consoleErrors": [
+    {
+      "role": "admin",
+      "text": "Failed to load resource: the server responded with a status of 423 (Locked)"
+    },
+    {
+      "role": "admin",
+      "text": "[adminSettings] Failed to fetch settings: {status: 423, code: ADMIN_COMPLIANCE_ACK_REQUIRED, message: administrator compliance acknowledgement is required, metadata: Object}"
+    },
+    {
+      "role": "admin",
+      "text": "Failed to load resource: the server responded with a status of 423 (Locked)"
+    },
+    {
+      "role": "admin",
+      "text": "Failed to load resource: the server responded with a status of 423 (Locked)"
+    },
+    {
+      "role": "admin",
+      "text": "Failed to fetch version: {status: 423, code: ADMIN_COMPLIANCE_ACK_REQUIRED, message: administrator compliance acknowledgement is required, metadata: Object}"
+    },
+    {
+      "role": "employee",
+      "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-jhF9P0qXyC4bfoceusGt7Q==' https://challenges.cloudflare.com https://static.cloudflareinsights.com https://*.stripe.com https://static.airwallex.com https://checkout.airwallex.com https://static"
+    },
+    {
+      "role": "employee",
+      "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-D77Mfim14/hE8Sy/mvbj0g==' https://challenges.cloudflare.com https://static.cloudflareinsights.com https://*.stripe.com https://static.airwallex.com https://checkout.airwallex.com https://static"
+    }
+  ],
+  "secretHits": 0,
+  "apiStatuses": [
+    {
+      "path": "/api/v1/admin/compliance",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/auth/me",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/compliance",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/subscriptions/active",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/payment/config",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/announcements",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/keys",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/settings",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/dashboard/users-trend",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/dashboard/users-ranking",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/provider-billing/boss-conclusions",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/dashboard/snapshot-v2",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/system/check-updates",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/compliance",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/auth/me",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/compliance",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/subscriptions/active",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/payment/config",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/settings",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/keys",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/announcements",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/video/dashboard",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/system/check-updates",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/compliance",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/auth/me",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/compliance",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/subscriptions/active",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/payment/config",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/settings",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/announcements",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/keys",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/video/dashboard",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/real-review-session",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/real-access-policy",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/system/check-updates",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/compliance",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/auth/me",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/compliance",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/subscriptions/active",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/payment/config",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/settings",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/provider-billing/imports",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/keys",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/announcements",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/provider-billing/period-summary",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/system/check-updates",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/compliance",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/auth/me",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/compliance",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/subscriptions/active",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/keys",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/announcements",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/settings",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/payment/config",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/user-attributes",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/users",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/admin/system/check-updates",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/usage/dashboard/stats",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/auth/me",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/subscriptions/active",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/keys",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/announcements",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/video/providers",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/auth/me",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/subscriptions/active",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/announcements",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/video/tasks",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/keys",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/auth/me",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/subscriptions/active",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/announcements",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/keys",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/keys",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/auth/me",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/settings/public",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/video/tasks",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/subscriptions/active",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/announcements",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/keys",
+      "status": 200
+    }
+  ],
+  "summary": {
+    "screenshots": 9,
+    "apiCalls": 79,
+    "apiNon2xx": 0,
+    "consoleErrors": 7,
+    "secretHits": 0
+  }
+}

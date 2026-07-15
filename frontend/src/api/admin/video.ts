@@ -359,6 +359,43 @@ export function localAssetURL(taskId: number): string {
   return `/video/tasks/${taskId}/local-asset`
 }
 
+export interface RealAccessPolicy {
+  name: string
+  enabled: boolean
+  global_kill_switch: boolean
+  allow_member: boolean
+  allow_group: boolean
+  image_daily_cny: string
+  video_daily_cny: string
+  monthly_cny: string
+  audit_actor_email?: string
+}
+
+export interface ClearReviewOnlyResult {
+  disabled_video_accounts: number
+  disabled_image_accounts: number
+}
+
+async function getRealAccessPolicy(): Promise<RealAccessPolicy> {
+  const { data } = await apiClient.get<RealAccessPolicy>('/admin/real-access-policy')
+  return data
+}
+
+async function putRealAccessPolicy(payload: Partial<RealAccessPolicy>): Promise<RealAccessPolicy> {
+  const { data } = await apiClient.put<RealAccessPolicy>('/admin/real-access-policy', payload)
+  return data
+}
+
+async function putRealAccessKillSwitch(enabled: boolean): Promise<RealAccessPolicy> {
+  const { data } = await apiClient.post<RealAccessPolicy>('/admin/real-access-policy/kill-switch', { enabled })
+  return data
+}
+
+async function clearReviewOnlyBootstrap(): Promise<ClearReviewOnlyResult> {
+  const { data } = await apiClient.post<ClearReviewOnlyResult>('/admin/real-review-session/clear-bootstrap')
+  return data
+}
+
 export const videoAdminAPI = {
   listProviders,
   createProvider,
@@ -370,6 +407,10 @@ export const videoAdminAPI = {
   routingEvents,
   skillCards,
   createSkillAnalysisExport,
+  getRealAccessPolicy,
+  putRealAccessPolicy,
+  putRealAccessKillSwitch,
+  clearReviewOnlyBootstrap,
 }
 
 export const videoTaskAPI = {

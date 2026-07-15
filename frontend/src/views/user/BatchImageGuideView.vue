@@ -587,6 +587,16 @@
           </div>
 
           <div>
+            <label class="input-label">执行模式</label>
+            <select v-model="batchImageExecutionMode" class="input">
+              <option value="mock">免费试跑</option>
+              <option value="review_real" :disabled="!reviewRealAvailable">一次真实复核</option>
+              <option value="internal_real" :disabled="!internalRealAvailable">内部真实调用</option>
+            </select>
+            <p v-if="executionModeHint" class="input-hint text-amber-600 dark:text-amber-400">{{ executionModeHint }}</p>
+          </div>
+
+          <div>
             <label class="input-label">预计生成</label>
             <div class="input flex items-center bg-gray-50 text-gray-600 dark:bg-dark-900 dark:text-gray-300">
               {{ estimatedOutputCount }} 张 / {{ promptRows.length }} 条
@@ -697,8 +707,21 @@
           <button type="button" class="btn btn-secondary" :disabled="submitting" @click="closeCreateModal">取消</button>
 	          <button type="button" class="btn btn-primary inline-flex min-w-[120px] justify-center" :disabled="submitting || loadingModels || (parsedItems.length === 0 && !promptDraft.trim()) || !selectedApiKey || !form.model" @click="submitJob">
             <Icon v-if="submitting" name="refresh" size="sm" class="mr-2 animate-spin" />
-            {{ submitting ? '提交中...' : '提交任务' }}
+            {{ submitting ? '提交中...' : (batchImageExecutionMode === 'mock' ? '提交试跑' : '创建真实任务') }}
           </button>
+        </div>
+      </template>
+    </BaseDialog>
+
+    <BaseDialog :show="confirmRealOpen" title="确认真实调用" @close="confirmRealOpen = false">
+      <div class="space-y-3 text-sm text-gray-700 dark:text-gray-200">
+        <p>将按真实通道提交，可能产生费用。</p>
+        <p>预计生成 <strong>{{ estimatedOutputCount }}</strong> 张；模式：{{ batchImageExecutionMode }}。</p>
+      </div>
+      <template #footer>
+        <div class="flex justify-end gap-3">
+          <button class="btn btn-outline" type="button" @click="confirmRealOpen = false">取消</button>
+          <button class="btn btn-primary" type="button" :disabled="submitting" @click="confirmRealOnce">再次确认并提交</button>
         </div>
       </template>
     </BaseDialog>
@@ -1260,6 +1283,8 @@ async function loadAvailableModels() {
   try {
     const result = await listBatchImageModels(key.key)
     if (requestID !== modelRequestSeq) return
+    batchImageCapabilities.value = result.execution_capabilities || { mock: true, review_real: false, internal_real: false }
+    batchImageExecutionMode.value = 'mock'
     const seen = new Set<string>()
     availableBatchImageModels.value = (result.data || [])
       .map(model => String(model.id || '').trim())
@@ -1272,6 +1297,7 @@ async function loadAvailableModels() {
     form.model = availableBatchImageModels.value[0]?.value || ''
   } catch (error: any) {
     if (requestID !== modelRequestSeq) return
+    batchImageCapabilities.value = { mock: true, review_real: false, internal_real: false }
     modelLoadError.value = batchImageErrorMessage(error, batchImageText('loadModelsFailed'))
   } finally {
     if (requestID === modelRequestSeq) {
@@ -1563,6 +1589,10 @@ function resetCreateDraft() {
   customIdDraft.value = ''
   outputCountDraft.value = 1
   referenceImageDrafts.value = []
+  batchImageExecutionMode.value = 'mock'
+  batchImageIdempotencyKey.value = ''
+  confirmRealOpen.value = false
+  confirmRealSecond.value = false
 }
 
 function closeDetail() {
@@ -1614,15 +1644,37 @@ function validateForm(): boolean {
 
 const batchImageExecutionMode = ref<'mock' | 'review_real' | 'internal_real'>('mock')
 const batchImageIdempotencyKey = ref('')
+const batchImageCapabilities = ref<{ mock?: boolean; review_real?: boolean; internal_real?: boolean }>({ mock: true })
+const confirmRealOpen = ref(false)
+const confirmRealSecond = ref(false)
+const reviewRealAvailable = computed(() => Boolean(batchImageCapabilities.value.review_real))
+const internalRealAvailable = computed(() => Boolean(batchImageCapabilities.value.internal_real))
+const executionModeHint = computed(() => {
+  if (batchImageExecutionMode.value === 'review_real' && !reviewRealAvailable.value) {
+    return '一次真实复核暂不可用：请联系管理员开启复核会话。'
+  }
+  if (batchImageExecutionMode.value === 'internal_real' && !internalRealAvailable.value) {
+    return '内部真实通道未开通：请先完成验收并由管理员配置正式内部通道策略。'
+  }
+  return ''
+})
 
 async function submitJob() {
   if (submitting.value) return
   if (promptDraft.value.trim()) addPromptRow()
   if (!validateForm()) return
+  if (executionModeHint.value) {
+    appStore.showError(executionModeHint.value)
+    return
+  }
   const key = requireApiKey()
   if (!key) return
+  if (batchImageExecutionMode.value !== 'mock' && !confirmRealSecond.value) {
+    confirmRealOpen.value = true
+    return
+  }
   if (!batchImageIdempotencyKey.value) {
-    batchImageIdempotencyKey.value = `sub2api-ui-${key.id}-${form.model}-${form.taskName.trim() || 'default'}-${parsedItems.value.map((item) => item.custom_id).join('|')}`
+    batchImageIdempotencyKey.value = crypto.randomUUID()
   }
   submitting.value = true
   try {
@@ -1640,6 +1692,8 @@ async function submitJob() {
       batchImageIdempotencyKey.value,
     )
     batchImageIdempotencyKey.value = ''
+    confirmRealOpen.value = false
+    confirmRealSecond.value = false
     currentJob.value = job
     selectedBatchId.value = job.id
     selectedBatchApiKeyId.value = key.id
@@ -1655,6 +1709,12 @@ async function submitJob() {
   } finally {
     submitting.value = false
   }
+}
+
+function confirmRealOnce() {
+  confirmRealSecond.value = true
+  confirmRealOpen.value = false
+  void submitJob()
 }
 
 async function refreshSelected() {

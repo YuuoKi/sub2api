@@ -42,6 +42,29 @@
       </details>
 
       <details class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
+        <summary class="cursor-pointer text-sm font-semibold text-gray-900 dark:text-white">内部真实策略</summary>
+        <div class="mt-4 space-y-3 text-sm text-gray-600 dark:text-gray-300">
+          <p>
+            策略：{{ policy?.enabled ? '已启用' : '未启用' }}；
+            杀开关：{{ policy?.global_kill_switch ? '开启（阻断）' : '关闭' }}；
+            日限额 image/video：{{ policy?.image_daily_cny || '-' }} / {{ policy?.video_daily_cny || '-' }}
+          </p>
+          <div class="flex flex-wrap gap-2">
+            <button class="btn btn-secondary btn-sm" type="button" :disabled="policyBusy" @click="loadPolicy">刷新策略</button>
+            <button class="btn btn-secondary btn-sm" type="button" :disabled="policyBusy || !policy" @click="togglePolicyEnabled">
+              {{ policy?.enabled ? '关闭策略' : '启用策略' }}
+            </button>
+            <button class="btn btn-secondary btn-sm" type="button" :disabled="policyBusy || !policy" @click="toggleKillSwitch">
+              {{ policy?.global_kill_switch ? '关闭杀开关' : '打开杀开关' }}
+            </button>
+            <button class="btn btn-secondary btn-sm text-red-600" type="button" :disabled="policyBusy" @click="clearBootstrap">
+              禁用复核引导账号
+            </button>
+          </div>
+        </div>
+      </details>
+
+      <details class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
         <summary class="cursor-pointer text-sm font-semibold text-gray-900 dark:text-white">给技术同学执行</summary>
         <div class="mt-4 space-y-3 text-sm text-gray-600 dark:text-gray-300">
           <p>如第二台电脑打不开，先在 Windows 管理员 PowerShell 执行启用脚本；演示结束后可执行回滚脚本。</p>
@@ -58,6 +81,7 @@ import { computed, onMounted, ref } from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { adminAPI } from '@/api/admin'
+import type { RealAccessPolicy } from '@/api/admin/video'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
 
@@ -65,6 +89,8 @@ type CheckState = 'normal' | 'warning' | 'unknown'
 
 const appStore = useAppStore()
 const loading = ref(false)
+const policyBusy = ref(false)
+const policy = ref<RealAccessPolicy | null>(null)
 const serviceReady = ref<CheckState>('unknown')
 const setupReady = ref<CheckState>('unknown')
 const taskCount = ref<number | null>(null)
@@ -110,6 +136,59 @@ function backendFetch(path: string): Promise<Response> {
   return fetch(`${backendRoot}${path}`, { cache: 'no-store' })
 }
 
+async function loadPolicy() {
+  policyBusy.value = true
+  try {
+    policy.value = await adminAPI.video.getRealAccessPolicy()
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, '加载内部真实策略失败'))
+  } finally {
+    policyBusy.value = false
+  }
+}
+
+async function togglePolicyEnabled() {
+  if (!policy.value) return
+  policyBusy.value = true
+  try {
+    policy.value = await adminAPI.video.putRealAccessPolicy({
+      ...policy.value,
+      enabled: !policy.value.enabled,
+      allow_member: true,
+    })
+    appStore.showSuccess(policy.value.enabled ? '已启用内部真实策略' : '已关闭内部真实策略')
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, '更新策略失败'))
+  } finally {
+    policyBusy.value = false
+  }
+}
+
+async function toggleKillSwitch() {
+  if (!policy.value) return
+  policyBusy.value = true
+  try {
+    policy.value = await adminAPI.video.putRealAccessKillSwitch(!policy.value.global_kill_switch)
+    appStore.showSuccess(policy.value.global_kill_switch ? '杀开关已打开' : '杀开关已关闭')
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, '更新杀开关失败'))
+  } finally {
+    policyBusy.value = false
+  }
+}
+
+async function clearBootstrap() {
+  policyBusy.value = true
+  try {
+    const result = await adminAPI.video.clearReviewOnlyBootstrap()
+    appStore.showSuccess(`已禁用复核账号：视频 ${result.disabled_video_accounts}，图片 ${result.disabled_image_accounts}`)
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, '禁用复核引导账号失败'))
+  } finally {
+    policyBusy.value = false
+  }
+}
+
 async function loadChecks() {
   loading.value = true
   try {
@@ -121,6 +200,7 @@ async function loadChecks() {
     serviceReady.value = healthResponse?.ok ? 'normal' : 'warning'
     setupReady.value = setupResponse?.ok ? 'normal' : 'warning'
     taskCount.value = dashboard?.today_tasks ?? 0
+    await loadPolicy()
   } catch (err) {
     serviceReady.value = 'warning'
     appStore.showError(extractApiErrorMessage(err, '系统检查失败'))

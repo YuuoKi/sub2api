@@ -741,25 +741,28 @@ func ProvideBatchImagePublicService(
 	cfg *config.Config,
 	realCreate reviewguard.RealCreateGuard,
 	settingService *SettingService,
+	realAccessPolicyRepo ProviderRealAccessPolicyRepository,
 ) *BatchImagePublicService {
 	svc := NewBatchImagePublicService(repo, accountRepo, groupRepo, userGroupRateRepo, queue, pricing, billingRepo, authCache, cfg)
 	svc.SetRealCreateGuard(realCreate)
 	svc.SetSettingService(settingService)
+	svc.SetRealAccessPolicyRepository(realAccessPolicyRepo)
 	return svc
 }
 
-func ProvideVideoGatewayService(repo VideoGatewayRepository, encryptor VideoKeyEncryptor, cfg *config.Config, userRepo UserRepository, settingService *SettingService, billingCacheService *BillingCacheService, realCreate reviewguard.RealCreateGuard) *VideoGatewayService {
+func ProvideVideoGatewayService(repo VideoGatewayRepository, encryptor VideoKeyEncryptor, cfg *config.Config, userRepo UserRepository, settingService *SettingService, billingCacheService *BillingCacheService, realCreate reviewguard.RealCreateGuard, realAccessPolicyRepo ProviderRealAccessPolicyRepository) *VideoGatewayService {
 	svc := NewVideoGatewayService(repo, encryptor, cfg)
 	svc.SetBalanceBillingDependencies(userRepo, settingService, billingCacheService)
 	svc.SetRealCreateGuard(realCreate)
+	svc.SetRealAccessPolicyRepository(realAccessPolicyRepo)
 	if cfg != nil && cfg.VideoGateway.PerCallBudget > 0 && cfg.VideoGateway.CostPerSecond > 0 {
 		svc.SetBudgetGuard(NewStaticBudgetGuard(cfg.VideoGateway.PerCallBudget))
 	}
 	return svc
 }
 
-func ProvideVideoGatewayServiceWithContentCollector(repo VideoGatewayRepository, encryptor VideoKeyEncryptor, cfg *config.Config, userRepo UserRepository, settingService *SettingService, billingCacheService *BillingCacheService, generationContentRepo GenerationContentRepository, realCreate reviewguard.RealCreateGuard) *VideoGatewayService {
-	svc := ProvideVideoGatewayService(repo, encryptor, cfg, userRepo, settingService, billingCacheService, realCreate)
+func ProvideVideoGatewayServiceWithContentCollector(repo VideoGatewayRepository, encryptor VideoKeyEncryptor, cfg *config.Config, userRepo UserRepository, settingService *SettingService, billingCacheService *BillingCacheService, generationContentRepo GenerationContentRepository, realCreate reviewguard.RealCreateGuard, realAccessPolicyRepo ProviderRealAccessPolicyRepository) *VideoGatewayService {
+	svc := ProvideVideoGatewayService(repo, encryptor, cfg, userRepo, settingService, billingCacheService, realCreate, realAccessPolicyRepo)
 	svc.SetGenerationContentCollector(NewGenerationContentCollector(generationContentRepo, cfg))
 	return svc
 }

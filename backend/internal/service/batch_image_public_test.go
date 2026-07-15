@@ -14,6 +14,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/reviewguard"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
 )
 
@@ -744,6 +745,51 @@ func TestBatchImageMockModeSkipsRealCreateGuard(t *testing.T) {
 	require.Len(t, queue.enqueued, 1)
 	require.Empty(t, gemini.submits)
 	require.Len(t, mock.submits, 1)
+}
+
+func TestBatchImageSubmitInternalRealReservesPolicy(t *testing.T) {
+	ctx := context.Background()
+	svc, repo, queue, gemini, _ := newTestBatchImagePublicService(true)
+	policyRepo := NewMemoryProviderRealAccessPolicyRepo(&ProviderRealAccessPolicy{
+		ID: 1, Name: "default", Enabled: true, GlobalKillSwitch: false, AllowMember: true,
+		ImageDailyCNY: decimal.NewFromInt(100), VideoDailyCNY: decimal.NewFromInt(100), MonthlyCNY: decimal.NewFromInt(1000),
+	})
+	svc.SetRealAccessPolicyRepository(policyRepo)
+	formal := testBatchImageAccount(404, AccountTypeAPIKey)
+	svc.AccountRepo = &publicBatchImageAccountRepo{accounts: []Account{formal}}
+
+	req := validBatchImageSubmitRequest()
+	req.ExecutionMode = ExecutionModeInternalReal
+	got, err := svc.Submit(ctx, testBatchImageOwner(), req, "idem-internal-real-reserve")
+	require.NoError(t, err)
+	require.Equal(t, ExecutionModeInternalReal, got.ExecutionMode)
+	require.Len(t, gemini.submits, 1)
+	require.Len(t, queue.enqueued, 1)
+	opID := "internal:image:" + got.ID
+	used, err := policyRepo.SumReservedCNY(ctx, testBatchImageOwner().UserID, "image", time.Time{})
+	require.NoError(t, err)
+	require.True(t, used.IsPositive(), "policy reservation must be held")
+	item, ok := policyRepo.reservations[opID]
+	require.True(t, ok, "reservation op %s missing", opID)
+	require.Equal(t, "reserved", item.Status)
+	_ = repo
+}
+
+func TestBatchImageSubmitInternalRealFailsClosedWithoutRepo(t *testing.T) {
+	ctx := context.Background()
+	svc, repo, queue, gemini, _ := newTestBatchImagePublicService(true)
+	// realAccessPolicyRepo intentionally nil
+	formal := testBatchImageAccount(505, AccountTypeAPIKey)
+	svc.AccountRepo = &publicBatchImageAccountRepo{accounts: []Account{formal}}
+
+	req := validBatchImageSubmitRequest()
+	req.ExecutionMode = ExecutionModeInternalReal
+	_, err := svc.Submit(ctx, testBatchImageOwner(), req, "idem-internal-real-nil-repo")
+	require.Error(t, err)
+	require.True(t, errors.Is(err, ErrInternalRealPolicyDenied) || strings.Contains(err.Error(), "INTERNAL_REAL_POLICY_DENIED"))
+	require.Empty(t, gemini.submits)
+	require.Empty(t, queue.enqueued)
+	require.Empty(t, repo.jobs)
 }
 
 func TestBatchImageReviewRealSessionDisabledCreateZero(t *testing.T) {

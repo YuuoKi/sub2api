@@ -13,6 +13,7 @@ func TestVideoGatewayCreateTaskContentArrayContract(t *testing.T) {
 	repo := newMemoryVideoGatewayRepo()
 	providerID := repo.seedMockProvider()
 	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, nil)
+	armPermissiveInternalRealPolicy(svc)
 
 	task, err := svc.CreateTask(context.Background(), VideoTaskCreateParams{
 		ProviderAccountID: providerID,
@@ -47,6 +48,7 @@ func TestVideoGatewayCreateTaskLegacyReferenceImageURLCompat(t *testing.T) {
 	repo := newMemoryVideoGatewayRepo()
 	providerID := repo.seedMockProvider()
 	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, nil)
+	armPermissiveInternalRealPolicy(svc)
 
 	task, err := svc.CreateTask(context.Background(), VideoTaskCreateParams{
 		ProviderAccountID: providerID,
@@ -159,6 +161,7 @@ func TestVideoGatewayCreateTaskValidatesSeedanceDurationAndResolution(t *testing
 	repo := newMemoryVideoGatewayRepo()
 	accountID := seedSmokeAuthorizedSeedanceProvider(repo, "seedance-test-key-1234567890", "https://ark.example.com/api/v3")
 	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, nil)
+	armPermissiveInternalRealPolicy(svc)
 
 	if _, err := svc.CreateTask(context.Background(), VideoTaskCreateParams{
 		ProviderAccountID: accountID,

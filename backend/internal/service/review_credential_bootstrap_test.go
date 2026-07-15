@@ -51,6 +51,58 @@ func TestReviewCredentialBootstrapUpsertsReviewOnlyWithoutLeakingSecrets(t *test
 	}
 }
 
+func TestClearReviewOnlyAccountsDisablesBootstrapAccounts(t *testing.T) {
+	repo := newMemoryVideoGatewayRepo()
+	reviewID := repo.nextProviderID
+	repo.nextProviderID++
+	repo.providers[reviewID] = &VideoProviderAccount{
+		ID:               reviewID,
+		Provider:         VideoProviderSeedance,
+		DisplayName:      reviewSeedanceAccountName,
+		Enabled:          true,
+		DefaultModel:     "seedance-1-0-pro",
+		RouteAvailable:   true,
+		APIKeyConfigured: true,
+		EncryptedAPIKey:  "enc",
+		Metadata:         map[string]any{"review_only": true},
+	}
+	formalID := repo.nextProviderID
+	repo.nextProviderID++
+	repo.providers[formalID] = &VideoProviderAccount{
+		ID:               formalID,
+		Provider:         VideoProviderSeedance,
+		DisplayName:      "Formal",
+		Enabled:          true,
+		DefaultModel:     "seedance-1-0-pro",
+		RouteAvailable:   true,
+		APIKeyConfigured: true,
+		EncryptedAPIKey:  "enc",
+		Metadata:         map[string]any{"production_authorized": true},
+	}
+	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, &config.Config{})
+	result, err := svc.ClearReviewOnlyAccounts(context.Background())
+	if err != nil {
+		t.Fatalf("ClearReviewOnlyAccounts: %v", err)
+	}
+	if result.DisabledVideoAccounts < 1 {
+		t.Fatalf("disabled video accounts=%d, want >=1", result.DisabledVideoAccounts)
+	}
+	review, err := repo.GetProviderAccount(context.Background(), reviewID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if review.Enabled {
+		t.Fatal("review_only bootstrap account must be disabled")
+	}
+	formal, err := repo.GetProviderAccount(context.Background(), formalID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !formal.Enabled {
+		t.Fatal("formal account must remain enabled")
+	}
+}
+
 func TestAllowProductMockBatchImageProviderNotInProduction(t *testing.T) {
 	cfg := &config.Config{}
 	cfg.Log.Environment = "production"

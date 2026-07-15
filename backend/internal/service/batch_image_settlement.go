@@ -12,6 +12,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/shopspring/decimal"
 	"go.uber.org/zap"
 )
 
@@ -55,12 +56,13 @@ func (r *BatchImageModelPricingResolver) BatchImageUnitPrice(ctx context.Context
 }
 
 type BatchImageSettlementService struct {
-	Repo         BatchImageRepository
-	BillingRepo  UsageBillingRepository
-	UsageLogRepo UsageLogRepository
-	Pricing      BatchImagePricingResolver
-	AuthCache    APIKeyAuthCacheInvalidator
-	Config       *config.Config
+	Repo                 BatchImageRepository
+	BillingRepo          UsageBillingRepository
+	UsageLogRepo         UsageLogRepository
+	Pricing              BatchImagePricingResolver
+	AuthCache            APIKeyAuthCacheInvalidator
+	Config               *config.Config
+	RealAccessPolicyRepo ProviderRealAccessPolicyRepository
 }
 
 type BatchImageSettlementResult struct {
@@ -177,6 +179,7 @@ func (s *BatchImageSettlementService) Settle(ctx context.Context, batchID string
 	}); err != nil {
 		return nil, err
 	}
+	s.settleInternalRealImageReservation(ctx, job, actualCost)
 	s.recordUsageLog(ctx, job, actualCost, result.RequestID, now)
 
 	return result, nil
@@ -230,6 +233,7 @@ func (s *BatchImageSettlementService) failExhaustedSettlement(ctx context.Contex
 		}
 		return ErrBatchImageSettlementBillingFailed.WithCause(err)
 	}
+	s.releaseInternalRealImageReservation(ctx, job)
 	s.invalidateAuthCache(ctx, job.UserID)
 	msg := strings.TrimSpace(message)
 	if msg == "" {
@@ -307,6 +311,34 @@ func (s *BatchImageSettlementService) outputRetentionAfterTerminal() time.Durati
 		return time.Duration(s.Config.BatchImage.OutputRetentionAfterTerminalHours) * time.Hour
 	}
 	return 72 * time.Hour
+}
+
+func (s *BatchImageSettlementService) settleInternalRealImageReservation(ctx context.Context, job *BatchImageJob, actualCost float64) {
+	if s == nil || s.RealAccessPolicyRepo == nil || job == nil {
+		return
+	}
+	if strings.TrimSpace(job.ExecutionMode) != ExecutionModeInternalReal {
+		return
+	}
+	opID := internalRealImageOperationID(job.BatchID)
+	if opID == "" {
+		return
+	}
+	_ = s.RealAccessPolicyRepo.Settle(ctx, opID, decimal.NewFromFloat(actualCost))
+}
+
+func (s *BatchImageSettlementService) releaseInternalRealImageReservation(ctx context.Context, job *BatchImageJob) {
+	if s == nil || s.RealAccessPolicyRepo == nil || job == nil {
+		return
+	}
+	if strings.TrimSpace(job.ExecutionMode) != ExecutionModeInternalReal {
+		return
+	}
+	opID := internalRealImageOperationID(job.BatchID)
+	if opID == "" {
+		return
+	}
+	_ = s.RealAccessPolicyRepo.Release(ctx, opID)
 }
 
 func BatchImageSettlementRequestID(batchID string) string {

@@ -50,6 +50,7 @@ export interface BatchImageJob {
   status: BatchImageStatus
   model: string
   provider: string
+  execution_mode?: BatchImageExecutionMode
   item_count: number
   success_count: number
   fail_count: number
@@ -97,9 +98,16 @@ export interface BatchImageModel {
   provider: string
 }
 
+export interface BatchImageExecutionCapabilities {
+  mock?: boolean
+  review_real?: boolean
+  internal_real?: boolean
+}
+
 export interface BatchImageModelsResponse {
   object: string
   data: BatchImageModel[]
+  execution_capabilities?: BatchImageExecutionCapabilities
 }
 
 export interface BatchImageJobsListOptions {

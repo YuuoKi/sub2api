@@ -258,31 +258,30 @@ func (h *VideoHandler) ListProviders(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
+	mockReady := false
+	reviewReady := false
+	for _, item := range items {
+		if item == nil {
+			continue
+		}
+		switch {
+		case item.Provider == service.VideoProviderMock && item.RouteAvailable:
+			mockReady = true
+		case item.RouteAvailable && service.IsReviewOnlyVideoAccount(item):
+			reviewReady = true
+		}
+	}
+	internalReady := h.video != nil && h.video.InternalRealCapability(c.Request.Context())
+	caps := gin.H{
+		"mock":          mockReady,
+		"review_real":   reviewReady && h.video != nil && h.video.RealReviewSessionEnabled(),
+		"internal_real": internalReady,
+	}
 	if role != "admin" {
 		// Employees get capability summary only — never enumerate provider accounts.
-		mockReady := false
-		reviewReady := false
-		internalReady := false
-		for _, item := range items {
-			if item == nil {
-				continue
-			}
-			switch {
-			case item.Provider == service.VideoProviderMock && item.RouteAvailable:
-				mockReady = true
-			case item.RouteAvailable && service.IsReviewOnlyVideoAccount(item):
-				reviewReady = true
-			case item.RouteAvailable && item.Provider != service.VideoProviderMock && !service.IsReviewOnlyVideoAccount(item):
-				internalReady = true
-			}
-		}
 		response.Success(c, gin.H{
-			"items":                 []any{},
-			"execution_capabilities": gin.H{
-				"mock":          mockReady,
-				"review_real":   reviewReady && h.video != nil && h.video.RealReviewSessionEnabled(),
-				"internal_real": internalReady,
-			},
+			"items":                  []any{},
+			"execution_capabilities": caps,
 		})
 		return
 	}
@@ -290,7 +289,7 @@ func (h *VideoHandler) ListProviders(c *gin.Context) {
 	for _, item := range items {
 		out = append(out, videoProviderAccountToResponse(item))
 	}
-	response.Success(c, gin.H{"items": out})
+	response.Success(c, gin.H{"items": out, "execution_capabilities": caps})
 }
 
 func (h *VideoHandler) ListAPIKeyVideoProviders(c *gin.Context) {

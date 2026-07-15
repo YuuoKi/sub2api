@@ -862,6 +862,7 @@ func (s *VideoGatewayService) finalizeWorkerTerminal(
 	}
 	applyVideoTaskFinalizationResult(candidate, result)
 	*current = *candidate
+	s.settleOrReleaseInternalRealForTask(ctx, candidate)
 	return nil
 }
 

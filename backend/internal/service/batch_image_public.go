@@ -84,18 +84,19 @@ type BatchImageOwner struct {
 }
 
 type BatchImagePublicService struct {
-	Repo              BatchImageRepository
-	AccountRepo       BatchImageAccountSelectionRepository
-	GroupRepo         BatchImageGroupPricingRepository
-	UserGroupRateRepo BatchImageUserGroupRateRepository
-	Queue             BatchImageQueue
-	ProviderRegistry  *BatchImageProviderRegistry
-	Pricing           BatchImagePricingResolver
-	BillingRepo       UsageBillingRepository
-	AuthCache         APIKeyAuthCacheInvalidator
-	Config            *config.Config
-	RealCreateGuard   reviewguard.RealCreateGuard
-	SettingService    *SettingService
+	Repo                 BatchImageRepository
+	AccountRepo          BatchImageAccountSelectionRepository
+	GroupRepo            BatchImageGroupPricingRepository
+	UserGroupRateRepo    BatchImageUserGroupRateRepository
+	Queue                BatchImageQueue
+	ProviderRegistry     *BatchImageProviderRegistry
+	Pricing              BatchImagePricingResolver
+	BillingRepo          UsageBillingRepository
+	AuthCache            APIKeyAuthCacheInvalidator
+	Config               *config.Config
+	RealCreateGuard      reviewguard.RealCreateGuard
+	SettingService       *SettingService
+	RealAccessPolicyRepo ProviderRealAccessPolicyRepository
 }
 
 type BatchImagePricingSnapshot struct {
@@ -118,6 +119,7 @@ type BatchImagePublicBatch struct {
 	Status          string   `json:"status"`
 	Model           string   `json:"model"`
 	Provider        string   `json:"provider"`
+	ExecutionMode   string   `json:"execution_mode,omitempty"`
 	ItemCount       int      `json:"item_count"`
 	SuccessCount    int      `json:"success_count"`
 	FailCount       int      `json:"fail_count"`
@@ -166,8 +168,15 @@ type BatchImagePublicModel struct {
 }
 
 type BatchImagePublicModelsResponse struct {
-	Object string                  `json:"object"`
-	Data   []BatchImagePublicModel `json:"data"`
+	Object                 string                          `json:"object"`
+	Data                   []BatchImagePublicModel         `json:"data"`
+	ExecutionCapabilities  *BatchImageExecutionCapabilities `json:"execution_capabilities,omitempty"`
+}
+
+type BatchImageExecutionCapabilities struct {
+	Mock         bool `json:"mock"`
+	ReviewReal   bool `json:"review_real"`
+	InternalReal bool `json:"internal_real"`
 }
 
 type BatchImageJobsQuery struct {
@@ -213,6 +222,99 @@ func (s *BatchImagePublicService) SetSettingService(setting *SettingService) {
 		return
 	}
 	s.SettingService = setting
+}
+
+func (s *BatchImagePublicService) SetRealAccessPolicyRepository(repo ProviderRealAccessPolicyRepository) {
+	if s == nil {
+		return
+	}
+	s.RealAccessPolicyRepo = repo
+}
+
+func internalRealImageOperationID(batchID string) string {
+	batchID = strings.TrimSpace(batchID)
+	if batchID == "" {
+		return ""
+	}
+	return "internal:image:" + batchID
+}
+
+func (s *BatchImagePublicService) reserveInternalRealForImageSubmit(ctx context.Context, owner BatchImageOwner, job *BatchImageJob, pricing *BatchImagePricingSnapshot) error {
+	if s == nil || s.RealAccessPolicyRepo == nil {
+		return ErrInternalRealPolicyDenied
+	}
+	if job == nil {
+		return ErrInternalRealPolicyDenied
+	}
+	opID := internalRealImageOperationID(job.BatchID)
+	if opID == "" {
+		return ErrInternalRealPolicyDenied
+	}
+	estimate := decimal.NewFromFloat(job.EstimatedCost)
+	if pricing != nil && pricing.EstimatedCost > 0 {
+		estimate = decimal.NewFromFloat(pricing.EstimatedCost)
+	}
+	if !estimate.IsPositive() {
+		estimate = decimal.NewFromInt(1)
+	}
+	return s.RealAccessPolicyRepo.ReserveInTx(ctx, ProviderRealAccessReservation{
+		OperationID: opID,
+		UserID:      owner.UserID,
+		Kind:        "image",
+		ReservedCNY: estimate,
+	})
+}
+
+func (s *BatchImagePublicService) releaseInternalRealImageReservation(ctx context.Context, batchID string) {
+	if s == nil || s.RealAccessPolicyRepo == nil {
+		return
+	}
+	opID := internalRealImageOperationID(batchID)
+	if opID == "" {
+		return
+	}
+	_ = s.RealAccessPolicyRepo.Release(ctx, opID)
+}
+
+func (s *BatchImagePublicService) InternalRealCapability(ctx context.Context) bool {
+	if s == nil || s.RealAccessPolicyRepo == nil {
+		return false
+	}
+	policy, err := s.RealAccessPolicyRepo.GetPolicy(ctx, "default")
+	if err != nil || policy == nil || !policy.Enabled || policy.GlobalKillSwitch || !policy.AllowMember {
+		return false
+	}
+	ok, err := s.hasFormalInternalImageChannel(ctx)
+	return err == nil && ok
+}
+
+func (s *BatchImagePublicService) hasFormalInternalImageChannel(ctx context.Context) (bool, error) {
+	if s == nil || s.AccountRepo == nil || s.ProviderRegistry == nil {
+		return false, nil
+	}
+	for _, providerName := range batchImageProviderSelectionOrder("") {
+		if providerName == BatchImageProviderMock {
+			continue
+		}
+		provider, ok := s.ProviderRegistry.Get(providerName)
+		if !ok || provider == nil {
+			continue
+		}
+		accounts, err := s.listCandidateAccounts(ctx, nil, batchImageProviderPlatform(providerName))
+		if err != nil {
+			return false, err
+		}
+		for i := range accounts {
+			account := &accounts[i]
+			if isReviewOnlyImageAccount(account) {
+				continue
+			}
+			if account.IsSchedulable() && provider.SupportsAccount(account) {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }
 
 func (s *BatchImagePublicService) Submit(ctx context.Context, owner BatchImageOwner, req BatchImageSubmitRequest, idempotencyKey string) (*BatchImagePublicBatch, error) {
@@ -323,6 +425,15 @@ func (s *BatchImagePublicService) Submit(ctx context.Context, owner BatchImageOw
 		return nil, err
 	}
 	job.ExecutionMode = mode
+	reservedInternalReal := false
+	if mode == ExecutionModeInternalReal {
+		if err := s.reserveInternalRealForImageSubmit(ctx, owner, job, pricingSnapshot); err != nil {
+			_ = s.Repo.RecordBatchImageJobSubmitFailure(ctx, job.BatchID, "INTERNAL_REAL_POLICY_DENIED", sanitizeBatchImagePublicMessage(err.Error()), true)
+			s.hidePreUpstreamSubmitFailure(ctx, owner, job)
+			return nil, err
+		}
+		reservedInternalReal = true
+	}
 	mockSettlement := mode == ExecutionModeMock || provider.Name() == BatchImageProviderMock
 	if mockSettlement {
 		// Product mock path: no balance hold; settlement is not_required.
@@ -330,6 +441,9 @@ func (s *BatchImagePublicService) Submit(ctx context.Context, owner BatchImageOw
 		job.HoldAmount = &holdAmount
 		job.EstimatedCost = 0
 	} else if err := reserveBatchImageBalanceHold(ctx, s.BillingRepo, job, requestHash); err != nil {
+		if reservedInternalReal {
+			s.releaseInternalRealImageReservation(ctx, job.BatchID)
+		}
 		code := "BILLING_HOLD_FAILED"
 		if errors.Is(err, ErrBatchImageInsufficientBalance) {
 			code = "INSUFFICIENT_BALANCE"
@@ -342,6 +456,9 @@ func (s *BatchImagePublicService) Submit(ctx context.Context, owner BatchImageOw
 		s.invalidateAuthCache(ctx, owner.UserID)
 	}
 	if err := s.createPendingItems(ctx, job.BatchID, requestHash, normalized.Items); err != nil {
+		if reservedInternalReal {
+			s.releaseInternalRealImageReservation(ctx, job.BatchID)
+		}
 		if !mockSettlement {
 			if releaseErr := s.releaseFailedSubmitHold(ctx, job, requestHash); releaseErr != nil {
 				return nil, releaseErr
@@ -381,6 +498,9 @@ func (s *BatchImagePublicService) Submit(ctx context.Context, owner BatchImageOw
 		EventType:    "upload_started",
 		EventPayload: map[string]any{"batch_id": job.BatchID},
 	}); err != nil {
+		if reservedInternalReal {
+			s.releaseInternalRealImageReservation(ctx, job.BatchID)
+		}
 		if releaseErr := s.releaseFailedSubmitHold(ctx, job, requestHash); releaseErr != nil {
 			return nil, releaseErr
 		}
@@ -398,6 +518,9 @@ func (s *BatchImagePublicService) Submit(ctx context.Context, owner BatchImageOw
 		pricingForGuard = *pricingSnapshot
 	}
 	if err := s.reserveRealCreateBeforeImageProvider(ctx, job, pricingForGuard); err != nil {
+		if reservedInternalReal {
+			s.releaseInternalRealImageReservation(ctx, job.BatchID)
+		}
 		if releaseErr := s.releaseFailedSubmitHold(ctx, job, requestHash); releaseErr != nil {
 			return nil, releaseErr
 		}
@@ -413,6 +536,9 @@ func (s *BatchImagePublicService) Submit(ctx context.Context, owner BatchImageOw
 	hbCancel()
 	<-hbDone
 	if err != nil {
+		if reservedInternalReal {
+			s.releaseInternalRealImageReservation(ctx, job.BatchID)
+		}
 		if releaseErr := s.releaseFailedSubmitHold(ctx, job, requestHash); releaseErr != nil {
 			return nil, releaseErr
 		}
@@ -423,6 +549,9 @@ func (s *BatchImagePublicService) Submit(ctx context.Context, owner BatchImageOw
 		return nil, publicErr
 	}
 	if providerJob == nil || strings.TrimSpace(providerJob.ProviderJobName) == "" {
+		if reservedInternalReal {
+			s.releaseInternalRealImageReservation(ctx, job.BatchID)
+		}
 		if releaseErr := s.releaseFailedSubmitHold(ctx, job, requestHash); releaseErr != nil {
 			return nil, releaseErr
 		}
@@ -785,7 +914,16 @@ func (s *BatchImagePublicService) ListModels(ctx context.Context, owner BatchIma
 			})
 		}
 	}
-	return &BatchImagePublicModelsResponse{Object: "list", Data: out}, nil
+	caps := &BatchImageExecutionCapabilities{Mock: true}
+	if s.Config != nil && s.Config.RealReviewSessionActive() && s.RealCreateGuard != nil {
+		if _, ok := s.RealCreateGuard.(*reviewguard.FailClosedGuard); !ok {
+			if _, err := s.RealCreateGuard.Snapshot(ctx); err == nil {
+				caps.ReviewReal = true
+			}
+		}
+	}
+	caps.InternalReal = s.InternalRealCapability(ctx)
+	return &BatchImagePublicModelsResponse{Object: "list", Data: out, ExecutionCapabilities: caps}, nil
 }
 
 func (s *BatchImagePublicService) ListItems(ctx context.Context, owner BatchImageOwner, batchID string, query BatchImageItemsQuery) (*BatchImagePublicItemsResponse, error) {
@@ -1352,6 +1490,7 @@ func BatchImageJobToPublic(job *BatchImageJob) *BatchImagePublicBatch {
 		Status:          PublicBatchImageStatus(job.Status),
 		Model:           job.Model,
 		Provider:        job.Provider,
+		ExecutionMode:   job.ExecutionMode,
 		ItemCount:       job.ItemCount,
 		SuccessCount:    job.SuccessCount,
 		FailCount:       job.FailCount,

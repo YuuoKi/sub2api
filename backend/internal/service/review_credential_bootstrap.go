@@ -28,6 +28,55 @@ type ReviewCredentialAccountStatus struct {
 	Message    string `json:"message,omitempty"`
 }
 
+// ClearReviewOnlyAccountsResult summarizes disable/clear of review_only bootstrap accounts.
+type ClearReviewOnlyAccountsResult struct {
+	DisabledVideoAccounts int `json:"disabled_video_accounts"`
+	DisabledImageAccounts int `json:"disabled_image_accounts"`
+}
+
+// ClearReviewOnlyAccounts disables review_only bootstrap provider accounts (does not delete).
+func (s *VideoGatewayService) ClearReviewOnlyAccounts(ctx context.Context) (*ClearReviewOnlyAccountsResult, error) {
+	out := &ClearReviewOnlyAccountsResult{}
+	if s == nil || s.repo == nil {
+		return out, ErrReviewRealAccountUnavailable
+	}
+	accounts, err := s.repo.ListProviderAccounts(ctx)
+	if err != nil {
+		return out, err
+	}
+	for _, account := range accounts {
+		if account == nil || !isReviewOnlyVideoAccount(account) {
+			continue
+		}
+		if !account.Enabled {
+			continue
+		}
+		account.Enabled = false
+		if err := s.repo.UpdateProviderAccount(ctx, account); err != nil {
+			return out, err
+		}
+		out.DisabledVideoAccounts++
+	}
+	if s.imageReviewClear != nil {
+		n, err := s.imageReviewClear(ctx)
+		if err != nil {
+			return out, err
+		}
+		out.DisabledImageAccounts = n
+	}
+	return out, nil
+}
+
+type imageReviewClearFunc func(ctx context.Context) (disabledCount int, err error)
+
+// SetImageReviewClear wires disable of Gemini review_only accounts in accounts table.
+func (s *VideoGatewayService) SetImageReviewClear(fn imageReviewClearFunc) {
+	if s == nil {
+		return
+	}
+	s.imageReviewClear = fn
+}
+
 // ReviewCredentialBootstrap consumes env key *presence* to create/update
 // review_only provider accounts via existing encrypted storage. It never logs
 // or returns secret values. Missing keys => fail-closed.

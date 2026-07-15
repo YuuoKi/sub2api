@@ -218,6 +218,7 @@ func newVideoBalanceBillingDeps() (*recordingVideoBillingUserRepo, *recordingVid
 func TestVideoGatewayPricingAdapterReturnsMoneyAndSnapshot(t *testing.T) {
 	_, _, settingSvc, _ := newVideoBalanceBillingDeps()
 	svc := NewVideoGatewayService(newMemoryVideoGatewayRepo(), noopVideoKeyEncryptor{}, cfgWithCostPerSecond(1))
+	armPermissiveInternalRealPolicy(svc)
 	svc.SetBalanceBillingDependencies(nil, settingSvc, nil)
 
 	var pricing VideoTaskPricing = svc
@@ -259,6 +260,7 @@ func TestVideoGatewayCreateUsesReservationOnlyForFlagOnRealProvider(t *testing.T
 		cfg.ReliabilityCore.VideoEnabled = true
 		cfg.ReliabilityCore.ReservationTTLHours = 6
 		svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfg)
+		armPermissiveInternalRealPolicy(svc)
 		creationRepo := &recordingVideoTaskCreationRepo{}
 		svc.SetVideoTaskCreationRepository(creationRepo)
 
@@ -299,6 +301,7 @@ func TestVideoGatewayCreateUsesReservationOnlyForFlagOnRealProvider(t *testing.T
 		providerID := seedSmokeAuthorizedSeedanceProvider(repo, "fake-only-key", "https://provider.invalid")
 		cfg := cfgWithCostPerSecond(1)
 		svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfg)
+		armPermissiveInternalRealPolicy(svc)
 		creationRepo := &recordingVideoTaskCreationRepo{}
 		svc.SetVideoTaskCreationRepository(creationRepo)
 
@@ -330,6 +333,7 @@ func TestVideoGatewayCreateUsesReservationOnlyForFlagOnRealProvider(t *testing.T
 		providerID := repo.seedMockProvider()
 		cfg := &config.Config{ReliabilityCore: config.ReliabilityCoreConfig{VideoEnabled: true, ReservationTTLHours: 6}}
 		svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfg)
+		armPermissiveInternalRealPolicy(svc)
 		creationRepo := &recordingVideoTaskCreationRepo{}
 		svc.SetVideoTaskCreationRepository(creationRepo)
 
@@ -356,6 +360,7 @@ func TestVideoGatewayCreateUsesReservationOnlyForFlagOnRealProvider(t *testing.T
 		cfg.ReliabilityCore.VideoEnabled = true
 		cfg.ReliabilityCore.ReservationTTLHours = 6
 		svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfg)
+		armPermissiveInternalRealPolicy(svc)
 		creationRepo := &recordingVideoTaskCreationRepo{err: ErrBillingReservationInsufficientBalance}
 		svc.SetVideoTaskCreationRepository(creationRepo)
 
@@ -387,6 +392,7 @@ func TestVideoGatewayCreateReplaysBeforeMutableRouteValidationAfterFlagOff(t *te
 	}
 	cfg := &config.Config{ReliabilityCore: config.ReliabilityCoreConfig{VideoEnabled: false, ReservationTTLHours: 6}}
 	svc := NewVideoGatewayService(newMemoryVideoGatewayRepo(), noopVideoKeyEncryptor{}, cfg)
+	armPermissiveInternalRealPolicy(svc)
 	svc.SetVideoTaskCreationRepository(creationRepo)
 
 	task, err := svc.CreateTask(context.Background(), VideoTaskCreateParams{
@@ -419,6 +425,7 @@ func TestVideoGatewayCreateConcurrentRepositoryReplayDoesNotDuplicateEvents(t *t
 	cfg.ReliabilityCore.VideoEnabled = true
 	cfg.ReliabilityCore.ReservationTTLHours = 6
 	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfg)
+	armPermissiveInternalRealPolicy(svc)
 	svc.SetVideoTaskCreationRepository(creationRepo)
 
 	_, err := svc.CreateTask(context.Background(), VideoTaskCreateParams{
@@ -453,6 +460,7 @@ func TestVideoGatewayTrialWrapperConcurrentReplayDoesNotDuplicateGateEvent(t *te
 	cfg.ReliabilityCore.VideoEnabled = true
 	cfg.ReliabilityCore.ReservationTTLHours = 6
 	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfg)
+	armPermissiveInternalRealPolicy(svc)
 	svc.SetVideoTaskCreationRepository(creationRepo)
 
 	_, err := svc.CreateAPIKeySeedanceTinyTrialTask(context.Background(), VideoProviderSeedance, VideoTaskCreateParams{
@@ -478,6 +486,7 @@ func TestSeedanceActualCostUsesProviderUsageTokens(t *testing.T) {
 	providerID := seedSmokeAuthorizedSeedanceProvider(repo, "seedance-billing-test-key", "https://ark.example.test")
 	tokens := int64(102960)
 	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, nil)
+	armPermissiveInternalRealPolicy(svc)
 	svc.adapters[VideoProviderSeedance] = &billingSeedanceAdapter{result: &VideoAdapterResult{
 		Status:           VideoStatusSucceeded,
 		ResultURL:        "https://ark-content.cn-beijing.volces.com/v/ok.mp4",
@@ -526,6 +535,7 @@ func TestSeedanceSucceededTaskDeductsUserBalanceInUSDAndQueuesCache(t *testing.T
 	providerID := seedSmokeAuthorizedSeedanceProvider(repo, "seedance-billing-test-key", "https://ark.example.test")
 	tokens := int64(102960)
 	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, nil)
+	armPermissiveInternalRealPolicy(svc)
 	svc.adapters[VideoProviderSeedance] = &billingSeedanceAdapter{result: &VideoAdapterResult{
 		Status:           VideoStatusSucceeded,
 		ResultURL:        "https://ark-content.cn-beijing.volces.com/v/ok.mp4",
@@ -744,6 +754,7 @@ func TestMockSucceededTaskHasZeroBillingSideEffects(t *testing.T) {
 func TestSeedanceActualCostSelectsVideoInputRate(t *testing.T) {
 	tokens := int64(102960)
 	svc := NewVideoGatewayService(newMemoryVideoGatewayRepo(), noopVideoKeyEncryptor{}, nil)
+	armPermissiveInternalRealPolicy(svc)
 	cost := svc.calculateVideoActualCost(&VideoTask{
 		Provider:         VideoProviderSeedance,
 		Model:            "doubao-seedance-2-0-260128",
@@ -767,6 +778,7 @@ func TestSeedanceFailedTaskCostsZeroEvenWithUsageTokens(t *testing.T) {
 	providerID := seedSmokeAuthorizedSeedanceProvider(repo, "seedance-billing-test-key", "https://ark.example.test")
 	tokens := int64(102960)
 	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, nil)
+	armPermissiveInternalRealPolicy(svc)
 	svc.adapters[VideoProviderSeedance] = &billingSeedanceAdapter{result: &VideoAdapterResult{
 		Status:           VideoStatusFailed,
 		ErrorMessage:     "provider failed",
@@ -810,6 +822,7 @@ func TestSeedanceFailedTaskCostsZeroEvenWithUsageTokens(t *testing.T) {
 
 func TestSeedanceBudgetEstimateUsesReferenceTableWhenConfigRateUnset(t *testing.T) {
 	svc := NewVideoGatewayService(newMemoryVideoGatewayRepo(), noopVideoKeyEncryptor{}, nil)
+	armPermissiveInternalRealPolicy(svc)
 	cost := svc.estimateVideoCost(&VideoTask{
 		Provider:   VideoProviderSeedance,
 		Model:      "doubao-seedance-2-0-260128",
@@ -837,6 +850,7 @@ func TestVideoBudgetGateAllowsWhenAffordable(t *testing.T) {
 	repo := newMemoryVideoGatewayRepo()
 	providerID := repo.seedMockProvider()
 	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfgWithCostPerSecond(0.5))
+	armPermissiveInternalRealPolicy(svc)
 	guard := &mockBudgetGuard{} // checkErr nil => affordable
 	svc.SetBudgetGuard(guard)
 
@@ -871,6 +885,7 @@ func TestVideoBudgetGateRejectsFailClosed(t *testing.T) {
 	repo := newMemoryVideoGatewayRepo()
 	providerID := repo.seedMockProvider()
 	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfgWithCostPerSecond(0.5))
+	armPermissiveInternalRealPolicy(svc)
 	denied := errors.New("INSUFFICIENT_BUDGET: over per-call cap")
 	guard := &mockBudgetGuard{checkErr: denied}
 	svc.SetBudgetGuard(guard)
@@ -905,6 +920,7 @@ func TestVideoBudgetDoesNotChargeMockOnSuccess(t *testing.T) {
 	repo := newMemoryVideoGatewayRepo()
 	providerID := repo.seedMockProvider()
 	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfgWithCostPerSecond(2.0))
+	armPermissiveInternalRealPolicy(svc)
 	guard := &mockBudgetGuard{}
 	svc.SetBudgetGuard(guard)
 
@@ -984,6 +1000,7 @@ func TestVideoBudgetGateInterceptsWhenCostExceedsBudget(t *testing.T) {
 	repo := newMemoryVideoGatewayRepo()
 	providerID := repo.seedMockProvider()
 	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfgWithCostPerSecond(0.5))
+	armPermissiveInternalRealPolicy(svc)
 	svc.SetBudgetGuard(NewStaticBudgetGuard(3.0)) // per-call cap 3.0
 
 	task, err := svc.CreateTask(ctx, VideoTaskCreateParams{
@@ -1016,6 +1033,7 @@ func TestVideoBudgetGateAllowsWithinBudget(t *testing.T) {
 	repo := newMemoryVideoGatewayRepo()
 	providerID := repo.seedMockProvider()
 	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfgWithCostPerSecond(0.5))
+	armPermissiveInternalRealPolicy(svc)
 	svc.SetBudgetGuard(NewStaticBudgetGuard(3.0)) // same per-call cap 3.0
 
 	task, err := svc.CreateTask(ctx, VideoTaskCreateParams{
@@ -1052,7 +1070,8 @@ func TestProvideVideoGatewayServiceArmsGuardFromConfig(t *testing.T) {
 	ctx := context.Background()
 	repo := newMemoryVideoGatewayRepo()
 	providerID := repo.seedMockProvider()
-	svc := ProvideVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfgWithVideoBudget(1.5, 2.0), nil, nil, nil, nil)
+	svc := ProvideVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfgWithVideoBudget(1.5, 2.0), nil, nil, nil, nil, nil)
+	armPermissiveInternalRealPolicy(svc)
 
 	task, err := svc.CreateTask(ctx, VideoTaskCreateParams{
 		ProviderAccountID: providerID,
@@ -1083,7 +1102,8 @@ func TestProvideVideoGatewayServiceUnarmedWhenBudgetZero(t *testing.T) {
 	ctx := context.Background()
 	repo := newMemoryVideoGatewayRepo()
 	providerID := repo.seedMockProvider()
-	svc := ProvideVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfgWithVideoBudget(1.5, 0), nil, nil, nil, nil)
+	svc := ProvideVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfgWithVideoBudget(1.5, 0), nil, nil, nil, nil, nil)
+	armPermissiveInternalRealPolicy(svc)
 
 	task, err := svc.CreateTask(ctx, VideoTaskCreateParams{
 		ProviderAccountID: providerID,
@@ -1111,7 +1131,8 @@ func TestProvideVideoGatewayServiceAdmitsNormalClipAtRealCap(t *testing.T) {
 	ctx := context.Background()
 	repo := newMemoryVideoGatewayRepo()
 	providerID := repo.seedMockProvider()
-	svc := ProvideVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfgWithVideoBudget(1.5, 30.0), nil, nil, nil, nil)
+	svc := ProvideVideoGatewayService(repo, noopVideoKeyEncryptor{}, cfgWithVideoBudget(1.5, 30.0), nil, nil, nil, nil, nil)
+	armPermissiveInternalRealPolicy(svc)
 
 	task, err := svc.CreateTask(ctx, VideoTaskCreateParams{
 		ProviderAccountID: providerID,

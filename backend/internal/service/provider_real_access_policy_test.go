@@ -2,12 +2,62 @@ package service
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/shopspring/decimal"
 )
+
+func armPermissiveInternalRealPolicy(svc *VideoGatewayService) {
+	if svc == nil {
+		return
+	}
+	svc.SetRealAccessPolicyRepository(NewMemoryProviderRealAccessPolicyRepo(nil))
+}
+
+func TestReserveInternalRealFailsClosedWhenPolicyRepoNil(t *testing.T) {
+	repo := newMemoryVideoGatewayRepo()
+	providerID := repo.nextProviderID
+	repo.nextProviderID++
+	repo.providers[providerID] = &VideoProviderAccount{
+		ID:               providerID,
+		Provider:         VideoProviderSeedance,
+		DisplayName:      "Formal Seedance",
+		Enabled:          true,
+		DefaultModel:     "seedance-1-0-pro",
+		RouteAvailable:   true,
+		APIKeyConfigured: true,
+		EncryptedAPIKey:  "enc",
+		Metadata:         map[string]any{"production_authorized": true},
+	}
+	svc := NewVideoGatewayService(repo, noopVideoKeyEncryptor{}, &config.Config{})
+	// realAccessPolicyRepo intentionally nil — must fail closed.
+	_, err := svc.CreateTask(context.Background(), VideoTaskCreateParams{
+		ExecutionMode:     ExecutionModeInternalReal,
+		ProviderAccountID: providerID,
+		TaskType:          VideoTaskTypeTextToVideo,
+		Prompt:            "must deny without policy repo",
+		CreatedBy:         42,
+		Duration:          5,
+		Resolution:        "720p",
+		AspectRatio:       "16:9",
+		CreationKey:       strings.Repeat("a", 64),
+		CreationFingerprint: strings.Repeat("b", 64),
+	})
+	if err == nil {
+		t.Fatal("expected fail-closed when policy repo is nil")
+	}
+	if !errors.Is(err, ErrInternalRealPolicyDenied) && !strings.Contains(err.Error(), "INTERNAL_REAL_POLICY_DENIED") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(repo.tasks) != 0 {
+		t.Fatalf("create count=%d, want 0 when policy repo nil", len(repo.tasks))
+	}
+}
 
 func TestInternalRealReservationIdempotentAndNoOverspend(t *testing.T) {
 	policy := &ProviderRealAccessPolicy{

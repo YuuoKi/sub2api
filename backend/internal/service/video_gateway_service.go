@@ -56,6 +56,7 @@ type VideoGatewayService struct {
 	budget              VideoBudgetGuard
 	realCreateGuard     reviewguard.RealCreateGuard
 	imageReviewBootstrap imageReviewBootstrapFunc
+	imageReviewClear     imageReviewClearFunc
 	realAccessPolicyRepo ProviderRealAccessPolicyRepository
 	userRepo            UserRepository
 	settingService      *SettingService
@@ -794,11 +795,6 @@ func (s *VideoGatewayService) CreateTask(ctx context.Context, p VideoTaskCreateP
 		}
 		mode = p.ExecutionMode
 	}
-	if mode == ExecutionModeInternalReal {
-		if err := s.reserveInternalRealForVideoCreate(ctx, p, account); err != nil {
-			return nil, err
-		}
-	}
 	if account.Provider == VideoProviderSeedance && p.RequireSeedanceProductionAuthorization && !seedanceProductionAuthorized(account) {
 		return nil, infraerrors.Forbidden("VIDEO_PRODUCTION_NOT_AUTHORIZED", "seedance production is not authorized for this provider account").WithMetadata(map[string]string{
 			"provider":              VideoProviderSeedance,
@@ -862,17 +858,13 @@ func (s *VideoGatewayService) ensureReviewRealSessionArmed(ctx context.Context) 
 
 func (s *VideoGatewayService) reserveInternalRealForVideoCreate(ctx context.Context, p VideoTaskCreateParams, account *VideoProviderAccount) error {
 	if s == nil || s.realAccessPolicyRepo == nil {
-		// Policy repository is optional until admin wires internal_real policies.
-		return nil
+		return ErrInternalRealPolicyDenied
 	}
 	if account == nil || isReviewOnlyVideoAccount(account) || account.Provider == VideoProviderMock {
 		return ErrInternalRealChannelMissing
 	}
-	opID := strings.TrimSpace(p.CreationKey)
+	opID := internalRealVideoOperationID(p.CreatedBy, p.CreationKey, p.CreationFingerprint)
 	if opID == "" {
-		opID = fmt.Sprintf("video:user:%d:fp:%s", p.CreatedBy, strings.TrimSpace(p.CreationFingerprint))
-	}
-	if opID == "" || opID == fmt.Sprintf("video:user:%d:fp:", p.CreatedBy) {
 		return ErrInternalRealPolicyDenied
 	}
 	estimate := decimal.NewFromFloat(s.estimateVideoCost(&VideoTask{
@@ -885,11 +877,91 @@ func (s *VideoGatewayService) reserveInternalRealForVideoCreate(ctx context.Cont
 		estimate = decimal.NewFromInt(1)
 	}
 	return s.realAccessPolicyRepo.ReserveInTx(ctx, ProviderRealAccessReservation{
-		OperationID: "internal:" + opID,
+		OperationID: opID,
 		UserID:      p.CreatedBy,
 		Kind:        "video",
 		ReservedCNY: estimate,
 	})
+}
+
+func internalRealVideoOperationID(createdBy int64, creationKey, creationFingerprint string) string {
+	opID := strings.TrimSpace(creationKey)
+	if opID == "" {
+		fp := strings.TrimSpace(creationFingerprint)
+		if fp != "" {
+			opID = fmt.Sprintf("video:user:%d:fp:%s", createdBy, fp)
+		}
+	}
+	if opID == "" {
+		// Legacy admin tooling may omit creation identity; still gate on policy with a
+		// per-call operation id so fail-closed reservation can proceed.
+		if createdBy <= 0 {
+			return ""
+		}
+		opID = fmt.Sprintf("video:user:%d:legacy:%d", createdBy, time.Now().UnixNano())
+	}
+	return "internal:" + opID
+}
+
+func internalRealVideoOperationIDForTask(task *VideoTask) string {
+	if task == nil {
+		return ""
+	}
+	return internalRealVideoOperationID(task.CreatedBy, task.CreationKey, task.CreationFingerprint)
+}
+
+func (s *VideoGatewayService) releaseInternalRealReservation(ctx context.Context, p VideoTaskCreateParams) {
+	if s == nil || s.realAccessPolicyRepo == nil {
+		return
+	}
+	opID := internalRealVideoOperationID(p.CreatedBy, p.CreationKey, p.CreationFingerprint)
+	if opID == "" {
+		return
+	}
+	_ = s.realAccessPolicyRepo.Release(ctx, opID)
+}
+
+func (s *VideoGatewayService) settleOrReleaseInternalRealForTask(ctx context.Context, task *VideoTask) {
+	if s == nil || s.realAccessPolicyRepo == nil || task == nil {
+		return
+	}
+	if strings.TrimSpace(task.ExecutionMode) != ExecutionModeInternalReal {
+		return
+	}
+	opID := internalRealVideoOperationIDForTask(task)
+	if opID == "" {
+		return
+	}
+	if task.Status == VideoStatusSucceeded {
+		settled := decimal.NewFromFloat(task.CostEstimate)
+		if !settled.IsPositive() {
+			settled = decimal.Zero
+		}
+		_ = s.realAccessPolicyRepo.Settle(ctx, opID, settled)
+		return
+	}
+	_ = s.realAccessPolicyRepo.Release(ctx, opID)
+}
+
+// GetRealAccessPolicy returns the named internal_real policy (default when name empty).
+func (s *VideoGatewayService) GetRealAccessPolicy(ctx context.Context, name string) (*ProviderRealAccessPolicy, error) {
+	if s == nil || s.realAccessPolicyRepo == nil {
+		return nil, ErrInternalRealPolicyDenied
+	}
+	return s.realAccessPolicyRepo.GetPolicy(ctx, name)
+}
+
+// InternalRealCapability reports whether internal_real creates are currently allowed.
+func (s *VideoGatewayService) InternalRealCapability(ctx context.Context) bool {
+	if s == nil || s.realAccessPolicyRepo == nil {
+		return false
+	}
+	policy, err := s.realAccessPolicyRepo.GetPolicy(ctx, "default")
+	if err != nil || policy == nil || !policy.Enabled || policy.GlobalKillSwitch || !policy.AllowMember {
+		return false
+	}
+	ok, err := s.hasFormalInternalVideoChannel(ctx)
+	return err == nil && ok
 }
 
 // SaveRealAccessPolicy persists internal_real policy. Requires at least one
@@ -946,6 +1018,18 @@ func (s *VideoGatewayService) createTaskWithRoute(ctx context.Context, p VideoTa
 	if err := validateVideoGenerationContract(account.Provider, model, duration, resolution); err != nil {
 		return nil, err
 	}
+	reservedInternalReal := false
+	if strings.TrimSpace(p.ExecutionMode) == ExecutionModeInternalReal {
+		if err := s.reserveInternalRealForVideoCreate(ctx, p, account); err != nil {
+			return nil, err
+		}
+		reservedInternalReal = true
+	}
+	releaseInternalReal := func() {
+		if reservedInternalReal {
+			s.releaseInternalRealReservation(ctx, p)
+		}
+	}
 	executionMode := p.ExecutionMode
 	if executionMode == "" {
 		executionMode = ExecutionModeMock
@@ -982,6 +1066,7 @@ func (s *VideoGatewayService) createTaskWithRoute(ctx context.Context, p VideoTa
 	mockIdempotency := s.cfg != nil && s.cfg.ReliabilityCore.VideoEnabled && account.Provider == VideoProviderMock
 	if mockIdempotency {
 		if len(p.CreationKey) != 64 || len(p.CreationFingerprint) != 64 {
+			releaseInternalReal()
 			return nil, ErrIdempotencyKeyInvalid
 		}
 		task.CreationKey = p.CreationKey
@@ -992,25 +1077,30 @@ func (s *VideoGatewayService) createTaskWithRoute(ctx context.Context, p VideoTa
 	// rejects the create with no task row and no provider call.
 	if s.budget != nil {
 		if err := s.budget.CheckBudget(ctx, task.CreatedBy, s.estimateVideoCost(task)); err != nil {
+			releaseInternalReal()
 			return nil, err
 		}
 	}
 	replayedCreation := false
 	if s.reliabilityVideoCreationEnabled(account.Provider) {
 		if s.creationRepo == nil {
+			releaseInternalReal()
 			return nil, ErrBillingReservationBalanceUnavailable.WithCause(errors.New("video task creation repository is unavailable"))
 		}
 		if len(p.CreationKey) != 64 || len(p.CreationFingerprint) != 64 {
+			releaseInternalReal()
 			return nil, ErrIdempotencyKeyInvalid
 		}
 		task.CreationKey = p.CreationKey
 		task.CreationFingerprint = p.CreationFingerprint
 		reservedAmountUSD, pricingSnapshot, err := s.videoTaskPricing().EstimatePrice(ctx, task)
 		if err != nil {
+			releaseInternalReal()
 			return nil, err
 		}
 		zero := MustUSD("0")
 		if comparison, err := reservedAmountUSD.Compare(zero); err != nil || comparison <= 0 {
+			releaseInternalReal()
 			if err != nil {
 				return nil, err
 			}
@@ -1032,9 +1122,11 @@ func (s *VideoGatewayService) createTaskWithRoute(ctx context.Context, p VideoTa
 		}
 		result, err := s.creationRepo.CreateWithReservation(ctx, creationInput)
 		if err != nil {
+			releaseInternalReal()
 			return nil, err
 		}
 		if result == nil || result.Task == nil {
+			releaseInternalReal()
 			return nil, fmt.Errorf("create video task with reservation: empty result")
 		}
 		task = result.Task
@@ -1052,6 +1144,7 @@ func (s *VideoGatewayService) createTaskWithRoute(ctx context.Context, p VideoTa
 				return replayed, replayErr
 			}
 		}
+		releaseInternalReal()
 		var appErr *infraerrors.ApplicationError
 		if errors.As(err, &appErr) {
 			return nil, err

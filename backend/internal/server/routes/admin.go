@@ -136,6 +136,10 @@ func registerAdminComplianceRoutes(admin *gin.RouterGroup, h *handler.Handlers) 
 	}
 	admin.GET("/real-review-session", h.Admin.RealReviewSession.GetStatus)
 	admin.POST("/real-review-session/bootstrap", h.Admin.RealReviewSession.BootstrapCredentials)
+	admin.POST("/real-review-session/clear-bootstrap", h.Admin.RealReviewSession.ClearReviewOnlyAccounts)
+	admin.GET("/real-access-policy", h.Admin.RealReviewSession.GetRealAccessPolicy)
+	admin.PUT("/real-access-policy", h.Admin.RealReviewSession.PutRealAccessPolicy)
+	admin.POST("/real-access-policy/kill-switch", h.Admin.RealReviewSession.PutKillSwitch)
 }
 
 func registerContentModerationRoutes(admin *gin.RouterGroup, h *handler.Handlers) {

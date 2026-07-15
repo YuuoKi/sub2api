@@ -981,3 +981,86 @@ func parseAnthropicContentBlockEvents(t *testing.T, raw string) []anthropicConte
 	}
 	return events
 }
+
+func TestConvertGeminiToClaudeMessage_MapsInlineDataToAnthropicImage(t *testing.T) {
+	geminiResp := map[string]any{
+		"candidates": []any{
+			map[string]any{
+				"content": map[string]any{
+					"parts": []any{
+						map[string]any{"text": "here is an image"},
+						map[string]any{
+							"inlineData": map[string]any{
+								"mimeType": "image/png",
+								"data":     "aGVsbG8=",
+							},
+						},
+					},
+				},
+				"finishReason": "STOP",
+			},
+		},
+		"usageMetadata": map[string]any{
+			"promptTokenCount":     10,
+			"candidatesTokenCount": 1500,
+		},
+	}
+	raw, err := json.Marshal(geminiResp)
+	require.NoError(t, err)
+
+	claudeResp, usage := convertGeminiToClaudeMessage(geminiResp, "gemini-3.1-flash-image-preview", raw)
+	require.NotNil(t, usage)
+
+	content, ok := claudeResp["content"].([]any)
+	require.True(t, ok)
+	require.Len(t, content, 2)
+
+	textBlock, ok := content[0].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "text", textBlock["type"])
+	require.Equal(t, "here is an image", textBlock["text"])
+
+	imageBlock, ok := content[1].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "image", imageBlock["type"])
+	source, ok := imageBlock["source"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "base64", source["type"])
+	require.Equal(t, "image/png", source["media_type"])
+	require.Equal(t, "aGVsbG8=", source["data"])
+}
+
+func TestConvertClaudeMessagesToGeminiGenerateContent_ImageModelAddsModalitiesAndImageConfig(t *testing.T) {
+	req := map[string]any{
+		"model":      "gemini-3.1-flash-image-preview",
+		"max_tokens": float64(8192),
+		"messages": []any{
+			map[string]any{
+				"role":    "user",
+				"content": "draw a cat",
+			},
+		},
+		"imageConfig": map[string]any{
+			"aspectRatio": "1:1",
+			"imageSize":   "1K",
+		},
+		"responseModalities": []any{"TEXT", "IMAGE"},
+	}
+	reqBytes, err := json.Marshal(req)
+	require.NoError(t, err)
+
+	body, err := convertClaudeMessagesToGeminiGenerateContent(reqBytes)
+	require.NoError(t, err)
+
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(body, &out))
+
+	generationConfig, ok := out["generationConfig"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, []any{"TEXT", "IMAGE"}, generationConfig["responseModalities"])
+
+	imageConfig, ok := generationConfig["imageConfig"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "1:1", imageConfig["aspectRatio"])
+	require.Equal(t, "1K", imageConfig["imageSize"])
+}

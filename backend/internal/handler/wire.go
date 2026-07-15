@@ -45,6 +45,7 @@ func ProvideAdminHandlers(
 	realReviewSessionHandler *admin.RealReviewSessionHandler,
 	videoHandler *admin.VideoHandler,
 	generationContentHandler *admin.GenerationContentHandler,
+	providerBillingHandler *admin.ProviderBillingHandler,
 ) *AdminHandlers {
 	return &AdminHandlers{
 		Dashboard:              dashboardHandler,
@@ -82,6 +83,7 @@ func ProvideAdminHandlers(
 		RealReviewSession:      realReviewSessionHandler,
 		Video:                  videoHandler,
 		GenerationContent:      generationContentHandler,
+		ProviderBilling:        providerBillingHandler,
 	}
 }
 
@@ -219,6 +221,7 @@ var ProviderSet = wire.NewSet(
 	admin.NewRealReviewSessionHandler,
 	ProvideAdminVideoHandler,
 	ProvideAdminGenerationContentHandler,
+	admin.NewProviderBillingHandler,
 
 	// AdminHandlers and Handlers constructors
 	ProvideAdminHandlers,

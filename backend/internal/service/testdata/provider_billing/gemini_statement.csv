@@ -1,0 +1,8 @@
+external_line_id,upstream_task_id,model,sku,usage_quantity,usage_unit,net_amount,tax_amount,gross_amount,currency,occurred_at
+gm-line-001,projects/demo/operations/op-exact,gemini-2.0-flash-preview-image-generation,image,1,image,0.0400000000,0.0000000000,0.0400000000,USD,2026-07-01T02:00:00Z
+gm-line-002,projects/demo/operations/op-usage-mismatch,gemini-2.0-flash-preview-image-generation,image,2,image,0.0800000000,0.0000000000,0.0800000000,USD,2026-07-01T03:00:00Z
+gm-line-003,projects/demo/operations/op-amount-mismatch,gemini-2.0-flash-preview-image-generation,image,1,image,0.0500000000,0.0000000000,0.0500000000,USD,2026-07-01T04:00:00Z
+gm-line-004,,gemini-2.0-flash-preview-image-generation,image,3,image,0.1200000000,0.0000000000,0.1200000000,USD,2026-07-01T05:00:00Z
+gm-line-005,projects/demo/operations/op-provider-only,gemini-2.0-flash-preview-image-generation,image,1,image,0.0400000000,0.0000000000,0.0400000000,USD,2026-07-01T06:00:00Z
+gm-line-dup,projects/demo/operations/op-dup,gemini-2.0-flash-preview-image-generation,image,1,image,0.0400000000,0.0000000000,0.0400000000,USD,2026-07-01T07:00:00Z
+gm-line-dup,projects/demo/operations/op-dup,gemini-2.0-flash-preview-image-generation,image,1,image,0.0400000000,0.0000000000,0.0400000000,USD,2026-07-01T07:00:00Z

@@ -1,0 +1,7 @@
+external_line_id,upstream_task_id,model,sku,usage_quantity,usage_unit,net_amount,tax_amount,gross_amount,currency,occurred_at
+sd-line-001,seedance-task-aaa,seedance-1.0,video-720p,1,video,10.00,0.60,10.60,USD,2026-07-01T10:00:00+08:00
+sd-line-002,seedance-task-bbb,seedance-1.0,video-720p,1,video,9.995,0.00,10.00,USD,2026-07-01T11:00:00+08:00
+sd-line-003,,seedance-1.0,video-1080p,2,video,20.00,0.00,20.00,USD,2026-07-01T12:00:00+08:00
+sd-line-004,seedance-task-ddd,seedance-1.0,video-720p,1,video,8.00,0.00,8.00,USD,2026-07-02T09:00:00+08:00
+sd-line-tax-001,seedance-task-tax,seedance-1.0,video-720p,1,video,10.00,1.00,11.00,USD,2026-07-01T13:00:00+08:00
+sd-line-disc-001,seedance-task-disc,seedance-1.0,video-720p,1,video,7.50,0.00,7.50,USD,2026-07-01T14:00:00+08:00

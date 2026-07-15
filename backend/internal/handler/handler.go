@@ -41,6 +41,7 @@ type AdminHandlers struct {
 	RealReviewSession      *admin.RealReviewSessionHandler
 	Video                  *admin.VideoHandler
 	GenerationContent      *admin.GenerationContentHandler
+	ProviderBilling        *admin.ProviderBillingHandler
 }
 
 // Handlers contains all HTTP handlers

@@ -80,6 +80,27 @@ export default {
       failedToLoad: 'Failed to load dashboard statistics'
     },
 
+    providerBilling: {
+      title: 'Provider Billing Reconciliation',
+      subtitle: 'Import provider statements and reconcile against internal tasks',
+      periodSummary: 'Period summary',
+      importPreview: 'Import preview',
+      imports: 'Imports',
+      preview: 'Preview',
+      import: 'Import & reconcile',
+      fileRequired: 'Please choose a CSV or XLSX file',
+      duplicateBlocked: 'Duplicate blocked: same file SHA-256 or provider external_line_id already exists',
+      viewMatches: 'Matches',
+      matchDetail: 'Match detail',
+      diffQueue: 'Diff queue',
+      noDiff: 'No differences',
+      exportCsv: 'Export CSV',
+      bossStrip: 'Provider billing',
+      conclusionReconciled: 'Reconciled',
+      conclusionHasDiff: 'Has diff',
+      conclusionNotUploaded: 'Not uploaded'
+    },
+
     backup: {
       title: 'Database Backup',
       description: 'Full database backup to S3-compatible storage with scheduled backup and restore',

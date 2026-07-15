@@ -726,6 +726,17 @@ const routes: RouteRecordRaw[] = [
       requiresPayment: true
     }
   },
+  {
+    path: '/admin/provider-billing',
+    name: 'AdminProviderBilling',
+    component: () => import('@/views/admin/ProviderBillingView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Provider Billing',
+      titleKey: 'nav.providerBilling'
+    }
+  },
 
   // ==================== 404 Not Found ====================
   {

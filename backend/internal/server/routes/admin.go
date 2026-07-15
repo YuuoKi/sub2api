@@ -106,8 +106,25 @@ func RegisterAdminRoutes(
 
 		registerAdminVideoRoutes(admin, h)
 
+		registerProviderBillingRoutes(admin, h)
+
 		// 邀请返利（专属用户管理）
 		registerAffiliateRoutes(admin, h)
+	}
+}
+
+func registerProviderBillingRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	billing := admin.Group("/provider-billing")
+	{
+		billing.GET("/period-summary", h.Admin.ProviderBilling.PeriodSummary)
+		billing.GET("/boss-conclusions", h.Admin.ProviderBilling.BossConclusions)
+		billing.GET("/imports", h.Admin.ProviderBilling.ListImports)
+		billing.POST("/imports/preview", h.Admin.ProviderBilling.PreviewImport)
+		billing.POST("/imports", h.Admin.ProviderBilling.Import)
+		billing.GET("/imports/:id", h.Admin.ProviderBilling.GetImport)
+		billing.POST("/imports/:id/reconcile", h.Admin.ProviderBilling.Reconcile)
+		billing.GET("/imports/:id/matches", h.Admin.ProviderBilling.ListMatches)
+		billing.GET("/imports/:id/matches.csv", h.Admin.ProviderBilling.ExportMatchesCSV)
 	}
 }
 

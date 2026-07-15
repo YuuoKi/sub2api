@@ -713,7 +713,12 @@ var ProviderSet = wire.NewSet(
 	ProvideReliabilityMetrics,
 	ProvideReliabilityReconciler,
 	ProvideGenerationContentRetentionService,
+	ProvideProviderBillingService,
 )
+
+func ProvideProviderBillingService(store ProviderBillingStore) *ProviderBillingService {
+	return NewProviderBillingService(store, videoAssetDataDir())
+}
 
 // ProvideUserPlatformQuotaUsageFlusher 创建并启动 UserPlatformQuotaUsageFlusher。
 func ProvideUserPlatformQuotaUsageFlusher(cfg *config.Config, cache BillingCache, quotaRepo UserPlatformQuotaRepository, tw *TimingWheelService) *UserPlatformQuotaUsageFlusher {

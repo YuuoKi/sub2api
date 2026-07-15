@@ -101,6 +101,7 @@ var ProviderSet = wire.NewSet(
 	NewBillingTransactionRepository,
 	NewDomainOutboxRepository,
 	NewReliabilityReconciliationRepository,
+	NewProviderBillingRepository,
 	NewUserPlatformQuotaRepository,     // T14: user × platform quota
 	NewUserPlatformQuotaServiceAdapter, // T14: adapter → service.UserPlatformQuotaRepository
 

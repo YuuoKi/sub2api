@@ -74,6 +74,27 @@ export default {
       failedToLoad: '加载仪表盘数据失败'
     },
 
+    providerBilling: {
+      title: '供应商账单对账',
+      subtitle: '导入供应商账单并与内部任务对账',
+      periodSummary: '账期汇总',
+      importPreview: '导入预览',
+      imports: '导入记录',
+      preview: '预览',
+      import: '导入并对账',
+      fileRequired: '请选择 CSV 或 XLSX 文件',
+      duplicateBlocked: '重复拦截：相同文件 SHA-256 或 provider+external_line_id 已存在',
+      viewMatches: '查看匹配',
+      matchDetail: '匹配详情',
+      diffQueue: '差异队列',
+      noDiff: '无差异',
+      exportCsv: '导出 CSV',
+      bossStrip: '供应商对账',
+      conclusionReconciled: '已对平',
+      conclusionHasDiff: '有差异',
+      conclusionNotUploaded: '未上传'
+    },
+
     backup: {
       title: '数据库备份',
       description: '全量数据库备份到 S3 兼容存储，支持定时备份与恢复',

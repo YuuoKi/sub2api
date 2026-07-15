@@ -7,6 +7,26 @@
       </div>
 
       <template v-else-if="stats">
+        <!-- Provider billing boss strip: conclusions only -->
+        <div class="card flex flex-wrap items-center gap-3 p-4">
+          <p class="text-sm font-medium text-gray-700 dark:text-gray-200">
+            {{ t('admin.providerBilling.bossStrip') }}
+          </p>
+          <template v-if="billingConclusions.length">
+            <span
+              v-for="(item, idx) in billingConclusions"
+              :key="idx"
+              class="rounded px-2 py-1 text-xs font-medium"
+              :class="conclusionClass(item.conclusion)"
+            >
+              <span v-if="item.provider">{{ item.provider }} · </span>{{ conclusionLabel(item.conclusion) }}
+            </span>
+          </template>
+          <span v-else class="rounded bg-gray-100 px-2 py-1 text-xs text-gray-600 dark:bg-dark-700 dark:text-gray-300">
+            {{ t('admin.providerBilling.conclusionNotUploaded') }}
+          </span>
+        </div>
+
         <!-- Row 1: Core Stats -->
         <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <!-- Total API Keys -->
@@ -396,6 +416,7 @@ const chartsLoading = ref(false)
 const userTrendLoading = ref(false)
 const rankingLoading = ref(false)
 const rankingError = ref(false)
+const billingConclusions = ref<Array<{ provider?: string; conclusion: string }>>([])
 
 // Chart data
 const trendData = ref<TrendDataPoint[]>([])
@@ -736,7 +757,8 @@ const loadDashboardStats = async () => {
   await Promise.all([
     loadDashboardSnapshot(true),
     loadUsersTrend(),
-    loadUserSpendingRanking()
+    loadUserSpendingRanking(),
+    loadBillingConclusions()
   ])
 }
 
@@ -746,6 +768,44 @@ const loadChartData = async () => {
     loadUsersTrend(),
     loadUserSpendingRanking()
   ])
+}
+
+const loadBillingConclusions = async () => {
+  try {
+    const response = await adminAPI.providerBilling.getBossConclusions()
+    billingConclusions.value = (response.items || []).map((item) => ({
+      provider: item.provider,
+      conclusion: item.conclusion
+    }))
+  } catch {
+    billingConclusions.value = [{ conclusion: 'not_uploaded' }]
+  }
+}
+
+const conclusionLabel = (conclusion: string) => {
+  switch (conclusion) {
+    case 'reconciled':
+      return t('admin.providerBilling.conclusionReconciled')
+    case 'has_diff':
+      return t('admin.providerBilling.conclusionHasDiff')
+    case 'not_uploaded':
+      return t('admin.providerBilling.conclusionNotUploaded')
+    default:
+      return conclusion
+  }
+}
+
+const conclusionClass = (conclusion: string) => {
+  switch (conclusion) {
+    case 'reconciled':
+      return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200'
+    case 'has_diff':
+      return 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200'
+    case 'not_uploaded':
+      return 'bg-gray-100 text-gray-700 dark:bg-dark-700 dark:text-gray-300'
+    default:
+      return 'bg-gray-100 text-gray-700 dark:bg-dark-700 dark:text-gray-300'
+  }
 }
 
 onMounted(() => {

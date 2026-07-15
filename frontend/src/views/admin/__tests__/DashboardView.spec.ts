@@ -5,10 +5,11 @@ import { createPinia, setActivePinia } from 'pinia'
 import type { DashboardStats } from '@/types'
 import DashboardView from '../DashboardView.vue'
 
-const { getSnapshotV2, getUserUsageTrend, getUserSpendingRanking } = vi.hoisted(() => ({
+const { getSnapshotV2, getUserUsageTrend, getUserSpendingRanking, getBossConclusions } = vi.hoisted(() => ({
   getSnapshotV2: vi.fn(),
   getUserUsageTrend: vi.fn(),
-  getUserSpendingRanking: vi.fn()
+  getUserSpendingRanking: vi.fn(),
+  getBossConclusions: vi.fn()
 }))
 
 vi.mock('@/api/admin', () => ({
@@ -17,6 +18,9 @@ vi.mock('@/api/admin', () => ({
       getSnapshotV2,
       getUserUsageTrend,
       getUserSpendingRanking
+    },
+    providerBilling: {
+      getBossConclusions
     }
   }
 }))
@@ -93,11 +97,15 @@ describe('admin DashboardView', () => {
     getSnapshotV2.mockReset()
     getUserUsageTrend.mockReset()
     getUserSpendingRanking.mockReset()
+    getBossConclusions.mockReset()
 
     getSnapshotV2.mockResolvedValue({
       stats: createDashboardStats(),
       trend: [],
       models: []
+    })
+    getBossConclusions.mockResolvedValue({
+      items: [{ conclusion: 'not_uploaded' }]
     })
     getUserUsageTrend.mockResolvedValue({
       trend: [],
@@ -116,7 +124,7 @@ describe('admin DashboardView', () => {
   })
 
   it('uses last 24 hours as default dashboard range', async () => {
-    mount(DashboardView, {
+    const wrapper = mount(DashboardView, {
       global: {
         stubs: {
           AppLayout: { template: '<div><slot /></div>' },
@@ -142,5 +150,7 @@ describe('admin DashboardView', () => {
       end_date: formatLocalDate(now),
       granularity: 'hour'
     }))
+    expect(getBossConclusions).toHaveBeenCalledTimes(1)
+    expect(wrapper.text()).toContain('admin.providerBilling.conclusionNotUploaded')
   })
 })

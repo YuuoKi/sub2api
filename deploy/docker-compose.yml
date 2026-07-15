@@ -7,7 +7,8 @@
 #   3. Check logs: docker-compose logs -f sub2api
 #   4. Access: http://localhost:8080
 #
-# All configuration is done via environment variables.
+# Most configuration is environment-driven; the controlled single-entry
+# profile intentionally pins loopback exposure and standard management mode.
 # No Setup Wizard needed - the system auto-initializes on first run.
 # =============================================================================
 
@@ -16,15 +17,18 @@ services:
   # Sub2API Application
   # ===========================================================================
   sub2api:
-    image: weishaw/sub2api:latest
-    container_name: sub2api
+    image: wujie-sub2api:local
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: wujie-single-entry-sub2api
     restart: unless-stopped
     ulimits:
       nofile:
         soft: 100000
         hard: 100000
     ports:
-      - "${BIND_HOST:-0.0.0.0}:${SERVER_PORT:-8080}:8080"
+      - "127.0.0.1:${SERVER_PORT:-8080}:8080"
     volumes:
       # Data persistence (config.yaml will be auto-generated here)
       - sub2api_data:/app/data
@@ -47,7 +51,7 @@ services:
       - SERVER_HOST=0.0.0.0
       - SERVER_PORT=8080
       - SERVER_MODE=${SERVER_MODE:-release}
-      - RUN_MODE=${RUN_MODE:-standard}
+      - RUN_MODE=standard
 
       # =======================================================================
       # Database Configuration (PostgreSQL)
@@ -195,7 +199,7 @@ services:
   # ===========================================================================
   postgres:
     image: postgres:18-alpine
-    container_name: sub2api-postgres
+    container_name: wujie-single-entry-sub2api-postgres
     restart: unless-stopped
     ulimits:
       nofile:
@@ -232,7 +236,7 @@ services:
   # ===========================================================================
   redis:
     image: redis:8-alpine
-    container_name: sub2api-redis
+    container_name: wujie-single-entry-sub2api-redis
     restart: unless-stopped
     ulimits:
       nofile:

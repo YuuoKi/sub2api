@@ -84,6 +84,12 @@ describe('useAppStore', () => {
     localStorage.clear()
   })
 
+  it('默认使用无界企业 AI 管理中台品牌', () => {
+    const store = useAppStore()
+
+    expect(store.siteName).toBe('无界 · 企业 AI 管理中台')
+  })
+
   // --- Toast 消息管理 ---
 
   describe('Toast 消息管理', () => {

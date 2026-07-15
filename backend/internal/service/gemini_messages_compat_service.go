@@ -1944,7 +1944,12 @@ type geminiStreamResult struct {
 }
 
 func (s *GeminiMessagesCompatService) handleNonStreamingResponse(c *gin.Context, resp *http.Response, originalModel string) (*ClaudeUsage, error) {
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	// Image models return base64 inlineData; 8MiB truncates mid-JSON or drops the image payload.
+	limit := int64(8 << 20)
+	if isImageGenerationModel(originalModel) {
+		limit = 64 << 20
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, limit))
 	if err != nil {
 		return nil, s.writeClaudeError(c, http.StatusBadGateway, "upstream_error", "Failed to read upstream response")
 	}
@@ -2711,6 +2716,42 @@ func unwrapGeminiResponse(raw []byte) ([]byte, error) {
 	return raw, nil
 }
 
+// geminiInlineDataToClaudeImageBlock maps Gemini inlineData / inline_data parts
+// to Anthropic Messages image blocks (type=image, source.base64).
+// Without this, image models return empty content[] while still billing IMAGE tokens.
+func geminiInlineDataToClaudeImageBlock(pm map[string]any) map[string]any {
+	var inline map[string]any
+	switch {
+	case pm["inlineData"] != nil:
+		inline, _ = pm["inlineData"].(map[string]any)
+	case pm["inline_data"] != nil:
+		inline, _ = pm["inline_data"].(map[string]any)
+	default:
+		return nil
+	}
+	if inline == nil {
+		return nil
+	}
+	mimeType, _ := inline["mimeType"].(string)
+	if strings.TrimSpace(mimeType) == "" {
+		mimeType, _ = inline["mime_type"].(string)
+	}
+	data, _ := inline["data"].(string)
+	mimeType = strings.TrimSpace(mimeType)
+	data = strings.TrimSpace(data)
+	if mimeType == "" || data == "" {
+		return nil
+	}
+	return map[string]any{
+		"type": "image",
+		"source": map[string]any{
+			"type":       "base64",
+			"media_type": mimeType,
+			"data":       data,
+		},
+	}
+}
+
 func convertGeminiToClaudeMessage(geminiResp map[string]any, originalModel string, rawData []byte) (map[string]any, *ClaudeUsage) {
 	usage := extractGeminiUsage(rawData)
 	if usage == nil {
@@ -2733,6 +2774,9 @@ func convertGeminiToClaudeMessage(geminiResp map[string]any, originalModel strin
 								"type": "text",
 								"text": text,
 							})
+						}
+						if imageBlock := geminiInlineDataToClaudeImageBlock(pm); imageBlock != nil {
+							contentBlocks = append(contentBlocks, imageBlock)
 						}
 						if fc, ok := pm["functionCall"].(map[string]any); ok {
 							name, _ := fc["name"].(string)
@@ -3080,6 +3124,22 @@ func convertClaudeMessagesToGeminiGenerateContent(body []byte) ([]byte, error) {
 	}
 
 	generationConfig := convertClaudeGenerationConfig(req)
+	model, _ := req["model"].(string)
+	if isImageGenerationModel(model) {
+		if generationConfig == nil {
+			generationConfig = map[string]any{}
+		}
+		// Pass through Claude-compatible image knobs that QCanvas / clients attach at top level.
+		if modalities, ok := req["responseModalities"]; ok && modalities != nil {
+			generationConfig["responseModalities"] = modalities
+		} else if _, exists := generationConfig["responseModalities"]; !exists {
+			// Gemini image models require explicit IMAGE modality or they may omit inlineData.
+			generationConfig["responseModalities"] = []any{"TEXT", "IMAGE"}
+		}
+		if imageConfig, ok := req["imageConfig"]; ok && imageConfig != nil {
+			generationConfig["imageConfig"] = imageConfig
+		}
+	}
 	if generationConfig != nil {
 		out["generationConfig"] = generationConfig
 	}

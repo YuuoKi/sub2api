@@ -3,110 +3,105 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Sub2API 真实图片、视频与前端闭环复核</title>
+  <title>Sub2API 内部真实可用收口审查包</title>
   <style>
-    :root{color-scheme:light dark;--bg:#f5f7fb;--card:#fff;--text:#172033;--muted:#667085;--line:#dfe5ee;--ok:#067647;--warn:#b54708}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.65 system-ui,"Microsoft YaHei",sans-serif}.wrap{max-width:1180px;margin:auto;padding:32px 20px 64px}h1{font-size:30px;margin:0 0 8px}h2{margin:30px 0 12px;font-size:20px}h3{font-size:16px}.meta,.card,.shot{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin:12px 0;box-shadow:0 4px 18px #1720330a}.status{display:inline-block;border-radius:999px;padding:4px 12px;background:#fff4e5;color:var(--warn);font-weight:700}.ok{color:var(--ok)}.muted{color:var(--muted)}code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}pre{white-space:pre-wrap;background:#101828;color:#e6edf7;padding:16px;border-radius:10px;overflow:auto}table{width:100%;border-collapse:collapse;background:var(--card)}th,td{padding:10px 12px;border:1px solid var(--line);text-align:left;vertical-align:top}th{background:#eef3f8}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}.shot img{width:100%;height:auto;border:1px solid var(--line);border-radius:8px}.shot a{color:inherit;text-decoration:none}.warn{border-left:4px solid #f79009}.pass{border-left:4px solid #12b76a}@media(prefers-color-scheme:dark){:root{--bg:#10131a;--card:#171c26;--text:#edf2f7;--muted:#a8b1c1;--line:#303848}th{background:#222a37}}
+    :root{color-scheme:light dark;--bg:#f5f7fb;--card:#fff;--text:#172033;--muted:#667085;--line:#dfe5ee;--ok:#067647;--warn:#b54708}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.65 system-ui,"Microsoft YaHei",sans-serif}.wrap{max-width:1180px;margin:auto;padding:32px 20px 64px}h1{font-size:30px;margin:0 0 8px}h2{margin:30px 0 12px;font-size:20px}h3{font-size:16px}.meta,.card,.shot{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin:12px 0;box-shadow:0 4px 18px #1720330a}.status{display:inline-block;border-radius:999px;padding:4px 12px;background:#fff4e5;color:var(--warn);font-weight:700}.ok{color:var(--ok)}.muted{color:var(--muted)}code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}pre{white-space:pre-wrap;background:#101828;color:#e6edf7;padding:16px;border-radius:10px;overflow:auto}table{width:100%;border-collapse:collapse;background:var(--card)}th,td{padding:10px 12px;border:1px solid var(--line);text-align:left;vertical-align:top}th{background:#eef3f8}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}.shot img{width:100%;height:auto;border:1px solid var(--line);border-radius:8px}.warn{border-left:4px solid #f79009}.pass{border-left:4px solid #12b76a}.stop{border-left:4px solid #d92d20}@media(prefers-color-scheme:dark){:root{--bg:#10131a;--card:#171c26;--text:#edf2f7;--muted:#a8b1c1;--line:#303848}th{background:#222a37}}
   </style>
 </head>
 <body><main class="wrap">
-  <h1>Sub2API 真实图片、视频与前端用户闭环复核</h1>
-  <p><span class="status">可演示</span>　更新时间：2026-07-13</p>
-  <div class="meta warn"><strong>结论：</strong>真实 Gemini 图片与两条 Seedance 视频上游链已有证据；既有 Seedance 9:16 任务已通过生产 repository/worker/finalizer/outbox 完成内部 usage 定价、reservation、单一账本、余额扣减、内容采集与 MP4 归档。当前 HEAD 三角色浏览器路径和员工 mock 创建闭环通过。由于仍缺真实 UI create、Provider 正式账单和 Gemini 产品资产链，状态为“可演示”，不能判定“内部可用”。</div>
+  <h1>Sub2API 内部真实可用收口审查包</h1>
+  <p><span class="status">READY_FOR_USER_REAL_TEST / 待复核</span>　更新时间：2026-07-15</p>
+  <div class="meta warn"><strong>结论：</strong>开发与无付费验证已完成。共享预算硬门、三种执行模式、Gemini 0-create 恢复 fixture、图片持久资产、Provider 账单对账与三角色 mock 浏览器闭环均有代码与测试证据。状态只能写为“待复核”，在用户完成真实图片/视频点击、真实账单上传、人眼验收和密钥废弃前，不得判定“内部可用”。</div>
 
   <h2>目标与执行边界</h2>
   <div class="card">
-    <p>执行目录：<code>D:\sub2api-trunk</code><br>分支：<code>wujie/video-capture-moat-20260702</code><br>代码证据 HEAD：<code>da22a229</code></p>
-    <p>授权上限：Gemini/Nano Banana 图片最多 4 次、Seedance 视频最多 4 次、累计 ¥60。实际：图片 1/4、视频 2/4、累计预留 ¥20。</p>
-    <p>未 push、未部署、未使用生产用户数据、未公开服务；本地服务仅绑定 <code>127.0.0.1:18080</code>。临时凭证只从 Windows 用户环境读取，不进入 Git、截图或本审查包。</p>
+    <p>执行目录：<code>D:\sub2api-trunk</code><br>分支：<code>wujie/video-capture-moat-20260702</code><br>代码证据 HEAD：<code>8296c2a6</code></p>
+    <p>会话预算延续：图片 1/4、视频 2/4、累计预留 ¥20 / ¥60。未重置计数文件。</p>
+    <p>未 push、未部署、未使用生产用户数据、未公开服务；本地 G6 栈仅绑定 <code>127.0.0.1:18080</code>。开发阶段未调用真实付费 Provider；审查包不含密钥值。</p>
+  </div>
+
+  <h2>HEAD 镜像</h2>
+  <div class="card pass">
+    <p>镜像：<code>sub2api:real-readiness-8296c2a6</code><br>镜像 ID：<code>sha256:ad432520f38c60fe67e85aaab7878ab47c901e12847fb5b2eacb9d972e1864fb</code><br>健康：<code>/health</code> ok；应用进程 UID 1000；端口 <code>127.0.0.1:18080</code>。</p>
   </div>
 
   <h2>关键变更</h2>
   <table><thead><tr><th>提交</th><th>作用</th></tr></thead><tbody>
-    <tr><td><code>06020077</code></td><td>统一真实复核硬门：图片 4、视频 4、累计预留 ¥60，跨进程锁与原子状态。</td></tr>
-    <tr><td><code>be346bb9</code> / <code>0b277da5</code></td><td>Gemini 真实 Form A 与 operation <code>BATCH_STATE_*</code> 状态解析。</td></tr>
-    <tr><td><code>798546cf</code></td><td>Seedance 既有任务只读恢复/资产归档；禁止 capture 未执行却误报 succeeded。</td></tr>
-    <tr><td><code>165d2823</code></td><td>员工视频任务权限安全、移动端卡片列表与空分页修复。</td></tr>
-    <tr><td><code>ca6829e0</code></td><td>真实测试不再输出带签名查询参数的结果 URL。</td></tr>
-    <tr><td><code>c2566a2b</code></td><td>mock SVG 结果使用图片证据预览，不再错误塞入视频播放器。</td></tr>
-    <tr><td><code>da22a229</code></td><td>共享硬门提取为 realsmoke-only 内部包；真实 Seedance DB 恢复 harness；视频 USD 账本纳入老板总览/成员排行；视频总览明确 CNY/USD。</td></tr>
+    <tr><td><code>61e776fd</code></td><td>succeeded 终态无资产 URL 不得结算（G0 前置）。</td></tr>
+    <tr><td><code>d6a35110</code> / <code>e5855818</code></td><td>共享 RealCreateGuard 接入产品 create chokepoint；Seedance CNY 预留与错误消毒。</td></tr>
+    <tr><td><code>fd0cc5f0</code> / <code>a9e8e12f</code></td><td>mock / review_real / internal_real 路由与策略预留。</td></tr>
+    <tr><td><code>5de80939</code></td><td>Gemini 产品 DB 0-create 恢复 integration（脱敏 fixture）。</td></tr>
+    <tr><td><code>c9c05084</code></td><td>Gemini 图片持久资产、预览、下载、再次引用。</td></tr>
+    <tr><td><code>05b40e49</code> / <code>9af957d3</code></td><td>Provider 账单导入/规范化/匹配；重复 SHA-256 拦截。</td></tr>
+    <tr><td><code>8a8d1ea2</code></td><td>domain_outbox Claim 集成测试隔离，修复共享 DB 污染。</td></tr>
+    <tr><td><code>8296c2a6</code></td><td>关闭 API-key 真实创建绕过 review_only；图片策略 USD→CNY；确认弹窗与 allow_member 保全。</td></tr>
   </tbody></table>
 
-  <h2>真实 Provider 证据</h2>
-  <table><thead><tr><th>场景</th><th>证据</th><th>判定</th></tr></thead><tbody>
-    <tr><td>Gemini/Nano Banana</td><td>1 次真实 Batch；上游 succeeded。修复 operation 状态解析后，对同一任务执行 Get→OpenResult→真实图片解码通过，没有第二次 create。</td><td>局部通过</td></tr>
-    <tr><td>Seedance 16:9</td><td>5 秒、720p、24fps；1 create、46 poll、usage 108900、succeeded；同一任务恢复并归档 MP4。</td><td>通过</td></tr>
-    <tr><td>Seedance 9:16</td><td>5 秒、720p、24fps；1 create、31 poll、usage 108900、succeeded；同一任务只读恢复并归档 1,761,009 字节 MP4。</td><td>通过</td></tr>
-    <tr><td>Seedance 产品数据恢复链</td><td>既有 upstream task 以 submitted 状态接入真实 Testcontainers Postgres；production worker 仅 Poll，finalizer 写 reservation/charge/video usage/余额/outbox；archive/capture 完成。账本 1 行、usage 1 行、内容 1 行、未完成 outbox 0；审计 0 create。</td><td>通过</td></tr>
-    <tr><td>安全</td><td>真实审计/恢复日志中临时 Key 精确命中 0；审查 JSON 中 Key/密码命中 0、Authorization 命中 0；结果签名 URL 已从后续测试输出移除。</td><td>通过</td></tr>
+  <h2>无付费验证统计</h2>
+  <table><thead><tr><th>门禁</th><th>结果</th></tr></thead><tbody>
+    <tr><td>go vet + backend packages</td><td class="ok">PASS</td></tr>
+    <tr><td>WSL Ubuntu-24.04 <code>go test -tags=integration ./internal/repository</code></td><td class="ok">PASS（executed，无 skip 冒充）</td></tr>
+    <tr><td>frontend lint / vue-tsc / vitest / build</td><td class="ok">PASS（944 tests）</td></tr>
+    <tr><td>Docker delivery image</td><td class="ok">PASS</td></tr>
+    <tr><td>三角色浏览器 mock 闭环</td><td class="ok">9 截图 / 79 API 2xx / secretHits 0</td></tr>
   </tbody></table>
 
-  <h2>当前 HEAD 与本地产品闭环</h2>
-  <div class="card pass">
-    <p>镜像：<code>sub2api:real-review-da22a229</code><br>镜像 ID：<code>sha256:616a90173b52a73487a062d7493e977a77ef55a716c24479bae35683003a85f9</code><br>容器：healthy；app 实际进程 UID 1000。</p>
-    <p>员工 mock 任务 #1：queued → submitted → running → succeeded；创建者 ID 2；费用 0、结算 <code>not_required</code>、员工余额保持 ¥100；相对结果地址 HTTP 200。任务返回的是明确的 SVG 试跑证据，不是真实视频，UI 已正确区分展示。</p>
-    <p>浏览器：7 条核心路径，59 个业务 API 响应全部 2xx。员工访问管理员 Provider/老板统计接口仍为 403，员工 provider 列表只有掩码状态，不含明文 Key。</p>
-  </div>
+  <h2>能力矩阵（当前）</h2>
+  <table><thead><tr><th>能力</th><th>自动证据</th><th>用户真实证据</th></tr></thead><tbody>
+    <tr><td>预算硬门</td><td>单元/并发/fail-closed + 产品 chokepoint</td><td>待页面剩余额度真人验证</td></tr>
+    <tr><td>员工视频 create</td><td>fake/mock 链 + create 门禁测试</td><td>待 1 次真实 Seedance</td></tr>
+    <tr><td>员工图片 create</td><td>产品 mock + 资产/模式测试</td><td>待 1 次真实 Gemini</td></tr>
+    <tr><td>Gemini 产品链</td><td>0-create recovery fixture + 资产归档</td><td>待真实创建走产品 DB</td></tr>
+    <tr><td>Provider 对账</td><td>合成 CSV/XLSX fixtures</td><td>待真实账单上传</td></tr>
+    <tr><td>三角色 UX</td><td>本轮 9 张截图</td><td>待人眼确认生成内容</td></tr>
+  </tbody></table>
 
-  <h2>浏览器截图</h2>
+  <h2>浏览器截图（本轮）</h2>
   <div class="grid">
-    <figure class="shot"><a href="assets/real-review-20260712/01-boss-dashboard.png"><img src="assets/real-review-20260712/01-boss-dashboard.png" alt="老板仪表盘"></a><figcaption>老板：总览、用量、成员和快捷动作。</figcaption></figure>
-    <figure class="shot"><a href="assets/real-review-20260712/02-admin-video-dashboard.png"><img src="assets/real-review-20260712/02-admin-video-dashboard.png" alt="管理员视频总览"></a><figcaption>管理员：视频总览与通道状态。</figcaption></figure>
-    <figure class="shot"><a href="assets/real-review-20260712/03-admin-users.png"><img src="assets/real-review-20260712/03-admin-users.png" alt="管理员用户管理"></a><figcaption>管理员：成员与额度管理。</figcaption></figure>
-    <figure class="shot"><a href="assets/real-review-20260712/04-employee-video-create.png"><img src="assets/real-review-20260712/04-employee-video-create.png" alt="员工创建任务"></a><figcaption>员工：三步内创建试跑任务，不接触底层密钥。</figcaption></figure>
-    <figure class="shot"><a href="assets/real-review-20260712/05-employee-video-tasks.png"><img src="assets/real-review-20260712/05-employee-video-tasks.png" alt="员工任务列表"></a><figcaption>员工：状态、花费、结果和下一步。</figcaption></figure>
-    <figure class="shot"><a href="assets/real-review-20260712/06-employee-task-detail.png"><img src="assets/real-review-20260712/06-employee-task-detail.png" alt="员工任务详情"></a><figcaption>员工：SVG 试跑证据、参数、调度和运行记录。</figcaption></figure>
-    <figure class="shot"><a href="assets/real-review-20260712/07-employee-tasks-mobile.png"><img src="assets/real-review-20260712/07-employee-tasks-mobile.png" alt="员工移动端任务列表"></a><figcaption>员工移动端 390×844：卡片列表，无挤压表格。</figcaption></figure>
+    <figure class="shot"><img src="assets/real-product-readiness-20260715/01-boss-dashboard.png" alt="老板仪表盘"><figcaption>老板：总花费/调用量/成员排行/对账状态条。</figcaption></figure>
+    <figure class="shot"><img src="assets/real-product-readiness-20260715/02-admin-video-dashboard.png" alt="管理员视频总览"><figcaption>管理员：视频总览。</figcaption></figure>
+    <figure class="shot"><img src="assets/real-product-readiness-20260715/03-admin-video-system-check.png" alt="系统检查与额度"><figcaption>管理员：复核 Snapshot / 日夜限额 / kill switch。</figcaption></figure>
+    <figure class="shot"><img src="assets/real-product-readiness-20260715/04-admin-provider-billing.png" alt="Provider 账单"><figcaption>管理员：Provider 账单导入与对账。</figcaption></figure>
+    <figure class="shot"><img src="assets/real-product-readiness-20260715/05-admin-users.png" alt="用户管理"><figcaption>管理员：成员管理。</figcaption></figure>
+    <figure class="shot"><img src="assets/real-product-readiness-20260715/06-employee-video-create.png" alt="员工视频创建"><figcaption>员工：默认免费试跑创建页。</figcaption></figure>
+    <figure class="shot"><img src="assets/real-product-readiness-20260715/07-employee-video-tasks.png" alt="员工任务列表"><figcaption>员工：任务列表轮询视图。</figcaption></figure>
+    <figure class="shot"><img src="assets/real-product-readiness-20260715/08-employee-batch-image.png" alt="员工批量生图"><figcaption>员工：批量生图入口与资产动作。</figcaption></figure>
+    <figure class="shot"><img src="assets/real-product-readiness-20260715/09-employee-tasks-mobile.png" alt="移动端任务"><figcaption>员工移动端 390×844。</figcaption></figure>
   </div>
 
-  <h2>验证命令与结果</h2>
-  <pre>go test -tags realsmoke ./internal/service -run '^(TestFormASeedance|TestRealReviewSessionGuard)' -count=1
-PASS（不设置真实开关，无付费调用）
+  <h2>用户真实测试卡</h2>
+  <div class="card stop">
+    <h3>状态：READY_FOR_USER_REAL_TEST / 待复核</h3>
+    <ol>
+      <li>确认 Windows 用户环境已存在临时凭证（presence-check only）。管理员 bootstrap 页显示两个 <code>review_only</code> 账号已装配，但不显示值。</li>
+      <li>登录员工账号，选择“一次真实复核”。</li>
+      <li>创建 1 张 Gemini 低规格图片；确认 task ID、终态、预览、下载、再次引用。</li>
+      <li>创建 1 条 Seedance 5 秒 9:16 视频；确认 task ID、create=1、终态、播放、下载、再次引用。</li>
+      <li>管理员上传 Gemini 与 Seedance 真实账单明细，确认匹配/差异；若无账单则保留“待账单复核”。</li>
+      <li>老板确认总览、成员排行、余额与对账状态符合实际。</li>
+      <li>管理员先确认至少一个非 <code>review_only</code> 正式内部 Provider 账号已配置并通过无费用连接检查，再决定是否启用 <code>internal_real</code>（指定成员/分组日/月上限；kill switch 可见）。无正式账号时保持关闭。</li>
+      <li>立即禁用 <code>review_only</code> 账号并废弃临时 Gemini/Seedance 密钥。</li>
+    </ol>
+    <p><strong>立即停止条件：</strong>鉴权异常、密钥回显、重复 create、未知状态、费用超过剩余 ¥40、URL 不安全、账务不一致、资产不可下载。</p>
+  </div>
 
-vitest run useVideoTaskLifecycle.spec.ts VideoTaskDetailView.spec.ts VideoTasksView.spec.ts
-3 files / 16 tests PASS
+  <h2>风险与回滚</h2>
+  <div class="card">
+    <ul>
+      <li>真实复核默认关闭；紧急先关 session capability / kill switch，再 <code>git revert</code>。</li>
+      <li>对账差异不自动改用户余额。</li>
+      <li>资产迁移只新增表与读取优先级；回滚应用保留资产文件。</li>
+      <li>历史真实 Provider 证据（2026-07-12）仍有效，本轮未重复付费调用。</li>
+    </ul>
+  </div>
 
-vue-tsc --noEmit
-PASS
-
-pnpm.cmd run build
-920 modules transformed / PASS（仅既有 chunk 与 browserslist warnings）
-
-docker build -f Dockerfile.delivery --build-arg COMMIT=da22a229 ...
-PASS / image sha256:616a90173b52...
-
-真实 Seedance 9:16 Form A
-PASS / 1 create / 31 poll / succeeded / usage 108900
-
-既有 Seedance 任务只读恢复
-PASS / MP4 1,761,009 bytes / 无新增 create
-
-Seedance Postgres/repository/worker/finalizer/outbox 恢复链
-PASS / usage=108900 / ledger=1 / video_usage=1 / content=1 / incomplete_outbox=0 / create=0
-
-视频账本→老板总览/成员排行 Testcontainers integration
-PASS / exact-once charge / UsageLog suite PASS</pre>
-  <p class="muted">浏览器网络证据原始摘要：<a href="assets/real-review-20260712/evidence.json">evidence.json</a>。</p>
-
-  <h2>风险与未完成项</h2>
-  <ol>
-    <li><strong>外部账务：</strong>Provider usage→内部 CNY catalog→USD ledger→用户余额→老板总览已对齐；Provider 正式账单/发票未接入，不能声称外部对账完成。</li>
-    <li><strong>一体链：</strong>真实恢复链使用既有 upstream task，未证明员工 UI create→真实 Provider create 的同一请求；Gemini 仍未进入产品数据库。</li>
-    <li><strong>覆盖：</strong>Gemini 常用规格/参考图，以及 Seedance 首帧/尾帧尚未验证。</li>
-    <li><strong>浏览器：</strong>员工任务列表有 1 条无头 Edge CSP inline-script 告警；同一响应 header/body nonce 一致，倾向自动化注入噪声，仍保留为风险。</li>
-    <li><strong>状态：</strong>mock 成功、真实 result URL 或本地 harness 文件都不能单独证明生产可用。</li>
-  </ol>
-
-  <h2>回滚</h2>
-  <p>使用 <code>git revert da22a229</code> 回退本轮共享硬门/恢复 harness/总览对账变更；使用 <code>git revert c2566a2b</code> 回退 mock 预览修复。禁止 reset/clean。停止本地环境使用同一 Compose project 执行 <code>docker compose ... down</code>，不会影响远程环境。</p>
-
-  <h2>下一步建议</h2>
-  <ol>
-    <li>在不新增付费调用的前提下，补齐真实资产浏览器下载与再次引用证据，并明确 Gemini 产品数据库接入方案。</li>
-    <li>如需证明员工 UI→真实 create，必须让产品入口复用同一共享硬门；当前恢复 harness 不应被误写为 UI create 证据。</li>
-    <li>只有上述证据确实需要时，才使用剩余图片 3 次/视频 2 次/¥40 额度；禁止循环重试。</li>
-    <li>复验完成后立即废弃本轮临时 Gemini 与 Seedance 凭证。</li>
-  </ol>
-
-  <h2>可复制后续提示词</h2>
-  <pre>继续 D:\sub2api-trunk 的真实复核。以 docs/reviews/LATEST_REVIEW_PACKAGE.html 为真相源。当前真实 Seedance 恢复链、内部账本/余额/outbox/老板总览已通过，计数仍为图片 1/4、视频 2/4、¥20。下一步优先无付费验证真实资产浏览器下载/再次引用和 Gemini 产品数据库方案；不得打印凭证，不得绕过共享硬门，不得 push、部署或公开服务。只有现有证据无法补齐验收时才考虑单次真实调用。</pre>
+  <h2>文件索引</h2>
+  <pre>docs/reviews/LATEST_REVIEW_PACKAGE.html
+docs/reviews/assets/real-product-readiness-20260715/*
+docs/superpowers/codex-handoff/deliverables/2026-07-15-REAL-PRODUCT-READINESS-closeout.md
+docs/superpowers/codex-handoff/CODEX_TASK_REAL_PRODUCT_READINESS_20260715.md
+00_START_HERE.md
+02_CURRENT_REALITY_STATUS.md
+docs/goals/03_CURRENT_GOAL.md
+</pre>
 </main></body></html>

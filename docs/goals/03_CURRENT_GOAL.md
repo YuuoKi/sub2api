@@ -1,40 +1,27 @@
-# 当前目标：真实图片、视频与前端用户闭环复核
+# 当前目标：用户真实复核收口
 
-更新时间：2026-07-12
-状态：**可演示，继续复核**
+更新时间：2026-07-15
+状态：**READY_FOR_USER_REAL_TEST / 待复核**
 
 ## 目标
 
-在不 push、不部署、不使用生产用户数据的前提下，以最多 4 次 Gemini/Nano Banana 图片、4 次 Seedance 2.0 视频、累计 ¥60 的硬上限，验证真实任务、计费、资产交付和老板/管理员/员工三角色用户路径。
+在会话硬上限（图片 4、视频 4、累计 ¥60；当前已用图片 1、视频 2、¥20）内，由用户完成真实图片、真实视频、真实账单与人眼验收；通过后才可判定内部可用。
 
-## 已完成
+## 已完成（无付费）
 
-- 当前分支本地提交：`1145f850` Windows 页面路径安全 fallback；`70d9d516` 员工视频入口与权限语义；`06020077` realsmoke 会话次数/预算硬门；`be346bb9` Gemini/Nano Banana 安全产品流 harness；`0b277da5` 真实 Gemini operation 状态解析；`798546cf` Seedance 资产恢复与 capture 真相修复；`165d2823` 员工任务页权限/移动端；`ca6829e0` 真实测试签名 URL 脱敏；`c2566a2b` mock SVG 结果正确预览。
-- Go 最低门禁、前端 lint/typecheck/视频测试/build 通过。
-- repository integration 35 cases 实际执行并通过、无 skip。
-- Seedance Form A 专用测试 harness 在读取 Key、构造客户端和 create 前先占用会话次数与预算。
-- Gemini Form A 专用测试 harness 固定每次预留 ¥5，并在读 Key/建客户端前占用图片次数与共享预算；fake 覆盖 Submit→Get→OpenResult、取消和图片解码。
-- Seedance 第二次真实 Form A：5 秒、720p、9:16、24fps，1 次 create、31 次 poll、usage 108900、succeeded；同一任务只读恢复并归档为 1,761,009 字节 MP4，未新增 create。
-- 当前 HEAD `da22a229` 本地镜像 ID `sha256:616a90173b52a73487a062d7493e977a77ef55a716c24479bae35683003a85f9`，健康运行且实际进程 UID 1000；服务只绑定 `127.0.0.1:18080`。
-- 老板、管理员、员工共 7 张真实浏览器截图；59 个业务 API 响应全部 2xx。员工 mock 任务 #1 经 queued→submitted→running→succeeded，结果证据可打开，桌面与移动端均已渲染验证。
-- `da22a229`：共享 4+4/¥60 硬门提取为 realsmoke-only 内部包；既有 Seedance 任务通过真实 Postgres/repository/worker/finalizer/outbox 完成 usage、reservation、账本、余额、内容和 MP4 归档，0 create；老板总览和成员排行纳入视频 USD 账本，视频总览明确 CNY/USD。
-- 最新镜像 `sub2api:real-review-da22a229`（`sha256:616a90173b52a73487a062d7493e977a77ef55a716c24479bae35683003a85f9`）healthy；三角色复跑 59 个业务 API 全部 2xx。
+- G0–G7 开发与自动验证按任务包执行到用户真实测试卡。
+- 代码证据 HEAD：`8296c2a6`。
+- 审查包：`docs/reviews/LATEST_REVIEW_PACKAGE.html`。
+- Closeout：`docs/superpowers/codex-handoff/deliverables/2026-07-15-REAL-PRODUCT-READINESS-closeout.md`。
 
-## 当前缺口
+## 当前缺口（仅用户动作）
 
-- Gemini/Nano Banana 仅完成首张真实图片；常用规格、参考图和真实图片资产进入产品数据库尚未验证。
-- Seedance 已完成真实 repository/账本/outbox 恢复链，但恢复的是既有 upstream task，尚不能证明员工 UI create→真实 Provider create 的同一请求链。
-- Provider 正式账单/发票未接入；内部 usage 定价与账本一致不等于外部账单对账，因此不能判定“内部可用”。
-- 浏览器业务页面 59 个 API 均为 2xx；无头 Edge 在员工任务列表产生 1 条 CSP inline-script 告警。同一响应的 header/body nonce 已核对一致，暂按自动化注入噪声记录，但仍保留风险。
-- 当前会话计数图片 1/4、视频 2/4、累计预留 ¥20；剩余额度不代表应继续调用，只有补齐明确缺失证据时才可使用。
+1. 一次真实 Gemini 低规格图片 create 与资产交付确认。
+2. 一次真实 Seedance 5 秒 9:16 视频 create=1 与播放/下载确认。
+3. 真实账单上传或明确保留“待账单复核”。
+4. 禁用 review_only 并废弃临时密钥。
+5. 可选：正式通道齐备后启用 `internal_real`。
 
 ## 停止条件
 
-- 鉴权异常、密钥回显、未知终态、重复 create、URL 不安全或账务不一致。
-- 图片或视频任一达到 4 次，或累计预留达到 ¥60。
-- 任何测试 skip、缓存镜像或静态源码证据不得包装成真实用户闭环。
-
-## 证据入口
-
-- 最新审查包：`docs/reviews/LATEST_REVIEW_PACKAGE.html`
-- 北极星更新草案：`docs/reviews/NORTH_STAR_V5_REAL_REVIEW_UPDATE_DRAFT_20260712.md`
+鉴权异常、密钥回显、重复 create、未知终态、费用超过剩余 ¥40、URL 不安全、账务不一致、资产不可下载。

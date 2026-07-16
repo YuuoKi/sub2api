@@ -60,7 +60,41 @@
     @apply bg-primary-500/20 text-primary-900 dark:text-primary-100;
   }
 
+  /* ============ K3 Apple-like 视觉 tokens(浅色) ============ */
+  :root {
+    --ui-canvas: 248 250 252;
+    --ui-surface: 255 255 255;
+    --ui-surface-raised: 255 255 255;
+    --ui-border: 15 23 42 / 0.08;
+    --ui-text: 15 23 42;
+    --ui-text-muted: 100 116 139;
+    --ui-accent: 13 148 136;
+    --ui-focus: 20 184 166 / 0.35;
+  }
 
+  /* ============ K3 Apple-like 视觉 tokens(深色) ============ */
+  .dark {
+    --ui-canvas: 9 12 17;
+    --ui-surface: 17 24 39;
+    --ui-surface-raised: 24 33 47;
+    --ui-border: 255 255 255 / 0.10;
+    --ui-text: 241 245 249;
+    --ui-text-muted: 148 163 184;
+    --ui-accent: 45 212 191;
+    --ui-focus: 45 212 191 / 0.40;
+  }
+
+  /* 减少动态效果:压缩动画/过渡时长,但保留焦点等状态反馈本身 */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
 }
 
 @layer components {
@@ -731,6 +765,41 @@
   /* 表头固定时添加底部阴影，增强视觉层次 */
   .table-wrapper thead.sticky {
     box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+  }
+
+  /* ============ K3 Apple-like 语义化布局原语 ============ */
+  /* 页面画布:浅色 slate-50 / 深色近黑,由 --ui-canvas 驱动 */
+  .ui-page {
+    @apply min-h-screen bg-ui-canvas font-sans text-ui-text antialiased;
+  }
+
+  /* 内容面板:Apple 式圆角 + 细描边 + 柔和投影 */
+  .ui-panel {
+    @apply rounded-2xl border border-ui-border bg-ui-surface shadow-card;
+    @apply transition-shadow duration-200;
+  }
+
+  /* 工具条:浮起于面板的操作区 */
+  .ui-toolbar {
+    @apply flex items-center gap-3;
+    @apply rounded-2xl border border-ui-border bg-ui-surface-raised px-4 py-3;
+  }
+
+  /* 焦点反馈:仅作用于新语义容器自身,不影响既有组件 */
+  .ui-panel:focus-visible,
+  .ui-toolbar:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgb(var(--ui-focus));
+  }
+
+  /* 页面主标题:收紧字距的 Apple 式排版 */
+  .ui-heading {
+    @apply text-2xl font-semibold tracking-tight text-ui-text;
+  }
+
+  /* 次级说明文字 */
+  .ui-subheading {
+    @apply text-sm text-ui-text-muted;
   }
 }
 

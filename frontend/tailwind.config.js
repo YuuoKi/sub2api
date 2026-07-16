@@ -46,6 +46,18 @@ export default {
           800: '#1e293b',
           900: '#0f172a',
           950: '#020617'
+        },
+        // K3 Apple-like 语义化表面色 —— 由 src/style.css 中 :root / .dark 的
+        // CSS 变量驱动;--ui-border 与 --ui-focus 变量本身已含 alpha 通道。
+        ui: {
+          canvas: 'rgb(var(--ui-canvas) / <alpha-value>)',
+          surface: 'rgb(var(--ui-surface) / <alpha-value>)',
+          'surface-raised': 'rgb(var(--ui-surface-raised) / <alpha-value>)',
+          border: 'rgb(var(--ui-border))',
+          text: 'rgb(var(--ui-text) / <alpha-value>)',
+          'text-muted': 'rgb(var(--ui-text-muted) / <alpha-value>)',
+          accent: 'rgb(var(--ui-accent) / <alpha-value>)',
+          focus: 'rgb(var(--ui-focus))'
         }
       },
       fontFamily: {

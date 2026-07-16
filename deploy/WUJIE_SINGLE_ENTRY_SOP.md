@@ -57,9 +57,9 @@ docker compose -f docker-compose.yml up -d
 Pop-Location
 ```
 
-compose 会正常加载 `deploy` 目录的本地环境文件。禁止用 `Get-Content`、`cat` 或 `docker compose config` 打印环境文件、密钥或展开后的配置。
+compose 会正常加载 `deploy` 目录的本地环境文件。host 入口已硬绑定为 `127.0.0.1:8080`，本地环境文件只能影响容器内业务配置，不能改写 host 端口。禁止用 `Get-Content`、`cat` 或 `docker compose config` 打印环境文件、密钥或展开后的配置。
 
-仓内 compose 已把 host 绑定硬性固定为 `127.0.0.1`，并把 `RUN_MODE` 固定为 `standard`；不得通过 `.env` 改为对外地址或 simple/demo 隐藏模式。如本地环境文件中的 TOTP key 无效，记录 `BLOCKED:totp-encryption-key` 并停止验收，禁止读取、回显或临时改写该 key。`docker compose run -e` 产生的 one-off 容器只可用于脱敏诊断，必须精确停止，不能作为本 SOP 的 `up` / `stop` 生命周期或品牌验收证据。
+仓内 compose 已把 host 绑定硬性固定为 `127.0.0.1:8080`，并把 `RUN_MODE` 固定为 `standard`；不得通过 `.env` 改为对外地址、其他 host 端口或 simple/demo 隐藏模式。如本地环境文件中的 TOTP key 无效，记录 `BLOCKED:totp-encryption-key` 并停止验收，禁止读取、回显或临时改写该 key。`docker compose run -e` 产生的 one-off 容器只可用于脱敏诊断，必须精确停止，不能作为本 SOP 的 `up` / `stop` 生命周期或品牌验收证据。
 
 ## 4. 只验收 `127.0.0.1:8080`
 

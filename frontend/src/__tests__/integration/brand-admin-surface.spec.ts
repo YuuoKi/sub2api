@@ -12,6 +12,7 @@ const sidebarSource = readFileSync(
   resolve(frontendRoot, 'src/components/layout/AppSidebar.vue'),
   'utf8',
 )
+const composeSource = readFileSync(resolve(frontendRoot, '../deploy/docker-compose.yml'), 'utf8')
 const forbiddenDemoMode = ['video', 'gateway', 'demo'].join('_')
 
 describe('无界品牌入口', () => {
@@ -27,6 +28,11 @@ describe('无界品牌入口', () => {
   it('侧栏继续展示运行时品牌名与现有 logo', () => {
     expect(sidebarSource).toContain('{{ siteName }}')
     expect(sidebarSource).toContain("siteLogo || '/logo.png'")
+  })
+
+  it('唯一入口硬绑定 loopback 8080，不允许环境变量改写 host 端口', () => {
+    expect(composeSource).toContain('- "127.0.0.1:8080:8080"')
+    expect(composeSource).not.toContain('127.0.0.1:${SERVER_PORT:-8080}:8080')
   })
 })
 

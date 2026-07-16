@@ -127,6 +127,8 @@ type authCacheStub struct {
 	getAuthCache   func(ctx context.Context, key string) (*APIKeyAuthCacheEntry, error)
 	setAuthKeys    []string
 	deleteAuthKeys []string
+	deleteAuthErr  error
+	publishAuthErr error
 }
 
 func (s *authCacheStub) GetCreateAttemptCount(ctx context.Context, userID int64) (int, error) {
@@ -163,11 +165,11 @@ func (s *authCacheStub) SetAuthCache(ctx context.Context, key string, entry *API
 
 func (s *authCacheStub) DeleteAuthCache(ctx context.Context, key string) error {
 	s.deleteAuthKeys = append(s.deleteAuthKeys, key)
-	return nil
+	return s.deleteAuthErr
 }
 
 func (s *authCacheStub) PublishAuthCacheInvalidation(ctx context.Context, cacheKey string) error {
-	return nil
+	return s.publishAuthErr
 }
 
 func (s *authCacheStub) SubscribeAuthCacheInvalidation(ctx context.Context, handler func(cacheKey string)) error {
@@ -468,8 +470,15 @@ func TestAPIKeyService_InvalidateAuthCacheByUserID(t *testing.T) {
 	}
 	svc := NewAPIKeyService(repo, nil, nil, nil, nil, cache, cfg)
 
-	svc.InvalidateAuthCacheByUserID(context.Background(), 7)
+	require.NoError(t, svc.InvalidateAuthCacheByUserID(context.Background(), 7))
 	require.Len(t, cache.deleteAuthKeys, 2)
+}
+
+func TestAPIKeyService_InvalidateAuthCacheByUserIDReturnsQueryError(t *testing.T) {
+	want := errors.New("list keys failed")
+	repo := &authRepoStub{listKeysByUserID: func(context.Context, int64) ([]string, error) { return nil, want }}
+	svc := NewAPIKeyService(repo, nil, nil, nil, nil, &authCacheStub{}, &config.Config{})
+	require.ErrorIs(t, svc.InvalidateAuthCacheByUserID(context.Background(), 7), want)
 }
 
 func TestAPIKeyService_InvalidateAuthCacheByGroupID(t *testing.T) {
@@ -486,7 +495,7 @@ func TestAPIKeyService_InvalidateAuthCacheByGroupID(t *testing.T) {
 	}
 	svc := NewAPIKeyService(repo, nil, nil, nil, nil, cache, cfg)
 
-	svc.InvalidateAuthCacheByGroupID(context.Background(), 9)
+	require.NoError(t, svc.InvalidateAuthCacheByGroupID(context.Background(), 9))
 	require.Len(t, cache.deleteAuthKeys, 2)
 }
 
@@ -504,8 +513,15 @@ func TestAPIKeyService_InvalidateAuthCacheByKey(t *testing.T) {
 	}
 	svc := NewAPIKeyService(repo, nil, nil, nil, nil, cache, cfg)
 
-	svc.InvalidateAuthCacheByKey(context.Background(), "k1")
+	require.NoError(t, svc.InvalidateAuthCacheByKey(context.Background(), "k1"))
 	require.Len(t, cache.deleteAuthKeys, 1)
+}
+
+func TestAPIKeyService_InvalidateAuthCacheByKeyReturnsDeleteError(t *testing.T) {
+	want := errors.New("redis delete failed")
+	cache := &authCacheStub{deleteAuthErr: want}
+	svc := NewAPIKeyService(&authRepoStub{}, nil, nil, nil, nil, cache, &config.Config{})
+	require.ErrorIs(t, svc.InvalidateAuthCacheByKey(context.Background(), "k1"), want)
 }
 
 func TestAPIKeyService_GetByKey_CachesNegativeOnRepoMiss(t *testing.T) {

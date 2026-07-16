@@ -132,6 +132,16 @@ func TestVideoGatewayRepositoryCancelRejectsDispatchedTask(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestValidateVideoSettlementRejectsMismatchedActualCost(t *testing.T) {
+	tokens := int64(10)
+	task := &service.VideoTask{ReservedCostUSD: 0.2, ReservationState: service.VideoReservationReserved}
+	_, _, err := validateVideoSettlement(task, service.VideoTaskFinalization{
+		Status: service.VideoStatusSucceeded, ResultURL: "https://assets.invalid/result.mp4", UsageTotalTokens: &tokens,
+		CostAmount: 0.1, ProviderActualCostUSD: 0.09, Settlement: service.VideoSettlementCaptureActual,
+	})
+	require.ErrorContains(t, err, "provider actual cost")
+}
+
 func videoTaskRows(now time.Time) *sqlmock.Rows {
 	return sqlmock.NewRows([]string{"id", "api_key_id", "group_id", "provider_account_id", "provider", "model", "task_type", "prompt", "status", "upstream_task_id", "result_url", "last_frame_url", "duration_seconds", "resolution", "usage_total_tokens", "cost_amount", "currency", "real_dispatch_count", "provider_error_code", "provider_error_message", "error_message", "creation_key", "version", "dispatch_state", "created_by", "created_at", "updated_at", "completed_at", "reserved_cost_usd", "reservation_state", "reserved_at", "reservation_window_5h_start", "reservation_window_1d_start", "reservation_window_7d_start", "provider_actual_cost_usd"})
 }

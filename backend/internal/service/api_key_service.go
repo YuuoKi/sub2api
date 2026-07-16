@@ -151,9 +151,9 @@ type APIKeyCache interface {
 
 // APIKeyAuthCacheInvalidator 提供认证缓存失效能力
 type APIKeyAuthCacheInvalidator interface {
-	InvalidateAuthCacheByKey(ctx context.Context, key string)
-	InvalidateAuthCacheByUserID(ctx context.Context, userID int64)
-	InvalidateAuthCacheByGroupID(ctx context.Context, groupID int64)
+	InvalidateAuthCacheByKey(ctx context.Context, key string) error
+	InvalidateAuthCacheByUserID(ctx context.Context, userID int64) error
+	InvalidateAuthCacheByGroupID(ctx context.Context, groupID int64) error
 }
 
 // CreateAPIKeyRequest 创建API Key请求

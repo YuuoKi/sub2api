@@ -207,6 +207,31 @@ func TestVideoGatewaySettlementRollbackKeepsReservationAtomic(t *testing.T) {
 	require.Zero(t, dedup)
 }
 
+func TestVideoGatewaySettlementRollsBackWhenReservedAPIKeyIsSoftDeleted(t *testing.T) {
+	ctx := context.Background()
+	f := newVideoIntegrationFixture(t, 10, 1, 1, "standard", true)
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `UPDATE api_keys SET deleted_at=NOW() WHERE id=$1 RETURNING id`, f.apiKeyID).Scan(&f.apiKeyID))
+	tokens := int64(100)
+	_, err := f.repo.FinalizeTask(ctx, service.VideoTaskFinalization{TaskID: f.task.ID, ExpectedVersion: f.task.Version,
+		Status: service.VideoStatusSucceeded, ResultURL: "https://cdn.example.test/video.mp4", UsageTotalTokens: &tokens,
+		CostAmount: 0.05, ProviderActualCostUSD: 0.05, Currency: "USD", Settlement: service.VideoSettlementCaptureActual, CompletedAt: time.Now().UTC()})
+	require.ErrorContains(t, err, "api key reservation")
+
+	var balance, frozen float64
+	var status, reservationState string
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT balance,frozen_balance FROM users WHERE id=$1`, f.userID).Scan(&balance, &frozen))
+	require.Equal(t, 9.8, balance)
+	require.Equal(t, 0.2, frozen)
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT status,reservation_state FROM video_tasks WHERE id=$1`, f.task.ID).Scan(&status, &reservationState))
+	require.Equal(t, service.VideoStatusQueued, status)
+	require.Equal(t, service.VideoReservationReserved, reservationState)
+	var dedup, usageLogs int
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT COUNT(*) FROM usage_billing_dedup WHERE request_id=$1`, fmt.Sprintf("video:%d", f.task.ID)).Scan(&dedup))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT COUNT(*) FROM video_usage_logs WHERE video_task_id=$1`, f.task.ID).Scan(&usageLogs))
+	require.Zero(t, dedup)
+	require.Zero(t, usageLogs)
+}
+
 func TestVideoGatewayScopeAndDispatchCancelConcurrency(t *testing.T) {
 	ctx := context.Background()
 	f := newVideoIntegrationFixture(t, 10, 1, 1, "standard", true)

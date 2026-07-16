@@ -50,16 +50,19 @@ type authCacheInvalidatorStub struct {
 	keys     []string
 }
 
-func (s *authCacheInvalidatorStub) InvalidateAuthCacheByKey(ctx context.Context, key string) {
+func (s *authCacheInvalidatorStub) InvalidateAuthCacheByKey(ctx context.Context, key string) error {
 	s.keys = append(s.keys, key)
+	return nil
 }
 
-func (s *authCacheInvalidatorStub) InvalidateAuthCacheByUserID(ctx context.Context, userID int64) {
+func (s *authCacheInvalidatorStub) InvalidateAuthCacheByUserID(ctx context.Context, userID int64) error {
 	s.userIDs = append(s.userIDs, userID)
+	return nil
 }
 
-func (s *authCacheInvalidatorStub) InvalidateAuthCacheByGroupID(ctx context.Context, groupID int64) {
+func (s *authCacheInvalidatorStub) InvalidateAuthCacheByGroupID(ctx context.Context, groupID int64) error {
 	s.groupIDs = append(s.groupIDs, groupID)
+	return nil
 }
 
 func TestAdminService_UpdateUserBalance_InvalidatesAuthCache(t *testing.T) {

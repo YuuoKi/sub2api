@@ -27,6 +27,9 @@ func (w *VideoGatewayWorker) RunOnce(ctx context.Context) error {
 	if w == nil || w.repo == nil || w.encryptor == nil || w.clientFactory == nil || w.cfg == nil {
 		return errors.New("video worker dependencies are required")
 	}
+	if w.authCache == nil || w.billingCache == nil {
+		return errors.New("video worker cache invalidators are required")
+	}
 	tasks, err := w.repo.ClaimRunnableTasks(ctx, 1, 30*time.Second)
 	if err != nil || len(tasks) == 0 {
 		return err
@@ -140,7 +143,7 @@ func (w *VideoGatewayWorker) RunOnce(ctx context.Context) error {
 func (w *VideoGatewayWorker) finalize(ctx context.Context, task *VideoTask, input VideoTaskFinalization) error {
 	_, err := w.repo.FinalizeTask(ctx, input)
 	if err == nil {
-		invalidateVideoCaches(ctx, w.authCache, w.billingCache, task.CreatedBy, task.APIKeyID)
+		err = invalidateVideoCaches(ctx, w.authCache, w.billingCache, task.CreatedBy, task.APIKeyID)
 	}
 	return err
 }
@@ -153,5 +156,9 @@ func videoActualUSD(completionTokens int64, cfg *config.Config) (float64, error)
 	if cny <= 0 {
 		return 0, errors.New("video actual cost is invalid")
 	}
-	return math.Round((cny/cfg.VideoGateway.USDCNYExchangeRate)*1e8) / 1e8, nil
+	actual := math.Round((cny/cfg.VideoGateway.USDCNYExchangeRate)*1e8) / 1e8
+	if actual <= 0 {
+		return 0, errors.New("video actual cost rounds to zero")
+	}
+	return actual, nil
 }

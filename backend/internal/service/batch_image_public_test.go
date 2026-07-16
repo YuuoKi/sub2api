@@ -746,16 +746,19 @@ type fakeBatchImageAuthCacheInvalidator struct {
 	groupIDs []int64
 }
 
-func (f *fakeBatchImageAuthCacheInvalidator) InvalidateAuthCacheByKey(_ context.Context, key string) {
+func (f *fakeBatchImageAuthCacheInvalidator) InvalidateAuthCacheByKey(_ context.Context, key string) error {
 	f.keys = append(f.keys, key)
+	return nil
 }
 
-func (f *fakeBatchImageAuthCacheInvalidator) InvalidateAuthCacheByUserID(_ context.Context, userID int64) {
+func (f *fakeBatchImageAuthCacheInvalidator) InvalidateAuthCacheByUserID(_ context.Context, userID int64) error {
 	f.userIDs = append(f.userIDs, userID)
+	return nil
 }
 
-func (f *fakeBatchImageAuthCacheInvalidator) InvalidateAuthCacheByGroupID(_ context.Context, groupID int64) {
+func (f *fakeBatchImageAuthCacheInvalidator) InvalidateAuthCacheByGroupID(_ context.Context, groupID int64) error {
 	f.groupIDs = append(f.groupIDs, groupID)
+	return nil
 }
 
 func validBatchImageSubmitRequest() BatchImageSubmitRequest {

@@ -12,7 +12,7 @@ import (
 var ErrVideoBudgetRejected = errors.New("video budget rejected")
 
 type VideoAuthCacheInvalidator interface {
-	InvalidateAuthCacheByUserID(context.Context, int64)
+	InvalidateAuthCacheByUserID(context.Context, int64) error
 }
 
 type VideoBillingCacheInvalidator interface {
@@ -94,7 +94,9 @@ func (s *VideoGatewayService) CreateTask(ctx context.Context, cmd VideoTaskCreat
 	if err := s.repo.ReserveAndCreateTask(ctx, task, maximumUSD); err != nil {
 		return nil, err
 	}
-	invalidateVideoCaches(ctx, s.authCache, s.billingCache, task.CreatedBy, task.APIKeyID)
+	if err := invalidateVideoCaches(ctx, s.authCache, s.billingCache, task.CreatedBy, task.APIKeyID); err != nil {
+		return task, err
+	}
 	return task, nil
 }
 
@@ -105,7 +107,7 @@ func (s *VideoGatewayService) GetTask(ctx context.Context, id int64, scope Video
 func (s *VideoGatewayService) CancelTask(ctx context.Context, id int64, scope VideoTaskScope) (*VideoTask, error) {
 	task, err := s.repo.CancelTaskForScope(ctx, id, scope)
 	if err == nil {
-		invalidateVideoCaches(ctx, s.authCache, s.billingCache, scope.UserID, scope.APIKeyID)
+		err = invalidateVideoCaches(ctx, s.authCache, s.billingCache, scope.UserID, scope.APIKeyID)
 	}
 	return task, err
 }

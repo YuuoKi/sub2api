@@ -273,12 +273,17 @@ type mockAuthCacheInvalidator struct {
 	mu                 sync.Mutex
 }
 
-func (m *mockAuthCacheInvalidator) InvalidateAuthCacheByKey(context.Context, string)    {}
-func (m *mockAuthCacheInvalidator) InvalidateAuthCacheByGroupID(context.Context, int64) {}
-func (m *mockAuthCacheInvalidator) InvalidateAuthCacheByUserID(_ context.Context, userID int64) {
+func (m *mockAuthCacheInvalidator) InvalidateAuthCacheByKey(context.Context, string) error {
+	return nil
+}
+func (m *mockAuthCacheInvalidator) InvalidateAuthCacheByGroupID(context.Context, int64) error {
+	return nil
+}
+func (m *mockAuthCacheInvalidator) InvalidateAuthCacheByUserID(_ context.Context, userID int64) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.invalidatedUserIDs = append(m.invalidatedUserIDs, userID)
+	return nil
 }
 
 // --- mock: BillingCache ---

@@ -23,24 +23,51 @@ type workerRepoStub struct {
 	beginCalls int
 }
 
-type videoAuthInvalidatorStub struct{ users []int64 }
+type videoAuthInvalidatorStub struct {
+	users []int64
+	err   error
+}
 
-func (s *videoAuthInvalidatorStub) InvalidateAuthCacheByUserID(_ context.Context, userID int64) {
+func (s *videoAuthInvalidatorStub) InvalidateAuthCacheByUserID(_ context.Context, userID int64) error {
 	s.users = append(s.users, userID)
+	return s.err
 }
 
 type videoBillingInvalidatorStub struct {
-	users []int64
-	keys  []int64
+	users   []int64
+	keys    []int64
+	userErr error
+	keyErr  error
 }
 
 func (s *videoBillingInvalidatorStub) InvalidateUserBalance(_ context.Context, userID int64) error {
 	s.users = append(s.users, userID)
-	return nil
+	return s.userErr
 }
 func (s *videoBillingInvalidatorStub) InvalidateAPIKeyRateLimit(_ context.Context, keyID int64) error {
 	s.keys = append(s.keys, keyID)
-	return nil
+	return s.keyErr
+}
+
+func TestInvalidateVideoCachesAggregatesEveryFailure(t *testing.T) {
+	authErr := errors.New("auth delete failed")
+	balanceErr := errors.New("balance delete failed")
+	rateErr := errors.New("rate delete failed")
+	err := invalidateVideoCaches(context.Background(), &videoAuthInvalidatorStub{err: authErr},
+		&videoBillingInvalidatorStub{userErr: balanceErr, keyErr: rateErr}, 11, 12)
+	require.ErrorIs(t, err, authErr)
+	require.ErrorIs(t, err, balanceErr)
+	require.ErrorIs(t, err, rateErr)
+}
+
+func TestVideoWorkerRequiresCacheInvalidators(t *testing.T) {
+	w := NewVideoGatewayWorker(&workerRepoStub{}, keyDecryptStub{}, func(string, string) *SeedanceAdapter { return nil }, nil, nil, &config.Config{}, NewSingleSmokeAuthorization(false))
+	require.ErrorContains(t, w.RunOnce(context.Background()), "cache invalidators")
+}
+
+func TestVideoActualUSDRejectsCostRoundedToZero(t *testing.T) {
+	_, err := videoActualUSD(1, &config.Config{VideoGateway: config.VideoGatewayConfig{SeedanceCNYPerMillionTokens: 0.000001, USDCNYExchangeRate: 100}})
+	require.ErrorContains(t, err, "rounds to zero")
 }
 
 func (r *workerRepoStub) CreateTask(context.Context, *VideoTask) error { return nil }

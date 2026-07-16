@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -479,6 +480,9 @@ func validateVideoSettlement(task *service.VideoTask, input service.VideoTaskFin
 		if input.Status != service.VideoStatusSucceeded || strings.TrimSpace(input.ResultURL) == "" || input.UsageTotalTokens == nil || *input.UsageTotalTokens <= 0 || input.CostAmount <= 0 {
 			return 0, "", errors.New("successful video settlement requires asset, usage, and positive cost")
 		}
+		if input.ProviderActualCostUSD <= 0 || math.Abs(input.ProviderActualCostUSD-input.CostAmount) > 0.00000001 {
+			return 0, "", errors.New("successful video settlement requires provider actual cost to equal charged cost")
+		}
 		if input.CostAmount-task.ReservedCostUSD > 0.00000001 {
 			return 0, "", service.ErrVideoBudgetRejected
 		}
@@ -510,7 +514,7 @@ func settleVideoReservation(ctx context.Context, tx *sql.Tx, task *service.Video
 		}
 		return errors.New("video frozen balance is insufficient")
 	}
-	_, err = tx.ExecContext(ctx, `UPDATE api_keys SET quota_used=GREATEST(0,quota_used-$1),
+	result, err = tx.ExecContext(ctx, `UPDATE api_keys SET quota_used=GREATEST(0,quota_used-$1),
 		status=CASE WHEN status=$6 AND (quota=0 OR GREATEST(0,quota_used-$1)<quota) THEN $7 ELSE status END,
 		usage_5h=CASE WHEN window_5h_start IS NOT DISTINCT FROM $2 THEN GREATEST(0,usage_5h-$1) ELSE usage_5h END,
 		usage_1d=CASE WHEN window_1d_start IS NOT DISTINCT FROM $3 THEN GREATEST(0,usage_1d-$1) ELSE usage_1d END,
@@ -518,7 +522,17 @@ func settleVideoReservation(ctx context.Context, tx *sql.Tx, task *service.Video
 		updated_at=NOW() WHERE id=$5 AND deleted_at IS NULL`, refund,
 		timePtrValue(task.ReservationWindow5h), timePtrValue(task.ReservationWindow1d), timePtrValue(task.ReservationWindow7d), task.APIKeyID,
 		service.StatusAPIKeyQuotaExhausted, service.StatusAPIKeyActive)
-	return err
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected != 1 {
+		return errors.New("video api key reservation is missing")
+	}
+	return nil
 }
 
 func claimVideoBillingKey(ctx context.Context, tx *sql.Tx, task *service.VideoTask, input service.VideoTaskFinalization, charge float64) error {

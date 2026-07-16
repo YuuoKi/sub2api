@@ -56,7 +56,7 @@ type APIKeyQuotaUpdater interface {
 }
 
 type apiKeyAuthCacheInvalidator interface {
-	InvalidateAuthCacheByKey(ctx context.Context, key string)
+	InvalidateAuthCacheByKey(ctx context.Context, key string) error
 }
 
 type usageLogBestEffortWriter interface {

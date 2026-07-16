@@ -173,16 +173,19 @@ type mockChannelAuthCacheInvalidator struct {
 	invalidatedUserIDs  []int64
 }
 
-func (m *mockChannelAuthCacheInvalidator) InvalidateAuthCacheByKey(_ context.Context, key string) {
+func (m *mockChannelAuthCacheInvalidator) InvalidateAuthCacheByKey(_ context.Context, key string) error {
 	m.invalidatedKeys = append(m.invalidatedKeys, key)
+	return nil
 }
 
-func (m *mockChannelAuthCacheInvalidator) InvalidateAuthCacheByUserID(_ context.Context, userID int64) {
+func (m *mockChannelAuthCacheInvalidator) InvalidateAuthCacheByUserID(_ context.Context, userID int64) error {
 	m.invalidatedUserIDs = append(m.invalidatedUserIDs, userID)
+	return nil
 }
 
-func (m *mockChannelAuthCacheInvalidator) InvalidateAuthCacheByGroupID(_ context.Context, groupID int64) {
+func (m *mockChannelAuthCacheInvalidator) InvalidateAuthCacheByGroupID(_ context.Context, groupID int64) error {
 	m.invalidatedGroupIDs = append(m.invalidatedGroupIDs, groupID)
+	return nil
 }
 
 // ---------------------------------------------------------------------------

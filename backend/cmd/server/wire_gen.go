@@ -298,7 +298,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	batchImageWorkerRuntime := service.ProvideBatchImageWorkerRuntime(batchImageRepository, accountRepository, batchImageQueue, usageBillingRepository, usageLogRepository, batchImageModelPricingResolver, apiKeyAuthCacheInvalidator, configConfig)
 	videoAuthCacheInvalidator := service.ProvideVideoAuthCacheInvalidator(apiKeyService)
 	videoBillingCacheInvalidator := service.ProvideVideoBillingCacheInvalidator(billingCacheService)
-	videoGatewayWorker := service.ProvideVideoGatewayWorker(videoGatewayRuntimeRepository, videoKeyEncryptor, videoAuthCacheInvalidator, videoBillingCacheInvalidator, configConfig)
+	videoGatewayWorker := service.ProvideVideoGatewayWorker(videoGatewayRuntimeRepository, videoKeyEncryptor, videoAuthCacheInvalidator, videoBillingCacheInvalidator, configConfig, singleSmokeAuthorization)
 	videoGatewayRuntime := service.ProvideVideoGatewayRuntime(videoGatewayWorker, configConfig, singleSmokeAuthorization)
 	scheduledTestRunnerService := service.ProvideScheduledTestRunnerService(scheduledTestPlanRepository, scheduledTestService, accountTestService, rateLimitService, configConfig)
 	paymentOrderExpiryService := service.ProvidePaymentOrderExpiryService(paymentService, leaderLockCache, db)

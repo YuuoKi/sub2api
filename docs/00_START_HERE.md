@@ -4,7 +4,7 @@
 
 ## 一句话状态
 
-当前 W4 收口基线 `00f98a95` 的代码、无界 embedded 品牌、本地镜像、唯一 loopback `:8080` 部署契约和隔离开卡/usage smoke 为**内部可用**；canonical compose 当前 exit 1、无 HTTP，既有 `BLOCKED:totp-encryption-key` 未解除，所以整体为**已阻塞**，不得标记为**可演示**。
+canonical `http://127.0.0.1:8080`、无界 embedded 品牌、本地镜像与完整管理后台五段路径已有同实例运行证据，G1 为**可演示**；真实付费图片/视频闭环尚无完整证据，`realCallExecuted=0`，所以整体仍为**已阻塞**。
 
 ## 唯一前端定义
 
@@ -46,7 +46,7 @@
 - 部署契约：`00f98a95`。唯一 host 发布为 `127.0.0.1:8080:8080`，独立终审 Critical=0、Important=0。
 - 本地镜像：`sha256:bc7202509217701388f6877d07222a94b5fbf9bf10d7435b57b8d84f20f1d01b`；embedded binary 无界 title=1、精确上游 title=0。
 - 隔离开卡/usage smoke：只显示掩码 key，`usage_delta=1`、`balance_delta=0.00045000`；临时 PostgreSQL/Redis 已终止，无真实 provider 或生产数据。
-- canonical runtime：精确镜像下 app 仍 exit 1、HTTP 不可用；未读取 env 值或容器日志，应用已停止，无浏览器五段截图。
+- canonical runtime：`http://127.0.0.1:8080` HTTP 200、title 为 `无界 · 企业 AI 管理中台`、镜像为 `wujie-sub2api:local`、host `:3000` 无监听；完整管理面、管理员开卡、员工 Key 与 usage 五段路径已留证。
 
 ## 验收纪律
 
@@ -59,17 +59,17 @@
 5. 完整管理面、管理员开卡、员工 Key 调用与 usage 可见；
 6. 截图和日志来自同一真实运行实例。
 
-当前第 1 项未满足，因此保持 `BLOCKED:totp-encryption-key`。不得用源码字符串、单元测试、隔离 smoke、one-off 容器或空 UI 截图冒充 canonical 浏览器验收。
+G1 已满足以上口径。不得用源码字符串、单元测试、隔离 smoke、one-off 容器或空 UI 截图冒充后续真实付费验收。
 
 ## 安全与回滚
 
-- 禁止 push、生产库 migration、真实付费出图/视频和删除备份目录。
+- 禁止 push、生产库 migration 和删除备份目录；真实付费仅可在老板明确授权的最小预算与 `tiny_real` 双重门禁下执行。
 - 本 CYCLE 未真实付费生成，`realCallExecuted=0`；隔离 loopback mock usage 请求不等于真实 provider 调用。
 
 ## Canonical video control plane (G2.R1)
 
 - Administrator UI: `/admin/video/providers` -> `/admin/video/tasks` -> `/admin/video/system-check`.
-- Provider creation is Seedance-only and requires an explicit employee group binding. Stored secrets are encrypted; API responses return only `api_key_configured` and `masked_key`.
+- Provider creation is Seedance-only and requires an active standard employee group. Backend contract fixes model `doubao-seedance-2-0-260128` and endpoint `https://ark.cn-beijing.volces.com/api/v3`; the UI does not ask the operator to guess them. Stored secrets are encrypted; API responses return only `api_key_configured` and `masked_key`.
 - Enabling a provider does not authorize a paid call. `POST /api/v1/admin/video/providers/:id/tiny-real-authorization` records one explicit `tiny_real` authorization and does not dispatch a task.
 - Task evidence exposes local/upstream task ids, terminal status, provider error, asset URLs, settled cost and `real_dispatch_count`. Failed tasks are not replaced by mock output.
 - These pages remain in the complete standard-mode administrator surface. Ordinary employees have no administrator video route; their runtime entry remains the API-key protected `/v1/video/*` gateway.
@@ -77,4 +77,4 @@
 
 ## 下一步
 
-人工提供有效 TOTP encryption key 后，才允许按 SOP 重跑 canonical `:8080` 与五段浏览器验收；代理不得读取或回显该值。真实付费证据另受 `BLOCKED:real-paid-generation` 控制，必须单独授权。
+下一步只按最小预算执行真实图片与视频闭环并留存上游任务、终态、资产、usage/费用差分；在证据完整前保持 `BLOCKED:real-paid-generation`，不得把 mock 或管理页授权记录当成真实生成。

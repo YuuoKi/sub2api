@@ -25,6 +25,9 @@ func TestSingleSmokeAuthorizationDefaultsDeniedAndIsConsumedOnce(t *testing.T) {
 	if err := authorized.Consume(); err != nil {
 		t.Fatalf("first consume: %v", err)
 	}
+	if authorized.Allowed() {
+		t.Fatal("authorization must not remain allowed after consumption")
+	}
 	if err := authorized.Consume(); !errors.Is(err, ErrVideoRealDispatchConsumed) {
 		t.Fatalf("second consume error = %v", err)
 	}

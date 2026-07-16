@@ -197,6 +197,7 @@ import { sanitizeSvg } from '@/utils/sanitize'
 import { sanitizeUrl } from '@/utils/url'
 import { FeatureFlags, makeSidebarFlag } from '@/utils/featureFlags'
 import { useBatchImageAccess } from '@/composables/useBatchImageAccess'
+import { filterAdminNavigationForMode } from './adminNavigation'
 
 interface NavItem {
   path: string
@@ -683,7 +684,6 @@ const adminNavItems = computed((): NavItem[] => {
       path: '/admin/video',
       label: '\u89c6\u9891\u751f\u6210',
       icon: ChannelIcon,
-      hideInSimpleMode: true,
       expandOnly: true,
       children: [
         { path: '/admin/video/providers', label: 'Seedance \u901a\u9053', icon: GlobeIcon },
@@ -714,7 +714,7 @@ const adminNavItems = computed((): NavItem[] => {
 
   // 简单模式下，在系统设置前插入 API密钥
   if (authStore.isSimpleMode) {
-    const filtered = visible.filter(item => !item.hideInSimpleMode)
+    const filtered = filterAdminNavigationForMode(visible, true)
     filtered.push({ path: '/keys', label: t('nav.apiKeys'), icon: KeyIcon })
     filtered.push({ path: '/admin/settings', label: t('nav.settings'), icon: CogIcon })
     for (const cm of customMenuItemsForAdmin.value) {

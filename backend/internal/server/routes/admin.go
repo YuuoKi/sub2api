@@ -112,6 +112,7 @@ func RegisterAdminRoutes(
 
 func registerAdminVideoRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	video := admin.Group("/video")
+	video.GET("/contract", h.Admin.Video.Contract)
 	video.GET("/providers", h.Admin.Video.ListProviders)
 	video.POST("/providers", h.Admin.Video.CreateProvider)
 	video.PUT("/providers/:id", h.Admin.Video.UpdateProvider)

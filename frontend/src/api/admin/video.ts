@@ -6,6 +6,7 @@ export interface VideoProviderAccount {
   tiny_real_authorized_at?: string; tiny_real_authorized_by?: number; tiny_real_consumed_at?: string
 }
 export interface VideoProviderPayload { group_id?: number; provider?: 'seedance'; display_name?: string; enabled?: boolean; api_key?: string; base_url?: string; default_model?: string }
+export interface VideoProviderContract { provider: 'seedance'; base_url: string; default_model: string; duration_seconds: number; resolution: string }
 export interface VideoTaskAdmin {
   id: number; provider_account_id: number; provider: string; model: string; task_type: string; prompt: string; status: string
   upstream_task_id: string; result_url: string; last_frame_url: string; error_message: string; provider_error_code: string
@@ -16,10 +17,11 @@ export interface VideoSystemCheck { provider_count: number; enabled_provider_cou
 export interface VideoTaskPage { items: VideoTaskAdmin[]; total: number; page: number; page_size: number; pages: number }
 
 const listProviders = async () => (await apiClient.get<{ items: VideoProviderAccount[] }>('/admin/video/providers')).data
+const contract = async () => (await apiClient.get<VideoProviderContract>('/admin/video/contract')).data
 const createProvider = async (payload: VideoProviderPayload) => (await apiClient.post<VideoProviderAccount>('/admin/video/providers', payload)).data
 const updateProvider = async (id: number, payload: VideoProviderPayload) => (await apiClient.put<VideoProviderAccount>(`/admin/video/providers/${id}`, payload)).data
 const authorizeTinyReal = async (id: number) => (await apiClient.post<VideoProviderAccount>(`/admin/video/providers/${id}/tiny-real-authorization`, { confirmation: 'tiny_real' })).data
 const listTasks = async (page = 1, pageSize = 20, status = '') => (await apiClient.get<VideoTaskPage>('/admin/video/tasks', { params: { page, page_size: pageSize, status: status || undefined } })).data
 const getTask = async (id: number) => (await apiClient.get<VideoTaskAdmin>(`/admin/video/tasks/${id}`)).data
 const systemCheck = async () => (await apiClient.get<VideoSystemCheck>('/admin/video/system-check')).data
-export default { listProviders, createProvider, updateProvider, authorizeTinyReal, listTasks, getTask, systemCheck }
+export default { contract, listProviders, createProvider, updateProvider, authorizeTinyReal, listTasks, getTask, systemCheck }

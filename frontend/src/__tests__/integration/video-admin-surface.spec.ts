@@ -24,4 +24,16 @@ describe('canonical video admin surface', () => {
     }
     expect(api).toContain('tiny-real-authorization')
   })
+
+  it('uses the canonical Seedance contract and explicit load failures', () => {
+    const providers = source('src/views/admin/video/VideoProvidersView.vue')
+    const api = source('src/api/admin/video.ts')
+    const detail = source('src/views/admin/video/VideoTaskDetailView.vue')
+    const system = source('src/views/admin/video/VideoSystemCheckView.vue')
+    expect(providers).toContain('adminAPI.video.contract()')
+    expect(providers).not.toContain('v-model="form.default_model"')
+    expect(api).toContain('/admin/video/contract')
+    expect(detail).toContain('extractApiErrorMessage')
+    expect(system).toContain('extractApiErrorMessage')
+  })
 })

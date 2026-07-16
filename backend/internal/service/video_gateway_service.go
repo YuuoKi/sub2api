@@ -21,13 +21,12 @@ type VideoBillingCacheInvalidator interface {
 }
 
 type VideoTaskCreateCommand struct {
-	Scope                 VideoTaskScope
-	ProviderAccountID     int64
-	Prompt                string
-	Duration              int
-	Resolution            string
-	SingleSmokeAuthorized bool
-	CreationKey           string
+	Scope             VideoTaskScope
+	ProviderAccountID int64
+	Prompt            string
+	Duration          int
+	Resolution        string
+	CreationKey       string
 }
 
 type VideoGatewayService struct {
@@ -73,9 +72,6 @@ func (s *VideoGatewayService) CreateTask(ctx context.Context, cmd VideoTaskCreat
 	}
 	if cmd.Scope.UserID <= 0 || cmd.Scope.APIKeyID <= 0 || cmd.Scope.GroupID <= 0 {
 		return nil, errors.New("complete employee video scope is required")
-	}
-	if !cmd.SingleSmokeAuthorized {
-		return nil, ErrVideoRealDispatchDenied
 	}
 	if s.cfg == nil || !s.cfg.VideoGateway.WorkerEnabled || s.gate == nil || !s.gate.Allowed() {
 		return nil, ErrVideoRealDispatchDenied

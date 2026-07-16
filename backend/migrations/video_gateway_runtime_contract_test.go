@@ -59,3 +59,25 @@ func TestVideoGatewayReservationMigrationIsAdditiveAndComplete(t *testing.T) {
 		t.Fatal("reservation migration must be additive")
 	}
 }
+
+func TestVideoGatewayProviderAuthorizationAndCanonicalContract(t *testing.T) {
+	authorization, err := os.ReadFile("178_wujie_video_admin_control_plane.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range []string{"tiny_real_authorized_at", "tiny_real_authorized_by", "tiny_real_consumed_at"} {
+		if !strings.Contains(strings.ToLower(string(authorization)), required) {
+			t.Errorf("missing %s", required)
+		}
+	}
+	contract, err := os.ReadFile("179_wujie_video_provider_contract.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	contractSQL := strings.ToLower(string(contract))
+	for _, required := range []string{"doubao-seedance-2-0-260128", "https://ark.cn-beijing.volces.com/api/v3", "group_id, provider, default_model"} {
+		if !strings.Contains(contractSQL, required) {
+			t.Errorf("missing %s", required)
+		}
+	}
+}

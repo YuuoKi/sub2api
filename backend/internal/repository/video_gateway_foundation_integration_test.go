@@ -58,8 +58,9 @@ func newVideoIntegrationFixture(t *testing.T, balance, quota, rate float64, grou
 		(user_id,key,name,group_id,status,quota,rate_limit_5h,rate_limit_1d,rate_limit_7d)
 		VALUES ($1,$2,'video',$3,'active',$4,$5,$5,$5) RETURNING id`, f.userID, fmt.Sprintf("video-key-%d", suffix), f.groupID, quota, rate).Scan(&f.apiKeyID))
 	require.NoError(t, integrationDB.QueryRowContext(ctx, `INSERT INTO video_provider_accounts
-		(provider,display_name,enabled,group_id,default_model) VALUES ('seedance',$1,true,$2,$3) RETURNING id`,
-		fmt.Sprintf("provider-%d", suffix), f.groupID, service.SeedanceModel).Scan(&f.providerID))
+		(provider,display_name,enabled,group_id,default_model,base_url,tiny_real_authorized_at,tiny_real_authorized_by)
+		VALUES ('seedance',$1,true,$2,$3,$4,NOW(),$5) RETURNING id`,
+		fmt.Sprintf("provider-%d", suffix), f.groupID, service.SeedanceModel, service.SeedanceBaseURL, f.userID).Scan(&f.providerID))
 	f.repo = NewVideoGatewayRuntimeRepository(integrationDB)
 	if reserve {
 		f.task = &service.VideoTask{APIKeyID: f.apiKeyID, GroupID: f.groupID, ProviderAccountID: f.providerID,
@@ -252,6 +253,70 @@ func TestVideoGatewayProviderGroupIsolationAndGlobalGate(t *testing.T) {
 	ok, err = f.repo.BeginRealDispatch(ctx, second.ID, second.Version)
 	require.NoError(t, err)
 	require.False(t, ok)
+}
+
+func TestVideoGatewayDispatchRequiresProviderGrantWithoutMutation(t *testing.T) {
+	ctx := context.Background()
+	f := newVideoIntegrationFixture(t, 10, 1, 1, "standard", true)
+	_, err := integrationDB.ExecContext(ctx, `UPDATE video_provider_accounts SET tiny_real_authorized_at=NULL,tiny_real_authorized_by=NULL WHERE id=$1`, f.providerID)
+	require.NoError(t, err)
+	ok, err := f.repo.BeginRealDispatch(ctx, f.task.ID, f.task.Version)
+	require.NoError(t, err)
+	require.False(t, ok)
+	var dispatchCount, globalCount int64
+	var status, dispatchState string
+	var consumedAt sql.NullTime
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT status,dispatch_state,real_dispatch_count FROM video_tasks WHERE id=$1`, f.task.ID).Scan(&status, &dispatchState, &dispatchCount))
+	require.Equal(t, service.VideoStatusQueued, status)
+	require.Equal(t, "pending", dispatchState)
+	require.Zero(t, dispatchCount)
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT tiny_real_consumed_at FROM video_provider_accounts WHERE id=$1`, f.providerID).Scan(&consumedAt))
+	require.False(t, consumedAt.Valid)
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT COUNT(*) FROM video_single_smoke_consumptions WHERE video_task_id=$1`, f.task.ID).Scan(&globalCount))
+	require.Zero(t, globalCount)
+}
+
+func TestVideoGatewayConcurrentDispatchConsumesOneProviderGrant(t *testing.T) {
+	ctx := context.Background()
+	f := newVideoIntegrationFixture(t, 10, 1, 1, "standard", true)
+	second := &service.VideoTask{APIKeyID: f.apiKeyID, GroupID: f.groupID, ProviderAccountID: f.providerID, Provider: "seedance", Model: service.SeedanceModel, TaskType: "text_to_video", Prompt: "concurrent", Status: service.VideoStatusQueued, CreationKey: fmt.Sprintf("concurrent-%d", time.Now().UnixNano()), CreatedBy: f.userID, DurationSeconds: 4, Resolution: "720p"}
+	require.NoError(t, f.repo.ReserveAndCreateTask(ctx, second, 0.2))
+	start := make(chan struct{})
+	results := make(chan bool, 2)
+	errorsFound := make(chan error, 2)
+	var wg sync.WaitGroup
+	for _, task := range []*service.VideoTask{f.task, second} {
+		wg.Add(1)
+		go func(candidate *service.VideoTask) {
+			defer wg.Done()
+			<-start
+			ok, err := f.repo.BeginRealDispatch(ctx, candidate.ID, candidate.Version)
+			results <- ok
+			errorsFound <- err
+		}(task)
+	}
+	close(start)
+	wg.Wait()
+	close(results)
+	close(errorsFound)
+	for err := range errorsFound {
+		require.NoError(t, err)
+	}
+	successes := 0
+	for ok := range results {
+		if ok {
+			successes++
+		}
+	}
+	require.Equal(t, 1, successes)
+	var totalDispatches, globalCount int64
+	var consumedAt sql.NullTime
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT COALESCE(SUM(real_dispatch_count),0) FROM video_tasks WHERE id IN ($1,$2)`, f.task.ID, second.ID).Scan(&totalDispatches))
+	require.Equal(t, int64(1), totalDispatches)
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT tiny_real_consumed_at FROM video_provider_accounts WHERE id=$1`, f.providerID).Scan(&consumedAt))
+	require.True(t, consumedAt.Valid)
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT COUNT(*) FROM video_single_smoke_consumptions WHERE video_task_id IN ($1,$2)`, f.task.ID, second.ID).Scan(&globalCount))
+	require.Equal(t, int64(1), globalCount)
 }
 
 func requirePostgresUniqueViolation(t *testing.T, err error) {

@@ -25,3 +25,13 @@ Status: 内部可用；canonical runtime 待复核
 - `go vet ./...`: pass.
 - `go build ./...`: pass.
 - Frontend production build: pass (existing chunk-size/dynamic-import warnings only).
+
+## Follow-up cold review closure
+
+- Simple mode now keeps the complete video administrator entry visible and has a runtime filtering test.
+- Provider create/update uses a backend-owned canonical model and allowlisted Ark endpoint; the UI renders this contract read-only.
+- A paid dispatch requires the process kill switch and an unconsumed database provider grant. Provider grant, global gate, and task dispatch claim are committed atomically before any upstream request.
+- Dispatch-time checks revalidate the task group, active standard group, canonical model and endpoint. A denied process gate explicitly fails and releases an already reserved task.
+- Administrator contract route has HTTP employee 403 / administrator 200 coverage. Task detail exposes upstream cost, provider error code and last-frame evidence; load failures are explicit.
+- Real upstream calls executed: 0. Status remains 待复核 until the approved paid smoke produces complete evidence.
+- The PostgreSQL integration assertions for unauthorized zero mutation and concurrent single consumption are committed, but local execution is 待复核 because testcontainers rejects the active rootless Docker context on Windows. Ordinary Go tests, vet, build, frontend typecheck, focused Vitest and production build pass.

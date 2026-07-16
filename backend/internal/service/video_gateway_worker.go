@@ -16,10 +16,11 @@ type VideoGatewayWorker struct {
 	authCache     VideoAuthCacheInvalidator
 	billingCache  VideoBillingCacheInvalidator
 	cfg           *config.Config
+	gate          *SingleSmokeAuthorization
 }
 
-func NewVideoGatewayWorker(repo VideoGatewayRuntimeRepository, encryptor VideoKeyEncryptor, factory func(string, string) *SeedanceAdapter, authCache VideoAuthCacheInvalidator, billingCache VideoBillingCacheInvalidator, cfg *config.Config) *VideoGatewayWorker {
-	return &VideoGatewayWorker{repo: repo, encryptor: encryptor, clientFactory: factory, authCache: authCache, billingCache: billingCache, cfg: cfg}
+func NewVideoGatewayWorker(repo VideoGatewayRuntimeRepository, encryptor VideoKeyEncryptor, factory func(string, string) *SeedanceAdapter, authCache VideoAuthCacheInvalidator, billingCache VideoBillingCacheInvalidator, cfg *config.Config, gate *SingleSmokeAuthorization) *VideoGatewayWorker {
+	return &VideoGatewayWorker{repo: repo, encryptor: encryptor, clientFactory: factory, authCache: authCache, billingCache: billingCache, cfg: cfg, gate: gate}
 }
 
 func (w *VideoGatewayWorker) RunOnce(ctx context.Context) error {
@@ -91,6 +92,14 @@ func (w *VideoGatewayWorker) RunOnce(ctx context.Context) error {
 			Currency: "USD", Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()})
 		return err
 	}
+	if w.gate == nil || !w.gate.Allowed() {
+		finalizeErr := w.finalize(ctx, task, VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version, Status: VideoStatusFailed,
+			ProviderErrorCode: "process_gate_denied", ProviderErrorMessage: "process safety gate denied dispatch", ErrorMessage: "process safety gate denied dispatch", Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()})
+		if finalizeErr != nil {
+			return finalizeErr
+		}
+		return ErrVideoRealDispatchDenied
+	}
 	started, err := w.repo.BeginRealDispatch(ctx, task.ID, task.Version)
 	if err != nil {
 		return err
@@ -99,6 +108,10 @@ func (w *VideoGatewayWorker) RunOnce(ctx context.Context) error {
 		finalizeErr := w.finalize(ctx, task, VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version, Status: VideoStatusFailed,
 			ProviderErrorCode: "gate_consumed", ProviderErrorMessage: "single smoke authorization already consumed", ErrorMessage: "single smoke authorization already consumed", Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()})
 		return finalizeErr
+	}
+	if err = w.gate.Consume(); err != nil {
+		return w.finalize(ctx, task, VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version + 1, Status: VideoStatusFailed,
+			ProviderErrorCode: "process_gate_denied", ProviderErrorMessage: "process safety gate denied dispatch", ErrorMessage: "process safety gate denied dispatch", Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()})
 	}
 	created, err := w.clientFactory(provider.BaseURL, key).Create(ctx, VideoCreateRequest{Prompt: task.Prompt, Duration: task.DurationSeconds, Resolution: task.Resolution, ReturnLastFrame: true})
 	if err != nil {

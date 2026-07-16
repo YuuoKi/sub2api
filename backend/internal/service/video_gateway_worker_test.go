@@ -10,15 +10,17 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/stretchr/testify/require"
 )
 
 type workerRepoStub struct {
-	task      *VideoTask
-	provider  VideoProviderAccount
-	begin     bool
-	finalized []VideoTaskFinalization
-	progress  []string
-	reserved  float64
+	task       *VideoTask
+	provider   VideoProviderAccount
+	begin      bool
+	finalized  []VideoTaskFinalization
+	progress   []string
+	reserved   float64
+	beginCalls int
 }
 
 type videoAuthInvalidatorStub struct{ users []int64 }
@@ -72,7 +74,7 @@ func (r *workerRepoStub) GetVideoProvider(context.Context, int64, int64) (*Video
 
 func TestVideoGatewayCreateRequiresWorkerAndReservesServerMaximum(t *testing.T) {
 	repo := &workerRepoStub{provider: VideoProviderAccount{ID: 10, GroupID: 9, Provider: "seedance", Enabled: true}}
-	cmd := VideoTaskCreateCommand{Scope: VideoTaskScope{UserID: 1, APIKeyID: 2, GroupID: 9}, ProviderAccountID: 10, Prompt: "x", Duration: 4, Resolution: "720p", SingleSmokeAuthorized: true}
+	cmd := VideoTaskCreateCommand{Scope: VideoTaskScope{UserID: 1, APIKeyID: 2, GroupID: 9}, ProviderAccountID: 10, Prompt: "x", Duration: 4, Resolution: "720p"}
 	cfg := &config.Config{VideoGateway: config.VideoGatewayConfig{SeedanceCNYPerMillionTokens: 2, USDCNYExchangeRate: 7, TinyRealEstimateCNY: 0.7, TinyRealMaximumCNY: 1.4}}
 	authCache := &videoAuthInvalidatorStub{}
 	billingCache := &videoBillingInvalidatorStub{}
@@ -99,7 +101,7 @@ func TestVideoGatewayCreateRequiresWorkerAndReservesServerMaximum(t *testing.T) 
 
 func TestVideoGatewayRuntimeStartsOnlyWithExplicitWorkerAndRealGate(t *testing.T) {
 	cfg := &config.Config{VideoGateway: config.VideoGatewayConfig{WorkerEnabled: true, WorkerIntervalSeconds: 1}}
-	w := NewVideoGatewayWorker(&workerRepoStub{}, keyDecryptStub{}, func(string, string) *SeedanceAdapter { return nil }, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}, cfg)
+	w := NewVideoGatewayWorker(&workerRepoStub{}, keyDecryptStub{}, func(string, string) *SeedanceAdapter { return nil }, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}, cfg, NewSingleSmokeAuthorization(false))
 	denied := ProvideVideoGatewayRuntime(w, cfg, NewSingleSmokeAuthorization(false))
 	if denied.Running() {
 		t.Fatal("runtime started without real gate")
@@ -114,6 +116,7 @@ func TestVideoGatewayRuntimeStartsOnlyWithExplicitWorkerAndRealGate(t *testing.T
 	}
 }
 func (r *workerRepoStub) BeginRealDispatch(context.Context, int64, int64) (bool, error) {
+	r.beginCalls++
 	return r.begin, nil
 }
 func (r *workerRepoStub) MarkVideoSubmitted(context.Context, int64, int64, string) error { return nil }
@@ -127,6 +130,24 @@ type keyDecryptStub struct{}
 func (keyDecryptStub) Encrypt(v string) (string, error) { return v, nil }
 func (keyDecryptStub) Decrypt(string) (string, error)   { return "synthetic-provider-key", nil }
 
+func TestVideoWorkerRequiresProcessGateBeforeDispatchClaim(t *testing.T) {
+	repo := &workerRepoStub{begin: true, task: &VideoTask{ID: 7, GroupID: 9, ProviderAccountID: 10, Status: VideoStatusQueued, Version: 1, ReservedCostUSD: 0.2, ReservationState: VideoReservationReserved}, provider: VideoProviderAccount{ID: 10, GroupID: 9, Enabled: true, BaseURL: SeedanceBaseURL, EncryptedAPIKey: "cipher"}}
+	clientCalls := 0
+	factory := func(string, string) *SeedanceAdapter { clientCalls++; return nil }
+	w := NewVideoGatewayWorker(repo, keyDecryptStub{}, factory, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}, &config.Config{}, NewSingleSmokeAuthorization(false))
+	require.ErrorIs(t, w.RunOnce(context.Background()), ErrVideoRealDispatchDenied)
+	require.Zero(t, repo.beginCalls)
+	require.Zero(t, clientCalls)
+}
+
+func TestVideoWorkerConsumesProcessGateAfterAtomicDBClaim(t *testing.T) {
+	repo := &workerRepoStub{begin: false, task: &VideoTask{ID: 7, GroupID: 9, ProviderAccountID: 10, Status: VideoStatusQueued, Version: 1, ReservedCostUSD: 0.2, ReservationState: VideoReservationReserved}, provider: VideoProviderAccount{ID: 10, GroupID: 9, Enabled: true, BaseURL: SeedanceBaseURL, EncryptedAPIKey: "cipher"}}
+	gate := NewSingleSmokeAuthorization(true)
+	w := NewVideoGatewayWorker(repo, keyDecryptStub{}, func(string, string) *SeedanceAdapter { return nil }, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}, &config.Config{}, gate)
+	require.NoError(t, w.RunOnce(context.Background()))
+	require.NoError(t, gate.Consume(), "DB denial must not consume process gate")
+}
+
 func TestVideoWorkerDelegatesSuccessfulAtomicCapture(t *testing.T) {
 	tokens := int64(245025)
 	repo := &workerRepoStub{task: &VideoTask{ID: 7, APIKeyID: 8, GroupID: 9, ProviderAccountID: 10, CreatedBy: 11, Model: SeedanceModel, Status: VideoStatusSubmitted, UpstreamTaskID: "up-7", Version: 2, DurationSeconds: 4, Resolution: "720p", ReservedCostUSD: 0.2, ReservationState: VideoReservationReserved}, provider: VideoProviderAccount{ID: 10, GroupID: 9, Enabled: true, BaseURL: "https://ark.cn-beijing.volces.com", EncryptedAPIKey: "cipher"}}
@@ -139,7 +160,7 @@ func TestVideoWorkerDelegatesSuccessfulAtomicCapture(t *testing.T) {
 	cfg := &config.Config{VideoGateway: config.VideoGatewayConfig{SeedanceCNYPerMillionTokens: 2, USDCNYExchangeRate: 7, TinyRealMaximumCNY: 0.1}}
 	authCache := &videoAuthInvalidatorStub{}
 	billingCache := &videoBillingInvalidatorStub{}
-	w := NewVideoGatewayWorker(repo, keyDecryptStub{}, factory, authCache, billingCache, cfg)
+	w := NewVideoGatewayWorker(repo, keyDecryptStub{}, factory, authCache, billingCache, cfg, NewSingleSmokeAuthorization(true))
 	if err := w.RunOnce(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -159,7 +180,7 @@ func TestVideoWorkerPreservesAssetsAndFailsWithoutCompletionTokens(t *testing.T)
 			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}, nil
 		})}, base, key)
 	}
-	w := NewVideoGatewayWorker(repo, keyDecryptStub{}, factory, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}, &config.Config{VideoGateway: config.VideoGatewayConfig{SeedanceCNYPerMillionTokens: 2, USDCNYExchangeRate: 7}})
+	w := NewVideoGatewayWorker(repo, keyDecryptStub{}, factory, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}, &config.Config{VideoGateway: config.VideoGatewayConfig{SeedanceCNYPerMillionTokens: 2, USDCNYExchangeRate: 7}}, NewSingleSmokeAuthorization(false))
 	if err := w.RunOnce(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +198,7 @@ func TestVideoWorkerFailsAndReleasesWhenSuccessOmitsVideoURL(t *testing.T) {
 			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}, nil
 		})}, base, key)
 	}
-	w := NewVideoGatewayWorker(repo, keyDecryptStub{}, factory, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}, &config.Config{VideoGateway: config.VideoGatewayConfig{SeedanceCNYPerMillionTokens: 2, USDCNYExchangeRate: 7}})
+	w := NewVideoGatewayWorker(repo, keyDecryptStub{}, factory, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}, &config.Config{VideoGateway: config.VideoGatewayConfig{SeedanceCNYPerMillionTokens: 2, USDCNYExchangeRate: 7}}, NewSingleSmokeAuthorization(false))
 	if err := w.RunOnce(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -195,7 +216,7 @@ func TestVideoWorkerCapturesReservationAndFailsWhenActualExceedsMaximum(t *testi
 			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}, nil
 		})}, base, key)
 	}
-	w := NewVideoGatewayWorker(repo, keyDecryptStub{}, factory, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}, &config.Config{VideoGateway: config.VideoGatewayConfig{SeedanceCNYPerMillionTokens: 2, USDCNYExchangeRate: 7}})
+	w := NewVideoGatewayWorker(repo, keyDecryptStub{}, factory, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}, &config.Config{VideoGateway: config.VideoGatewayConfig{SeedanceCNYPerMillionTokens: 2, USDCNYExchangeRate: 7}}, NewSingleSmokeAuthorization(false))
 	if err := w.RunOnce(context.Background()); err != nil {
 		t.Fatal(err)
 	}

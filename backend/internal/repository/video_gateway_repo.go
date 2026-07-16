@@ -68,6 +68,22 @@ func (r *videoGatewayRepository) BeginRealDispatch(ctx context.Context, id, vers
 		return false, err
 	}
 	defer tx.Rollback()
+	providerGrant, err := tx.ExecContext(ctx, `UPDATE video_provider_accounts provider SET tiny_real_consumed_at=NOW(), updated_at=NOW()
+		FROM video_tasks task, groups candidate WHERE task.id=$1 AND task.provider_account_id=provider.id
+		AND provider.group_id=task.group_id AND candidate.id=provider.group_id
+		AND candidate.status='active' AND candidate.subscription_type='standard' AND candidate.deleted_at IS NULL
+		AND provider.enabled=TRUE AND provider.provider='seedance' AND provider.default_model=$2 AND provider.base_url=$3
+		AND provider.tiny_real_authorized_at IS NOT NULL AND provider.tiny_real_consumed_at IS NULL`, id, service.SeedanceModel, service.SeedanceBaseURL)
+	if err != nil {
+		return false, err
+	}
+	grants, err := providerGrant.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	if grants != 1 {
+		return false, nil
+	}
 	result, err := tx.ExecContext(ctx, `UPDATE video_tasks SET real_dispatch_count=1, dispatch_state='dispatching', version=version+1,
 		updated_at=NOW() WHERE id=$1 AND version=$2 AND status='queued' AND real_dispatch_count=0`, id, version)
 	if err != nil {

@@ -89,6 +89,8 @@ docker start wujie-final-sub2
 1. Open `/admin/video/providers`, bind Seedance to the controlled employee group, save the secret, and verify that only a masked value is rendered.
 2. Keep the provider disabled until the group and model are reviewed. Enabling it alone must not dispatch a request.
 3. Grant the one-time `tiny_real` authorization only inside the approved paid-test window. This records the gate and still performs zero upstream calls.
+   Dispatch requires both the process kill switch and the unconsumed database provider grant. The worker atomically consumes the provider grant, the global gate, and the task dispatch claim before any upstream request.
+   The canonical contract is read-only in the UI: model `doubao-seedance-2-0-260128`, endpoint `https://ark.cn-beijing.volces.com/api/v3`, 4 seconds, 720p.
 4. Open `/admin/video/system-check` and record provider, authorization, task, global gate, and real dispatch counters before the paid smoke.
 5. After an employee API-key request, use `/admin/video/tasks` and its detail page to capture local/upstream task ids, terminal status, asset URL, explicit error, cost, and `real_dispatch_count`.
 

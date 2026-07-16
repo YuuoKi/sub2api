@@ -15,7 +15,10 @@ import (
 	"time"
 )
 
-const SeedanceModel = "doubao-seedance-2-0-260128"
+const (
+	SeedanceModel   = "doubao-seedance-2-0-260128"
+	SeedanceBaseURL = "https://ark.cn-beijing.volces.com/api/v3"
+)
 
 var (
 	ErrVideoRealDispatchDenied   = errors.New("real video dispatch denied: single_smoke_authorized is required")
@@ -44,7 +47,14 @@ func (a *SingleSmokeAuthorization) Consume() error {
 	return nil
 }
 
-func (a *SingleSmokeAuthorization) Allowed() bool { return a != nil && a.allowed }
+func (a *SingleSmokeAuthorization) Allowed() bool {
+	if a == nil {
+		return false
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.allowed && !a.consumed
+}
 
 type VideoCreateRequest struct {
 	Prompt            string `json:"prompt"`

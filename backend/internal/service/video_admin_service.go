@@ -3,7 +3,15 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
+)
+
+var (
+	ErrVideoAdminInvalidRequest        = errors.New("invalid video provider request")
+	ErrVideoAdminInvalidGroup          = errors.New("video provider group must be active and standard")
+	ErrVideoAdminConflict              = errors.New("video provider model already exists")
+	ErrVideoAdminAuthorizationConflict = errors.New("tiny_real authorization is unavailable")
 )
 
 type VideoProviderAdminCreate struct {
@@ -60,16 +68,16 @@ func (s *VideoAdminService) ListProviders(ctx context.Context) ([]VideoProviderA
 }
 func (s *VideoAdminService) CreateProvider(ctx context.Context, in VideoProviderAdminCreate) (*VideoProviderAccount, error) {
 	if strings.ToLower(strings.TrimSpace(in.Provider)) != "seedance" {
-		return nil, errors.New("only seedance provider is supported")
+		return nil, fmt.Errorf("%w: only seedance provider is supported", ErrVideoAdminInvalidRequest)
 	}
 	if in.GroupID <= 0 || strings.TrimSpace(in.DisplayName) == "" || strings.TrimSpace(in.APIKey) == "" {
-		return nil, errors.New("group, display name and api key are required")
+		return nil, fmt.Errorf("%w: group, display name and api key are required", ErrVideoAdminInvalidRequest)
 	}
 	encrypted, err := s.encryptor.Encrypt(strings.TrimSpace(in.APIKey))
 	if err != nil {
 		return nil, err
 	}
-	item := VideoProviderAccount{GroupID: in.GroupID, Provider: "seedance", DisplayName: strings.TrimSpace(in.DisplayName), Enabled: in.Enabled, EncryptedAPIKey: encrypted, MaskedKey: maskVideoSecret(in.APIKey), BaseURL: strings.TrimSpace(in.BaseURL), DefaultModel: strings.TrimSpace(in.DefaultModel), APIKeyConfigured: true}
+	item := VideoProviderAccount{GroupID: in.GroupID, Provider: "seedance", DisplayName: strings.TrimSpace(in.DisplayName), Enabled: in.Enabled, EncryptedAPIKey: encrypted, MaskedKey: maskVideoSecret(in.APIKey), BaseURL: SeedanceBaseURL, DefaultModel: SeedanceModel, APIKeyConfigured: true}
 	created, err := s.repo.CreateVideoProvider(ctx, item)
 	if err != nil {
 		return nil, err
@@ -89,6 +97,8 @@ func (s *VideoAdminService) UpdateProvider(ctx context.Context, id int64, in Vid
 		masked := maskVideoSecret(*in.APIKey)
 		in.EncryptedAPIKey, in.MaskedKey = &encrypted, &masked
 	}
+	canonicalBaseURL, canonicalModel := SeedanceBaseURL, SeedanceModel
+	in.BaseURL, in.DefaultModel = &canonicalBaseURL, &canonicalModel
 	item, err := s.repo.UpdateVideoProvider(ctx, id, in)
 	if err != nil {
 		return nil, err

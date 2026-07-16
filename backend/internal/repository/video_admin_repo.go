@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/lib/pq"
 )
 
 type videoAdminRepository struct{ db *sql.DB }
@@ -53,22 +54,42 @@ func (r *videoAdminRepository) ListVideoProviders(ctx context.Context) ([]servic
 func (r *videoAdminRepository) CreateVideoProvider(ctx context.Context, item service.VideoProviderAccount) (*service.VideoProviderAccount, error) {
 	row := r.db.QueryRowContext(ctx, `WITH inserted AS (INSERT INTO video_provider_accounts
 		(group_id,provider,display_name,enabled,encrypted_api_key,masked_key,base_url,default_model)
-		VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *)
+		SELECT $1,$2,$3,$4,$5,$6,$7,$8 FROM groups
+		WHERE id=$1 AND status='active' AND subscription_type='standard' AND deleted_at IS NULL RETURNING *)
 		SELECT `+strings.ReplaceAll(videoAdminProviderColumns, "p.", "inserted.")+` FROM inserted JOIN groups g ON g.id=inserted.group_id`,
 		item.GroupID, item.Provider, item.DisplayName, item.Enabled, item.EncryptedAPIKey, item.MaskedKey, item.BaseURL, item.DefaultModel)
-	return scanVideoAdminProvider(row)
+	created, err := scanVideoAdminProvider(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, service.ErrVideoAdminInvalidGroup
+	}
+	if isVideoProviderUniqueViolation(err) {
+		return nil, service.ErrVideoAdminConflict
+	}
+	return created, err
 }
 func (r *videoAdminRepository) UpdateVideoProvider(ctx context.Context, id int64, in service.VideoProviderAdminUpdate) (*service.VideoProviderAccount, error) {
 	row := r.db.QueryRowContext(ctx, `WITH updated AS (UPDATE video_provider_accounts SET
 		group_id=CASE WHEN $2 THEN $3 ELSE group_id END, display_name=CASE WHEN $4 THEN $5 ELSE display_name END,
 		enabled=CASE WHEN $6 THEN $7 ELSE enabled END, encrypted_api_key=CASE WHEN $8 THEN $9 ELSE encrypted_api_key END,
 		masked_key=CASE WHEN $8 THEN $10 ELSE masked_key END, base_url=CASE WHEN $11 THEN $12 ELSE base_url END,
-		default_model=CASE WHEN $13 THEN $14 ELSE default_model END, updated_at=NOW() WHERE id=$1 RETURNING *)
+		default_model=CASE WHEN $13 THEN $14 ELSE default_model END, updated_at=NOW() WHERE id=$1
+		AND EXISTS (SELECT 1 FROM groups candidate WHERE candidate.id=CASE WHEN $2 THEN $3 ELSE video_provider_accounts.group_id END
+		AND candidate.status='active' AND candidate.subscription_type='standard' AND candidate.deleted_at IS NULL) RETURNING *)
 		SELECT `+strings.ReplaceAll(videoAdminProviderColumns, "p.", "updated.")+` FROM updated JOIN groups g ON g.id=updated.group_id`,
 		id, in.GroupID != nil, valueInt64(in.GroupID), in.DisplayName != nil, valueString(in.DisplayName), in.Enabled != nil, valueBool(in.Enabled),
 		in.EncryptedAPIKey != nil, valueString(in.EncryptedAPIKey), valueString(in.MaskedKey), in.BaseURL != nil, valueString(in.BaseURL), in.DefaultModel != nil, valueString(in.DefaultModel))
 	item, err := scanVideoAdminProvider(row)
+	if isVideoProviderUniqueViolation(err) {
+		return nil, service.ErrVideoAdminConflict
+	}
 	if errors.Is(err, sql.ErrNoRows) {
+		var exists bool
+		if existsErr := r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM video_provider_accounts WHERE id=$1)`, id).Scan(&exists); existsErr != nil {
+			return nil, existsErr
+		}
+		if exists {
+			return nil, service.ErrVideoAdminInvalidGroup
+		}
 		return nil, service.ErrVideoProviderNotFound
 	}
 	return item, err
@@ -79,7 +100,7 @@ func (r *videoAdminRepository) AuthorizeTinyReal(ctx context.Context, id, actor 
 		SELECT `+strings.ReplaceAll(videoAdminProviderColumns, "p.", "updated.")+` FROM updated JOIN groups g ON g.id=updated.group_id`, id, actor)
 	item, err := scanVideoAdminProvider(row)
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, errors.New("tiny_real authorization requires an enabled, configured Seedance provider and can only be granted once")
+		return nil, service.ErrVideoAdminAuthorizationConflict
 	}
 	return item, err
 }
@@ -145,6 +166,10 @@ func valueString(v *string) string {
 		return ""
 	}
 	return *v
+}
+func isVideoProviderUniqueViolation(err error) bool {
+	var pqErr *pq.Error
+	return errors.As(err, &pqErr) && pqErr.Code == "23505"
 }
 func valueBool(v *bool) bool {
 	if v == nil {

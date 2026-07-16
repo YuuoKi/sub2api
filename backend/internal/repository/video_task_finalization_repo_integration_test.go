@@ -857,6 +857,56 @@ func TestVideoTaskFinalizationMockMismatchedReservationOwnerStillRequiresReview(
 	require.Contains(t, videoTaskFinalizationOutboxTypes(t, fixture.task.ID), "billing.reservation_review_required")
 }
 
+func TestVideoTaskFinalizationBillableReviewRequiredLandsTerminalWithoutAutoSettle(t *testing.T) {
+	ctx := context.Background()
+	fixture := newVideoTaskFinalizationFixture(t, "3")
+	_, err := integrationDB.ExecContext(ctx, `
+		UPDATE billing_reservations
+		SET status = $2, updated_at = NOW()
+		WHERE id = $1
+	`, fixture.reservation.ID, service.BillingReservationStatusReviewRequired)
+	require.NoError(t, err)
+	_, err = integrationDB.ExecContext(ctx, `
+		UPDATE video_tasks
+		SET settlement_status = $2, version = version + 1, updated_at = NOW()
+		WHERE id = $1
+	`, fixture.task.ID, "error")
+	require.NoError(t, err)
+	fixture.task.Version++
+	fixture.task.SettlementStatus = "error"
+
+	input := newVideoTaskFinalizationInput(fixture.task, service.VideoStatusSucceeded, "1.25")
+	result, err := newVideoTaskFinalizerForIntegration(t).Finalize(ctx, input)
+	require.NoError(t, err)
+	require.True(t, result.Applied)
+	require.Equal(t, service.VideoStatusSucceeded, result.Status)
+	require.Equal(t, "error", result.SettlementStatus)
+	require.Nil(t, result.BalanceChargedAt)
+	require.Nil(t, result.TransactionID)
+
+	var taskStatus, settlementStatus, reservationStatus string
+	var chargedAt sql.NullTime
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		SELECT status, settlement_status, balance_charged_at
+		FROM video_tasks WHERE id = $1
+	`, fixture.task.ID).Scan(&taskStatus, &settlementStatus, &chargedAt))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		SELECT status FROM billing_reservations WHERE id = $1
+	`, fixture.reservation.ID).Scan(&reservationStatus))
+	require.Equal(t, service.VideoStatusSucceeded, taskStatus)
+	require.Equal(t, "error", settlementStatus)
+	require.False(t, chargedAt.Valid)
+	require.Equal(t, service.BillingReservationStatusReviewRequired, reservationStatus)
+	require.Equal(t, 0, countVideoTaskFinalizationRows(t, "billing_transactions", "source_id", fixture.task.ID))
+	require.Equal(t, "10.00000000", videoTaskFinalizationBalance(t, fixture.user.ID))
+	require.Contains(t, videoTaskFinalizationOutboxTypes(t, fixture.task.ID), "billing.reservation_review_required")
+
+	replayed, err := newVideoTaskFinalizerForIntegration(t).Finalize(ctx, input)
+	require.NoError(t, err)
+	require.True(t, replayed.Idempotent)
+	require.Equal(t, 0, countVideoTaskFinalizationRows(t, "billing_transactions", "source_id", fixture.task.ID))
+}
+
 func newVideoTaskFinalizerForIntegration(t *testing.T) *service.VideoTaskFinalizer {
 	t.Helper()
 	gatewayRepo := NewVideoGatewayRepository(integrationDB)

@@ -99,6 +99,18 @@ func (r *videoGatewayRepository) FinalizeVideoTask(ctx context.Context, input se
 	if err != nil {
 		return service.VideoTaskFinalizationResult{}, err
 	}
+	if reviewRequired {
+		// CAS may have stamped settled/released + balance_charged_at before billing
+		// saw a review_required reservation; restore the reaper "error" hung-settlement
+		// vocabulary and clear the false charge marker.
+		if err := restoreVideoFinalizationReviewSettlement(ctx, tx, input.TaskID, task.provider); err != nil {
+			return service.VideoTaskFinalizationResult{}, err
+		}
+		if task.provider != service.VideoProviderMock {
+			task.settlementStatus = "error"
+			task.balanceChargedAt = nil
+		}
+	}
 	if err := enqueueVideoFinalizationOutbox(ctx, tx, task, input, chargeApplied, overrun, reviewRequired); err != nil {
 		return service.VideoTaskFinalizationResult{}, fmt.Errorf("enqueue terminal video outbox: %w", err)
 	}
@@ -370,6 +382,12 @@ func settleVideoFinalizationBilling(
 	if reservation.userID != task.userID {
 		return 0, false, false, false, fmt.Errorf("video task reservation user mismatch")
 	}
+	// Reaper may have already parked the reservation as review_required while the
+	// provider later reached a terminal status. Keep the hung reservation for
+	// human reconciliation: land the task terminal state without auto settle/refund.
+	if reservation.status == service.BillingReservationStatusReviewRequired {
+		return 0, false, false, true, nil
+	}
 	if reservation.status != service.BillingReservationStatusActive {
 		return 0, false, false, false, fmt.Errorf("video task reservation is not active")
 	}
@@ -421,6 +439,24 @@ func markMockVideoReservationForReview(ctx context.Context, tx *sql.Tx, reservat
 		WHERE id = $1 AND status = $3
 	`, reservationID, service.BillingReservationStatusReviewRequired, service.BillingReservationStatusActive)
 	return requireOneVideoFinalizationRow(result, err, "mark mock video reservation for review")
+}
+
+// restoreVideoFinalizationReviewSettlement aligns task settlement with the reaper
+// review_required hung-accounting vocabulary ("error") after a terminal CAS that
+// would otherwise claim settled/released without a ledger mutation.
+func restoreVideoFinalizationReviewSettlement(ctx context.Context, tx *sql.Tx, taskID int64, provider string) error {
+	if provider == service.VideoProviderMock {
+		// Mock CAS already stamps not_required; keep that invariant.
+		return nil
+	}
+	result, err := tx.ExecContext(ctx, `
+		UPDATE video_tasks
+		SET settlement_status = $2,
+			balance_charged_at = NULL,
+			updated_at = NOW()
+		WHERE id = $1
+	`, taskID, "error")
+	return requireOneVideoFinalizationRow(result, err, "restore review_required settlement")
 }
 
 func lockVideoFinalizationReservation(ctx context.Context, tx *sql.Tx, reservationID int64) (videoFinalizationReservation, error) {
@@ -669,6 +705,10 @@ func enqueueVideoFinalizationOutbox(
 		})
 	}
 	if reviewRequired {
+		reason := "mock_task_has_reservation"
+		if task.provider != service.VideoProviderMock {
+			reason = service.BillingReservationStatusReviewRequired
+		}
 		specs = append(specs, outboxSpec{
 			eventType: videoFinalizationOutboxReview,
 			suffix:    "reservation_review_required",
@@ -676,7 +716,7 @@ func enqueueVideoFinalizationOutbox(
 				"task_id":        input.TaskID,
 				"user_id":        task.userID,
 				"reservation_id": task.reservationID,
-				"reason":         "mock_task_has_reservation",
+				"reason":         reason,
 			},
 		})
 	}

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -42,11 +43,14 @@ func (a *SingleSmokeAuthorization) Consume() error {
 	return nil
 }
 
+func (a *SingleSmokeAuthorization) Allowed() bool { return a != nil && a.allowed }
+
 type VideoCreateRequest struct {
 	Prompt            string `json:"prompt"`
 	Duration          int    `json:"duration"`
 	Resolution        string `json:"resolution"`
 	ReferenceImageURL string `json:"reference_image_url,omitempty"`
+	ReturnLastFrame   bool   `json:"return_last_frame"`
 }
 
 func ValidateTinyRealContract(r VideoCreateRequest) error {
@@ -70,7 +74,9 @@ type VideoProviderTask struct {
 	Status           string `json:"status"`
 	ResultURL        string `json:"result_url"`
 	LastFrameURL     string `json:"last_frame_url"`
-	UsageTotalTokens *int64 `json:"usage_total_tokens"`
+	CompletionTokens *int64 `json:"completion_tokens"`
+	ErrorCode        string `json:"error_code"`
+	ErrorMessage     string `json:"error_message"`
 }
 
 type SeedanceAdapter struct {
@@ -87,14 +93,22 @@ func NewSeedanceAdapter(client *http.Client, baseURL, apiKey string) *SeedanceAd
 
 func validateArkBaseURL(raw string) (*url.URL, error) {
 	u, err := url.Parse(raw)
-	if err != nil || u.Scheme != "https" || u.User != nil {
+	if err != nil || u.Scheme != "https" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
 		return nil, errors.New("seedance endpoint must be HTTPS")
 	}
 	host := strings.ToLower(u.Hostname())
-	if host != "ark.cn-beijing.volces.com" && !strings.HasSuffix(host, ".ark.cn-beijing.volces.com") {
+	if host != "ark.cn-beijing.volces.com" {
 		return nil, errors.New("seedance endpoint host is not allowlisted")
 	}
 	return u, nil
+}
+
+func arkTaskCollectionURL(u *url.URL) string {
+	base := strings.TrimRight(u.String(), "/")
+	if strings.HasSuffix(u.Path, "/api/v3") {
+		return base + "/contents/generations/tasks"
+	}
+	return base + "/api/v3/contents/generations/tasks"
 }
 
 func (a *SeedanceAdapter) Create(ctx context.Context, input VideoCreateRequest) (*VideoProviderTask, error) {
@@ -105,17 +119,22 @@ func (a *SeedanceAdapter) Create(ctx context.Context, input VideoCreateRequest) 
 	if err != nil {
 		return nil, err
 	}
+	type contentItem struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	}
 	payload := struct {
-		Model      string `json:"model"`
-		Prompt     string `json:"prompt"`
-		Duration   int    `json:"duration"`
-		Resolution string `json:"resolution"`
-	}{SeedanceModel, input.Prompt, input.Duration, input.Resolution}
+		Model           string        `json:"model"`
+		Content         []contentItem `json:"content"`
+		Duration        int           `json:"duration"`
+		Resolution      string        `json:"resolution"`
+		ReturnLastFrame bool          `json:"return_last_frame"`
+	}{SeedanceModel, []contentItem{{Type: "text", Text: input.Prompt}}, input.Duration, input.Resolution, input.ReturnLastFrame}
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String()+"/api/v3/contents/generations/tasks", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, arkTaskCollectionURL(u), bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
@@ -130,8 +149,11 @@ func (a *SeedanceAdapter) Create(ctx context.Context, input VideoCreateRequest) 
 	if readErr != nil {
 		return nil, errors.New("seedance create response read failed")
 	}
+	if a.apiKey != "" && strings.Contains(string(data), a.apiKey) {
+		return nil, errors.New("seedance response echoed provider credential")
+	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("seedance create failed (%d): %s", resp.StatusCode, RedactVideoSecrets(string(data), a.apiKey))
+		return nil, fmt.Errorf("seedance create failed: http_%d", resp.StatusCode)
 	}
 	var task VideoProviderTask
 	if err := json.Unmarshal(data, &task); err != nil {
@@ -151,7 +173,7 @@ func (a *SeedanceAdapter) Poll(ctx context.Context, upstreamTaskID string) (*Vid
 	if strings.TrimSpace(upstreamTaskID) == "" {
 		return nil, errors.New("seedance upstream task id is required")
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String()+"/api/v3/contents/generations/tasks/"+url.PathEscape(upstreamTaskID), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, arkTaskCollectionURL(u)+"/"+url.PathEscape(upstreamTaskID), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -165,8 +187,11 @@ func (a *SeedanceAdapter) Poll(ctx context.Context, upstreamTaskID string) (*Vid
 	if err != nil {
 		return nil, errors.New("seedance poll response read failed")
 	}
+	if a.apiKey != "" && strings.Contains(string(data), a.apiKey) {
+		return nil, errors.New("seedance response echoed provider credential")
+	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("seedance poll failed (%d): %s", resp.StatusCode, RedactVideoSecrets(string(data), a.apiKey))
+		return nil, fmt.Errorf("seedance poll failed: http_%d", resp.StatusCode)
 	}
 	var parsed struct {
 		ID           string `json:"id"`
@@ -177,8 +202,13 @@ func (a *SeedanceAdapter) Poll(ctx context.Context, upstreamTaskID string) (*Vid
 			LastFrameURL string `json:"last_frame_url"`
 		} `json:"content"`
 		Usage struct {
-			TotalTokens *int64 `json:"total_tokens"`
+			CompletionTokens *int64 `json:"completion_tokens"`
+			TotalTokens      *int64 `json:"total_tokens"`
 		} `json:"usage"`
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
 	}
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		return nil, errors.New("seedance poll response is invalid")
@@ -191,7 +221,56 @@ func (a *SeedanceAdapter) Poll(ctx context.Context, upstreamTaskID string) (*Vid
 	if lastFrame == "" {
 		lastFrame = parsed.Content.LastFrameURL
 	}
-	return &VideoProviderTask{UpstreamTaskID: parsed.ID, Status: status, ResultURL: parsed.Content.VideoURL, LastFrameURL: lastFrame, UsageTotalTokens: parsed.Usage.TotalTokens}, nil
+	if parsed.Content.VideoURL != "" {
+		if err := validatePublicHTTPSAssetURL(parsed.Content.VideoURL); err != nil {
+			return nil, errors.New("seedance returned unsafe result URL")
+		}
+	}
+	if lastFrame != "" {
+		if err := validatePublicHTTPSAssetURL(lastFrame); err != nil {
+			return nil, errors.New("seedance returned unsafe last-frame URL")
+		}
+	}
+	return &VideoProviderTask{UpstreamTaskID: parsed.ID, Status: status, ResultURL: parsed.Content.VideoURL, LastFrameURL: lastFrame,
+		CompletionTokens: parsed.Usage.CompletionTokens, ErrorCode: sanitizeProviderCode(parsed.Error.Code), ErrorMessage: sanitizeProviderMessage(parsed.Error.Message)}, nil
+}
+
+func validatePublicHTTPSAssetURL(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || u.User != nil || u.Hostname() == "" {
+		return errors.New("asset URL must be HTTPS")
+	}
+	host := strings.ToLower(u.Hostname())
+	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
+		return errors.New("asset URL host is private")
+	}
+	if ip := net.ParseIP(host); ip != nil && (ip.IsLoopback() || ip.IsPrivate() || ip.IsUnspecified() || ip.IsLinkLocalUnicast()) {
+		return errors.New("asset URL host is private")
+	}
+	return nil
+}
+
+func sanitizeProviderCode(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if len(value) > 64 {
+		value = value[:64]
+	}
+	for _, r := range value {
+		if !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' || r == '-') {
+			return "provider_error"
+		}
+	}
+	if value == "" {
+		return "provider_error"
+	}
+	return value
+}
+
+func sanitizeProviderMessage(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return ""
+	}
+	return "upstream provider reported an error"
 }
 
 func normalizeSeedanceStatus(value string) (string, error) {

@@ -25,6 +25,13 @@ func ProvideConcurrencyCache(rdb *redis.Client, cfg *config.Config) service.Conc
 	return NewConcurrencyCache(rdb, cfg.Gateway.ConcurrencySlotTTLMinutes, waitTTLSeconds)
 }
 
+func ProvideVideoKeyEncryptor(cfg *config.Config) (service.VideoKeyEncryptor, error) {
+	if cfg == nil || !cfg.VideoGateway.WorkerEnabled {
+		return service.DisabledVideoKeyEncryptor{}, nil
+	}
+	return NewVideoKeyEncryptor(cfg.VideoGateway.EncryptionKey)
+}
+
 // ProvideGitHubReleaseClient 创建 GitHub Release 客户端
 // 从配置中读取代理设置，支持国内服务器通过代理访问 GitHub
 func ProvideGitHubReleaseClient(cfg *config.Config) service.GitHubReleaseClient {
@@ -79,6 +86,7 @@ var ProviderSet = wire.NewSet(
 	NewUsageBillingRepository,
 	NewBatchImageRepository,
 	NewVideoGatewayRuntimeRepository,
+	ProvideVideoKeyEncryptor,
 	NewIdempotencyRepository,
 	NewUsageCleanupRepository,
 	NewDashboardAggregationRepository,

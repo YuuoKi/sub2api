@@ -22,6 +22,7 @@ func TestVideoGatewayFoundationSchemaSmoke(t *testing.T) {
 		"video_task_events",
 		"video_usage_logs",
 		"video_daily_trial_reservations",
+		"video_single_smoke_consumptions",
 	} {
 		var regclass sql.NullString
 		require.NoError(t, integrationDB.QueryRowContext(context.Background(), "SELECT to_regclass('public.' || $1)", table).Scan(&regclass))
@@ -36,6 +37,46 @@ func TestVideoGatewayFoundationSchemaSmoke(t *testing.T) {
 			WHERE c.relname = $1`, index).Scan(&unique))
 		require.True(t, unique, "expected unique index %s", index)
 	}
+}
+
+func TestVideoGatewayGlobalGateAndGroupIsolation(t *testing.T) {
+	ctx := context.Background()
+	suffix := time.Now().UnixNano()
+	var userID, groupA, groupB, keyID int64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `INSERT INTO users (email,password_hash,role,status,balance,concurrency) VALUES ($1,'x','user','active',10,1) RETURNING id`, fmt.Sprintf("video-gate-%d@invalid.test", suffix)).Scan(&userID))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `INSERT INTO groups (name,platform,status,rate_multiplier) VALUES ($1,'openai','active',1) RETURNING id`, fmt.Sprintf("video-a-%d", suffix)).Scan(&groupA))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `INSERT INTO groups (name,platform,status,rate_multiplier) VALUES ($1,'openai','active',1) RETURNING id`, fmt.Sprintf("video-b-%d", suffix)).Scan(&groupB))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `INSERT INTO api_keys (user_id,key,name,group_id,status) VALUES ($1,$2,'video',$3,'active') RETURNING id`, userID, fmt.Sprintf("video-key-%d", suffix), groupA).Scan(&keyID))
+	var providerA, providerB int64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `INSERT INTO video_provider_accounts (provider,display_name,enabled,group_id) VALUES ('seedance',$1,true,$2) RETURNING id`, fmt.Sprintf("pa-%d", suffix), groupA).Scan(&providerA))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `INSERT INTO video_provider_accounts (provider,display_name,enabled,group_id) VALUES ('seedance',$1,true,$2) RETURNING id`, fmt.Sprintf("pb-%d", suffix), groupB).Scan(&providerB))
+	t.Cleanup(func() {
+		_, _ = integrationDB.Exec(`DELETE FROM video_single_smoke_consumptions WHERE video_task_id IN (SELECT id FROM video_tasks WHERE created_by=$1)`, userID)
+		_, _ = integrationDB.Exec(`DELETE FROM video_tasks WHERE created_by=$1`, userID)
+		_, _ = integrationDB.Exec(`DELETE FROM video_provider_accounts WHERE id IN ($1,$2)`, providerA, providerB)
+		_, _ = integrationDB.Exec(`DELETE FROM api_keys WHERE id=$1`, keyID)
+		_, _ = integrationDB.Exec(`DELETE FROM groups WHERE id IN ($1,$2)`, groupA, groupB)
+		_, _ = integrationDB.Exec(`DELETE FROM users WHERE id=$1`, userID)
+	})
+	repo := NewVideoGatewayRuntimeRepository(integrationDB)
+	providers, err := repo.ListEnabledVideoProviders(ctx, groupA)
+	require.NoError(t, err)
+	require.Len(t, providers, 1)
+	require.Equal(t, providerA, providers[0].ID)
+	_, err = repo.GetVideoProvider(ctx, providerB, groupA)
+	require.ErrorIs(t, err, service.ErrVideoProviderNotFound)
+	makeTask := func(key string) *service.VideoTask {
+		task := &service.VideoTask{APIKeyID: keyID, GroupID: groupA, ProviderAccountID: providerA, Provider: "seedance", Model: service.SeedanceModel, TaskType: "text_to_video", Prompt: "x", Status: service.VideoStatusQueued, CreationKey: key, CreatedBy: userID}
+		require.NoError(t, repo.CreateTask(ctx, task))
+		return task
+	}
+	first, second := makeTask(fmt.Sprintf("gate-a-%d", suffix)), makeTask(fmt.Sprintf("gate-b-%d", suffix))
+	ok, err := repo.BeginRealDispatch(ctx, first.ID, first.Version)
+	require.NoError(t, err)
+	require.True(t, ok)
+	ok, err = repo.BeginRealDispatch(ctx, second.ID, second.Version)
+	require.NoError(t, err)
+	require.False(t, ok)
 }
 
 func TestVideoGatewayFoundationRepositoryLifecycle(t *testing.T) {

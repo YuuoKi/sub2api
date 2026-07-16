@@ -20,13 +20,13 @@ func NewVideoGatewayRuntimeRepository(db *sql.DB) service.VideoGatewayRuntimeRep
 	return &videoGatewayRepository{db: db}
 }
 
-func (r *videoGatewayRepository) ListEnabledVideoProviders(ctx context.Context) ([]service.VideoProviderAccount, error) {
+func (r *videoGatewayRepository) ListEnabledVideoProviders(ctx context.Context, groupID int64) ([]service.VideoProviderAccount, error) {
 	db, err := r.requireDB()
 	if err != nil {
 		return nil, err
 	}
-	rows, err := db.QueryContext(ctx, `SELECT id, provider, display_name, enabled, '', masked_key, '', default_model
-		FROM video_provider_accounts WHERE enabled=TRUE ORDER BY id`)
+	rows, err := db.QueryContext(ctx, `SELECT id, group_id, provider, display_name, enabled, '', masked_key, '', default_model
+		FROM video_provider_accounts WHERE enabled=TRUE AND group_id=$1 ORDER BY id`, groupID)
 	if err != nil {
 		return nil, err
 	}
@@ -34,7 +34,7 @@ func (r *videoGatewayRepository) ListEnabledVideoProviders(ctx context.Context) 
 	items := make([]service.VideoProviderAccount, 0)
 	for rows.Next() {
 		var item service.VideoProviderAccount
-		if err := rows.Scan(&item.ID, &item.Provider, &item.DisplayName, &item.Enabled, &item.EncryptedAPIKey, &item.MaskedKey, &item.BaseURL, &item.DefaultModel); err != nil {
+		if err := rows.Scan(&item.ID, &item.GroupID, &item.Provider, &item.DisplayName, &item.Enabled, &item.EncryptedAPIKey, &item.MaskedKey, &item.BaseURL, &item.DefaultModel); err != nil {
 			return nil, err
 		}
 		items = append(items, item)
@@ -42,17 +42,17 @@ func (r *videoGatewayRepository) ListEnabledVideoProviders(ctx context.Context) 
 	return items, rows.Err()
 }
 
-func (r *videoGatewayRepository) GetVideoProvider(ctx context.Context, id int64) (*service.VideoProviderAccount, error) {
+func (r *videoGatewayRepository) GetVideoProvider(ctx context.Context, id, groupID int64) (*service.VideoProviderAccount, error) {
 	db, err := r.requireDB()
 	if err != nil {
 		return nil, err
 	}
 	var item service.VideoProviderAccount
-	err = db.QueryRowContext(ctx, `SELECT id, provider, display_name, enabled, encrypted_api_key, masked_key, base_url, default_model
-		FROM video_provider_accounts WHERE id=$1`, id).Scan(&item.ID, &item.Provider, &item.DisplayName, &item.Enabled,
+	err = db.QueryRowContext(ctx, `SELECT id, group_id, provider, display_name, enabled, encrypted_api_key, masked_key, base_url, default_model
+		FROM video_provider_accounts WHERE id=$1 AND group_id=$2`, id, groupID).Scan(&item.ID, &item.GroupID, &item.Provider, &item.DisplayName, &item.Enabled,
 		&item.EncryptedAPIKey, &item.MaskedKey, &item.BaseURL, &item.DefaultModel)
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, service.ErrVideoTaskNotFound
+		return nil, service.ErrVideoProviderNotFound
 	}
 	return &item, err
 }
@@ -62,13 +62,35 @@ func (r *videoGatewayRepository) BeginRealDispatch(ctx context.Context, id, vers
 	if err != nil {
 		return false, err
 	}
-	result, err := db.ExecContext(ctx, `UPDATE video_tasks SET real_dispatch_count=1, dispatch_state='dispatching',
-		version=version+1, updated_at=NOW() WHERE id=$1 AND version=$2 AND status='queued' AND real_dispatch_count=0`, id, version)
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+	result, err := tx.ExecContext(ctx, `UPDATE video_tasks SET real_dispatch_count=1, dispatch_state='dispatching', version=version+1,
+		updated_at=NOW() WHERE id=$1 AND version=$2 AND status='queued' AND real_dispatch_count=0`, id, version)
 	if err != nil {
 		return false, err
 	}
 	n, err := result.RowsAffected()
-	return n == 1, err
+	if err != nil || n != 1 {
+		return false, err
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO video_single_smoke_consumptions (gate_key, video_task_id)
+		VALUES ('global',$1) ON CONFLICT (gate_key) DO NOTHING`, id); err != nil {
+		return false, err
+	}
+	var owned int64
+	if err = tx.QueryRowContext(ctx, `SELECT video_task_id FROM video_single_smoke_consumptions WHERE gate_key='global'`).Scan(&owned); err != nil {
+		return false, err
+	}
+	if owned != id {
+		return false, nil
+	}
+	if err = tx.Commit(); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func (r *videoGatewayRepository) MarkVideoSubmitted(ctx context.Context, id, version int64, upstreamTaskID string) error {
@@ -78,6 +100,29 @@ func (r *videoGatewayRepository) MarkVideoSubmitted(ctx context.Context, id, ver
 	}
 	result, err := db.ExecContext(ctx, `UPDATE video_tasks SET status='submitted', dispatch_state='accepted', upstream_task_id=$3,
 		version=version+1, worker_claimed_at=NULL, worker_claimed_until=NULL, updated_at=NOW() WHERE id=$1 AND version=$2`, id, version, upstreamTaskID)
+	if err != nil {
+		return err
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n != 1 {
+		return service.ErrVideoTaskTerminalConflict
+	}
+	return nil
+}
+
+func (r *videoGatewayRepository) UpdateVideoProgress(ctx context.Context, id, version int64, status string) error {
+	if status != service.VideoStatusSubmitted && status != service.VideoStatusRunning {
+		return fmt.Errorf("invalid video progress status")
+	}
+	db, err := r.requireDB()
+	if err != nil {
+		return err
+	}
+	result, err := db.ExecContext(ctx, `UPDATE video_tasks SET status=$3, version=version+1, worker_claimed_at=NULL,
+		worker_claimed_until=NULL, updated_at=NOW() WHERE id=$1 AND version=$2 AND status IN ('submitted','running')`, id, version, status)
 	if err != nil {
 		return err
 	}
@@ -154,8 +199,15 @@ func (r *videoGatewayRepository) CancelTaskForScope(ctx context.Context, id int6
 	}
 	task, err := scanVideoTask(db.QueryRowContext(ctx, `UPDATE video_tasks SET status='cancelled', completed_at=NOW(),
 		version=version+1, updated_at=NOW() WHERE id=$1 AND created_by=$2 AND api_key_id=$3 AND group_id=$4
-		AND status IN ('queued','submitted','running') RETURNING `+videoTaskColumns, id, scope.UserID, scope.APIKeyID, scope.GroupID))
+		AND status='queued' AND real_dispatch_count=0 AND dispatch_state='pending' RETURNING `+videoTaskColumns, id, scope.UserID, scope.APIKeyID, scope.GroupID))
 	if errors.Is(err, sql.ErrNoRows) {
+		var exists bool
+		if readErr := db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM video_tasks WHERE id=$1 AND created_by=$2 AND api_key_id=$3 AND group_id=$4)`, id, scope.UserID, scope.APIKeyID, scope.GroupID).Scan(&exists); readErr != nil {
+			return nil, readErr
+		}
+		if exists {
+			return nil, service.ErrVideoCancelConflict
+		}
 		return nil, service.ErrVideoTaskNotFound
 	}
 	return task, err

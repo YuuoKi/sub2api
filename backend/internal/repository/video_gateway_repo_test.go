@@ -102,6 +102,19 @@ func TestVideoGatewayRepositoryTerminalFinalizationIsIdempotent(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestVideoGatewayRepositoryCancelRejectsDispatchedTask(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	repo := NewVideoGatewayRuntimeRepository(db)
+	scope := service.VideoTaskScope{UserID: 1, APIKeyID: 2, GroupID: 3}
+	mock.ExpectQuery("UPDATE video_tasks SET status='cancelled'").WithArgs(int64(9), int64(1), int64(2), int64(3)).WillReturnError(sql.ErrNoRows)
+	mock.ExpectQuery("SELECT EXISTS").WithArgs(int64(9), int64(1), int64(2), int64(3)).WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
+	_, err = repo.CancelTaskForScope(context.Background(), 9, scope)
+	require.ErrorIs(t, err, service.ErrVideoCancelConflict)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func videoTaskRows(now time.Time) *sqlmock.Rows {
 	return sqlmock.NewRows([]string{"id", "api_key_id", "group_id", "provider_account_id", "provider", "model", "task_type", "prompt", "status", "upstream_task_id", "result_url", "last_frame_url", "duration_seconds", "resolution", "usage_total_tokens", "cost_amount", "currency", "real_dispatch_count", "provider_error_code", "provider_error_message", "error_message", "creation_key", "version", "dispatch_state", "created_by", "created_at", "updated_at", "completed_at"})
 }

@@ -94,6 +94,18 @@ type Config struct {
 	Update                  UpdateConfig                  `mapstructure:"update"`
 	Idempotency             IdempotencyConfig             `mapstructure:"idempotency"`
 	BatchImage              BatchImageConfig              `mapstructure:"batch_image"`
+	VideoGateway            VideoGatewayConfig            `mapstructure:"video_gateway"`
+}
+
+type VideoGatewayConfig struct {
+	EncryptionKey               string  `mapstructure:"encryption_key"`
+	WorkerEnabled               bool    `mapstructure:"worker_enabled"`
+	WorkerIntervalSeconds       int     `mapstructure:"worker_interval_seconds"`
+	HTTPTimeoutSeconds          int     `mapstructure:"http_timeout_seconds"`
+	SeedanceCNYPerMillionTokens float64 `mapstructure:"seedance_cny_per_million_tokens"`
+	USDCNYExchangeRate          float64 `mapstructure:"usd_cny_exchange_rate"`
+	TinyRealEstimateCNY         float64 `mapstructure:"tiny_real_estimate_cny"`
+	TinyRealMaximumCNY          float64 `mapstructure:"tiny_real_maximum_cny"`
 }
 
 type LogConfig struct {

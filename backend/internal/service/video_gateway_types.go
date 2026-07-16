@@ -19,6 +19,8 @@ var (
 	ErrVideoTaskNotFound         = errors.New("video task not found")
 	ErrVideoTaskTerminalConflict = errors.New("video task terminal status conflicts with requested status")
 	ErrVideoTaskForbidden        = errors.New("video task is outside employee scope")
+	ErrVideoProviderNotFound     = errors.New("video provider not found")
+	ErrVideoCancelConflict       = errors.New("video task cannot be cancelled after dispatch started")
 )
 
 type VideoTaskScope struct {
@@ -34,6 +36,7 @@ type VideoKeyEncryptor interface {
 
 type VideoProviderAccount struct {
 	ID              int64  `json:"id"`
+	GroupID         int64  `json:"-"`
 	Provider        string `json:"provider"`
 	DisplayName     string `json:"display_name"`
 	Enabled         bool   `json:"enabled"`
@@ -107,8 +110,9 @@ type VideoGatewayRepository interface {
 
 type VideoGatewayRuntimeRepository interface {
 	VideoGatewayRepository
-	ListEnabledVideoProviders(context.Context) ([]VideoProviderAccount, error)
-	GetVideoProvider(context.Context, int64) (*VideoProviderAccount, error)
+	ListEnabledVideoProviders(context.Context, int64) ([]VideoProviderAccount, error)
+	GetVideoProvider(context.Context, int64, int64) (*VideoProviderAccount, error)
 	BeginRealDispatch(context.Context, int64, int64) (bool, error)
 	MarkVideoSubmitted(context.Context, int64, int64, string) error
+	UpdateVideoProgress(context.Context, int64, int64, string) error
 }

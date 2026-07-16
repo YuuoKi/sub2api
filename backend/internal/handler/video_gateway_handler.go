@@ -18,13 +18,12 @@ func NewVideoGatewayHandler(s *service.VideoGatewayService) *VideoGatewayHandler
 }
 
 type videoCreateBody struct {
-	ProviderAccountID     int64   `json:"provider_account_id" binding:"required"`
-	Prompt                string  `json:"prompt" binding:"required"`
-	Duration              int     `json:"duration" binding:"required"`
-	Resolution            string  `json:"resolution" binding:"required"`
-	SingleSmokeAuthorized bool    `json:"single_smoke_authorized" binding:"required"`
-	CreationKey           string  `json:"creation_key"`
-	MaximumCost           float64 `json:"maximum_cost" binding:"required"`
+	ProviderAccountID     int64  `json:"provider_account_id" binding:"required"`
+	Prompt                string `json:"prompt" binding:"required"`
+	Duration              int    `json:"duration" binding:"required"`
+	Resolution            string `json:"resolution" binding:"required"`
+	SingleSmokeAuthorized bool   `json:"single_smoke_authorized"`
+	CreationKey           string `json:"creation_key"`
 }
 
 func videoScope(c *gin.Context) (service.VideoTaskScope, bool) {
@@ -37,10 +36,11 @@ func videoScope(c *gin.Context) (service.VideoTaskScope, bool) {
 }
 
 func (h *VideoGatewayHandler) Providers(c *gin.Context) {
-	if _, ok := videoScope(c); !ok {
+	scope, ok := videoScope(c)
+	if !ok {
 		return
 	}
-	items, err := h.service.ListProviders(c.Request.Context())
+	items, err := h.service.ListProviders(c.Request.Context(), scope)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, "failed to list video providers")
 		return
@@ -60,7 +60,7 @@ func (h *VideoGatewayHandler) Create(c *gin.Context) {
 	}
 	task, err := h.service.CreateTask(c.Request.Context(), service.VideoTaskCreateCommand{Scope: scope, ProviderAccountID: body.ProviderAccountID,
 		Prompt: body.Prompt, Duration: body.Duration, Resolution: body.Resolution, SingleSmokeAuthorized: body.SingleSmokeAuthorized,
-		CreationKey: body.CreationKey, MaximumCost: body.MaximumCost})
+		CreationKey: body.CreationKey})
 	if err != nil {
 		writeVideoError(c, err)
 		return
@@ -91,17 +91,25 @@ func (h *VideoGatewayHandler) withTask(c *gin.Context, cancel bool) {
 		writeVideoError(c, err)
 		return
 	}
-	response.Success(c, videoTaskResponse(task))
+	payload := videoTaskResponse(task)
+	if cancel {
+		payload["cancel_outcome"] = "local_pre_dispatch"
+	}
+	response.Success(c, payload)
 }
 
 func writeVideoError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, service.ErrVideoTaskNotFound):
 		response.Error(c, http.StatusNotFound, "video task not found")
+	case errors.Is(err, service.ErrVideoProviderNotFound):
+		response.Error(c, http.StatusNotFound, "video provider not found")
 	case errors.Is(err, service.ErrVideoRealDispatchDenied), errors.Is(err, service.ErrVideoRealDispatchConsumed), errors.Is(err, service.ErrVideoBudgetRejected):
 		response.Error(c, http.StatusForbidden, err.Error())
+	case errors.Is(err, service.ErrVideoCancelConflict):
+		response.Error(c, http.StatusConflict, err.Error())
 	default:
-		response.BadRequest(c, service.RedactVideoSecrets(err.Error()))
+		response.BadRequest(c, "video request failed")
 	}
 }
 

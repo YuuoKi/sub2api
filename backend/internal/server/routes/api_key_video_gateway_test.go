@@ -367,11 +367,22 @@ func (r *apiKeyVideoGatewayMemoryRepo) realProviderTaskCount() int {
 }
 
 func newAPIKeyVideoGatewayTestRouter(repo *apiKeyVideoGatewayMemoryRepo) *gin.Engine {
+	return newAPIKeyVideoGatewayTestRouterWithRealAccess(repo, false)
+}
+
+// newAPIKeyVideoGatewayTestRouterWithRealAccess builds the gateway test router.
+// When armRealAccess is true, a permissive in-memory internal_real policy is
+// seeded so tiny_real / internal_real creates are authorized without weakening
+// the production fail-closed default (nil policy repo still denies).
+func newAPIKeyVideoGatewayTestRouterWithRealAccess(repo *apiKeyVideoGatewayMemoryRepo, armRealAccess bool) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	cfg := &config.Config{}
 	cfg.Gateway.MaxBodySize = 1 << 20
 	videoSvc := service.NewVideoGatewayService(repo, apiKeyVideoGatewayNoopEncryptor{}, cfg)
+	if armRealAccess {
+		videoSvc.SetRealAccessPolicyRepository(service.NewMemoryProviderRealAccessPolicyRepo(nil))
+	}
 	videoHandler := handler.NewVideoHandler(videoSvc)
 	RegisterGatewayRoutes(
 		router,
@@ -816,7 +827,9 @@ func TestAPIKeyVideoGatewaySeedanceTrialSuccess(t *testing.T) {
 		"health_status":           "healthy",
 		"single_smoke_authorized": true,
 	})
-	router := newAPIKeyVideoGatewayTestRouter(repo)
+	// Explicit internal_real policy seed: fail-closed default (nil repo) is
+	// intentional; this success path must authorize without weakening that default.
+	router := newAPIKeyVideoGatewayTestRouterWithRealAccess(repo, true)
 
 	rec := apiKeyVideoGatewayRequest(router, http.MethodPost, "/v1/video/tasks", []byte(`{
 		"provider":"seedance",

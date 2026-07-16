@@ -47,8 +47,8 @@ canonical `http://127.0.0.1:8080`、无界 embedded 品牌、本地镜像与完�
 - 本地镜像：`sha256:bc7202509217701388f6877d07222a94b5fbf9bf10d7435b57b8d84f20f1d01b`；embedded binary 无界 title=1、精确上游 title=0。
 - 隔离开卡/usage smoke：只显示掩码 key，`usage_delta=1`、`balance_delta=0.00045000`；临时 PostgreSQL/Redis 已终止，无真实 provider 或生产数据。
 - canonical runtime：`http://127.0.0.1:8080` HTTP 200、title 为 `无界 · 企业 AI 管理中台`、镜像为 `wujie-sub2api:local`、host `:3000` 无监听；完整管理面、管理员开卡、员工 Key 与 usage 五段路径已留证。
-- 视频网关实现与付费安全收口：当前 HEAD `15880e23`；`/v1/video/tasks`、管理员视频控制面、原子一次授权/dispatch claim、usage/settlement 与 process-only gate 均已验证。
-- Gemini 图片真实证据：request `client:995b4b75-be49-4ecd-a8ff-c7bc283fda69`，终态成功，本地 PNG 1336210 bytes，实扣 `$0.0585`。
+- 视频网关实现与付费安全收口：当前 HEAD `d6687e89`（视频能力落点祖先含 `15880e23`）；`/v1/video/tasks`、管理员视频控制面、原子一次授权/dispatch claim、usage/settlement 与 process-only gate 均已验证。
+- Gemini 图片真实证据：request `client:995b4b75-be49-4ecd-a8ff-c7bc283fda69`，终态成功，本地 PNG 1336210 bytes，实扣 `$0.0585`；实账 `billedImageSize=2K`（勿再写成已验证 512）。
 - Seedance 2.0 真实证据：local task `1`、upstream task `cgt-20260716174852-8p5hj`、终态 `succeeded`、87300 tokens，本地 MP4/尾帧齐全，实扣 `$0.3395`。
 - 两次合计 `$0.3980` / 约 `¥2.8656`，员工余额 `$3.0000 → $2.6020`，低于授权上限 `¥15`；process-only 单次门已恢复关闭。
 
@@ -82,4 +82,11 @@ G1 已满足以上口径。不得用源码字符串、单元测试、隔离 smok
 
 ## 下一步
 
-下一步只做 G3 文档一致性、独立冷审、密钥扫描与 UX P1 排期；不得再次触发真实付费。若要把现有资产回填 QCanvas，必须先提供目标 `projectId/flowId`，仅通过 `tapcanvas-api` 复用本地 PNG/MP4/尾帧，不再生成。
+G3 文档同步与独立冷审**已完成**；交叉验证 IV 文档消毒后，等老板确认再 commit（本仓仅允许既有 `docs/legal/admin-compliance.zh.md` dirty 不纳入提交，除非老板另批）。
+
+当前真实下一步：
+
+1. 真相源对齐：以本文件、QCanvas 总规划 `#qcanvas-state`（整体**待复核**）、`20260716_FINAL_FINDINGS.md` 顶部权威段为准；不得再把 `GROK45_COMMERCIAL_DELIVERY_LOOP_STATE_20260715.json` 当当前口径。
+2. 不得再次触发真实付费；`realCallExecuted=2` 已封口。
+3. 可选补证：老板提供 QCanvas `projectId/flowId` 后，仅通过 `tapcanvas-api` 复用本地 PNG/MP4/尾帧做非付费画布回填；可选 pilot 浏览器链补证。
+4. UX P1 排期与密钥轮换（会话曾出现明文 key 粘贴）按老板授权单独处理；禁止 push。

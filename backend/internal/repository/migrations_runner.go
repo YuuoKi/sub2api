@@ -119,20 +119,24 @@ func ApplyMigrations(ctx context.Context, db *sql.DB) error {
 //   - ctx: 上下文
 //   - db: 数据库连接
 //   - fsys: 包含迁移文件的文件系统（通常是 embed.FS）
-func applyMigrationsFS(ctx context.Context, db *sql.DB, fsys fs.FS) error {
+func applyMigrationsFS(ctx context.Context, db *sql.DB, fsys fs.FS) (retErr error) {
 	if db == nil {
 		return errors.New("nil sql db")
 	}
 
 	// 获取分布式锁，确保多实例部署时只有一个实例执行迁移。
 	// 这是 PostgreSQL 特有的 Advisory Lock 机制。
-	if err := pgAdvisoryLock(ctx, db); err != nil {
+	// Session-level advisory locks are bound to one backend connection; hold a
+	// dedicated *sql.Conn for the whole critical section so unlock cannot land
+	// on a different pooled connection (which silently returns false).
+	lockConn, err := pgAdvisoryLock(ctx, db)
+	if err != nil {
 		return err
 	}
 	defer func() {
-		// 无论迁移是否成功，都要释放锁。
-		// 使用 context.Background() 确保即使原 ctx 已取消也能释放锁。
-		_ = pgAdvisoryUnlock(context.Background(), db)
+		if unlockErr := pgAdvisoryUnlock(lockConn); retErr == nil {
+			retErr = unlockErr
+		}
 	}()
 
 	// 创建迁移记录表（如果不存在）。
@@ -517,35 +521,58 @@ func stripSQLLineComment(s string) string {
 	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
 
-// pgAdvisoryLock 获取 PostgreSQL Advisory Lock。
-// Advisory Lock 是一种轻量级的锁机制，不与任何特定的数据库对象关联。
-// 它非常适合用于应用层面的分布式锁场景，如迁移序列化。
-func pgAdvisoryLock(ctx context.Context, db *sql.DB) error {
+// pgAdvisoryLock 获取 PostgreSQL Advisory Lock，并返回持有该锁的专用连接。
+// 调用方必须用同一连接调用 pgAdvisoryUnlock（其内部会 Close 连接）。
+func pgAdvisoryLock(ctx context.Context, db *sql.DB) (*sql.Conn, error) {
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("acquire migrations lock conn: %w", err)
+	}
+
 	ticker := time.NewTicker(migrationsLockRetryInterval)
 	defer ticker.Stop()
 
 	for {
 		var locked bool
-		if err := db.QueryRowContext(ctx, "SELECT pg_try_advisory_lock($1)", migrationsAdvisoryLockID).Scan(&locked); err != nil {
-			return fmt.Errorf("acquire migrations lock: %w", err)
+		if err := conn.QueryRowContext(ctx, "SELECT pg_try_advisory_lock($1)", migrationsAdvisoryLockID).Scan(&locked); err != nil {
+			_ = conn.Close()
+			return nil, fmt.Errorf("acquire migrations lock: %w", err)
 		}
 		if locked {
-			return nil
+			return conn, nil
 		}
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("acquire migrations lock: %w", ctx.Err())
+			_ = conn.Close()
+			return nil, fmt.Errorf("acquire migrations lock: %w", ctx.Err())
 		case <-ticker.C:
 		}
 	}
 }
 
-// pgAdvisoryUnlock 释放 PostgreSQL Advisory Lock。
-// 必须在获取锁后确保释放，否则会阻塞其他实例的迁移操作。
-func pgAdvisoryUnlock(ctx context.Context, db *sql.DB) error {
-	_, err := db.ExecContext(ctx, "SELECT pg_advisory_unlock($1)", migrationsAdvisoryLockID)
+// pgAdvisoryUnlock 在持锁连接上释放 PostgreSQL Advisory Lock 并关闭连接。
+// 必须检查 pg_advisory_unlock 的布尔返回值：跨连接解锁会返回 false 且无 SQL 错误。
+func pgAdvisoryUnlock(conn *sql.Conn) error {
+	if conn == nil {
+		return errors.New("release migrations lock: nil conn")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var unlocked bool
+	err := conn.QueryRowContext(ctx, "SELECT pg_advisory_unlock($1)", migrationsAdvisoryLockID).Scan(&unlocked)
+	closeErr := conn.Close()
 	if err != nil {
 		return fmt.Errorf("release migrations lock: %w", err)
+	}
+	if !unlocked {
+		if closeErr != nil {
+			return fmt.Errorf("release migrations lock: lock was not held; close conn: %w", closeErr)
+		}
+		return errors.New("release migrations lock: lock was not held")
+	}
+	if closeErr != nil {
+		return fmt.Errorf("release migrations lock: close conn: %w", closeErr)
 	}
 	return nil
 }

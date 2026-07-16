@@ -76,6 +76,9 @@
               {{ statusLabel(task.status) }}
             </span>
           </div>
+          <div v-if="!isTerminalStatus(task.status)" class="mt-2">
+            <TaskProgressRing :phase="taskPhaseLabel(task)" :size="26" side-label />
+          </div>
           <div v-if="task.delivery_status" class="mt-2">
             <span class="inline-flex rounded-md bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-700 dark:bg-slate-500/15 dark:text-slate-200">
               {{ deliveryStatusLabel(task) }}
@@ -94,14 +97,19 @@
           </div>
           <div class="mt-4 flex flex-wrap gap-2">
             <a v-if="hasUsableRemoteAsset(task)" class="btn btn-sm btn-outline" :href="task.result_url" target="_blank" rel="noreferrer">打开结果</a>
-            <button v-if="task.local_asset_available" class="btn btn-sm btn-outline" type="button" @click="openLocalAsset(task)">本地资产</button>
+            <button v-if="task.local_asset_available" class="btn btn-sm btn-outline" type="button" @click="openLocalAsset(task)">本地文件</button>
             <button class="btn btn-sm btn-outline" type="button" @click="copyToCreate(task)">复制参数</button>
             <RouterLink class="btn btn-sm btn-outline" :to="`/admin/video/tasks/${task.id}`">查看详情</RouterLink>
           </div>
         </article>
-        <div v-if="!loading && !tasks.length" class="ui-panel px-5 py-10 text-center text-sm text-ui-text-muted">
-          <p>当前还没有任务记录。</p>
-          <RouterLink class="btn btn-sm btn-primary mt-4" to="/admin/video/create">试跑一条任务</RouterLink>
+        <div v-if="!loading && !tasks.length" class="ui-panel">
+          <AnimatedEmptyState
+            variant="video-tasks"
+            title="当前还没有任务记录。"
+            :description="isVideoGatewayDemoMode ? '可以先试跑一条任务，检查系统是否能正常接收、处理和记录。' : '可以先创建一个演示任务验证流转。'"
+            :action-label="isVideoGatewayDemoMode ? '试跑一条任务' : '创建一个演示任务'"
+            @action="goCreate"
+          />
         </div>
         <div v-if="tasks.length" data-testid="video-task-mobile-pagination" class="ui-toolbar justify-between text-sm">
           <span class="text-ui-text-muted">共 {{ pagination.total }} 条</span>
@@ -157,6 +165,9 @@
                   <span v-if="task.delivery_status" class="ml-1 inline-flex rounded-md bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-700 dark:bg-slate-500/15 dark:text-slate-200">
                     {{ deliveryStatusLabel(task) }}
                   </span>
+                  <div v-if="!isTerminalStatus(task.status)" class="mt-2">
+                    <TaskProgressRing :phase="taskPhaseLabel(task)" :size="30" />
+                  </div>
                 </td>
                 <td class="px-5 py-3 tabular-nums text-teal-600 dark:text-teal-300">
                   {{ formatTaskCost(task) }}
@@ -188,12 +199,12 @@
                         <Icon name="externalLink" size="xs" />
                         打开结果
                       </a>
-                      <span v-if="hasUsableRemoteAsset(task)" class="text-[10px] text-gray-400">远端可交付物</span>
+                      <span v-if="hasUsableRemoteAsset(task)" class="text-[10px] text-gray-400">在线可看（有过期时间）</span>
                       <span
                         v-if="task.local_asset_available"
                         class="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-200"
                       >
-                        本地已归档资产
+                        本地已保存
                       </span>
                     </div>
                     <div
@@ -209,7 +220,7 @@
                     <div class="font-medium">{{ isVideoGatewayDemoMode ? '任务失败原因' : '失败原因' }}</div>
                     <div>{{ errorMessageLabel(task.error_message) }}</div>
                   </div>
-                  <span v-else class="text-gray-400">等待回收</span>
+                  <span v-else class="text-gray-400">结果还没回来</span>
                 </td>
                 <td class="px-5 py-3 text-gray-500 dark:text-gray-400">{{ formatDate(task.created_at) }}</td>
                 <td class="px-5 py-3">
@@ -224,7 +235,7 @@
                       type="button"
                       @click="openLocalAsset(task)"
                     >
-                      本地归档
+                      本地文件
                     </button>
                     <button class="btn btn-sm btn-outline" type="button" @click="copyToCreate(task)">
                       {{ isVideoGatewayDemoMode ? '复制参数重新提交' : '复制参数' }}
@@ -236,11 +247,14 @@
                 </td>
               </tr>
               <tr v-if="!loading && !tasks.length">
-                <td :colspan="authStore.isAdmin ? 9 : 8" class="px-5 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-                  <div class="space-y-3">
-                    <div>{{ isVideoGatewayDemoMode ? '当前还没有任务记录。你可以先试跑一条任务，检查系统是否能正常接收、处理和记录。' : '没有任务。可以先创建一个演示任务验证流转。' }}</div>
-                    <RouterLink class="btn btn-sm btn-outline" to="/admin/video/create">{{ isVideoGatewayDemoMode ? '试跑一条任务' : '创建一个演示任务' }}</RouterLink>
-                  </div>
+                <td :colspan="authStore.isAdmin ? 9 : 8">
+                  <AnimatedEmptyState
+                    variant="video-tasks"
+                    title="当前还没有任务记录。"
+                    :description="isVideoGatewayDemoMode ? '可以先试跑一条任务，检查系统是否能正常接收、处理和记录。' : '没有任务，可以先创建一个演示任务验证流转。'"
+                    :action-label="isVideoGatewayDemoMode ? '试跑一条任务' : '创建一个演示任务'"
+                    @action="goCreate"
+                  />
                 </td>
               </tr>
             </tbody>
@@ -264,6 +278,8 @@ import { computed, onMounted, reactive, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
+import AnimatedEmptyState from '@/components/common/AnimatedEmptyState.vue'
+import TaskProgressRing from '@/components/common/TaskProgressRing.vue'
 import { videoTaskAPI, type VideoProvider, type VideoTask, type VideoTaskListParams, type VideoTaskStatus } from '@/api/admin/video'
 import { preferredVideoTaskAsset, useVideoTaskLifecycle, videoTaskResultMediaKind } from '@/composables/useVideoTaskLifecycle'
 import { useAppStore } from '@/stores/app'
@@ -285,6 +301,7 @@ import {
   saveTaskDraft,
   statusBadgeClass,
   statusLabel,
+  taskPhaseLabel,
   taskTypeLabel,
   isTerminalStatus,
 } from './videoUtils'
@@ -383,6 +400,10 @@ function copyToCreate(task: VideoTask) {
   router.push('/admin/video/create')
 }
 
+function goCreate() {
+  router.push('/admin/video/create')
+}
+
 function hasUsableRemoteAsset(task: VideoTask): boolean {
   return preferredVideoTaskAsset(task).kind === 'remote'
 }
@@ -422,7 +443,7 @@ async function copyResultUrl(task: VideoTask) {
 async function openLocalAsset(task: VideoTask) {
   const asset = preferredVideoTaskAsset(task)
   if (asset.kind === 'unavailable') {
-    appStore.showError(task.error_message || lifecycle.error.value || '当前任务没有可下载的本地资产或远端结果')
+    appStore.showError(task.error_message || lifecycle.error.value || '当前任务还没有可下载的结果或本地文件')
     return
   }
   if (asset.kind === 'remote') {

@@ -1,0 +1,187 @@
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
+
+import VideoTasksView from '../VideoTasksView.vue'
+
+const { listTasks, loadUsdCnyRate, authState } = vi.hoisted(() => ({
+  listTasks: vi.fn(),
+  loadUsdCnyRate: vi.fn().mockResolvedValue(undefined),
+  authState: { isAdmin: true },
+}))
+
+vi.mock('@/api/admin/video', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api/admin/video')>()
+  return {
+    ...actual,
+    videoTaskAPI: {
+      ...actual.videoTaskAPI,
+      list: (...args: unknown[]) => listTasks(...args),
+    },
+  }
+})
+
+vi.mock('@/composables/useAdminDisplayCurrencyRate', () => ({
+  useAdminDisplayCurrencyRate: () => ({
+    usdCnyRate: { value: 7.2 },
+    loadUsdCnyRate,
+  }),
+}))
+
+vi.mock('@/stores/app', () => ({
+  useAppStore: () => ({
+    showError: vi.fn(),
+    showInfo: vi.fn(),
+  }),
+}))
+
+vi.mock('@/stores/auth', () => ({
+  useAuthStore: () => authState,
+}))
+
+vi.mock('@/utils/productMode', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/utils/productMode')>()
+  return {
+    ...actual,
+    isVideoGatewayDemoMode: false,
+  }
+})
+
+vi.mock('vue-router', async () => {
+  const actual = await vi.importActual<typeof import('vue-router')>('vue-router')
+  return {
+    ...actual,
+    useRouter: () => ({ push: vi.fn() }),
+    RouterLink: { template: '<a><slot /></a>' },
+  }
+})
+
+vi.mock('vue-i18n', async () => {
+  const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n')
+  return {
+    ...actual,
+    useI18n: () => ({ t: (key: string) => key }),
+  }
+})
+
+const AppLayoutStub = { template: '<div><slot /></div>' }
+
+function runningTaskFixture() {
+  return {
+    id: 42,
+    provider_account_id: 1,
+    provider_account_name: 'demo-account',
+    provider: 'mock',
+    model: 'mock-video-v1',
+    task_type: 'text_to_video',
+    prompt: 'test prompt',
+    status: 'running',
+    result_url: '',
+    error_message: '',
+    cost_estimate: 0,
+    created_by: 1,
+    created_by_email: 'admin@example.com',
+    created_by_name: 'Admin',
+    created_by_label: 'Admin',
+    created_at: '2026-07-08T00:00:00Z',
+    updated_at: '2026-07-08T00:00:00Z',
+    completed_at: null,
+    negative_prompt: '',
+    reference_image_url: '',
+    reference_video_url: '',
+    aspect_ratio: '16:9',
+    duration: 5,
+    resolution: '1080p',
+  }
+}
+
+describe('VideoTasksView motion polish', () => {
+  let wrapper: VueWrapper | null = null
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.clearAllMocks()
+    authState.isAdmin = true
+    listTasks.mockResolvedValue({
+      items: [runningTaskFixture()],
+      total: 1,
+      page: 1,
+      page_size: 20,
+      pages: 1,
+    })
+  })
+
+  afterEach(() => {
+    wrapper?.unmount()
+    wrapper = null
+    vi.useRealTimers()
+  })
+
+  function mountView() {
+    return mount(VideoTasksView, {
+      global: {
+        stubs: {
+          AppLayout: AppLayoutStub,
+          Icon: true,
+        },
+      },
+    })
+  }
+
+  it('shows an indeterminate progress ring with a phase label for in-progress rows on desktop and mobile', async () => {
+    wrapper = mountView()
+    await flushPromises()
+
+    for (const testid of ['video-task-desktop-table', 'video-task-mobile-list']) {
+      const section = wrapper.find(`[data-testid="${testid}"]`)
+      const ring = section.find('[role="status"]')
+      expect(ring.exists()).toBe(true)
+      expect(ring.attributes('aria-label')).toBe('生成中')
+      // 不定态:不出现任何伪造的百分比
+      expect(section.text()).not.toMatch(/\d+%/)
+    }
+  })
+
+  it('replaces the plain text empty state with the animated empty state', async () => {
+    listTasks.mockResolvedValueOnce({ items: [], total: 0, page: 1, page_size: 20, pages: 1 })
+    wrapper = mountView()
+    await flushPromises()
+
+    const emptyStates = wrapper.findAll('[data-testid="animated-empty-state"]')
+    expect(emptyStates.length).toBeGreaterThanOrEqual(2)
+    for (const state of emptyStates) {
+      expect(state.attributes('data-variant')).toBe('video-tasks')
+      expect(state.text()).toContain('当前还没有任务记录')
+    }
+  })
+})
+
+describe('video views motion source contract', () => {
+  const tasksViewSource = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../VideoTasksView.vue'), 'utf8')
+  const detailViewSource = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../VideoTaskDetailView.vue'), 'utf8')
+  const videoDashboardSource = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../VideoDashboardView.vue'), 'utf8')
+  const adminDashboardSource = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../../DashboardView.vue'), 'utf8')
+
+  it('wires TaskProgressRing into in-progress surfaces', () => {
+    expect(tasksViewSource).toContain("import TaskProgressRing from '@/components/common/TaskProgressRing.vue'")
+    expect(detailViewSource).toContain("import TaskProgressRing from '@/components/common/TaskProgressRing.vue'")
+    expect(tasksViewSource).toContain('taskPhaseLabel(task)')
+  })
+
+  it('wires AnimatedEmptyState into the video and admin dashboard empty states', () => {
+    expect(tasksViewSource).toContain("import AnimatedEmptyState from '@/components/common/AnimatedEmptyState.vue'")
+    expect(videoDashboardSource).toContain("import AnimatedEmptyState from '@/components/common/AnimatedEmptyState.vue'")
+    expect(adminDashboardSource).toContain("import AnimatedEmptyState from '@/components/common/AnimatedEmptyState.vue'")
+    expect(videoDashboardSource).toContain('variant="video-dashboard"')
+    expect(adminDashboardSource).toContain('variant="generic"')
+  })
+
+  it('never fabricates a determinate progress percentage from list or detail data', () => {
+    // 后端不返回进度数值,任何 :progress 绑定都是在伪造百分比
+    expect(tasksViewSource).not.toContain(':progress')
+    expect(detailViewSource).not.toContain(':progress')
+  })
+})

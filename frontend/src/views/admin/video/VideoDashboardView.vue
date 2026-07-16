@@ -181,8 +181,12 @@
                   <td class="px-5 py-3 text-gray-700 dark:text-gray-200">{{ provider.failed_tasks }}</td>
                 </tr>
                 <tr v-if="!loading && !(dashboard?.provider_status || []).length">
-                  <td colspan="6" class="px-5 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-                    暂无通道数据，请先进入模型通道确认演示通道状态。
+                  <td colspan="6">
+                    <AnimatedEmptyState
+                      variant="video-dashboard"
+                      title="暂无通道数据"
+                      description="请先进入模型通道，确认演示通道状态。"
+                    />
                   </td>
                 </tr>
               </tbody>
@@ -206,10 +210,13 @@
                 <span class="font-medium tabular-nums text-gray-900 dark:text-white">{{ formatVideoUsageCost(item.cost_estimate, item.currency) }}</span>
               </div>
             </div>
-            <div v-if="!loading && !(dashboard?.usage_overview || []).length" class="space-y-3 px-5 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-              <div>暂无用量记录。</div>
-              <RouterLink class="btn btn-sm btn-outline" to="/admin/video/create">创建一个演示任务</RouterLink>
-            </div>
+            <AnimatedEmptyState
+              v-if="!loading && !(dashboard?.usage_overview || []).length"
+              variant="video-dashboard"
+              title="暂无用量记录。"
+              action-label="创建一个演示任务"
+              @action="goCreate"
+            />
           </div>
         </section>
       </div>
@@ -224,9 +231,10 @@
 
 <script setup lang="ts">
 import { computed, defineComponent, h, onMounted, ref, type PropType } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
+import AnimatedEmptyState from '@/components/common/AnimatedEmptyState.vue'
 import { adminAPI } from '@/api/admin'
 import type { VideoDashboard, VideoTaskSummary } from '@/api/admin/video'
 import { useAppStore } from '@/stores/app'
@@ -250,13 +258,18 @@ import {
 } from './videoUtils'
 
 const appStore = useAppStore()
+const router = useRouter()
 const loading = ref(false)
 const dashboard = ref<VideoDashboard | null>(null)
+
+function goCreate() {
+  router.push('/admin/video/create')
+}
 
 const pageTitle = computed(() => isVideoGatewayDemoMode ? '总览' : '视频总览')
 const pageDescription = computed(() =>
   isVideoGatewayDemoMode
-    ? '老板看统一入口、中央主机调度、生成能力、经验沉淀和演示状态。'
+    ? '老板看统一入口、任务处理、生成能力和演示状态。'
     : '查看视频任务吞吐、成功率、失败和通道状态。',
 )
 
@@ -380,6 +393,7 @@ const RecentTaskPanel = defineComponent({
     tasks: { type: Array as PropType<VideoTaskSummary[]>, required: true },
   },
   setup(props) {
+    const router = useRouter()
     return () =>
       h('section', { class: 'ui-panel' }, [
         h('div', { class: 'border-b border-ui-border px-5 py-4' }, [
@@ -402,12 +416,12 @@ const RecentTaskPanel = defineComponent({
                 ]),
               )
             : [
-                h('div', { class: 'space-y-3 px-5 py-8 text-center text-sm text-gray-500 dark:text-gray-400' }, [
-                  h('div', props.title.includes('失败') ? '没有失败记录。' : '没有成功结果。'),
-                  h(RouterLink, { to: '/admin/video/create', class: 'btn btn-sm btn-outline' }, () =>
-                    isVideoGatewayDemoMode ? (props.title.includes('失败') ? '填入失败调用示例' : '发起成功调用示例') : (props.title.includes('失败') ? '运行失败演示' : '运行成功演示'),
-                  ),
-                ]),
+                h(AnimatedEmptyState, {
+                  variant: 'video-dashboard',
+                  title: props.title.includes('失败') ? '没有失败记录。' : '没有成功结果。',
+                  actionLabel: isVideoGatewayDemoMode ? '试跑一条任务' : '创建一个演示任务',
+                  onAction: () => router.push('/admin/video/create'),
+                }),
               ],
         ),
       ])

@@ -5,7 +5,7 @@ vi.mock('@/utils/productMode', async (importOriginal) => {
   return { ...actual, isVideoGatewayDemoMode: false }
 })
 
-import { routingStrategyLabel } from '../videoUtils'
+import { routingStrategyLabel, taskPhaseLabel } from '../videoUtils'
 
 describe('routingStrategyLabel', () => {
   it.each([
@@ -18,5 +18,21 @@ describe('routingStrategyLabel', () => {
 
   it('does not treat the retired unprefixed strategy as a current contract value', () => {
     expect(routingStrategyLabel('least_inflight')).toBe('least_inflight')
+  })
+})
+
+describe('taskPhaseLabel', () => {
+  it('maps real task status to a plain-language phase without inventing progress', () => {
+    expect(taskPhaseLabel({ status: 'queued' })).toBe('排队中')
+    expect(taskPhaseLabel({ status: 'submitted' })).toBe('已提交')
+    expect(taskPhaseLabel({ status: 'running' })).toBe('生成中')
+  })
+
+  it('prefers the archive next_action as the near-completion phase', () => {
+    expect(taskPhaseLabel({ status: 'running', next_action: 'archive' })).toBe('即将完成')
+  })
+
+  it('falls back to a neutral in-progress label for unknown status', () => {
+    expect(taskPhaseLabel({ status: 'something-else' })).toBe('处理中')
   })
 })

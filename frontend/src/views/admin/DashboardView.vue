@@ -350,11 +350,11 @@
 
       <!-- Explicit empty state: stats failed to load -->
       <div v-else-if="statsLoadFailed" class="ui-panel">
-        <div class="empty-state">
-          <Icon name="infoCircle" class="empty-state-icon" />
-          <p class="empty-state-title">{{ t('admin.dashboard.emptyTitle') }}</p>
-          <p class="empty-state-description">{{ t('admin.dashboard.emptyDescription') }}</p>
-        </div>
+        <AnimatedEmptyState
+          variant="generic"
+          :title="t('admin.dashboard.emptyTitle')"
+          :description="t('admin.dashboard.emptyDescription')"
+        />
       </div>
     </div>
   </AppLayout>
@@ -377,6 +377,7 @@ import type {
 } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import AnimatedEmptyState from '@/components/common/AnimatedEmptyState.vue'
 import Icon from '@/components/icons/Icon.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'
 import Select from '@/components/common/Select.vue'

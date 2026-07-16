@@ -42,7 +42,7 @@
       </details>
 
       <details class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800" open>
-        <summary class="cursor-pointer text-sm font-semibold text-gray-900 dark:text-white">复核 Session 配额</summary>
+        <summary class="cursor-pointer text-sm font-semibold text-gray-900 dark:text-white">复核会话额度</summary>
         <div class="mt-4 space-y-3 text-sm text-gray-600 dark:text-gray-300">
           <p>
             会话：{{ sessionSnapshot?.enabled ? '已启用' : '未启用' }}；
@@ -51,12 +51,12 @@
             金额剩余：{{ sessionSnapshot?.remaining_cny ?? '-' }} CNY
           </p>
           <p class="text-xs text-gray-500 dark:text-gray-400">
-            已用 image/video：{{ sessionSnapshot?.image_used ?? 0 }} / {{ sessionSnapshot?.video_used ?? 0 }}；
-            已预留：{{ sessionSnapshot?.reserved_cny ?? '-' }}；
-            pricing：{{ sessionSnapshot?.pricing_version || '-' }}
+            图片/视频已用：{{ sessionSnapshot?.image_used ?? 0 }} / {{ sessionSnapshot?.video_used ?? 0 }}；
+            已预留金额：{{ sessionSnapshot?.reserved_cny ?? '-' }}；
+            计价版本：{{ sessionSnapshot?.pricing_version || '-' }}
           </p>
           <button class="btn btn-secondary btn-sm" type="button" :disabled="policyBusy" @click="loadSessionSnapshot">
-            刷新 Snapshot
+            刷新额度
           </button>
         </div>
       </details>
@@ -66,7 +66,7 @@
         <div class="mt-4 space-y-3 text-sm text-gray-600 dark:text-gray-300">
           <p>
             策略：{{ policy?.enabled ? '已启用' : '未启用' }}；
-            杀开关：{{ policy?.global_kill_switch ? '开启（阻断）' : '关闭' }}
+            紧急停用：{{ policy?.global_kill_switch ? '已开启（阻断所有真实调用）' : '已关闭' }}
           </p>
           <div class="grid gap-3 md:grid-cols-3">
             <label class="block text-xs">
@@ -91,7 +91,7 @@
               {{ policy?.enabled ? '关闭策略' : '启用策略' }}
             </button>
             <button class="btn btn-secondary btn-sm" type="button" :disabled="policyBusy || !policy" @click="toggleKillSwitch">
-              {{ policy?.global_kill_switch ? '关闭杀开关' : '打开杀开关' }}
+              {{ policy?.global_kill_switch ? '解除紧急停用' : '开启紧急停用' }}
             </button>
             <button class="btn btn-secondary btn-sm text-red-600" type="button" :disabled="policyBusy" @click="clearBootstrap">
               禁用复核引导账号
@@ -203,7 +203,7 @@ async function loadSessionSnapshot() {
   try {
     sessionSnapshot.value = await adminAPI.video.getRealReviewSessionSnapshot()
   } catch (err) {
-    appStore.showError(extractApiErrorMessage(err, '加载复核 Session Snapshot 失败'))
+    appStore.showError(extractApiErrorMessage(err, '加载复核会话额度失败'))
   } finally {
     policyBusy.value = false
   }
@@ -258,9 +258,9 @@ async function toggleKillSwitch() {
   policyBusy.value = true
   try {
     policy.value = await adminAPI.video.putRealAccessKillSwitch(!policy.value.global_kill_switch)
-    appStore.showSuccess(policy.value.global_kill_switch ? '杀开关已打开' : '杀开关已关闭')
+    appStore.showSuccess(policy.value.global_kill_switch ? '紧急停用已开启' : '紧急停用已解除')
   } catch (err) {
-    appStore.showError(extractApiErrorMessage(err, '更新杀开关失败'))
+    appStore.showError(extractApiErrorMessage(err, '更新紧急停用开关失败'))
   } finally {
     policyBusy.value = false
   }

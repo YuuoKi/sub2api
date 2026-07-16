@@ -529,6 +529,18 @@ export function isTerminalStatus(status: string): boolean {
   return status === 'succeeded' || status === 'failed' || status === 'cancelled'
 }
 
+/**
+ * 进行中任务的阶段文案(供 TaskProgressRing 展示)。
+ * 只依据真实 status / next_action 推导,不估算百分比。
+ */
+export function taskPhaseLabel(task: Pick<VideoTask, 'status'> & Partial<Pick<VideoTask, 'next_action'>>): string {
+  if (task.next_action === 'archive') return '即将完成'
+  if (task.status === 'queued') return '排队中'
+  if (task.status === 'submitted') return '已提交'
+  if (task.status === 'running') return '生成中'
+  return '处理中'
+}
+
 export const VIDEO_TASK_DRAFT_KEY = 'video_gateway_task_draft'
 
 export function saveTaskDraft(task: VideoTask): void {

@@ -17,7 +17,7 @@
       <section class="ui-panel p-5" aria-label="提示词模板">
         <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 class="text-base font-semibold text-ui-text">{{ isVideoGatewayDemoMode ? '业务提示词模板' : 'Prompt 模板候选' }}</h2>
+            <h2 class="text-base font-semibold text-ui-text">{{ isVideoGatewayDemoMode ? '业务提示词模板' : '提示词模板候选' }}</h2>
             <p class="ui-subheading mt-1">
               {{ isVideoGatewayDemoMode ? '选择 AI 中剧 / 短剧生产模板，快速填入试跑任务参数。' : '选择业务候选，系统会自动填入提示词、任务类型、画幅、时长和分辨率。' }}
             </p>

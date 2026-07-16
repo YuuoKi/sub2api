@@ -17,7 +17,7 @@
         <div class="flex flex-wrap gap-2">
           <button v-if="task && !isTerminalStatus(task.status)" class="btn btn-outline" type="button" :disabled="cancelling" @click="cancelTask">
             <Icon name="ban" size="sm" />
-            {{ isVideoGatewayDemoMode ? '取消任务' : '取消任务' }}
+            取消任务
           </button>
           <button v-if="task" class="btn btn-outline" type="button" @click="copyToCreate">
             {{ isVideoGatewayDemoMode ? '复制参数重新提交' : '复制参数' }}
@@ -49,7 +49,7 @@
               type="button"
               @click="openLocalAsset"
             >
-              打开本地归档
+              打开本地文件
             </button>
             <button class="btn btn-sm btn-outline" type="button" @click="copyToCreate">
               {{ isVideoGatewayDemoMode ? '复制参数重新提交' : '复制参数' }}
@@ -80,7 +80,7 @@
           />
         </div>
         <p v-if="task.local_asset_available" class="mt-2 text-xs text-emerald-700 dark:text-emerald-300">
-          本机已归档{{ task.local_asset_saved_at ? `（${task.local_asset_saved_at}）` : '' }}，上游链接过期后仍可打开本地文件。
+          本机已保存一份{{ task.local_asset_saved_at ? `（${task.local_asset_saved_at}）` : '' }}，在线链接过期后仍可打开本地文件。
         </p>
         <div class="mt-4 grid gap-4 lg:grid-cols-[0.7fr_1.2fr_1fr]">
           <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-700">
@@ -89,6 +89,9 @@
               <span class="inline-flex rounded-md px-2 py-1 text-xs font-medium" :class="statusBadgeClass(task.status)">
                 {{ statusLabel(task.status) }}
               </span>
+            </div>
+            <div v-if="!isTerminalStatus(task.status)" class="mt-3">
+              <TaskProgressRing :phase="taskPhaseLabel(task)" :size="40" side-label />
             </div>
           </div>
           <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-700">
@@ -180,7 +183,7 @@
                 <div class="text-xs text-gray-500 dark:text-gray-400">{{ formatDate(event.created_at) }}</div>
               </div>
               <details v-if="!isVideoGatewayDemoMode && event.payload_json && Object.keys(event.payload_json).length" class="mt-2">
-                <summary class="cursor-pointer text-xs font-medium text-gray-500 dark:text-gray-400">技术数据（payload）</summary>
+                <summary class="cursor-pointer text-xs font-medium text-gray-500 dark:text-gray-400">技术数据</summary>
                 <pre class="mt-2 max-h-64 overflow-auto rounded-md bg-gray-50 p-3 text-xs text-gray-700 dark:bg-dark-900 dark:text-gray-200">{{ JSON.stringify(event.payload_json, null, 2) }}</pre>
               </details>
             </div>
@@ -205,6 +208,7 @@ import { computed, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
+import TaskProgressRing from '@/components/common/TaskProgressRing.vue'
 import { videoTaskAPI, type VideoTask } from '@/api/admin/video'
 import { preferredVideoTaskAsset, useVideoTaskLifecycle, videoTaskResultMediaKind } from '@/composables/useVideoTaskLifecycle'
 import { useAppStore } from '@/stores/app'
@@ -225,6 +229,7 @@ import {
   saveTaskDraft,
   statusBadgeClass,
   statusLabel,
+  taskPhaseLabel,
   taskTypeLabel,
 } from './videoUtils'
 
@@ -260,7 +265,7 @@ const resultExpiryHint = computed(() => {
   const label = formatDate(raw)
   const source = task.value.result_url_expiry_source
   if (source === 'estimated') {
-    return `结果链接预计约在 ${label} 过期（上游未提供签名过期参数，按完成时间 +24h 估算）。请尽快下载或复制。`
+    return `结果链接预计约在 ${label} 过期（生成方没有告知准确过期时间，按完成后 24 小时估算）。请尽快下载或复制。`
   }
   if (expires.getTime() <= Date.now()) {
     return `结果链接可能已于 ${label} 过期。`
@@ -270,15 +275,15 @@ const resultExpiryHint = computed(() => {
 const outcomeTitle = computed(() => {
   if (!task.value) return '-'
   if (task.value.error_message) return isVideoGatewayDemoMode ? '任务失败，原因已记录' : '任务失败'
-  if (task.value.result_url) return isVideoGatewayDemoMode ? '任务成功，结果已回收' : '生成成功'
-  if (!isTerminalStatus(task.value.status)) return isVideoGatewayDemoMode ? '生成中，等待结果回收' : '处理中'
+  if (task.value.result_url) return isVideoGatewayDemoMode ? '任务成功，已拿到结果' : '生成成功'
+  if (!isTerminalStatus(task.value.status)) return isVideoGatewayDemoMode ? '生成中，等待结果' : '处理中'
   return isVideoGatewayDemoMode ? '暂无结果' : '暂无结果'
 })
 const outcomeDescription = computed(() => {
   if (!task.value) return '-'
   if (task.value.error_message) return errorMessageLabel(task.value.error_message)
-  if (task.value.result_url) return isVideoGatewayDemoMode ? '结果链接已经进入任务详情，管理员可以审计完整链路。' : '结果链接已回收。'
-  if (!isTerminalStatus(task.value.status)) return isVideoGatewayDemoMode ? '系统仍在等待上游处理或状态回收。' : '任务仍在处理。'
+  if (task.value.result_url) return isVideoGatewayDemoMode ? '结果链接已保存在这里，可随时回看完整过程。' : '结果链接已保存。'
+  if (!isTerminalStatus(task.value.status)) return isVideoGatewayDemoMode ? '系统还在等待生成方返回结果。' : '任务仍在处理。'
   return isVideoGatewayDemoMode ? '没有返回结果链接，请查看时间线确认原因。' : '没有返回结果链接。'
 })
 const nextActionTitle = computed(() => {
@@ -302,8 +307,8 @@ const nextActionDescription = computed(() => {
   if (task.value.delivery_status === 'deliverable') return '优先使用本地资产；尚未归档时使用上游链接。'
   if (task.value.delivery_status === 'delivery_failed') return lifecycleError.value || errorMessageLabel(task.value.error_message || '归档失败，暂无可交付资产。')
   if (task.value.error_message) return '先看失败原因，再调整提示词或切换生成通道重新提交。'
-  if (task.value.result_url) return '结果已经回收，可打开链接或复制给业务方。'
-  if (!isTerminalStatus(task.value.status)) return '系统会继续轮询并回收结果或失败原因。'
+  if (task.value.result_url) return '结果已经拿到，可打开链接或复制给需要的人。'
+  if (!isTerminalStatus(task.value.status)) return '系统会自动跟进，拿回结果或失败原因。'
   return '从运行记录确认最后一次状态变化。'
 })
 const channelRows = computed(() => {
@@ -335,7 +340,7 @@ const channelRows = computed(() => {
 const parameterRows = computed(() => {
   if (!task.value) return []
   return [
-    { label: isVideoGatewayDemoMode ? '任务类型' : '任务类型', value: taskTypeLabel(task.value.task_type) },
+    { label: '任务类型', value: taskTypeLabel(task.value.task_type) },
     { label: '完整提示词', value: task.value.prompt },
     { label: '负向提示词', value: task.value.negative_prompt },
     { label: '参考图', value: task.value.reference_image_url },
@@ -396,7 +401,7 @@ function copyResultUrl() {
 async function openLocalAsset() {
   const asset = preferredVideoTaskAsset(task.value)
   if (asset.kind === 'unavailable') {
-    appStore.showError(task.value?.error_message || lifecycleError.value || '当前任务没有可下载的本地资产或远端结果')
+    appStore.showError(task.value?.error_message || lifecycleError.value || '当前任务还没有可下载的结果或本地文件')
     return
   }
   if (asset.kind === 'remote') {
@@ -415,7 +420,7 @@ async function openLocalAsset() {
       window.open(task.value.result_url, '_blank', 'noopener,noreferrer')
       return
     }
-    appStore.showError(extractApiErrorMessage(err, '打开本地归档失败'))
+    appStore.showError(extractApiErrorMessage(err, '打开本地文件失败'))
   }
 }
 

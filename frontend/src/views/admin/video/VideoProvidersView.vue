@@ -5,7 +5,7 @@
         <div>
           <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? '生成通道' : '模型通道' }}</h1>
           <p class="mt-1 max-w-4xl text-sm text-gray-500 dark:text-gray-400">
-            {{ isVideoGatewayDemoMode ? '管理员看 Seedance / Kling / 演示通道的能力边界、切换状态和真实验证缺口。' : '管理演示通道与未来真实模型通道的启用状态和调用凭证。' }}
+            {{ isVideoGatewayDemoMode ? '管理员看 Seedance / Kling / 演示通道的能力边界、切换状态和真实验证缺口。' : '管理演示通道与未来真实模型通道的启用状态和调用密钥。' }}
           </p>
         </div>
         <button class="btn btn-outline" type="button" :disabled="loading" @click="loadProviders">
@@ -17,18 +17,18 @@
       <section v-if="isVideoGatewayDemoMode" class="grid gap-3 md:grid-cols-3">
         <div class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-800">
           <div class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">老板先看</div>
-          <div class="mt-2 text-sm font-semibold text-gray-900 dark:text-white">凭证状态是否正常</div>
-          <p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">未配置真实凭证、鉴权失败、限流都会用人话展示。</p>
+          <div class="mt-2 text-sm font-semibold text-gray-900 dark:text-white">密钥是否能用</div>
+          <p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">没配密钥、密钥失效、请求太频繁，都会用大白话说明。</p>
         </div>
         <div class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-800">
           <div class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">员工无需选择</div>
           <div class="mt-2 text-sm font-semibold text-gray-900 dark:text-white">网关自动挑可用账号</div>
-          <p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">生成通道只影响系统调度，不让普通用户手动选择账号。</p>
+          <p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">生成通道只影响系统自动分配账号，普通员工不需要手动选择。</p>
         </div>
         <div class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-800">
           <div class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">运维处理</div>
           <div class="mt-2 text-sm font-semibold text-gray-900 dark:text-white">看建议动作而不是日志</div>
-          <p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">先配置真实凭证、检查鉴权、降并发或启停账号。</p>
+          <p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">先配置真实密钥、检查是否能用、降低并发或启停账号。</p>
         </div>
       </section>
 
@@ -72,7 +72,7 @@
               <thead class="bg-gray-50 text-left text-xs uppercase text-gray-500 dark:bg-dark-700/40 dark:text-gray-400">
                 <tr>
                   <th class="px-5 py-3 font-medium">通道名称</th>
-                  <th class="px-5 py-3 font-medium">凭证状态</th>
+                  <th class="px-5 py-3 font-medium">密钥状态</th>
                   <th class="px-5 py-3 font-medium">是否启用</th>
                   <th class="px-5 py-3 font-medium">今日调用</th>
                   <th class="px-5 py-3 font-medium">当前处理中</th>
@@ -131,7 +131,7 @@
         <section class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
           <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? '通道详情 / 技术配置' : '通道配置' }}</h2>
           <p v-if="isVideoGatewayDemoMode" class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            左侧表格给老板看，右侧保留技术配置。调用凭证（API Key）加密保存，前端只显示脱敏状态；留空表示保留当前凭证。
+            左侧表格给老板看，右侧保留技术配置。调用密钥加密保存，这里只显示是否已配置，不会显示密钥内容；留空表示不修改。
           </p>
           <form v-if="selected" class="mt-4 space-y-4" @submit.prevent="saveProvider">
             <div>
@@ -139,7 +139,7 @@
               <input v-model="form.display_name" class="input" maxlength="120" />
             </div>
             <div>
-              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">{{ isVideoGatewayDemoMode ? '接口入口地址' : '上游地址' }}</label>
+              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">{{ isVideoGatewayDemoMode ? '接口入口地址' : '接口地址' }}</label>
               <input v-model="form.base_url" class="input" maxlength="500" />
             </div>
             <div>
@@ -147,8 +147,8 @@
               <input v-model="form.default_model" class="input" maxlength="200" />
             </div>
             <div>
-              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">调用凭证（API Key）</label>
-              <input v-model="form.api_key" class="input" type="password" autocomplete="off" placeholder="留空表示保留当前凭证" maxlength="4000" />
+              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">调用密钥</label>
+              <input v-model="form.api_key" class="input" type="password" autocomplete="off" placeholder="留空表示不修改" maxlength="4000" />
               <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">当前：{{ providerKeyLabel(selected.api_key_configured, selected.masked_key, selected.key_status, selected.provider) }}</p>
             </div>
             <div>
@@ -181,7 +181,7 @@
             </div>
             <p class="mt-2 text-gray-600 dark:text-gray-300">{{ providerTestMessage(testResult.message) }}</p>
             <details v-if="!isVideoGatewayDemoMode" class="mt-3">
-              <summary class="cursor-pointer text-xs font-medium text-gray-500 dark:text-gray-400">技术数据（payload）预览</summary>
+              <summary class="cursor-pointer text-xs font-medium text-gray-500 dark:text-gray-400">技术数据预览</summary>
               <pre class="mt-2 max-h-64 overflow-auto rounded-md bg-white p-3 text-xs text-gray-700 dark:bg-dark-900 dark:text-gray-200">{{ JSON.stringify(testResult.payload_preview || {}, null, 2) }}</pre>
             </details>
           </div>
@@ -199,7 +199,7 @@
               <tr>
                 <th class="px-5 py-3 font-medium">生成通道</th>
                 <th class="px-5 py-3 font-medium">系统调度账号</th>
-                <th class="px-5 py-3 font-medium">凭证状态</th>
+                <th class="px-5 py-3 font-medium">密钥状态</th>
                 <th class="px-5 py-3 font-medium">最近测试</th>
                 <th class="px-5 py-3 font-medium">异常类型</th>
                 <th class="px-5 py-3 font-medium">影响任务数</th>
@@ -303,7 +303,7 @@ const engineMatrix = [
     provider: '内部授权通道',
     mode: '接口适配准备',
     bestFor: '公司主机受控试运行',
-    capabilities: '只允许后端安全配置，前端不展示凭证',
+    capabilities: '只允许后端安全配置，这里不展示密钥内容',
     status: '未开启',
     safe: false,
   },

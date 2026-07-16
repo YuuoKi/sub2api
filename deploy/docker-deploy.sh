@@ -4,7 +4,7 @@
 # =============================================================================
 # This script prepares deployment files for Sub2API:
 #   - Downloads docker-compose.local.yml and .env.example
-#   - Generates secure secrets (JWT_SECRET, TOTP_ENCRYPTION_KEY, POSTGRES_PASSWORD)
+#   - Generates secure secrets (JWT_SECRET, TOTP_ENCRYPTION_KEY, POSTGRES_PASSWORD, VIDEO_GATEWAY_ENCRYPTION_KEY)
 #   - Creates necessary data directories
 #
 # After running this script, you can start services with:
@@ -104,6 +104,7 @@ main() {
     JWT_SECRET=$(generate_secret)
     TOTP_ENCRYPTION_KEY=$(generate_secret)
     POSTGRES_PASSWORD=$(generate_secret)
+    VIDEO_GATEWAY_ENCRYPTION_KEY=$(generate_secret)
 
     # Create .env from .env.example
     cp .env.example .env
@@ -114,11 +115,13 @@ main() {
         sed -i "s/^JWT_SECRET=.*/JWT_SECRET=${JWT_SECRET}/" .env
         sed -i "s/^TOTP_ENCRYPTION_KEY=.*/TOTP_ENCRYPTION_KEY=${TOTP_ENCRYPTION_KEY}/" .env
         sed -i "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=${POSTGRES_PASSWORD}/" .env
+        sed -i "s/^VIDEO_GATEWAY_ENCRYPTION_KEY=.*/VIDEO_GATEWAY_ENCRYPTION_KEY=${VIDEO_GATEWAY_ENCRYPTION_KEY}/" .env
     else
         # BSD sed (macOS)
         sed -i '' "s/^JWT_SECRET=.*/JWT_SECRET=${JWT_SECRET}/" .env
         sed -i '' "s/^TOTP_ENCRYPTION_KEY=.*/TOTP_ENCRYPTION_KEY=${TOTP_ENCRYPTION_KEY}/" .env
         sed -i '' "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=${POSTGRES_PASSWORD}/" .env
+        sed -i '' "s/^VIDEO_GATEWAY_ENCRYPTION_KEY=.*/VIDEO_GATEWAY_ENCRYPTION_KEY=${VIDEO_GATEWAY_ENCRYPTION_KEY}/" .env
     fi
 
     # Create data directories
@@ -139,6 +142,7 @@ main() {
     echo "  POSTGRES_PASSWORD:     ${POSTGRES_PASSWORD}"
     echo "  JWT_SECRET:            ${JWT_SECRET}"
     echo "  TOTP_ENCRYPTION_KEY:   ${TOTP_ENCRYPTION_KEY}"
+    echo "  VIDEO_GATEWAY_ENCRYPTION_KEY: ${VIDEO_GATEWAY_ENCRYPTION_KEY}"
     echo ""
     print_warning "These credentials have been saved to .env file."
     print_warning "Please keep them secure and do not share publicly!"

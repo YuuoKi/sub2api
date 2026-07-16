@@ -86,6 +86,7 @@ var ProviderSet = wire.NewSet(
 	NewUsageBillingRepository,
 	NewBatchImageRepository,
 	NewVideoGatewayRuntimeRepository,
+	NewVideoAdminRepository,
 	ProvideVideoKeyEncryptor,
 	NewIdempotencyRepository,
 	NewUsageCleanupRepository,

@@ -680,6 +680,18 @@ const adminNavItems = computed((): NavItem[] => {
     { path: '/admin/users', label: t('nav.users'), icon: UsersIcon, hideInSimpleMode: true },
     { path: '/admin/groups', label: t('nav.groups'), icon: FolderIcon, hideInSimpleMode: true },
     {
+      path: '/admin/video',
+      label: '\u89c6\u9891\u751f\u6210',
+      icon: ChannelIcon,
+      hideInSimpleMode: true,
+      expandOnly: true,
+      children: [
+        { path: '/admin/video/providers', label: 'Seedance \u901a\u9053', icon: GlobeIcon },
+        { path: '/admin/video/tasks', label: '\u4efb\u52a1\u8bc1\u636e', icon: ChartIcon },
+        { path: '/admin/video/system-check', label: '\u7cfb\u7edf\u68c0\u67e5', icon: ShieldIcon },
+      ],
+    },
+    {
       path: '/admin/channels',
       label: t('nav.channelManagement'),
       icon: ChannelIcon,

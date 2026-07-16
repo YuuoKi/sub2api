@@ -65,6 +65,14 @@
 
 - 禁止 push、生产库 migration、真实付费出图/视频和删除备份目录。
 - 本 CYCLE 未真实付费生成，`realCallExecuted=0`；隔离 loopback mock usage 请求不等于真实 provider 调用。
+
+## Canonical video control plane (G2.R1)
+
+- Administrator UI: `/admin/video/providers` -> `/admin/video/tasks` -> `/admin/video/system-check`.
+- Provider creation is Seedance-only and requires an explicit employee group binding. Stored secrets are encrypted; API responses return only `api_key_configured` and `masked_key`.
+- Enabling a provider does not authorize a paid call. `POST /api/v1/admin/video/providers/:id/tiny-real-authorization` records one explicit `tiny_real` authorization and does not dispatch a task.
+- Task evidence exposes local/upstream task ids, terminal status, provider error, asset URLs, settled cost and `real_dispatch_count`. Failed tasks are not replaced by mock output.
+- These pages remain in the complete standard-mode administrator surface. Ordinary employees have no administrator video route; their runtime entry remains the API-key protected `/v1/video/*` gateway.
 - 如需回滚，只按 SOP 停止本轮应用容器并恢复旧应用容器；不删除 volume、数据库或备份。
 
 ## 下一步

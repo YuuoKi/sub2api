@@ -83,3 +83,13 @@ docker compose -f docker-compose.yml stop sub2api
 Pop-Location
 docker start wujie-final-sub2
 ```
+
+## 6. Video gateway operator check (no dispatch)
+
+1. Open `/admin/video/providers`, bind Seedance to the controlled employee group, save the secret, and verify that only a masked value is rendered.
+2. Keep the provider disabled until the group and model are reviewed. Enabling it alone must not dispatch a request.
+3. Grant the one-time `tiny_real` authorization only inside the approved paid-test window. This records the gate and still performs zero upstream calls.
+4. Open `/admin/video/system-check` and record provider, authorization, task, global gate, and real dispatch counters before the paid smoke.
+5. After an employee API-key request, use `/admin/video/tasks` and its detail page to capture local/upstream task ids, terminal status, asset URL, explicit error, cost, and `real_dispatch_count`.
+
+Never print provider secrets, `.env`, expanded compose configuration, cookies, or employee API keys. UI save/authorization is not real-generation evidence; the paid smoke additionally requires a real upstream id, terminal result, delivered asset, usage/cost delta, and incremented dispatch count.

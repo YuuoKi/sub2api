@@ -43,15 +43,20 @@ type VideoKeyEncryptor interface {
 }
 
 type VideoProviderAccount struct {
-	ID              int64  `json:"id"`
-	GroupID         int64  `json:"-"`
-	Provider        string `json:"provider"`
-	DisplayName     string `json:"display_name"`
-	Enabled         bool   `json:"enabled"`
-	EncryptedAPIKey string `json:"-"`
-	MaskedKey       string `json:"masked_key"`
-	BaseURL         string `json:"-"`
-	DefaultModel    string `json:"default_model"`
+	ID                   int64      `json:"id"`
+	GroupID              int64      `json:"group_id"`
+	GroupName            string     `json:"group_name,omitempty"`
+	Provider             string     `json:"provider"`
+	DisplayName          string     `json:"display_name"`
+	Enabled              bool       `json:"enabled"`
+	EncryptedAPIKey      string     `json:"-"`
+	MaskedKey            string     `json:"masked_key"`
+	BaseURL              string     `json:"-"`
+	DefaultModel         string     `json:"default_model"`
+	APIKeyConfigured     bool       `json:"api_key_configured"`
+	TinyRealAuthorizedAt *time.Time `json:"tiny_real_authorized_at,omitempty"`
+	TinyRealAuthorizedBy int64      `json:"tiny_real_authorized_by,omitempty"`
+	TinyRealConsumedAt   *time.Time `json:"tiny_real_consumed_at,omitempty"`
 }
 
 type VideoTask struct {

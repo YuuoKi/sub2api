@@ -22,6 +22,7 @@ func RegisterAdminRoutes(
 	{
 		// 部署与运营合规确认
 		registerAdminComplianceRoutes(admin, h)
+		registerAdminVideoRoutes(admin, h)
 
 		// 仪表盘
 		registerDashboardRoutes(admin, h)
@@ -107,6 +108,17 @@ func RegisterAdminRoutes(
 		// 邀请返利（专属用户管理）
 		registerAffiliateRoutes(admin, h)
 	}
+}
+
+func registerAdminVideoRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	video := admin.Group("/video")
+	video.GET("/providers", h.Admin.Video.ListProviders)
+	video.POST("/providers", h.Admin.Video.CreateProvider)
+	video.PUT("/providers/:id", h.Admin.Video.UpdateProvider)
+	video.POST("/providers/:id/tiny-real-authorization", h.Admin.Video.AuthorizeTinyReal)
+	video.GET("/tasks", h.Admin.Video.ListTasks)
+	video.GET("/tasks/:id", h.Admin.Video.GetTask)
+	video.GET("/system-check", h.Admin.Video.SystemCheck)
 }
 
 func registerAdminComplianceRoutes(admin *gin.RouterGroup, h *handler.Handlers) {

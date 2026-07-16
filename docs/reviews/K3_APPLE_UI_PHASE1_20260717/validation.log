@@ -1,0 +1,69 @@
+# K3 Apple-like UI Phase 1 — Validation Log
+
+- Task: Task 5 — Verify Phase 1 and Produce the Review Checkpoint
+- Branch: codex/k3-apple-ui-experiment-20260717
+- Review HEAD: 6b66dbf06d8465c288534c0b882f589e48a109cb
+- Baseline (merge-base with wujie/video-capture-moat-20260702): deb9ff5b8876a5bca1a96f78d94f602a3fd5adb4
+- Runner: Windows git-bash, Node v24.15.0, working dir D:\sub2api-trunk\frontend
+- Timezone note: UTC timestamps shown; local time UTC+8 (2026-07-17)
+
+## Gate 1 — ESLint
+
+- Command: `npx.cmd eslint . --ext .ts,.vue --max-warnings=0`
+- Started (UTC): 2026-07-16T17:52:27Z
+- Exit code: 0
+- Result: PASS (0 errors, 0 warnings; --max-warnings=0 enforced)
+
+## Gate 2 — vue-tsc type check
+
+- Command: `npx.cmd vue-tsc --noEmit`
+- Started (UTC): 2026-07-16T17:53:07Z
+- Exit code: 0
+- Result: PASS (no type errors)
+
+## Gate 3 — Vitest full suite
+
+- Command: `npx.cmd vitest run --reporter=basic`
+- Started (UTC): 2026-07-16T17:53:41Z
+- Exit code: 0
+- Test count: 152 test files passed (152/152); 964 tests passed (964/964); 0 failed, 0 skipped
+- Duration: 31.61s
+- Result: PASS
+- Note: stderr contained benign vue-i18n runtime-build warnings ("message format compilation is not supported in this build") from pre-existing payment component tests; no failures.
+
+## Gate 4 — Production build
+
+- Command: `"$HOME/AppData/Roaming/npm/pnpm.cmd" run build`
+  - Substitution note: plan specifies `pnpm run build`; `pnpm` is not on PATH in git-bash, so the pnpm.cmd shim at `%USERPROFILE%\AppData\Roaming\npm\pnpm.cmd` was invoked directly. The executed script is exactly package.json `build`: `vue-tsc -b && vite build`. No equivalent-command fallback was needed.
+- Started (UTC): 2026-07-16T17:54:31Z
+- Exit code: 0
+- Build output summary: vite production build succeeded in 33.83s; output written to `backend/internal/web/dist/` (gitignored build artifact directory, verified via `git check-ignore`). Largest emitted chunks: AccountsView 621.36 kB, vendor-ui 430.32 kB, SettingsView 329.59 kB, index 316.86 kB. Pre-existing >500 kB chunk-size warning for AccountsView (informational, not an error).
+- Result: PASS
+
+## Repository hygiene (Step 2)
+
+- `git diff --check` → exit 0, no whitespace errors.
+- `git status --short` → clean worktree before docs/reviews changes of this task; build artifacts are gitignored and did not dirty the tree.
+- `git diff --stat wujie/video-capture-moat-20260702...HEAD` → 20 files changed, 1394 insertions(+), 639 deletions(-).
+- `git diff --name-only wujie/video-capture-moat-20260702...HEAD` → product-code changes confined to `frontend/**` (18 files). Non-frontend changes are only task documentation: `docs/superpowers/plans/2026-07-17-k3-apple-ui-phase1.md` and `docs/superpowers/specs/2026-07-17-k3-apple-ui-experiment-design.md`.
+- Commit chain: f9c6e881 (design) → b7e42b34 (plan) → ea6da06b (tokens) → 8ea98019 (shell) → e7e6ede1 (dashboard) → 6b66dbf0 (video).
+- Result: PASS
+
+## Visual matrix capture (Step 3)
+
+- Method: fully mocked. `vite preview` (production build of HEAD) served at `127.0.0.1:5199`; every `/api/v1/**` and `/setup/status` call intercepted by Playwright route handlers with local fixtures (`capture_k3.mjs`). No backend, no database, no credentials, no real Provider, no create submission; mock CDN (`files.example.com`) served locally so no outbound call was attempted.
+- Evidence: `capture-evidence.json`; captures 8/8; intercepted API calls 73; console errors 0; secret-pattern hits 0; final URLs match target routes (no login redirect).
+- Catch-all (empty fixture, logged): `GET /keys` (employee), `GET /admin/system/check-updates` (admin). Both render-safe.
+- Server lifecycle: preview started per capture run and killed afterwards; port verified closed (`PORT_CLOSED`) after each run.
+- Runs: 3 (fixture iteration for the remote-deliverable preview thumbnail); final run 2026-07-16T18:19:41Z (2026-07-17 02:19 +08:00) with 0 console errors.
+- Human check: all 8 PNGs reviewed side-by-side with baselines — no horizontal overflow, no decorative gradient residue, no real paid-action triggers.
+- Result: PASS
+
+## Gates summary
+
+| Gate | Command | Exit | Result |
+|---|---|---|---|
+| ESLint | `npx.cmd eslint . --ext .ts,.vue --max-warnings=0` | 0 | PASS |
+| Type check | `npx.cmd vue-tsc --noEmit` | 0 | PASS |
+| Tests | `npx.cmd vitest run --reporter=basic` | 0 | PASS (152 files / 964 tests) |
+| Build | `pnpm.cmd run build` (vue-tsc -b && vite build) | 0 | PASS |

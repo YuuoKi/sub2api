@@ -3,112 +3,206 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Sub2API 内部真实可用收口审查包</title>
+  <title>Sub2API K3 Apple-like UI Phase 1 审查包</title>
   <style>
-    :root{color-scheme:light dark;--bg:#f5f7fb;--card:#fff;--text:#172033;--muted:#667085;--line:#dfe5ee;--ok:#067647;--warn:#b54708}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.65 system-ui,"Microsoft YaHei",sans-serif}.wrap{max-width:1180px;margin:auto;padding:32px 20px 64px}h1{font-size:30px;margin:0 0 8px}h2{margin:30px 0 12px;font-size:20px}h3{font-size:16px}.meta,.card,.shot{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin:12px 0;box-shadow:0 4px 18px #1720330a}.status{display:inline-block;border-radius:999px;padding:4px 12px;background:#fff4e5;color:var(--warn);font-weight:700}.ok{color:var(--ok)}.muted{color:var(--muted)}code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}pre{white-space:pre-wrap;background:#101828;color:#e6edf7;padding:16px;border-radius:10px;overflow:auto}table{width:100%;border-collapse:collapse;background:var(--card)}th,td{padding:10px 12px;border:1px solid var(--line);text-align:left;vertical-align:top}th{background:#eef3f8}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}.shot img{width:100%;height:auto;border:1px solid var(--line);border-radius:8px}.warn{border-left:4px solid #f79009}.pass{border-left:4px solid #12b76a}.stop{border-left:4px solid #d92d20}@media(prefers-color-scheme:dark){:root{--bg:#10131a;--card:#171c26;--text:#edf2f7;--muted:#a8b1c1;--line:#303848}th{background:#222a37}}
+    :root{color-scheme:light dark;--bg:#f5f7fb;--card:#fff;--text:#172033;--muted:#667085;--line:#dfe5ee;--ok:#067647;--warn:#b54708}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.65 system-ui,"Microsoft YaHei",sans-serif}.wrap{max-width:1180px;margin:auto;padding:32px 20px 64px}h1{font-size:30px;margin:0 0 8px}h2{margin:30px 0 12px;font-size:20px}h3{font-size:16px}.meta,.card,.shot{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin:12px 0;box-shadow:0 4px 18px #1720330a}.status{display:inline-block;border-radius:999px;padding:4px 12px;background:#e6f4ea;color:var(--ok);font-weight:700}.ok{color:var(--ok)}.muted{color:var(--muted)}code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}pre{white-space:pre-wrap;background:#101828;color:#e6edf7;padding:16px;border-radius:10px;overflow:auto}table{width:100%;border-collapse:collapse;background:var(--card)}th,td{padding:10px 12px;border:1px solid var(--line);text-align:left;vertical-align:top}th{background:#eef3f8}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}.shot img{width:100%;height:auto;border:1px solid var(--line);border-radius:8px}.warn{border-left:4px solid #f79009}.pass{border-left:4px solid #12b76a}.stop{border-left:4px solid #d92d20}@media(prefers-color-scheme:dark){:root{--bg:#10131a;--card:#171c26;--text:#edf2f7;--muted:#a8b1c1;--line:#303848}th{background:#222a37}.status{background:#12341f}}
   </style>
 </head>
 <body><main class="wrap">
-  <h1>Sub2API 内部真实可用收口审查包</h1>
-  <p><span class="status">READY_FOR_USER_REAL_TEST / 待复核</span>　更新时间：2026-07-15</p>
-  <div class="meta warn"><strong>结论：</strong>开发与无付费验证已完成。共享预算硬门、三种执行模式、Gemini 0-create 恢复 fixture、图片持久资产、Provider 账单对账与三角色 mock 浏览器闭环均有代码与测试证据。状态只能写为“待复核”，在用户完成真实图片/视频点击、真实账单上传、人眼验收和密钥废弃前，不得判定“内部可用”。</div>
+  <h1>Sub2API K3 Apple-like UI Phase 1 审查包</h1>
+  <p><span class="status">可演示 / 视觉检查点</span>　更新时间：2026-07-17（UTC+8）</p>
+  <div class="meta warn"><strong>结论：</strong>Phase 1 视觉检查点完成：四条前端门禁全绿（eslint / vue-tsc / vitest 152 文件 964 测试 / 生产构建），三角色四种视图 8 张全 mock 截图与 2026-07-15 基线对照确认方向成立。状态仅为「可演示」——不得判定「内部可用」或生产 READY；未经用户明确批准不得进入 Phase 2、不得 push / 合并 / 部署。</div>
 
-  <h2>目标与执行边界</h2>
+  <h2>1. 目标与设计原则</h2>
   <div class="card">
-    <p>执行目录：<code>D:\sub2api-trunk</code><br>分支：<code>wujie/video-capture-moat-20260702</code><br>无付费代码证据 tip：<code>8296c2a6</code>；G7 审查包纳入提交：<code>a2344431</code></p>
-    <p>会话预算延续：图片 1/4、视频 2/4、累计预留 ¥20 / ¥60。未重置计数文件。</p>
-    <p>未 push、未部署、未使用生产用户数据、未公开服务；本地 G6 栈仅绑定 <code>127.0.0.1:18080</code>。开发阶段未调用真实付费 Provider；审查包不含密钥值。</p>
-  </div>
-
-  <h2>代码证据镜像</h2>
-  <div class="card pass">
-    <p>镜像：<code>sub2api:real-readiness-8296c2a6</code><br>镜像 ID：<code>sha256:ad432520f38c60fe67e85aaab7878ab47c901e12847fb5b2eacb9d972e1864fb</code><br>健康：<code>/health</code> ok；应用进程 UID 1000；端口 <code>127.0.0.1:18080</code>。</p>
-  </div>
-
-  <h2>关键变更</h2>
-  <table><thead><tr><th>提交</th><th>作用</th></tr></thead><tbody>
-    <tr><td><code>61e776fd</code></td><td>succeeded 终态无资产 URL 不得结算（G0 前置）。</td></tr>
-    <tr><td><code>d6a35110</code> / <code>e5855818</code></td><td>共享 RealCreateGuard 接入产品 create chokepoint；Seedance CNY 预留与错误消毒。</td></tr>
-    <tr><td><code>fd0cc5f0</code> / <code>a9e8e12f</code></td><td>mock / review_real / internal_real 路由与策略预留。</td></tr>
-    <tr><td><code>5de80939</code></td><td>Gemini 产品 DB 0-create 恢复 integration（脱敏 fixture）。</td></tr>
-    <tr><td><code>c9c05084</code></td><td>Gemini 图片持久资产、预览、下载、再次引用。</td></tr>
-    <tr><td><code>05b40e49</code> / <code>9af957d3</code></td><td>Provider 账单导入/规范化/匹配；重复 SHA-256 拦截。</td></tr>
-    <tr><td><code>8a8d1ea2</code></td><td>domain_outbox Claim 集成测试隔离，修复共享 DB 污染。</td></tr>
-    <tr><td><code>8296c2a6</code></td><td>关闭 API-key 真实创建绕过 review_only；图片策略 USD→CNY；确认弹窗与 allow_member 保全。</td></tr>
-  </tbody></table>
-
-  <h2>无付费验证统计</h2>
-  <table><thead><tr><th>门禁</th><th>结果</th></tr></thead><tbody>
-    <tr><td>go vet + backend packages</td><td class="ok">PASS</td></tr>
-    <tr><td>WSL Ubuntu-24.04 <code>go test -tags=integration ./internal/repository</code></td><td class="ok">PASS（executed，无 skip 冒充）</td></tr>
-    <tr><td>frontend lint / vue-tsc / vitest / build</td><td class="ok">PASS（944 tests）</td></tr>
-    <tr><td>Docker delivery image</td><td class="ok">PASS</td></tr>
-    <tr><td>三角色浏览器 mock 闭环</td><td class="ok">9 截图 / 79 API 2xx / secretHits 0</td></tr>
-  </tbody></table>
-
-  <h2>能力矩阵（当前）</h2>
-  <table><thead><tr><th>能力</th><th>自动证据</th><th>用户真实证据</th></tr></thead><tbody>
-    <tr><td>预算硬门</td><td>单元/并发/fail-closed + 产品 chokepoint</td><td>待页面剩余额度真人验证</td></tr>
-    <tr><td>员工视频 create</td><td>fake/mock 链 + create 门禁测试</td><td>待 1 次真实 Seedance</td></tr>
-    <tr><td>员工图片 create</td><td>产品 mock + 资产/模式测试</td><td>待 1 次真实 Gemini</td></tr>
-    <tr><td>Gemini 产品链</td><td>0-create recovery fixture + 资产归档</td><td>待真实创建走产品 DB</td></tr>
-    <tr><td>Provider 对账</td><td>合成 CSV/XLSX fixtures</td><td>待真实账单上传</td></tr>
-    <tr><td>三角色 UX</td><td>本轮 9 张截图</td><td>待人眼确认生成内容</td></tr>
-  </tbody></table>
-
-  <h2>浏览器截图（本轮）</h2>
-  <div class="grid">
-    <figure class="shot"><img src="assets/real-product-readiness-20260715/01-boss-dashboard.png" alt="老板仪表盘"><figcaption>老板：总花费/调用量/成员排行/对账状态条。</figcaption></figure>
-    <figure class="shot"><img src="assets/real-product-readiness-20260715/02-admin-video-dashboard.png" alt="管理员视频总览"><figcaption>管理员：视频总览。</figcaption></figure>
-    <figure class="shot"><img src="assets/real-product-readiness-20260715/03-admin-video-system-check.png" alt="系统检查与额度"><figcaption>管理员：复核 Snapshot / 日夜限额 / kill switch。</figcaption></figure>
-    <figure class="shot"><img src="assets/real-product-readiness-20260715/04-admin-provider-billing.png" alt="Provider 账单"><figcaption>管理员：Provider 账单导入与对账。</figcaption></figure>
-    <figure class="shot"><img src="assets/real-product-readiness-20260715/05-admin-users.png" alt="用户管理"><figcaption>管理员：成员管理。</figcaption></figure>
-    <figure class="shot"><img src="assets/real-product-readiness-20260715/06-employee-video-create.png" alt="员工视频创建"><figcaption>员工：默认免费试跑创建页。</figcaption></figure>
-    <figure class="shot"><img src="assets/real-product-readiness-20260715/07-employee-video-tasks.png" alt="员工任务列表"><figcaption>员工：任务列表轮询视图。</figcaption></figure>
-    <figure class="shot"><img src="assets/real-product-readiness-20260715/08-employee-batch-image.png" alt="员工批量生图"><figcaption>员工：批量生图入口与资产动作。</figcaption></figure>
-    <figure class="shot"><img src="assets/real-product-readiness-20260715/09-employee-tasks-mobile.png" alt="移动端任务"><figcaption>员工移动端 390×844。</figcaption></figure>
-  </div>
-
-  <h2>用户真实测试卡</h2>
-  <div class="card stop">
-    <h3>状态：READY_FOR_USER_REAL_TEST / 待复核</h3>
-    <ol>
-      <li>确认 Windows 用户环境已存在临时凭证（presence-check only）。管理员 bootstrap 页显示两个 <code>review_only</code> 账号已装配，但不显示值。</li>
-      <li>登录员工账号，选择“一次真实复核”。</li>
-      <li>创建 1 张 Gemini 低规格图片；确认 task ID、终态、预览、下载、再次引用。</li>
-      <li>创建 1 条 Seedance 5 秒 9:16 视频；确认 task ID、create=1、终态、播放、下载、再次引用。</li>
-      <li><strong>人眼硬项（媒体 + 业务文案）——不可用自动化替代：</strong>
-        <ul>
-          <li><strong>媒体：</strong>真实图片能打开且内容与 prompt 相关；真实视频能播放、时长约 5s、画幅约 9:16、无黑屏/静音异常/明显错片；下载文件可本地打开；“再次引用”后仍指向同一可用资产。</li>
-          <li><strong>文案：</strong>执行模式/确认弹窗标明真实计费与额度影响；任务列表状态与详情一致（勿桌面“处理中”而移动端长期停在“已提交”）；费用展示币种与内部账一致；失败原因可读、无密钥/绝对路径泄露。</li>
-          <li><strong>已知 mock 审查包文案债（本轮可记、不阻塞真实 create）：</strong>部分页眉英文（Video Dashboard / Video Tasks / Create Video Task / Video System Check）；供应商对账表单英文字段（Provider account ID、Period start RFC3339 等）；余额常显 <code>$</code> 而策略限额用 CNY；G6 mock 会话 Snapshot 显示 0/0 属 session 未启用，勿与历史预算 1/4、2/4、¥20 混淆。</li>
-        </ul>
-      </li>
-      <li>管理员上传 Gemini 与 Seedance 真实账单明细，确认匹配/差异；若无账单则保留“待账单复核”。</li>
-      <li>老板确认总览、成员排行、余额与对账状态符合实际。</li>
-      <li>管理员先确认至少一个非 <code>review_only</code> 正式内部 Provider 账号已配置并通过无费用连接检查，再决定是否启用 <code>internal_real</code>（指定成员/分组日/月上限；kill switch 可见）。无正式账号时保持关闭。</li>
-      <li>立即禁用 <code>review_only</code> 账号并废弃临时 Gemini/Seedance 密钥。</li>
-    </ol>
-    <p><strong>立即停止条件：</strong>鉴权异常、密钥回显、重复 create、未知状态、费用超过剩余 ¥40、URL 不安全、账务不一致、资产不可下载、<strong>人眼判定媒体不可用或关键业务文案误导真实计费</strong>。</p>
-  </div>
-
-  <h2>风险与回滚</h2>
-  <div class="card">
+    <p><strong>目标</strong>：不改任何业务契约与付费 Provider 路径，交付第一个可评审的 Apple-like 前端检查点，供用户决定是否批准全站迁移方向。</p>
     <ul>
-      <li>真实复核默认关闭；紧急先关 session capability / kill switch，再 <code>git revert</code>。</li>
-      <li>对账差异不自动改用户余额。</li>
-      <li>资产迁移只新增表与读取优先级；回滚应用保留资产文件。</li>
-      <li>历史真实 Provider 证据（2026-07-12）仍有效，本轮未重复付费调用。</li>
+      <li>中性画布与分层表面（<code>--ui-canvas / --ui-surface / --ui-surface-raised</code>），移除装饰性渐变（原薄荷 mesh 底色）；</li>
+      <li>保留 Wujie 青品牌强调色；状态色只用于真实语义；</li>
+      <li>结果先行：结论 → ≤4 主 KPI → 次要指标 → 关注项 → 趋势与排行；</li>
+      <li>tabular numerals、克制标签、单一主行动、显式空状态；</li>
+      <li>明暗双主题同源 token；尊重 <code>prefers-reduced-motion</code>；</li>
+      <li>Router → View → Store/Composable → API 流程不变，仅表现层重组。</li>
     </ul>
   </div>
 
-  <h2>文件索引</h2>
-  <pre>docs/reviews/LATEST_REVIEW_PACKAGE.html
-docs/reviews/assets/real-product-readiness-20260715/*
-docs/superpowers/codex-handoff/deliverables/2026-07-15-REAL-PRODUCT-READINESS-closeout.md
-docs/superpowers/codex-handoff/CODEX_TASK_REAL_PRODUCT_READINESS_20260715.md
-00_START_HERE.md
-02_CURRENT_REALITY_STATUS.md
-docs/goals/03_CURRENT_GOAL.md
-</pre>
-</main></body></html>
+  <h2>2. 执行分支、baseline HEAD、review HEAD</h2>
+  <div class="card">
+    <table>
+      <tr><th>项</th><th>值</th></tr>
+      <tr><td>执行分支</td><td><code>codex/k3-apple-ui-experiment-20260717</code></td></tr>
+      <tr><td>对照基线分支</td><td><code>wujie/video-capture-moat-20260702</code></td></tr>
+      <tr><td>Baseline HEAD（merge-base）</td><td><code>deb9ff5b8876a5bca1a96f78d94f602a3fd5adb4</code></td></tr>
+      <tr><td>Review HEAD（产品代码 tip）</td><td><code>6b66dbf06d8465c288534c0b882f589e48a109cb</code></td></tr>
+      <tr><td>提交链</td><td><code>f9c6e881</code> 设计 → <code>b7e42b34</code> 计划 → <code>ea6da06b</code> tokens → <code>8ea98019</code> shell → <code>e7e6ede1</code> dashboard → <code>6b66dbf0</code> video →（本审查包文档提交）</td></tr>
+    </table>
+  </div>
+
+  <h2>3. 精确变更清单</h2>
+  <div class="card">
+    <p><code>git diff --name-only wujie/video-capture-moat-20260702...HEAD</code>：20 个文件，+1394/−639。产品代码改动全部位于 <code>frontend/**</code>（18 个文件）；非 frontend 改动仅 2 个任务文档（计划 + 设计规格）。Task 5 仅新增/更新 <code>docs/reviews/**</code>。</p>
+    <table>
+      <tr><th>文件</th><th>任务</th><th>变更性质</th></tr>
+      <tr><td><code>frontend/tailwind.config.js</code></td><td>1</td><td>spacing/radius/shadow/color/motion tokens</td></tr>
+      <tr><td><code>frontend/src/style.css</code></td><td>1</td><td><code>--ui-*</code> 变量 + <code>.ui-*</code> 语义类 + reduced-motion</td></tr>
+      <tr><td><code>frontend/src/__tests__/visualTokens.spec.ts</code></td><td>1</td><td>token 契约测试（14 例）</td></tr>
+      <tr><td><code>frontend/src/components/layout/AppLayout.vue</code></td><td>2</td><td>页面画布、256/72px 侧栏、粘性头部、landmark</td></tr>
+      <tr><td><code>frontend/src/components/layout/AppSidebar.vue</code></td><td>2</td><td>导航呈现重组（计算逻辑未动）</td></tr>
+      <tr><td><code>frontend/src/components/layout/AppHeader.vue</code></td><td>2</td><td>页首层级</td></tr>
+      <tr><td><code>frontend/src/components/layout/TablePageLayout.vue</code></td><td>2</td><td>表格页组合</td></tr>
+      <tr><td><code>frontend/src/components/layout/__tests__/AppLayoutVisualContract.spec.ts</code></td><td>2</td><td>shell landmark 契约测试</td></tr>
+      <tr><td><code>frontend/src/components/layout/__tests__/AppSidebar.spec.ts</code></td><td>2</td><td>导航构建器回归断言</td></tr>
+      <tr><td><code>frontend/src/views/admin/DashboardView.vue</code></td><td>3</td><td>老板仪表盘 outcome-first 重排</td></tr>
+      <tr><td><code>frontend/src/views/admin/__tests__/DashboardView.spec.ts</code></td><td>3</td><td>层级顺序断言</td></tr>
+      <tr><td><code>frontend/src/i18n/locales/en/admin/overview.ts</code> / <code>zh/admin/overview.ts</code></td><td>3</td><td>新文案键（英/中）</td></tr>
+      <tr><td><code>frontend/src/views/admin/video/VideoDashboardView.vue</code></td><td>4</td><td>视频总览：状态 → 推荐下一步 → 入口</td></tr>
+      <tr><td><code>frontend/src/views/admin/video/VideoCreateTaskView.vue</code></td><td>4</td><td>创建页主流程层级</td></tr>
+      <tr><td><code>frontend/src/views/admin/video/VideoTasksView.vue</code></td><td>4</td><td>筛选与结果分离、状态显式</td></tr>
+      <tr><td><code>frontend/src/views/admin/video/__tests__/VideoCreateTaskExecutionMode.spec.ts</code> / <code>VideoTasksView.spec.ts</code></td><td>4</td><td>表现层断言</td></tr>
+    </table>
+  </div>
+
+  <h2>4. 前后对比截图</h2>
+  <div class="card">
+    <p>左/上为 2026-07-15 基线（本地 G6 栈真实渲染，目录 <code>assets/real-product-readiness-20260715/</code>），右/下为本阶段（全 mock 渲染，目录 <code>K3_APPLE_UI_PHASE1_20260717/screenshots/</code>）。逐图人工核对：无横向溢出、无装饰渐变残留、无真实付费触发。</p>
+  </div>
+  <h3>老板仪表盘 1440 浅色</h3>
+  <div class="grid">
+    <div class="shot"><strong>前</strong><img src="assets/real-product-readiness-20260715/01-boss-dashboard.png" alt="baseline boss dashboard"></div>
+    <div class="shot"><strong>后</strong><img src="K3_APPLE_UI_PHASE1_20260717/screenshots/boss-dashboard-light-1440.png" alt="k3 boss dashboard light"></div>
+  </div>
+  <h3>老板仪表盘 1440 深色（新产出，无基线）</h3>
+  <div class="grid">
+    <div class="shot"><img src="K3_APPLE_UI_PHASE1_20260717/screenshots/boss-dashboard-dark-1440.png" alt="k3 boss dashboard dark"></div>
+  </div>
+  <h3>管理员视频总览 1440 浅色</h3>
+  <div class="grid">
+    <div class="shot"><strong>前</strong><img src="assets/real-product-readiness-20260715/02-admin-video-dashboard.png" alt="baseline admin video dashboard"></div>
+    <div class="shot"><strong>后</strong><img src="K3_APPLE_UI_PHASE1_20260717/screenshots/admin-video-dashboard-light-1440.png" alt="k3 admin video dashboard light"></div>
+  </div>
+  <h3>员工创建任务 1440 浅色</h3>
+  <div class="grid">
+    <div class="shot"><strong>前</strong><img src="assets/real-product-readiness-20260715/06-employee-video-create.png" alt="baseline employee video create"></div>
+    <div class="shot"><strong>后</strong><img src="K3_APPLE_UI_PHASE1_20260717/screenshots/employee-video-create-light-1440.png" alt="k3 employee video create light"></div>
+  </div>
+  <h3>员工任务记录 1440 浅色 / 深色</h3>
+  <div class="grid">
+    <div class="shot"><strong>前</strong><img src="assets/real-product-readiness-20260715/07-employee-video-tasks.png" alt="baseline employee video tasks"></div>
+    <div class="shot"><strong>后（浅色）</strong><img src="K3_APPLE_UI_PHASE1_20260717/screenshots/employee-video-tasks-light-1440.png" alt="k3 employee video tasks light"></div>
+    <div class="shot"><strong>后（深色）</strong><img src="K3_APPLE_UI_PHASE1_20260717/screenshots/employee-video-tasks-dark-1440.png" alt="k3 employee video tasks dark"></div>
+  </div>
+  <h3>员工任务记录 390 浅色 / 深色</h3>
+  <div class="grid">
+    <div class="shot"><strong>前</strong><img src="assets/real-product-readiness-20260715/09-employee-tasks-mobile.png" alt="baseline employee tasks mobile"></div>
+    <div class="shot"><strong>后（浅色）</strong><img src="K3_APPLE_UI_PHASE1_20260717/screenshots/employee-video-tasks-light-390.png" alt="k3 employee tasks mobile light"></div>
+    <div class="shot"><strong>后（深色）</strong><img src="K3_APPLE_UI_PHASE1_20260717/screenshots/employee-video-tasks-dark-390.png" alt="k3 employee tasks mobile dark"></div>
+  </div>
+
+  <h2>5. 三角色与四种视图矩阵</h2>
+  <div class="card">
+    <table>
+      <tr><th>角色 \ 视图</th><th>老板仪表盘</th><th>管理员视频总览</th><th>员工创建任务</th><th>员工任务记录</th></tr>
+      <tr><td>Boss（admin）</td><td>✅ 浅+深 1440</td><td>✅ 浅 1440</td><td>—</td><td>—</td></tr>
+      <tr><td>Admin</td><td>（同 Boss）</td><td>✅ 浅 1440</td><td>—</td><td>—</td></tr>
+      <tr><td>Employee</td><td>—</td><td>—</td><td>✅ 浅 1440</td><td>✅ 浅/深 1440 + 浅/深 390</td></tr>
+    </table>
+    <p class="muted">管理员视频总览深色、创建页深色/移动视口未纳入本阶段矩阵，见第 7 节。</p>
+  </div>
+
+  <h2>6. 验证命令、退出码和结果</h2>
+  <div class="card pass">
+    <table>
+      <tr><th>门禁</th><th>命令</th><th>退出码</th><th>结果</th></tr>
+      <tr><td>ESLint</td><td><code>npx.cmd eslint . --ext .ts,.vue --max-warnings=0</code></td><td>0</td><td>PASS（0 错误 0 警告）</td></tr>
+      <tr><td>类型检查</td><td><code>npx.cmd vue-tsc --noEmit</code></td><td>0</td><td>PASS</td></tr>
+      <tr><td>全量测试</td><td><code>npx.cmd vitest run --reporter=basic</code></td><td>0</td><td>PASS（152 文件 / 964 测试，0 失败 0 跳过）</td></tr>
+      <tr><td>生产构建</td><td><code>pnpm.cmd run build</code>（= <code>vue-tsc -b && vite build</code>）</td><td>0</td><td>PASS（33.83s；产物在 gitignored 的 <code>backend/internal/web/dist/</code>）</td></tr>
+    </table>
+    <p>卫生检查：<code>git diff --check</code> 退出 0；<code>git status --short</code> 干净；diff 中产品代码改动全部位于 <code>frontend/**</code>。截图证据：8/8 成功，73 次 API 调用全部被本地 mock 拦截，控制台错误 0，密钥模式命中 0。完整原始记录见 <code>K3_APPLE_UI_PHASE1_20260717/validation.log</code> 与 <code>capture-evidence.json</code>。</p>
+  </div>
+
+  <h2>7. 未验证或跳过项</h2>
+  <div class="card warn">
+    <ol>
+      <li>截图为全 mock 渲染（vite preview + 路由拦截），未连真实后端；真实数据形态差异未验证。</li>
+      <li>深色覆盖不全：管理员视频总览深色、创建页深色/移动视口未截图。</li>
+      <li>未做像素级 diff，前后对照为人工逐图比对。</li>
+      <li>真实付费路径按设计禁止：未调用真实 Provider、未上传真实账单、未执行真实 create。</li>
+      <li>后端门禁未运行（本阶段无 <code>backend/**</code> 改动）。</li>
+      <li>既有 <code>AccountsView</code> chunk &gt;500 kB 构建警告（非本次引入）未处理。</li>
+      <li>既有 vue-i18n runtime-build 测试警告（payment 组件，非本次引入）。</li>
+      <li>深色图为首次产出，无历史基线对照。</li>
+    </ol>
+  </div>
+
+  <h2>8. 业务不变量复核</h2>
+  <div class="card pass">
+    <table>
+      <tr><th>不变量</th><th>复核方式</th><th>结论</th></tr>
+      <tr><td>路由守卫/角色边界</td><td>guards / feature-access / video-route-access 测试全绿；router 无 diff</td><td>✅</td></tr>
+      <tr><td>执行模式语义（mock/review_real/internal_real）</td><td>VideoCreateTaskExecutionMode 测试全绿；能力门逻辑无 diff</td><td>✅</td></tr>
+      <tr><td>Idempotency-Key 行为</td><td>视频测试套件全绿；提交链路无 diff</td><td>✅</td></tr>
+      <tr><td>任务生命周期轮询条件</td><td>useVideoTaskLifecycle 相关测试全绿；轮询条件无 diff</td><td>✅</td></tr>
+      <tr><td>本地归档 vs 远端可交付物区分</td><td>截图 #5001/#5003（本地已归档）与 #5002（远端可交付 + 过期时间）并陈；判定逻辑无 diff</td><td>✅</td></tr>
+      <tr><td>货币语义（$ 不擅自转 CNY）</td><td>formatByCurrency 未改；UI 仍以 $ 展示</td><td>✅</td></tr>
+      <tr><td>对账结论诚实待处理</td><td>fixture 返回 not_uploaded，UI 如实显示“未上传/对账待处理”</td><td>✅</td></tr>
+      <tr><td>功能开关/菜单计算</td><td>AppSidebar 断言 adminNavItems/userNavItems/applyFeatureFlags 保留</td><td>✅</td></tr>
+      <tr><td>API 契约</td><td>无 src/api/** 与 backend/** diff</td><td>✅</td></tr>
+    </table>
+  </div>
+
+  <h2>9. 风险与回滚</h2>
+  <div class="card warn">
+    <ul>
+      <li><strong>R1</strong> 视觉验证基于 mock 数据，真实数据密度下的折行/溢出未完全暴露 → Phase 2 用本地 G6 栈复截。</li>
+      <li><strong>R2</strong> 新增 i18n 文案键（en/zh admin/overview），其他语言缺失时回退键名，影响仅限新 UI 文案。</li>
+      <li><strong>R3</strong> 仪表盘模型分布表在 1440 宽、长模型名下末列轻微截断（记录在案，本任务不修产品代码）。</li>
+      <li><strong>R4</strong> 趋势图 X 轴直接渲染后端日期串，长 ISO 串下可读性一般（mock fixture 放大此现象；真实后端返回格式未变）。</li>
+    </ul>
+    <p><strong>回滚</strong>：纯前端、无数据库迁移、无后端/配置改动。<code>git revert ea6da06b^..6b66dbf0</code>（或以 <code>deb9ff5b</code> 为基线废弃分支）即可回到基线外观；审查包文档可独立删除。</p>
+  </div>
+
+  <h2>10. 当前状态</h2>
+  <div class="meta stop"><strong>可演示</strong>：四视图在明暗/双视口下可稳定复现演示（mock 模式），门禁全绿，证据齐全。本检查点<strong>不构成</strong>「内部可用」判定，<strong>不构成</strong>生产 READY；真实数据验收与真实栈复截完成前状态不得上调。</div>
+
+  <h2>11. Phase 2 建议与明确停止点</h2>
+  <div class="card">
+    <ol>
+      <li>在 docker 可用环境用本地 G6 栈对真实后端复截同矩阵，替换 mock 证据；</li>
+      <li>引入 Playwright 像素级视觉回归，固化本阶段外观为基线；</li>
+      <li>token 层推广到剩余高频视图（用户管理、渠道、密钥、使用记录），每次一个切片、同一门禁节奏；</li>
+      <li>补齐深色矩阵与 390 视口其余页面；</li>
+      <li>可访问性走查（对比度、焦点序、reduced-motion 实测）；</li>
+      <li>处理 R3/R4 两个表现层小瑕疵。</li>
+    </ol>
+    <p><strong>明确停止点</strong>：已在 Phase 1 审查包处停止。未经用户明确批准，不开始 Phase 2；不 push、不合并、不部署。</p>
+  </div>
+
+  <h2>12. 文件索引</h2>
+  <div class="card">
+    <table>
+      <tr><th>路径</th><th>说明</th></tr>
+      <tr><td><code>docs/reviews/K3_APPLE_UI_PHASE1_20260717/SUMMARY.md</code></td><td>审查摘要（与本包同内容 Markdown 版）</td></tr>
+      <tr><td><code>docs/reviews/K3_APPLE_UI_PHASE1_20260717/validation.log</code></td><td>门禁与卫生检查原始记录</td></tr>
+      <tr><td><code>docs/reviews/K3_APPLE_UI_PHASE1_20260717/capture_k3.mjs</code></td><td>全 mock 截图脚本（可复跑）</td></tr>
+      <tr><td><code>docs/reviews/K3_APPLE_UI_PHASE1_20260717/capture-evidence.json</code></td><td>截图证据（角色/路由/视口/主题/URL + API 拦截清单 + 密钥扫描）</td></tr>
+      <tr><td><code>docs/reviews/K3_APPLE_UI_PHASE1_20260717/screenshots/</code></td><td>8 张新截图</td></tr>
+      <tr><td><code>docs/reviews/K3_APPLE_UI_PHASE1_20260717/assets/mock-remote-preview.svg</code></td><td>远端结果预览占位图（fixture）</td></tr>
+      <tr><td><code>docs/reviews/LATEST_REVIEW_PACKAGE.html</code></td><td>本文件</td></tr>
+      <tr><td><code>docs/reviews/assets/real-product-readiness-20260715/</code></td><td>前后对比基线（2026-07-15）</td></tr>
+      <tr><td><code>docs/superpowers/plans/2026-07-17-k3-apple-ui-phase1.md</code> / <code>.../specs/2026-07-17-k3-apple-ui-experiment-design.md</code></td><td>执行计划 / 设计规格</td></tr>
+    </table>
+  </div>
+
+  <h2>13. 可复制后续提示词</h2>
+  <pre>你是 K3_Phase2_Executor。工作目录 D:\sub2api-trunk（分支 codex/k3-apple-ui-experiment-20260717）。
+先读 docs/reviews/K3_APPLE_UI_PHASE1_20260717/SUMMARY.md 与 docs/superpowers/plans/2026-07-17-k3-apple-ui-phase1.md。
+用户已批准 Phase 2：&lt;在此粘贴用户批准原文&gt;。
+按 SUMMARY 第 11 节优先级执行：先在可用 docker 环境用本地 G6 栈复截真实后端同矩阵并替换 mock 证据；
+再引入 Playwright 像素基线；然后每次只迁移一个高频视图到 token 层，迁移后跑
+npx.cmd eslint . --ext .ts,.vue --max-warnings=0 / npx.cmd vue-tsc --noEmit / npx.cmd vitest run --reporter=basic / 构建四门禁。
+约束不变：只改 frontend/** 与 docs/**；不读密钥；不调真实付费 Provider；不 push/部署/合并；
+若用户未批准某子项，保持停止。</pre>
+
+</main></body>
+</html>

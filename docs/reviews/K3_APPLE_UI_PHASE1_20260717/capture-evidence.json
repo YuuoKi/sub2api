@@ -1,0 +1,408 @@
+{
+  "baseURL": "http://127.0.0.1:5199",
+  "capturedAt": "2026-07-16T18:19:41.516Z",
+  "mode": "fully-mocked (vite preview + route interception); no backend, no credentials, no real provider, no create submission",
+  "captures": [
+    {
+      "name": "boss-dashboard-light-1440",
+      "role": "admin",
+      "route": "/admin/dashboard",
+      "viewport": "1440x1000",
+      "theme": "light",
+      "mock": true,
+      "secretsUsed": false,
+      "finalUrl": "http://127.0.0.1:5199/admin/dashboard",
+      "screenshot": "screenshots/boss-dashboard-light-1440.png"
+    },
+    {
+      "name": "boss-dashboard-dark-1440",
+      "role": "admin",
+      "route": "/admin/dashboard",
+      "viewport": "1440x1000",
+      "theme": "dark",
+      "mock": true,
+      "secretsUsed": false,
+      "finalUrl": "http://127.0.0.1:5199/admin/dashboard",
+      "screenshot": "screenshots/boss-dashboard-dark-1440.png"
+    },
+    {
+      "name": "admin-video-dashboard-light-1440",
+      "role": "admin",
+      "route": "/admin/video",
+      "viewport": "1440x1000",
+      "theme": "light",
+      "mock": true,
+      "secretsUsed": false,
+      "finalUrl": "http://127.0.0.1:5199/admin/video",
+      "screenshot": "screenshots/admin-video-dashboard-light-1440.png"
+    },
+    {
+      "name": "employee-video-create-light-1440",
+      "role": "employee",
+      "route": "/admin/video/create",
+      "viewport": "1440x1000",
+      "theme": "light",
+      "mock": true,
+      "secretsUsed": false,
+      "finalUrl": "http://127.0.0.1:5199/admin/video/create",
+      "screenshot": "screenshots/employee-video-create-light-1440.png"
+    },
+    {
+      "name": "employee-video-tasks-light-1440",
+      "role": "employee",
+      "route": "/admin/video/tasks",
+      "viewport": "1440x1000",
+      "theme": "light",
+      "mock": true,
+      "secretsUsed": false,
+      "finalUrl": "http://127.0.0.1:5199/admin/video/tasks",
+      "screenshot": "screenshots/employee-video-tasks-light-1440.png"
+    },
+    {
+      "name": "employee-video-tasks-dark-1440",
+      "role": "employee",
+      "route": "/admin/video/tasks",
+      "viewport": "1440x1000",
+      "theme": "dark",
+      "mock": true,
+      "secretsUsed": false,
+      "finalUrl": "http://127.0.0.1:5199/admin/video/tasks",
+      "screenshot": "screenshots/employee-video-tasks-dark-1440.png"
+    },
+    {
+      "name": "employee-video-tasks-light-390",
+      "role": "employee",
+      "route": "/admin/video/tasks",
+      "viewport": "390x844",
+      "theme": "light",
+      "mock": true,
+      "secretsUsed": false,
+      "finalUrl": "http://127.0.0.1:5199/admin/video/tasks",
+      "screenshot": "screenshots/employee-video-tasks-light-390.png"
+    },
+    {
+      "name": "employee-video-tasks-dark-390",
+      "role": "employee",
+      "route": "/admin/video/tasks",
+      "viewport": "390x844",
+      "theme": "dark",
+      "mock": true,
+      "secretsUsed": false,
+      "finalUrl": "http://127.0.0.1:5199/admin/video/tasks",
+      "screenshot": "screenshots/employee-video-tasks-dark-390.png"
+    }
+  ],
+  "apiCalls": [
+    {
+      "role": "admin",
+      "key": "GET /auth/me"
+    },
+    {
+      "role": "admin",
+      "key": "GET /admin/compliance"
+    },
+    {
+      "role": "admin",
+      "key": "GET /admin/compliance"
+    },
+    {
+      "role": "admin",
+      "key": "GET /subscriptions/active"
+    },
+    {
+      "role": "admin",
+      "key": "GET /announcements"
+    },
+    {
+      "role": "admin",
+      "key": "GET /admin/settings"
+    },
+    {
+      "role": "admin",
+      "key": "GET /admin/payment/config"
+    },
+    {
+      "role": "admin",
+      "key": "GET /admin/system/check-updates"
+    },
+    {
+      "role": "admin",
+      "key": "GET /keys"
+    },
+    {
+      "role": "admin",
+      "key": "GET /admin/dashboard/snapshot-v2"
+    },
+    {
+      "role": "admin",
+      "key": "GET /admin/dashboard/users-trend"
+    },
+    {
+      "role": "admin",
+      "key": "GET /admin/dashboard/users-ranking"
+    },
+    {
+      "role": "admin",
+      "key": "GET /admin/provider-billing/boss-conclusions"
+    },
+    {
+      "role": "admin",
+      "key": "GET /settings/public"
+    },
+    {
+      "role": "admin",
+      "key": "GET /auth/me"
+    },
+    {
+      "role": "admin",
+      "key": "GET /admin/compliance"
+    },
+    {
+      "role": "admin",
+      "key": "GET /admin/compliance"
+    },
+    {
+      "role": "admin",
+      "key": "GET /subscriptions/active"
+    },
+    {
+      "role": "admin",
+      "key": "GET /announcements"
+    },
+    {
+      "role": "admin",
+      "key": "GET /admin/settings"
+    },
+    {
+      "role": "admin",
+      "key": "GET /admin/payment/config"
+    },
+    {
+      "role": "admin",
+      "key": "GET /admin/system/check-updates"
+    },
+    {
+      "role": "admin",
+      "key": "GET /keys"
+    },
+    {
+      "role": "admin",
+      "key": "GET /admin/dashboard/snapshot-v2"
+    },
+    {
+      "role": "admin",
+      "key": "GET /admin/dashboard/users-trend"
+    },
+    {
+      "role": "admin",
+      "key": "GET /admin/dashboard/users-ranking"
+    },
+    {
+      "role": "admin",
+      "key": "GET /admin/provider-billing/boss-conclusions"
+    },
+    {
+      "role": "admin",
+      "key": "GET /settings/public"
+    },
+    {
+      "role": "admin",
+      "key": "GET /auth/me"
+    },
+    {
+      "role": "admin",
+      "key": "GET /admin/compliance"
+    },
+    {
+      "role": "admin",
+      "key": "GET /admin/compliance"
+    },
+    {
+      "role": "admin",
+      "key": "GET /subscriptions/active"
+    },
+    {
+      "role": "admin",
+      "key": "GET /announcements"
+    },
+    {
+      "role": "admin",
+      "key": "GET /admin/settings"
+    },
+    {
+      "role": "admin",
+      "key": "GET /admin/payment/config"
+    },
+    {
+      "role": "admin",
+      "key": "GET /admin/system/check-updates"
+    },
+    {
+      "role": "admin",
+      "key": "GET /keys"
+    },
+    {
+      "role": "admin",
+      "key": "GET /admin/video/dashboard"
+    },
+    {
+      "role": "admin",
+      "key": "GET /settings/public"
+    },
+    {
+      "role": "employee",
+      "key": "GET /auth/me"
+    },
+    {
+      "role": "employee",
+      "key": "GET /subscriptions/active"
+    },
+    {
+      "role": "employee",
+      "key": "GET /announcements"
+    },
+    {
+      "role": "employee",
+      "key": "GET /keys"
+    },
+    {
+      "role": "employee",
+      "key": "GET /video/providers"
+    },
+    {
+      "role": "employee",
+      "key": "GET /settings/public"
+    },
+    {
+      "role": "employee",
+      "key": "GET /auth/me"
+    },
+    {
+      "role": "employee",
+      "key": "GET /subscriptions/active"
+    },
+    {
+      "role": "employee",
+      "key": "GET /announcements"
+    },
+    {
+      "role": "employee",
+      "key": "GET /keys"
+    },
+    {
+      "role": "employee",
+      "key": "GET /video/tasks"
+    },
+    {
+      "role": "employee",
+      "key": "GET /settings/public"
+    },
+    {
+      "role": "employee",
+      "key": "GET /video/tasks"
+    },
+    {
+      "role": "employee",
+      "key": "GET /auth/me"
+    },
+    {
+      "role": "employee",
+      "key": "GET /subscriptions/active"
+    },
+    {
+      "role": "employee",
+      "key": "GET /announcements"
+    },
+    {
+      "role": "employee",
+      "key": "GET /keys"
+    },
+    {
+      "role": "employee",
+      "key": "GET /video/tasks"
+    },
+    {
+      "role": "employee",
+      "key": "GET /settings/public"
+    },
+    {
+      "role": "employee",
+      "key": "GET /video/tasks"
+    },
+    {
+      "role": "employee",
+      "key": "GET /auth/me"
+    },
+    {
+      "role": "employee",
+      "key": "GET /subscriptions/active"
+    },
+    {
+      "role": "employee",
+      "key": "GET /announcements"
+    },
+    {
+      "role": "employee",
+      "key": "GET /keys"
+    },
+    {
+      "role": "employee",
+      "key": "GET /video/tasks"
+    },
+    {
+      "role": "employee",
+      "key": "GET /settings/public"
+    },
+    {
+      "role": "employee",
+      "key": "GET /video/tasks"
+    },
+    {
+      "role": "employee",
+      "key": "GET /auth/me"
+    },
+    {
+      "role": "employee",
+      "key": "GET /subscriptions/active"
+    },
+    {
+      "role": "employee",
+      "key": "GET /announcements"
+    },
+    {
+      "role": "employee",
+      "key": "GET /keys"
+    },
+    {
+      "role": "employee",
+      "key": "GET /video/tasks"
+    },
+    {
+      "role": "employee",
+      "key": "GET /settings/public"
+    },
+    {
+      "role": "employee",
+      "key": "GET /video/tasks"
+    }
+  ],
+  "unknownEndpoints": [
+    {
+      "role": "admin",
+      "key": "GET /admin/system/check-updates"
+    },
+    {
+      "role": "employee",
+      "key": "GET /keys"
+    }
+  ],
+  "consoleErrors": [],
+  "secretHits": 0,
+  "summary": {
+    "captures": 8,
+    "apiCalls": 73,
+    "unknownEndpoints": 2,
+    "consoleErrors": 0,
+    "secretHits": 0
+  }
+}

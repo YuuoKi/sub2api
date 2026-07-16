@@ -4,7 +4,7 @@
 
 ## 一句话状态
 
-canonical `http://127.0.0.1:8080`、无界 embedded 品牌、本地镜像与完整管理后台五段路径已有同实例运行证据，G1 为**可演示**；真实付费图片/视频闭环尚无完整证据，`realCallExecuted=0`，所以整体仍为**已阻塞**。
+canonical `http://127.0.0.1:8080`、无界 embedded 品牌、本地镜像与完整管理后台五段路径已有同实例运行证据；Gemini 图片与 Seedance 2.0 视频各一次真实 tiny_real 也已成功且无重试。`realCallExecuted=2`、`open_p0_count=0`、`blocked=[]`，整体为**待复核**；不得外推为商业交付完成、生产上线或已 push。
 
 ## 唯一前端定义
 
@@ -47,6 +47,10 @@ canonical `http://127.0.0.1:8080`、无界 embedded 品牌、本地镜像与完�
 - 本地镜像：`sha256:bc7202509217701388f6877d07222a94b5fbf9bf10d7435b57b8d84f20f1d01b`；embedded binary 无界 title=1、精确上游 title=0。
 - 隔离开卡/usage smoke：只显示掩码 key，`usage_delta=1`、`balance_delta=0.00045000`；临时 PostgreSQL/Redis 已终止，无真实 provider 或生产数据。
 - canonical runtime：`http://127.0.0.1:8080` HTTP 200、title 为 `无界 · 企业 AI 管理中台`、镜像为 `wujie-sub2api:local`、host `:3000` 无监听；完整管理面、管理员开卡、员工 Key 与 usage 五段路径已留证。
+- 视频网关实现与付费安全收口：当前 HEAD `15880e23`；`/v1/video/tasks`、管理员视频控制面、原子一次授权/dispatch claim、usage/settlement 与 process-only gate 均已验证。
+- Gemini 图片真实证据：request `client:995b4b75-be49-4ecd-a8ff-c7bc283fda69`，终态成功，本地 PNG 1336210 bytes，实扣 `$0.0585`。
+- Seedance 2.0 真实证据：local task `1`、upstream task `cgt-20260716174852-8p5hj`、终态 `succeeded`、87300 tokens，本地 MP4/尾帧齐全，实扣 `$0.3395`。
+- 两次合计 `$0.3980` / 约 `¥2.8656`，员工余额 `$3.0000 → $2.6020`，低于授权上限 `¥15`；process-only 单次门已恢复关闭。
 
 ## 验收纪律
 
@@ -63,8 +67,9 @@ G1 已满足以上口径。不得用源码字符串、单元测试、隔离 smok
 
 ## 安全与回滚
 
-- 禁止 push、生产库 migration 和删除备份目录；真实付费仅可在老板明确授权的最小预算与 `tiny_real` 双重门禁下执行。
-- 本 CYCLE 未真实付费生成，`realCallExecuted=0`；隔离 loopback mock usage 请求不等于真实 provider 调用。
+- 禁止 push、生产库 migration 和删除备份目录。
+- 本 CYCLE 已消费完明确授权的两次真实 tiny_real，`realCallExecuted=2`；禁止再次真实调用、自动重试或模型降级。隔离 loopback mock usage 仍不等于真实 provider 调用。
+- `.env` 与上游密钥保持未跟踪、未提交；文档只记录脱敏标识、task id、资产 hash 与费用差分。
 
 ## Canonical video control plane (G2.R1)
 
@@ -77,4 +82,4 @@ G1 已满足以上口径。不得用源码字符串、单元测试、隔离 smok
 
 ## 下一步
 
-下一步只按最小预算执行真实图片与视频闭环并留存上游任务、终态、资产、usage/费用差分；在证据完整前保持 `BLOCKED:real-paid-generation`，不得把 mock 或管理页授权记录当成真实生成。
+下一步只做 G3 文档一致性、独立冷审、密钥扫描与 UX P1 排期；不得再次触发真实付费。若要把现有资产回填 QCanvas，必须先提供目标 `projectId/flowId`，仅通过 `tapcanvas-api` 复用本地 PNG/MP4/尾帧，不再生成。

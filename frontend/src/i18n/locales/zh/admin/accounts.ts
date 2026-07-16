@@ -471,10 +471,13 @@ export default {
       bedrockLabel: 'AWS Bedrock',
       bedrockDesc: 'SigV4 / API Key',
       vertexLabel: 'Vertex',
-      vertexDesc: 'Service Account',
+      vertexDesc: '服务账号(Service Account)',
       vertexAnthropicHint: '使用 Google Cloud Service Account JSON 通过 Vertex AI 调用 Anthropic Claude。建议配置模型映射，将客户端 Claude 模型名映射到 Vertex 模型 ID。',
       vertexGeminiHint: '使用 Google Cloud Service Account JSON 访问 Vertex AI Gemini。建议将 Vertex 账号放入独立分组，避免和 AI Studio/Gemini OAuth 同模型混调。',
-      vertexSaJsonLabel: 'Service Account JSON',
+      vertexSaJsonLabel: '服务账号 JSON(Service Account JSON)',
+      vertexProjectIdLabel: '项目 ID(Project ID)',
+      vertexClientEmailLabel: '客户端邮箱(Client Email)',
+      vertexLocationLabel: '区域(Location)',
       vertexSaJsonLoaded: '已读取 Service Account JSON',
       vertexSaJsonDrop: '拖入 Service Account JSON',
       vertexSaJsonKeyHidden: '密钥内容不会在表单中显示。',
@@ -612,6 +615,8 @@ export default {
       supportsAllModels: '（支持所有模型）',
       requestModel: '请求模型',
       actualModel: '实际模型',
+      fromModel: '请求模型',
+      toModel: '实际模型',
       addMapping: '添加映射',
       mappingExists: '模型 {model} 的映射已存在',
       wildcardOnlyAtEnd: '通配符 * 只能放在末尾',
@@ -874,6 +879,15 @@ export default {
         batchSuccess: '成功创建 {count} 个账号',
         batchPartialSuccess: '部分成功：{success} 个成功，{failed} 个失败',
         batchFailed: '批量创建失败',
+        // Refresh Token / Session Token 输入（预留：当前 Anthropic 流程不展示，保持各平台 key 对称）
+        refreshTokenAuth: '手动输入 RT',
+        refreshTokenDesc: '输入您已有的 Refresh Token，支持批量输入（每行一个），系统将自动验证并创建账号。',
+        refreshTokenPlaceholder: '粘贴您的 Refresh Token...\n支持多个，每行一个',
+        validating: '验证中...',
+        validateAndCreate: '验证并创建账号',
+        sessionTokenAuth: '手动输入 ST',
+        refreshTokenLabel: '刷新令牌(Refresh Token)',
+        copyAuthUrl: '复制链接',
         // OpenAI specific
         openai: {
           title: 'OpenAI 账户授权',
@@ -902,6 +916,8 @@ export default {
           refreshTokenAuth: '手动输入 RT',
           refreshTokenDesc: '输入您已有的 OpenAI Refresh Token，支持批量输入（每行一个），系统将自动验证并创建账号。',
           refreshTokenPlaceholder: '粘贴您的 OpenAI Refresh Token...\n支持多个，每行一个',
+          mobileRefreshTokenAuth: '移动端 RT',
+          accessTokenAuth: '手动输入 AT',
           codexSessionAuth: 'Codex JSON / AT 批量输入',
           codexSessionDesc: '粘贴 Codex JSON 或 accessToken，按第一步配置创建账号。',
           codexSessionInputLabel: 'Codex JSON 或 accessToken',
@@ -956,6 +972,7 @@ export default {
           validating: '验证中...',
           validateAndCreate: '验证并创建账号',
           pleaseEnterRefreshToken: '请输入 Refresh Token',
+          sessionTokenAuth: '手动输入 ST',
           failedToGenerateUrl: '生成 Grok 授权链接失败',
           missingExchangeParams: '缺少授权码、state 或 OAuth 会话',
           failedToExchangeCode: 'Grok 授权码兑换失败',
@@ -1006,6 +1023,13 @@ export default {
           failedToGenerateUrl: '生成 Gemini 授权链接失败',
           missingExchangeParams: '缺少 code / session_id / state',
           failedToExchangeCode: 'Gemini 授权码兑换失败',
+          // Refresh Token / Session Token 输入（预留：当前 Gemini 流程不展示，保持各平台 key 对称）
+          refreshTokenAuth: '手动输入 RT',
+          refreshTokenDesc: '输入您已有的 Gemini Refresh Token，支持批量输入（每行一个），系统将自动验证并创建账号。',
+          refreshTokenPlaceholder: '粘贴您的 Gemini Refresh Token...\n支持多个，每行一个',
+          validating: '验证中...',
+          validateAndCreate: '验证并创建账号',
+          sessionTokenAuth: '手动输入 ST',
           missingProjectId:
             'GCP Project ID 获取失败：您的 Google 账号未关联有效的 GCP 项目。请前往 Google Cloud Console 激活 GCP 并绑定信用卡，或在授权时手动填写 Project ID。',
           modelPassthrough: 'Gemini 直接转发模型',
@@ -1050,7 +1074,8 @@ export default {
           validating: '验证中...',
           validateAndCreate: '验证并创建账号',
           pleaseEnterRefreshToken: '请输入 Refresh Token',
-          failedToValidateRT: '验证 Refresh Token 失败'
+          failedToValidateRT: '验证 Refresh Token 失败',
+          sessionTokenAuth: '手动输入 ST'
         }
       },
       // Gemini specific (platform-wide)
@@ -1096,7 +1121,9 @@ export default {
           builtInTitle: '内置授权（Gemini CLI / Code Assist）',
           builtInDesc: '使用 Google 内置客户端 ID，无需管理员配置。',
           builtInRequirement: '需要 GCP 项目并填写 Project ID。',
+          googleOneTitle: 'Google One',
           googleOneDesc: '个人账号，享受 Google One 订阅配额',
+          codeAssistTitle: 'GCP Code Assist',
           codeAssistDesc: '企业级，需要 GCP 项目',
           codeAssistRequirement: '需要激活 GCP 项目并绑定信用卡',
           showAdvanced: '显示高级选项（自建 OAuth Client）',
@@ -1150,6 +1177,14 @@ export default {
             vertex: 'Vertex AI 配额'
           },
           simulatedNote: '本地模拟配额，仅供参考',
+          tiers: {
+            free: '免费版(Free)',
+            pro: '专业版(Pro)',
+            ultra: '旗舰版(Ultra)',
+            standard: '标准版(Standard)',
+            enterprise: '企业版(Enterprise)',
+            paid: '付费版(Paid)'
+          },
           rows: {
             googleOne: {
               channel: 'Google One OAuth（个人版 / Code Assist for Individuals）',

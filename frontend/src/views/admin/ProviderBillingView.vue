@@ -145,12 +145,12 @@ onMounted(refresh)
           <table class="min-w-full text-sm">
             <thead>
               <tr class="text-left text-gray-500">
-                <th class="py-2 pr-4">Provider</th>
-                <th class="py-2 pr-4">Account</th>
-                <th class="py-2 pr-4">Period</th>
-                <th class="py-2 pr-4">Conclusion</th>
-                <th class="py-2 pr-4">Matched</th>
-                <th class="py-2 pr-4">Diff</th>
+                <th class="py-2 pr-4">{{ t('admin.providerBilling.provider') }}</th>
+                <th class="py-2 pr-4">{{ t('admin.providerBilling.account') }}</th>
+                <th class="py-2 pr-4">{{ t('admin.providerBilling.period') }}</th>
+                <th class="py-2 pr-4">{{ t('admin.providerBilling.conclusion') }}</th>
+                <th class="py-2 pr-4">{{ t('admin.providerBilling.matched') }}</th>
+                <th class="py-2 pr-4">{{ t('admin.providerBilling.diff') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -171,41 +171,41 @@ onMounted(refresh)
         <h2 class="text-lg font-medium">{{ t('admin.providerBilling.importPreview') }}</h2>
         <div class="grid gap-3 md:grid-cols-2">
           <label class="text-sm">
-            Provider
+            {{ t('admin.providerBilling.provider') }}
             <select v-model="form.provider" class="input mt-1 w-full">
               <option value="seedance">seedance</option>
               <option value="gemini">gemini</option>
             </select>
           </label>
           <label class="text-sm">
-            Provider account ID
+            {{ t('admin.providerBilling.providerAccountId') }}
             <input v-model="form.provider_account_id" class="input mt-1 w-full" />
           </label>
           <label class="text-sm">
-            Period start (RFC3339)
+            {{ t('admin.providerBilling.periodStart') }}
             <input v-model="form.billing_period_start" class="input mt-1 w-full" />
           </label>
           <label class="text-sm">
-            Period end (RFC3339)
+            {{ t('admin.providerBilling.periodEnd') }}
             <input v-model="form.billing_period_end" class="input mt-1 w-full" />
           </label>
           <label class="text-sm">
-            Timezone
+            {{ t('admin.providerBilling.timezone') }}
             <input v-model="form.timezone" class="input mt-1 w-full" />
           </label>
           <label class="text-sm">
-            Currency
+            {{ t('admin.providerBilling.currency') }}
             <select v-model="form.original_currency" class="input mt-1 w-full">
               <option value="USD">USD</option>
               <option value="CNY">CNY</option>
             </select>
           </label>
           <label class="text-sm">
-            Invoice number
+            {{ t('admin.providerBilling.invoiceNumber') }}
             <input v-model="form.invoice_number" class="input mt-1 w-full" />
           </label>
           <label class="text-sm">
-            Statement file (CSV/XLSX)
+            {{ t('admin.providerBilling.statementFile') }}
             <input type="file" accept=".csv,.xlsx" class="mt-1 block w-full text-sm" @change="onFileChange" />
           </label>
         </div>
@@ -216,16 +216,18 @@ onMounted(refresh)
           <button class="btn btn-secondary" @click="onPreview">{{ t('admin.providerBilling.preview') }}</button>
           <button class="btn btn-primary" @click="onImport">{{ t('admin.providerBilling.import') }}</button>
         </div>
-        <p v-if="previewSHA" class="text-xs text-gray-500">SHA-256: {{ previewSHA }} · lines {{ previewLines.length }}</p>
+        <p v-if="previewSHA" class="text-xs text-gray-500">
+          {{ t('admin.providerBilling.previewShaLines', { sha: previewSHA, count: previewLines.length }) }}
+        </p>
         <div v-if="previewLines.length > 0" class="overflow-x-auto">
           <table class="min-w-full text-xs">
             <thead>
               <tr class="text-left text-gray-500">
-                <th class="py-1 pr-2">external_line_id</th>
-                <th class="py-1 pr-2">upstream_task_id</th>
-                <th class="py-1 pr-2">model</th>
-                <th class="py-1 pr-2">gross</th>
-                <th class="py-1 pr-2">currency</th>
+                <th class="py-1 pr-2">{{ t('admin.providerBilling.colExternalLineId') }}</th>
+                <th class="py-1 pr-2">{{ t('admin.providerBilling.colUpstreamTaskId') }}</th>
+                <th class="py-1 pr-2">{{ t('admin.providerBilling.colModel') }}</th>
+                <th class="py-1 pr-2">{{ t('admin.providerBilling.colGross') }}</th>
+                <th class="py-1 pr-2">{{ t('admin.providerBilling.colCurrency') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -238,7 +240,9 @@ onMounted(refresh)
               </tr>
             </tbody>
           </table>
-          <p v-if="previewLines.length > 20" class="mt-1 text-xs text-gray-500">Showing first 20 of {{ previewLines.length }} lines</p>
+          <p v-if="previewLines.length > 20" class="mt-1 text-xs text-gray-500">
+            {{ t('admin.providerBilling.showingFirstLines', { count: previewLines.length }) }}
+          </p>
         </div>
       </section>
 
@@ -249,9 +253,9 @@ onMounted(refresh)
             <thead>
               <tr class="text-left text-gray-500">
                 <th class="py-2 pr-4">ID</th>
-                <th class="py-2 pr-4">Provider</th>
-                <th class="py-2 pr-4">SHA-256</th>
-                <th class="py-2 pr-4">Lines</th>
+                <th class="py-2 pr-4">{{ t('admin.providerBilling.provider') }}</th>
+                <th class="py-2 pr-4">{{ t('admin.providerBilling.colSha256') }}</th>
+                <th class="py-2 pr-4">{{ t('admin.providerBilling.colLines') }}</th>
                 <th class="py-2 pr-4"></th>
               </tr>
             </thead>
@@ -286,8 +290,14 @@ onMounted(refresh)
             <li v-for="m in diffQueue" :key="`${m.external_line_id}-${m.internal_ref_id}-${m.match_status}`" class="rounded border border-gray-200 p-2 dark:border-dark-600">
               <div class="font-medium">{{ m.match_status }} · {{ m.match_mode }}</div>
               <div class="text-gray-500">
-                line={{ m.external_line_id || '-' }} internal={{ m.internal_ref_id || '-' }}
-                amount {{ m.provider_amount }} / {{ m.internal_amount }}
+                {{
+                  t('admin.providerBilling.diffLine', {
+                    external: m.external_line_id || '-',
+                    internal: m.internal_ref_id || '-',
+                    providerAmount: m.provider_amount,
+                    internalAmount: m.internal_amount
+                  })
+                }}
               </div>
             </li>
           </ul>
@@ -296,12 +306,12 @@ onMounted(refresh)
           <table class="min-w-full text-sm">
             <thead>
               <tr class="text-left text-gray-500">
-                <th class="py-2 pr-3">Status</th>
-                <th class="py-2 pr-3">Mode</th>
-                <th class="py-2 pr-3">External</th>
-                <th class="py-2 pr-3">Internal</th>
-                <th class="py-2 pr-3">Provider amt</th>
-                <th class="py-2 pr-3">Internal amt</th>
+                <th class="py-2 pr-3">{{ t('admin.providerBilling.colStatus') }}</th>
+                <th class="py-2 pr-3">{{ t('admin.providerBilling.colMode') }}</th>
+                <th class="py-2 pr-3">{{ t('admin.providerBilling.colExternal') }}</th>
+                <th class="py-2 pr-3">{{ t('admin.providerBilling.colInternal') }}</th>
+                <th class="py-2 pr-3">{{ t('admin.providerBilling.colProviderAmount') }}</th>
+                <th class="py-2 pr-3">{{ t('admin.providerBilling.colInternalAmount') }}</th>
               </tr>
             </thead>
             <tbody>

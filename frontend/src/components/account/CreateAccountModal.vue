@@ -278,8 +278,8 @@
               <Icon name="cloud" size="sm" />
             </div>
             <div>
-              <span class="block text-sm font-medium text-gray-900 dark:text-white">Vertex</span>
-              <span class="text-xs text-gray-500 dark:text-gray-400">Service Account</span>
+              <span class="block text-sm font-medium text-gray-900 dark:text-white">{{ t('admin.accounts.vertexLabel') }}</span>
+              <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.accounts.vertexDesc') }}</span>
             </div>
           </button>
 
@@ -557,7 +557,7 @@
               </div>
               <div class="min-w-0">
                 <span class="block text-sm font-medium text-gray-900 dark:text-white">
-                  Google One
+                  {{ t('admin.accounts.gemini.oauthType.googleOneTitle') }}
                 </span>
                 <span class="text-xs text-gray-500 dark:text-gray-400">
                   {{ t('admin.accounts.gemini.oauthType.googleOneDesc') }}
@@ -600,7 +600,7 @@
               </div>
               <div class="min-w-0">
                 <span class="block text-sm font-medium text-gray-900 dark:text-white">
-                  GCP Code Assist
+                  {{ t('admin.accounts.gemini.oauthType.codeAssistTitle') }}
                 </span>
                 <span class="text-xs text-gray-500 dark:text-gray-400">
                   {{ t('admin.accounts.gemini.oauthType.codeAssistDesc') }}
@@ -869,7 +869,7 @@
       <!-- Vertex Service Account -->
       <div v-if="(form.platform === 'gemini' || form.platform === 'anthropic') && accountCategory === 'service_account'" class="space-y-4">
         <div>
-          <label class="input-label">Service Account JSON</label>
+          <label class="input-label">{{ t('admin.accounts.vertexSaJsonLabel') }}</label>
           <input
             ref="vertexServiceAccountFileInput"
             type="file"
@@ -912,8 +912,8 @@
               v-if="vertexClientEmail"
               class="mt-3 rounded-md border border-sky-200 bg-white px-3 py-2 text-xs text-sky-900 dark:border-sky-800/50 dark:bg-dark-800 dark:text-sky-200"
             >
-              <div class="truncate">Project ID: <span class="font-mono">{{ vertexProjectId }}</span></div>
-              <div class="truncate">Client Email: <span class="font-mono">{{ vertexClientEmail }}</span></div>
+              <div class="truncate">{{ t('admin.accounts.vertexProjectIdLabel') }}: <span class="font-mono">{{ vertexProjectId }}</span></div>
+              <div class="truncate">{{ t('admin.accounts.vertexClientEmailLabel') }}: <span class="font-mono">{{ vertexClientEmail }}</span></div>
             </div>
           </div>
           <p class="input-hint">{{ t('admin.accounts.vertexSaJsonUploadHint') }}</p>
@@ -921,7 +921,7 @@
 
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label class="input-label">Project ID</label>
+            <label class="input-label">{{ t('admin.accounts.vertexProjectIdLabel') }}</label>
             <input
               v-model="vertexProjectId"
               type="text"
@@ -931,7 +931,7 @@
             />
           </div>
           <div>
-            <label class="input-label">Location</label>
+            <label class="input-label">{{ t('admin.accounts.vertexLocationLabel') }}</label>
             <select
               v-model="vertexLocation"
               required
@@ -3253,21 +3253,21 @@
                 <td class="px-3 py-2 text-gray-900 dark:text-white">
                   {{ t('admin.accounts.gemini.quotaPolicy.rows.googleOne.channel') }}
                 </td>
-                <td class="px-3 py-2 text-gray-600 dark:text-gray-400">Free</td>
+                <td class="px-3 py-2 text-gray-600 dark:text-gray-400">{{ t('admin.accounts.gemini.quotaPolicy.tiers.free') }}</td>
                 <td class="px-3 py-2 text-gray-600 dark:text-gray-400">
                   {{ t('admin.accounts.gemini.quotaPolicy.rows.googleOne.limitsFree') }}
                 </td>
               </tr>
               <tr>
                 <td class="px-3 py-2 text-gray-900 dark:text-white"></td>
-                <td class="px-3 py-2 text-gray-600 dark:text-gray-400">Pro</td>
+                <td class="px-3 py-2 text-gray-600 dark:text-gray-400">{{ t('admin.accounts.gemini.quotaPolicy.tiers.pro') }}</td>
                 <td class="px-3 py-2 text-gray-600 dark:text-gray-400">
                   {{ t('admin.accounts.gemini.quotaPolicy.rows.googleOne.limitsPro') }}
                 </td>
               </tr>
               <tr>
                 <td class="px-3 py-2 text-gray-900 dark:text-white"></td>
-                <td class="px-3 py-2 text-gray-600 dark:text-gray-400">Ultra</td>
+                <td class="px-3 py-2 text-gray-600 dark:text-gray-400">{{ t('admin.accounts.gemini.quotaPolicy.tiers.ultra') }}</td>
                 <td class="px-3 py-2 text-gray-600 dark:text-gray-400">
                   {{ t('admin.accounts.gemini.quotaPolicy.rows.googleOne.limitsUltra') }}
                 </td>
@@ -3276,14 +3276,14 @@
                 <td class="px-3 py-2 text-gray-900 dark:text-white">
                   {{ t('admin.accounts.gemini.quotaPolicy.rows.gcp.channel') }}
                 </td>
-                <td class="px-3 py-2 text-gray-600 dark:text-gray-400">Standard</td>
+                <td class="px-3 py-2 text-gray-600 dark:text-gray-400">{{ t('admin.accounts.gemini.quotaPolicy.tiers.standard') }}</td>
                 <td class="px-3 py-2 text-gray-600 dark:text-gray-400">
                   {{ t('admin.accounts.gemini.quotaPolicy.rows.gcp.limitsStandard') }}
                 </td>
               </tr>
               <tr>
                 <td class="px-3 py-2 text-gray-900 dark:text-white"></td>
-                <td class="px-3 py-2 text-gray-600 dark:text-gray-400">Enterprise</td>
+                <td class="px-3 py-2 text-gray-600 dark:text-gray-400">{{ t('admin.accounts.gemini.quotaPolicy.tiers.enterprise') }}</td>
                 <td class="px-3 py-2 text-gray-600 dark:text-gray-400">
                   {{ t('admin.accounts.gemini.quotaPolicy.rows.gcp.limitsEnterprise') }}
                 </td>
@@ -3292,14 +3292,14 @@
                 <td class="px-3 py-2 text-gray-900 dark:text-white">
                   {{ t('admin.accounts.gemini.quotaPolicy.rows.aiStudio.channel') }}
                 </td>
-                <td class="px-3 py-2 text-gray-600 dark:text-gray-400">Free</td>
+                <td class="px-3 py-2 text-gray-600 dark:text-gray-400">{{ t('admin.accounts.gemini.quotaPolicy.tiers.free') }}</td>
                 <td class="px-3 py-2 text-gray-600 dark:text-gray-400">
                   {{ t('admin.accounts.gemini.quotaPolicy.rows.aiStudio.limitsFree') }}
                 </td>
               </tr>
               <tr>
                 <td class="px-3 py-2 text-gray-900 dark:text-white"></td>
-                <td class="px-3 py-2 text-gray-600 dark:text-gray-400">Paid</td>
+                <td class="px-3 py-2 text-gray-600 dark:text-gray-400">{{ t('admin.accounts.gemini.quotaPolicy.tiers.paid') }}</td>
                 <td class="px-3 py-2 text-gray-600 dark:text-gray-400">
                   {{ t('admin.accounts.gemini.quotaPolicy.rows.aiStudio.limitsPaid') }}
                 </td>
@@ -5397,7 +5397,7 @@ const handleOpenAIImportCodexPAT = async (accessToken: string) => {
       extra
     })
 
-    appStore.showSuccess(t('admin.accounts.messages.accountCreated'))
+    appStore.showSuccess(t('admin.accounts.accountCreated'))
     emit('created')
     handleClose()
   } catch (error: any) {

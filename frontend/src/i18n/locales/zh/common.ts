@@ -191,6 +191,18 @@ export default {
     channelStatus: '渠道状态',
     riskControl: '风控中心',
     providerBilling: '供应商对账',
+    videoDashboard: '生产总览',
+    videoCreate: '视频试跑',
+    videoTasks: '任务记录',
+    videoTaskDetail: '任务详情',
+    videoProviders: '生成通道',
+    videoSystemCheck: '系统检查',
+    videoDashboardDesc: '视频生产整体情况一览',
+    videoCreateDesc: '提交一次视频生成试跑',
+    videoTasksDesc: '查看全部视频生成任务',
+    videoTaskDetailDesc: '查看单个任务的执行详情',
+    videoProvidersDesc: '管理视频生成通道与能力',
+    videoSystemCheckDesc: '检查视频功能的系统状态',
   },
 
   // Auth

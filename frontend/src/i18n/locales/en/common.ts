@@ -191,6 +191,18 @@ export default {
     channelStatus: 'Channel Status',
     riskControl: 'Risk Control',
     providerBilling: 'Provider Billing',
+    videoDashboard: 'Video Dashboard',
+    videoCreate: 'Create Video Task',
+    videoTasks: 'Video Tasks',
+    videoTaskDetail: 'Video Task Detail',
+    videoProviders: 'Video Providers',
+    videoSystemCheck: 'Video System Check',
+    videoDashboardDesc: 'Overview of video production',
+    videoCreateDesc: 'Submit a video generation trial run',
+    videoTasksDesc: 'View all video generation tasks',
+    videoTaskDetailDesc: 'View execution details of a task',
+    videoProvidersDesc: 'Manage video generation providers and capabilities',
+    videoSystemCheckDesc: 'Check system status for video features',
   },
 
   // Auth

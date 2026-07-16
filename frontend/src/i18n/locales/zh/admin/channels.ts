@@ -110,6 +110,7 @@ export default {
         modelInputHint: '按回车添加，支持粘贴批量导入',
         billingMode: '计费模式',
         defaultPrices: '默认价格（未命中区间时使用）',
+        priceUnitMTok: '$/百万 Token',
         inputPrice: '输入',
         outputPrice: '输出',
         cacheWritePrice: '缓存写入',

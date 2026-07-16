@@ -99,7 +99,7 @@
           <!-- Default prices (fallback when no interval matches) -->
           <label class="mt-3 block text-xs font-medium text-gray-500 dark:text-gray-400">
             {{ t('admin.channels.form.defaultPrices') }}
-            <span class="ml-1 font-normal text-gray-400">$/MTok</span>
+            <span class="ml-1 font-normal text-gray-400">{{ t('admin.channels.form.priceUnitMTok') }}</span>
           </label>
           <div class="mt-1 grid grid-cols-2 gap-2 sm:grid-cols-5">
             <div>

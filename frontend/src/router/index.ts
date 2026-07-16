@@ -474,7 +474,9 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: true,
-      title: 'Video Dashboard'
+      title: 'Video Dashboard',
+      titleKey: 'nav.videoDashboard',
+      descriptionKey: 'nav.videoDashboardDesc'
     }
   },
   {
@@ -484,7 +486,9 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: true,
-      title: 'Video Providers'
+      title: 'Video Providers',
+      titleKey: 'nav.videoProviders',
+      descriptionKey: 'nav.videoProvidersDesc'
     }
   },
   {
@@ -494,7 +498,9 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: false,
-      title: 'Create Video Task'
+      title: 'Create Video Task',
+      titleKey: 'nav.videoCreate',
+      descriptionKey: 'nav.videoCreateDesc'
     }
   },
   {
@@ -504,7 +510,9 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: false,
-      title: 'Video Tasks'
+      title: 'Video Tasks',
+      titleKey: 'nav.videoTasks',
+      descriptionKey: 'nav.videoTasksDesc'
     }
   },
   {
@@ -514,7 +522,9 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: false,
-      title: 'Video Task'
+      title: 'Video Task',
+      titleKey: 'nav.videoTaskDetail',
+      descriptionKey: 'nav.videoTaskDetailDesc'
     }
   },
   {
@@ -524,7 +534,9 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: true,
-      title: 'Video System Check'
+      title: 'Video System Check',
+      titleKey: 'nav.videoSystemCheck',
+      descriptionKey: 'nav.videoSystemCheckDesc'
     }
   },
   {

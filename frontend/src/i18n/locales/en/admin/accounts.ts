@@ -78,6 +78,9 @@ export default {
       crsBack: 'Back',
       editAccount: 'Edit Account',
       deleteAccount: 'Delete Account',
+      deleteConfirmMessage: "Are you sure you want to delete account '{name}'?",
+      refreshCookie: 'Refresh Cookie',
+      testAccount: 'Test Account',
       searchAccounts: 'Search accounts...',
       notes: 'Notes',
       notesPlaceholder: 'Enter notes',
@@ -115,7 +118,9 @@ export default {
         grokOauth: 'Grok OAuth',
         antigravityApikey: 'Connect via Base URL + API Key',
         upstream: 'Upstream',
-        upstreamDesc: 'Connect via Base URL + API Key'
+        upstreamDesc: 'Connect via Base URL + API Key',
+        api_key: 'API Key',
+        cookie: 'Cookie'
       },
       antigravityProjectIdLabel: 'GCP Project ID (optional)',
       antigravityProjectIdPlaceholder: 'your-gcp-project-id',
@@ -299,6 +304,36 @@ export default {
       tokenRefreshed: 'Token refreshed successfully',
       accountDeleted: 'Account deleted successfully',
       rateLimitCleared: 'Rate limit cleared successfully',
+      form: {
+        nameLabel: 'Account Name',
+        namePlaceholder: 'Enter account name',
+        platformLabel: 'Platform',
+        selectPlatform: 'Select platform',
+        typeLabel: 'Type',
+        selectType: 'Select type',
+        credentialsLabel: 'Credentials',
+        credentialsPlaceholder: 'Enter Cookie or API Key',
+        priorityLabel: 'Priority',
+        priorityHint: 'Lower numbers mean higher priority',
+        weightLabel: 'Weight',
+        weightHint: 'Weight value used for load balancing',
+        statusLabel: 'Status'
+      },
+      filters: {
+        platform: 'Platform',
+        allPlatforms: 'All Platforms',
+        type: 'Type',
+        allTypes: 'All Types',
+        status: 'Status',
+        allStatuses: 'All Statuses'
+      },
+      saving: 'Saving...',
+      refreshing: 'Refreshing...',
+      noAccounts: 'No accounts yet',
+      noAccountsDescription: 'Add AI platform accounts to start using the API gateway.',
+      accountCreatedSuccess: 'Account added successfully',
+      accountUpdatedSuccess: 'Account updated successfully',
+      accountDeletedSuccess: 'Account deleted successfully',
       bulkSchedulableEnabled: 'Successfully enabled scheduling for {count} account(s)',
       bulkSchedulableDisabled: 'Successfully disabled scheduling for {count} account(s)',
       bulkSchedulablePartial: 'Scheduling updated partially: {success} succeeded, {failed} failed',
@@ -353,7 +388,10 @@ export default {
       resetStatus: 'Reset Status',
       statusReset: 'Account status reset successfully',
       failedToResetStatus: 'Failed to reset account status',
+      cookieRefreshedSuccess: 'Cookie refreshed successfully',
+      testSuccess: 'Account test passed',
       failedToLoad: 'Failed to load accounts',
+      failedToSave: 'Failed to save account',
       failedToRefresh: 'Failed to refresh token',
       failedToDelete: 'Failed to delete account',
       failedToClearRateLimit: 'Failed to clear rate limit',
@@ -372,6 +410,9 @@ export default {
       vertexAnthropicHint: 'Use a Google Cloud Service Account JSON to call Anthropic Claude via Vertex AI. It is recommended to configure model mapping to map client Claude model names to Vertex model IDs.',
       vertexGeminiHint: 'Use a Google Cloud Service Account JSON to access Vertex AI Gemini. It is recommended to place Vertex accounts in a separate group to avoid mixing with AI Studio/Gemini OAuth on the same models.',
       vertexSaJsonLabel: 'Service Account JSON',
+      vertexProjectIdLabel: 'Project ID',
+      vertexClientEmailLabel: 'Client Email',
+      vertexLocationLabel: 'Location',
       vertexSaJsonLoaded: 'Service Account JSON loaded',
       vertexSaJsonDrop: 'Drop Service Account JSON here',
       vertexSaJsonKeyHidden: 'Key content is not displayed in the form.',
@@ -515,6 +556,8 @@ export default {
       supportsAllModels: '(supports all models)',
       requestModel: 'Request model',
       actualModel: 'Actual model',
+      fromModel: 'Request model',
+      toModel: 'Actual model',
       addMapping: 'Add Mapping',
       mappingExists: 'Mapping for {model} already exists',
       wildcardOnlyAtEnd: 'Wildcard * can only be at the end',
@@ -785,6 +828,15 @@ export default {
         batchSuccess: 'Successfully created {count} account(s)',
         batchPartialSuccess: 'Partial success: {success} succeeded, {failed} failed',
         batchFailed: 'Batch creation failed',
+        // Refresh Token / Session Token input (reserved: not shown in the current Anthropic flow; kept symmetric across platforms)
+        refreshTokenAuth: 'Manual RT Input',
+        refreshTokenDesc: 'Enter your existing Refresh Token(s). Supports batch input (one per line). The system will automatically validate and create accounts.',
+        refreshTokenPlaceholder: 'Paste your Refresh Token...\nSupports multiple, one per line',
+        validating: 'Validating...',
+        validateAndCreate: 'Validate & Create Account',
+        sessionTokenAuth: 'Manual ST Input',
+        refreshTokenLabel: 'Refresh Token',
+        copyAuthUrl: 'Copy URL',
         // OpenAI specific
         openai: {
           title: 'OpenAI Account Authorization',
@@ -815,6 +867,8 @@ export default {
           refreshTokenAuth: 'Manual RT Input',
           refreshTokenDesc: 'Enter your existing OpenAI Refresh Token(s). Supports batch input (one per line). The system will automatically validate and create accounts.',
           refreshTokenPlaceholder: 'Paste your OpenAI Refresh Token...\nSupports multiple, one per line',
+          mobileRefreshTokenAuth: 'Mobile RT',
+          accessTokenAuth: 'Manual AT Input',
           codexSessionAuth: 'Codex JSON / AT Batch Input',
           codexSessionDesc: 'Paste Codex JSON or an accessToken. Accounts use the step 1 settings.',
           codexSessionInputLabel: 'Codex JSON or accessToken',
@@ -869,6 +923,7 @@ export default {
           validating: 'Validating...',
           validateAndCreate: 'Validate & Create Account',
           pleaseEnterRefreshToken: 'Please enter Refresh Token',
+          sessionTokenAuth: 'Manual ST Input',
           failedToGenerateUrl: 'Failed to generate Grok auth URL',
           missingExchangeParams: 'Missing authorization code, state, or OAuth session',
           failedToExchangeCode: 'Failed to exchange Grok authorization code',
@@ -923,6 +978,13 @@ export default {
 	          failedToGenerateUrl: 'Failed to generate Gemini auth URL',
 	          missingExchangeParams: 'Missing auth code, session ID, or state',
 	          failedToExchangeCode: 'Failed to exchange Gemini auth code',
+          // Refresh Token / Session Token input (reserved: not shown in the current Gemini flow; kept symmetric across platforms)
+          refreshTokenAuth: 'Manual RT Input',
+          refreshTokenDesc: 'Enter your existing Gemini Refresh Token(s). Supports batch input (one per line). The system will automatically validate and create accounts.',
+          refreshTokenPlaceholder: 'Paste your Gemini Refresh Token...\nSupports multiple, one per line',
+          validating: 'Validating...',
+          validateAndCreate: 'Validate & Create Account',
+          sessionTokenAuth: 'Manual ST Input',
 	          missingProjectId: 'GCP Project ID retrieval failed: Your Google account is not linked to an active GCP project. Please activate GCP and bind a credit card in Google Cloud Console, or manually enter the Project ID during authorization.',
 	          modelPassthrough: 'Gemini Model Passthrough',
 	          modelPassthroughDesc:
@@ -967,7 +1029,8 @@ export default {
                     validating: 'Validating...',
                     validateAndCreate: 'Validate & Create',
                     pleaseEnterRefreshToken: 'Please enter Refresh Token',
-                    failedToValidateRT: 'Failed to validate Refresh Token'
+                    failedToValidateRT: 'Failed to validate Refresh Token',
+                    sessionTokenAuth: 'Manual ST Input'
                   }
                 },      // Gemini specific (platform-wide)
       gemini: {
@@ -1014,7 +1077,9 @@ export default {
           builtInTitle: 'Built-in OAuth (Gemini CLI / Code Assist)',
           builtInDesc: 'Uses Google built-in client ID. No admin configuration required.',
           builtInRequirement: 'Requires a GCP project and Project ID.',
+          googleOneTitle: 'Google One',
           googleOneDesc: 'Personal account with Google One subscription quota',
+          codeAssistTitle: 'GCP Code Assist',
           codeAssistDesc: 'Enterprise-grade, requires a GCP project',
           codeAssistRequirement: 'Requires an active GCP project with billing enabled',
           showAdvanced: 'Show advanced options (custom OAuth Client)',
@@ -1068,6 +1133,14 @@ export default {
             vertex: 'Vertex AI Quotas'
           },
           simulatedNote: 'Simulated quota, for reference only',
+          tiers: {
+            free: 'Free',
+            pro: 'Pro',
+            ultra: 'Ultra',
+            standard: 'Standard',
+            enterprise: 'Enterprise',
+            paid: 'Paid'
+          },
           rows: {
             googleOne: {
               channel: 'Google One OAuth (Individuals / Code Assist for Individuals)',

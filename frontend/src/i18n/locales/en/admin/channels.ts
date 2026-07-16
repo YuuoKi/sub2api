@@ -110,6 +110,7 @@ export default {
         modelInputHint: 'Press Enter to add, supports paste for batch import.',
         billingMode: 'Billing Mode',
         defaultPrices: 'Default prices (fallback when no interval matches)',
+        priceUnitMTok: '$/MTok',
         inputPrice: 'Input',
         outputPrice: 'Output',
         cacheWritePrice: 'Cache Write',

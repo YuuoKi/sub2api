@@ -18,9 +18,34 @@ type workerRepoStub struct {
 	begin     bool
 	finalized []VideoTaskFinalization
 	progress  []string
+	reserved  float64
 }
 
-func (r *workerRepoStub) CreateTask(context.Context, *VideoTask) error       { return nil }
+type videoAuthInvalidatorStub struct{ users []int64 }
+
+func (s *videoAuthInvalidatorStub) InvalidateAuthCacheByUserID(_ context.Context, userID int64) {
+	s.users = append(s.users, userID)
+}
+
+type videoBillingInvalidatorStub struct {
+	users []int64
+	keys  []int64
+}
+
+func (s *videoBillingInvalidatorStub) InvalidateUserBalance(_ context.Context, userID int64) error {
+	s.users = append(s.users, userID)
+	return nil
+}
+func (s *videoBillingInvalidatorStub) InvalidateAPIKeyRateLimit(_ context.Context, keyID int64) error {
+	s.keys = append(s.keys, keyID)
+	return nil
+}
+
+func (r *workerRepoStub) CreateTask(context.Context, *VideoTask) error { return nil }
+func (r *workerRepoStub) ReserveAndCreateTask(_ context.Context, _ *VideoTask, maximumUSD float64) error {
+	r.reserved = maximumUSD
+	return nil
+}
 func (r *workerRepoStub) GetTask(context.Context, int64) (*VideoTask, error) { return r.task, nil }
 func (r *workerRepoStub) GetTaskForScope(context.Context, int64, VideoTaskScope) (*VideoTask, error) {
 	return r.task, nil
@@ -45,28 +70,36 @@ func (r *workerRepoStub) GetVideoProvider(context.Context, int64, int64) (*Video
 	return &r.provider, nil
 }
 
-type videoBudgetStub struct{ err error }
-
-func (b videoBudgetStub) AuthorizeVideo(context.Context, VideoTaskScope) (float64, error) {
-	return 0.2, b.err
-}
-
-func TestVideoGatewayCreateDefaultsDeniedAndDoesNotTrustCallerCost(t *testing.T) {
+func TestVideoGatewayCreateRequiresWorkerAndReservesServerMaximum(t *testing.T) {
 	repo := &workerRepoStub{provider: VideoProviderAccount{ID: 10, GroupID: 9, Provider: "seedance", Enabled: true}}
 	cmd := VideoTaskCreateCommand{Scope: VideoTaskScope{UserID: 1, APIKeyID: 2, GroupID: 9}, ProviderAccountID: 10, Prompt: "x", Duration: 4, Resolution: "720p", SingleSmokeAuthorized: true}
-	_, err := NewVideoGatewayService(repo, NewSingleSmokeAuthorization(false), videoBudgetStub{}).CreateTask(context.Background(), cmd)
+	cfg := &config.Config{VideoGateway: config.VideoGatewayConfig{SeedanceCNYPerMillionTokens: 2, USDCNYExchangeRate: 7, TinyRealEstimateCNY: 0.7, TinyRealMaximumCNY: 1.4}}
+	authCache := &videoAuthInvalidatorStub{}
+	billingCache := &videoBillingInvalidatorStub{}
+	_, err := NewVideoGatewayService(repo, NewSingleSmokeAuthorization(false), cfg, authCache, billingCache).CreateTask(context.Background(), cmd)
 	if !errors.Is(err, ErrVideoRealDispatchDenied) {
 		t.Fatalf("err=%v", err)
 	}
-	task, err := NewVideoGatewayService(repo, NewSingleSmokeAuthorization(true), videoBudgetStub{}).CreateTask(context.Background(), cmd)
+	_, err = NewVideoGatewayService(repo, NewSingleSmokeAuthorization(true), cfg, authCache, billingCache).CreateTask(context.Background(), cmd)
+	if !errors.Is(err, ErrVideoRealDispatchDenied) {
+		t.Fatalf("worker-disabled err=%v", err)
+	}
+	cfg.VideoGateway.WorkerEnabled = true
+	task, err := NewVideoGatewayService(repo, NewSingleSmokeAuthorization(true), cfg, authCache, billingCache).CreateTask(context.Background(), cmd)
 	if err != nil || task == nil || task.DurationSeconds != 4 || task.Resolution != "720p" {
 		t.Fatalf("task=%#v err=%v", task, err)
+	}
+	if repo.reserved != 0.2 || task.ReservedCostUSD != 0.2 || task.ReservationState != VideoReservationReserved {
+		t.Fatalf("reserved=%v task=%#v", repo.reserved, task)
+	}
+	if len(authCache.users) != 1 || len(billingCache.users) != 1 || len(billingCache.keys) != 1 {
+		t.Fatalf("auth=%v billing_users=%v billing_keys=%v", authCache.users, billingCache.users, billingCache.keys)
 	}
 }
 
 func TestVideoGatewayRuntimeStartsOnlyWithExplicitWorkerAndRealGate(t *testing.T) {
 	cfg := &config.Config{VideoGateway: config.VideoGatewayConfig{WorkerEnabled: true, WorkerIntervalSeconds: 1}}
-	w := NewVideoGatewayWorker(&workerRepoStub{}, keyDecryptStub{}, func(string, string) *SeedanceAdapter { return nil }, &billingDedupStub{}, cfg)
+	w := NewVideoGatewayWorker(&workerRepoStub{}, keyDecryptStub{}, func(string, string) *SeedanceAdapter { return nil }, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}, cfg)
 	denied := ProvideVideoGatewayRuntime(w, cfg, NewSingleSmokeAuthorization(false))
 	if denied.Running() {
 		t.Fatal("runtime started without real gate")
@@ -94,41 +127,9 @@ type keyDecryptStub struct{}
 func (keyDecryptStub) Encrypt(v string) (string, error) { return v, nil }
 func (keyDecryptStub) Decrypt(string) (string, error)   { return "synthetic-provider-key", nil }
 
-type billingDedupStub struct {
-	effects int
-	seen    map[string]string
-	last    *UsageBillingCommand
-}
-
-func (b *billingDedupStub) Apply(_ context.Context, cmd *UsageBillingCommand) (*UsageBillingApplyResult, error) {
-	b.last = cmd
-	if b.seen == nil {
-		b.seen = map[string]string{}
-	}
-	if fp, ok := b.seen[cmd.RequestID]; ok {
-		if fp != cmd.RequestPayloadHash {
-			return nil, ErrUsageBillingRequestConflict
-		}
-		return &UsageBillingApplyResult{}, nil
-	}
-	b.seen[cmd.RequestID] = cmd.RequestPayloadHash
-	b.effects++
-	return &UsageBillingApplyResult{Applied: true}, nil
-}
-func (*billingDedupStub) ReserveBatchImageBalance(context.Context, *BatchImageBalanceHoldCommand) (*BatchImageBalanceHoldResult, error) {
-	return nil, nil
-}
-func (*billingDedupStub) CaptureBatchImageBalance(context.Context, *BatchImageBalanceHoldCommand) (*BatchImageBalanceHoldResult, error) {
-	return nil, nil
-}
-func (*billingDedupStub) ReleaseBatchImageBalance(context.Context, *BatchImageBalanceHoldCommand) (*BatchImageBalanceHoldResult, error) {
-	return nil, nil
-}
-
-func TestVideoWorkerBillsSuccessfulTerminalExactlyOnceWithStableFacts(t *testing.T) {
+func TestVideoWorkerDelegatesSuccessfulAtomicCapture(t *testing.T) {
 	tokens := int64(245025)
-	repo := &workerRepoStub{task: &VideoTask{ID: 7, APIKeyID: 8, GroupID: 9, ProviderAccountID: 10, CreatedBy: 11, Model: SeedanceModel, Status: VideoStatusSubmitted, UpstreamTaskID: "up-7", Version: 2, DurationSeconds: 4, Resolution: "720p"}, provider: VideoProviderAccount{ID: 10, GroupID: 9, Enabled: true, BaseURL: "https://ark.cn-beijing.volces.com", EncryptedAPIKey: "cipher"}}
-	billing := &billingDedupStub{}
+	repo := &workerRepoStub{task: &VideoTask{ID: 7, APIKeyID: 8, GroupID: 9, ProviderAccountID: 10, CreatedBy: 11, Model: SeedanceModel, Status: VideoStatusSubmitted, UpstreamTaskID: "up-7", Version: 2, DurationSeconds: 4, Resolution: "720p", ReservedCostUSD: 0.2, ReservationState: VideoReservationReserved}, provider: VideoProviderAccount{ID: 10, GroupID: 9, Enabled: true, BaseURL: "https://ark.cn-beijing.volces.com", EncryptedAPIKey: "cipher"}}
 	responseBody := `{"id":"up-7","status":"succeeded","content":{"video_url":"https://cdn.example.test/v.mp4"},"usage":{"completion_tokens":245025}}`
 	factory := func(base, key string) *SeedanceAdapter {
 		return NewSeedanceAdapter(&http.Client{Transport: videoRoundTripperFunc(func(*http.Request) (*http.Response, error) {
@@ -136,35 +137,70 @@ func TestVideoWorkerBillsSuccessfulTerminalExactlyOnceWithStableFacts(t *testing
 		})}, base, key)
 	}
 	cfg := &config.Config{VideoGateway: config.VideoGatewayConfig{SeedanceCNYPerMillionTokens: 2, USDCNYExchangeRate: 7, TinyRealMaximumCNY: 0.1}}
-	w := NewVideoGatewayWorker(repo, keyDecryptStub{}, factory, billing, cfg)
+	authCache := &videoAuthInvalidatorStub{}
+	billingCache := &videoBillingInvalidatorStub{}
+	w := NewVideoGatewayWorker(repo, keyDecryptStub{}, factory, authCache, billingCache, cfg)
 	if err := w.RunOnce(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if err := w.RunOnce(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if billing.effects != 1 || billing.last.AccountID != 0 || billing.last.AccountQuotaCost != 0 || billing.last.OutputTokens != int(tokens) {
-		t.Fatalf("billing=%#v effects=%d", billing.last, billing.effects)
-	}
-	if len(repo.finalized) != 2 || repo.finalized[0].CostAmount <= 0 || repo.finalized[0].Status != VideoStatusSucceeded {
+	if len(repo.finalized) != 1 || repo.finalized[0].CostAmount <= 0 || repo.finalized[0].Status != VideoStatusSucceeded || repo.finalized[0].Settlement != VideoSettlementCaptureActual || *repo.finalized[0].UsageTotalTokens != tokens {
 		t.Fatalf("finalized=%#v", repo.finalized)
+	}
+	if len(authCache.users) != 1 || len(billingCache.users) != 1 || len(billingCache.keys) != 1 {
+		t.Fatalf("caches were not invalidated")
 	}
 }
 
 func TestVideoWorkerPreservesAssetsAndFailsWithoutCompletionTokens(t *testing.T) {
-	repo := &workerRepoStub{task: &VideoTask{ID: 7, APIKeyID: 8, GroupID: 9, ProviderAccountID: 10, CreatedBy: 11, Model: SeedanceModel, Status: VideoStatusSubmitted, UpstreamTaskID: "up-7", Version: 2, DurationSeconds: 4, Resolution: "720p"}, provider: VideoProviderAccount{ID: 10, GroupID: 9, Enabled: true, BaseURL: "https://ark.cn-beijing.volces.com", EncryptedAPIKey: "cipher"}}
-	billing := &billingDedupStub{}
+	repo := &workerRepoStub{task: &VideoTask{ID: 7, APIKeyID: 8, GroupID: 9, ProviderAccountID: 10, CreatedBy: 11, Model: SeedanceModel, Status: VideoStatusSubmitted, UpstreamTaskID: "up-7", Version: 2, DurationSeconds: 4, Resolution: "720p", ReservedCostUSD: 0.2, ReservationState: VideoReservationReserved}, provider: VideoProviderAccount{ID: 10, GroupID: 9, Enabled: true, BaseURL: "https://ark.cn-beijing.volces.com", EncryptedAPIKey: "cipher"}}
 	body := `{"id":"up-7","status":"succeeded","content":{"video_url":"https://cdn.example.test/v.mp4"}}`
 	factory := func(base, key string) *SeedanceAdapter {
 		return NewSeedanceAdapter(&http.Client{Transport: videoRoundTripperFunc(func(*http.Request) (*http.Response, error) {
 			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}, nil
 		})}, base, key)
 	}
-	w := NewVideoGatewayWorker(repo, keyDecryptStub{}, factory, billing, &config.Config{VideoGateway: config.VideoGatewayConfig{SeedanceCNYPerMillionTokens: 2, USDCNYExchangeRate: 7}})
+	w := NewVideoGatewayWorker(repo, keyDecryptStub{}, factory, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}, &config.Config{VideoGateway: config.VideoGatewayConfig{SeedanceCNYPerMillionTokens: 2, USDCNYExchangeRate: 7}})
 	if err := w.RunOnce(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if billing.effects != 0 || len(repo.finalized) != 1 || repo.finalized[0].ProviderErrorCode != "billing_usage_missing" || repo.finalized[0].ResultURL == "" {
-		t.Fatalf("billing=%d finalized=%#v", billing.effects, repo.finalized)
+	if len(repo.finalized) != 1 || repo.finalized[0].ProviderErrorCode != "billing_usage_missing" || repo.finalized[0].ResultURL == "" || repo.finalized[0].Settlement != VideoSettlementRelease {
+		t.Fatalf("finalized=%#v", repo.finalized)
+	}
+}
+
+func TestVideoWorkerFailsAndReleasesWhenSuccessOmitsVideoURL(t *testing.T) {
+	tokens := int64(10)
+	repo := &workerRepoStub{task: &VideoTask{ID: 7, APIKeyID: 8, GroupID: 9, ProviderAccountID: 10, CreatedBy: 11, Model: SeedanceModel, Status: VideoStatusSubmitted, UpstreamTaskID: "up-7", Version: 2, ReservedCostUSD: 0.2, ReservationState: VideoReservationReserved}, provider: VideoProviderAccount{ID: 10, GroupID: 9, Enabled: true, BaseURL: "https://ark.cn-beijing.volces.com", EncryptedAPIKey: "cipher"}}
+	body := `{"id":"up-7","status":"succeeded","usage":{"completion_tokens":10}}`
+	factory := func(base, key string) *SeedanceAdapter {
+		return NewSeedanceAdapter(&http.Client{Transport: videoRoundTripperFunc(func(*http.Request) (*http.Response, error) {
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}, nil
+		})}, base, key)
+	}
+	w := NewVideoGatewayWorker(repo, keyDecryptStub{}, factory, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}, &config.Config{VideoGateway: config.VideoGatewayConfig{SeedanceCNYPerMillionTokens: 2, USDCNYExchangeRate: 7}})
+	if err := w.RunOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	got := repo.finalized[0]
+	if got.Status != VideoStatusFailed || got.ProviderErrorCode != "result_asset_missing" || got.Settlement != VideoSettlementRelease || got.ResultURL != "" || got.UsageTotalTokens == nil || *got.UsageTotalTokens != tokens {
+		t.Fatalf("finalized=%#v", got)
+	}
+}
+
+func TestVideoWorkerCapturesReservationAndFailsWhenActualExceedsMaximum(t *testing.T) {
+	repo := &workerRepoStub{task: &VideoTask{ID: 7, APIKeyID: 8, GroupID: 9, ProviderAccountID: 10, CreatedBy: 11, Model: SeedanceModel, Status: VideoStatusSubmitted, UpstreamTaskID: "up-7", Version: 2, ReservedCostUSD: 0.1, ReservationState: VideoReservationReserved}, provider: VideoProviderAccount{ID: 10, GroupID: 9, Enabled: true, BaseURL: "https://ark.cn-beijing.volces.com", EncryptedAPIKey: "cipher"}}
+	body := `{"id":"up-7","status":"succeeded","content":{"video_url":"https://cdn.example.test/v.mp4"},"usage":{"completion_tokens":1000000}}`
+	factory := func(base, key string) *SeedanceAdapter {
+		return NewSeedanceAdapter(&http.Client{Transport: videoRoundTripperFunc(func(*http.Request) (*http.Response, error) {
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}, nil
+		})}, base, key)
+	}
+	w := NewVideoGatewayWorker(repo, keyDecryptStub{}, factory, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}, &config.Config{VideoGateway: config.VideoGatewayConfig{SeedanceCNYPerMillionTokens: 2, USDCNYExchangeRate: 7}})
+	if err := w.RunOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	got := repo.finalized[0]
+	if got.Status != VideoStatusFailed || got.ProviderErrorCode != "budget_actual_exceeded" || got.Settlement != VideoSettlementCaptureReserved || got.CostAmount != 0.1 || got.ProviderActualCostUSD <= got.CostAmount || got.ResultURL == "" {
+		t.Fatalf("finalized=%#v", got)
 	}
 }

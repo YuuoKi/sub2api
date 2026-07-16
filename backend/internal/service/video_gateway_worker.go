@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math"
 	"time"
 
@@ -14,16 +13,17 @@ type VideoGatewayWorker struct {
 	repo          VideoGatewayRuntimeRepository
 	encryptor     VideoKeyEncryptor
 	clientFactory func(string, string) *SeedanceAdapter
-	billing       UsageBillingRepository
+	authCache     VideoAuthCacheInvalidator
+	billingCache  VideoBillingCacheInvalidator
 	cfg           *config.Config
 }
 
-func NewVideoGatewayWorker(repo VideoGatewayRuntimeRepository, encryptor VideoKeyEncryptor, factory func(string, string) *SeedanceAdapter, billing UsageBillingRepository, cfg *config.Config) *VideoGatewayWorker {
-	return &VideoGatewayWorker{repo: repo, encryptor: encryptor, clientFactory: factory, billing: billing, cfg: cfg}
+func NewVideoGatewayWorker(repo VideoGatewayRuntimeRepository, encryptor VideoKeyEncryptor, factory func(string, string) *SeedanceAdapter, authCache VideoAuthCacheInvalidator, billingCache VideoBillingCacheInvalidator, cfg *config.Config) *VideoGatewayWorker {
+	return &VideoGatewayWorker{repo: repo, encryptor: encryptor, clientFactory: factory, authCache: authCache, billingCache: billingCache, cfg: cfg}
 }
 
 func (w *VideoGatewayWorker) RunOnce(ctx context.Context) error {
-	if w == nil || w.repo == nil || w.encryptor == nil || w.clientFactory == nil || w.billing == nil || w.cfg == nil {
+	if w == nil || w.repo == nil || w.encryptor == nil || w.clientFactory == nil || w.cfg == nil {
 		return errors.New("video worker dependencies are required")
 	}
 	tasks, err := w.repo.ClaimRunnableTasks(ctx, 1, 30*time.Second)
@@ -52,31 +52,43 @@ func (w *VideoGatewayWorker) RunOnce(ctx context.Context) error {
 		}
 		if polled.Status == VideoStatusSucceeded {
 			if polled.CompletionTokens == nil || *polled.CompletionTokens <= 0 {
-				_, err = w.repo.FinalizeTask(ctx, VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version, Status: VideoStatusFailed,
+				err = w.finalize(ctx, task, VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version, Status: VideoStatusFailed,
 					ResultURL: polled.ResultURL, LastFrameURL: polled.LastFrameURL, ProviderErrorCode: "billing_usage_missing",
-					ProviderErrorMessage: "provider success omitted billable completion tokens", ErrorMessage: "provider success omitted billable completion tokens", Currency: "USD", CompletedAt: time.Now().UTC()})
+					ProviderErrorMessage: "provider success omitted billable completion tokens", ErrorMessage: "provider success omitted billable completion tokens", Currency: "USD", Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()})
 				return err
 			}
 			actualUSD, costErr := videoActualUSD(*polled.CompletionTokens, w.cfg)
 			if costErr != nil {
-				return costErr
+				err = w.finalize(ctx, task, VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version, Status: VideoStatusFailed,
+					ResultURL: polled.ResultURL, LastFrameURL: polled.LastFrameURL, UsageTotalTokens: polled.CompletionTokens,
+					ProviderErrorCode: "billing_configuration_invalid", ProviderErrorMessage: "video billing configuration is invalid",
+					ErrorMessage: "video billing configuration is invalid", Currency: "USD", Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()})
+				return err
 			}
-			cmd := &UsageBillingCommand{RequestID: fmt.Sprintf("video:%d", task.ID), APIKeyID: task.APIKeyID, UserID: task.CreatedBy,
-				AccountID: 0, AccountType: AccountTypeAPIKey, Model: task.Model, BillingType: BillingTypeBalance,
-				OutputTokens: int(*polled.CompletionTokens), MediaType: "video", BalanceCost: actualUSD, APIKeyQuotaCost: actualUSD,
-				APIKeyRateLimitCost: actualUSD, AccountQuotaCost: 0,
-				RequestPayloadHash: HashUsageRequestPayload([]byte(fmt.Sprintf("%d|%d|%d|%s|%d|%d|%s", task.ID, task.CreatedBy, task.APIKeyID, task.Model, *polled.CompletionTokens, task.DurationSeconds, task.Resolution)))}
-			if _, billErr := w.billing.Apply(ctx, cmd); billErr != nil {
-				return fmt.Errorf("video billing failed: %w", billErr)
+			if polled.ResultURL == "" {
+				err = w.finalize(ctx, task, VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version, Status: VideoStatusFailed,
+					LastFrameURL: polled.LastFrameURL, UsageTotalTokens: polled.CompletionTokens, ProviderActualCostUSD: actualUSD,
+					ProviderErrorCode: "result_asset_missing", ProviderErrorMessage: "provider success omitted video asset",
+					ErrorMessage: "provider success omitted video asset", Currency: "USD", Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()})
+				return err
 			}
-			_, err = w.repo.FinalizeTask(ctx, VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version, Status: polled.Status,
+			if actualUSD-task.ReservedCostUSD > 0.00000001 {
+				err = w.finalize(ctx, task, VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version, Status: VideoStatusFailed,
+					ResultURL: polled.ResultURL, LastFrameURL: polled.LastFrameURL, UsageTotalTokens: polled.CompletionTokens,
+					CostAmount: task.ReservedCostUSD, ProviderActualCostUSD: actualUSD, Currency: "USD", Settlement: VideoSettlementCaptureReserved,
+					ProviderErrorCode: "budget_actual_exceeded", ProviderErrorMessage: "provider cost exceeded reserved maximum",
+					ErrorMessage: "provider cost exceeded reserved maximum", CompletedAt: time.Now().UTC()})
+				return err
+			}
+			err = w.finalize(ctx, task, VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version, Status: polled.Status,
 				ResultURL: polled.ResultURL, LastFrameURL: polled.LastFrameURL, UsageTotalTokens: polled.CompletionTokens,
-				CostAmount: actualUSD, Currency: "USD", CompletedAt: time.Now().UTC()})
+				CostAmount: actualUSD, ProviderActualCostUSD: actualUSD, Currency: "USD", Settlement: VideoSettlementCaptureActual, CompletedAt: time.Now().UTC()})
 			return err
 		}
-		_, err = w.repo.FinalizeTask(ctx, VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version, Status: polled.Status,
+		err = w.finalize(ctx, task, VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version, Status: polled.Status,
+			ResultURL: polled.ResultURL, LastFrameURL: polled.LastFrameURL,
 			ProviderErrorCode: polled.ErrorCode, ProviderErrorMessage: polled.ErrorMessage, ErrorMessage: polled.ErrorMessage,
-			Currency: "USD", CompletedAt: time.Now().UTC()})
+			Currency: "USD", Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()})
 		return err
 	}
 	started, err := w.repo.BeginRealDispatch(ctx, task.ID, task.Version)
@@ -84,14 +96,14 @@ func (w *VideoGatewayWorker) RunOnce(ctx context.Context) error {
 		return err
 	}
 	if !started {
-		_, finalizeErr := w.repo.FinalizeTask(ctx, VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version, Status: VideoStatusFailed,
-			ProviderErrorCode: "gate_consumed", ProviderErrorMessage: "single smoke authorization already consumed", ErrorMessage: "single smoke authorization already consumed", CompletedAt: time.Now().UTC()})
+		finalizeErr := w.finalize(ctx, task, VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version, Status: VideoStatusFailed,
+			ProviderErrorCode: "gate_consumed", ProviderErrorMessage: "single smoke authorization already consumed", ErrorMessage: "single smoke authorization already consumed", Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()})
 		return finalizeErr
 	}
 	created, err := w.clientFactory(provider.BaseURL, key).Create(ctx, VideoCreateRequest{Prompt: task.Prompt, Duration: task.DurationSeconds, Resolution: task.Resolution, ReturnLastFrame: true})
 	if err != nil {
-		_, finalizeErr := w.repo.FinalizeTask(ctx, VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version + 1, Status: VideoStatusFailed,
-			ErrorMessage: "upstream provider dispatch failed", ProviderErrorCode: "provider_dispatch_failed", ProviderErrorMessage: "upstream provider dispatch failed", CompletedAt: time.Now().UTC()})
+		finalizeErr := w.finalize(ctx, task, VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version + 1, Status: VideoStatusFailed,
+			ErrorMessage: "upstream provider dispatch failed", ProviderErrorCode: "provider_dispatch_failed", ProviderErrorMessage: "upstream provider dispatch failed", Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()})
 		if finalizeErr != nil {
 			return finalizeErr
 		}
@@ -110,6 +122,14 @@ func (w *VideoGatewayWorker) RunOnce(ctx context.Context) error {
 		case <-time.After(100 * time.Millisecond):
 		}
 	}
+}
+
+func (w *VideoGatewayWorker) finalize(ctx context.Context, task *VideoTask, input VideoTaskFinalization) error {
+	_, err := w.repo.FinalizeTask(ctx, input)
+	if err == nil {
+		invalidateVideoCaches(ctx, w.authCache, w.billingCache, task.CreatedBy, task.APIKeyID)
+	}
+	return err
 }
 
 func videoActualUSD(completionTokens int64, cfg *config.Config) (float64, error) {

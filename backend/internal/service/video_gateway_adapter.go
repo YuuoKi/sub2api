@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 )
 
 const SeedanceModel = "doubao-seedance-2-0-260128"
@@ -86,7 +87,7 @@ type SeedanceAdapter struct {
 
 func NewSeedanceAdapter(client *http.Client, baseURL, apiKey string) *SeedanceAdapter {
 	if client == nil {
-		client = http.DefaultClient
+		client = &http.Client{Timeout: 30 * time.Second}
 	}
 	return &SeedanceAdapter{client: client, baseURL: strings.TrimRight(strings.TrimSpace(baseURL), "/"), apiKey: apiKey}
 }

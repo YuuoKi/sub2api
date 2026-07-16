@@ -13,6 +13,14 @@ const (
 	VideoStatusSucceeded = "succeeded"
 	VideoStatusFailed    = "failed"
 	VideoStatusCancelled = "cancelled"
+
+	VideoReservationReserved = "reserved"
+	VideoReservationReleased = "released"
+	VideoReservationCaptured = "captured"
+
+	VideoSettlementRelease         = "release"
+	VideoSettlementCaptureActual   = "capture_actual"
+	VideoSettlementCaptureReserved = "capture_reserved"
 )
 
 var (
@@ -47,49 +55,58 @@ type VideoProviderAccount struct {
 }
 
 type VideoTask struct {
-	ID                   int64
-	APIKeyID             int64
-	GroupID              int64
-	ProviderAccountID    int64
-	Provider             string
-	Model                string
-	TaskType             string
-	Prompt               string
-	Status               string
-	UpstreamTaskID       string
-	ResultURL            string
-	LastFrameURL         string
-	DurationSeconds      int
-	Resolution           string
-	UsageTotalTokens     *int64
-	CostAmount           float64
-	Currency             string
-	RealDispatchCount    int
-	ProviderErrorCode    string
-	ProviderErrorMessage string
-	ErrorMessage         string
-	CreationKey          string
-	Version              int64
-	DispatchState        string
-	CreatedBy            int64
-	CreatedAt            time.Time
-	UpdatedAt            time.Time
-	CompletedAt          *time.Time
+	ID                    int64
+	APIKeyID              int64
+	GroupID               int64
+	ProviderAccountID     int64
+	Provider              string
+	Model                 string
+	TaskType              string
+	Prompt                string
+	Status                string
+	UpstreamTaskID        string
+	ResultURL             string
+	LastFrameURL          string
+	DurationSeconds       int
+	Resolution            string
+	UsageTotalTokens      *int64
+	CostAmount            float64
+	Currency              string
+	RealDispatchCount     int
+	ProviderErrorCode     string
+	ProviderErrorMessage  string
+	ErrorMessage          string
+	CreationKey           string
+	Version               int64
+	DispatchState         string
+	CreatedBy             int64
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+	CompletedAt           *time.Time
+	ReservedCostUSD       float64
+	ReservationState      string
+	ReservedAt            *time.Time
+	ReservationWindow5h   *time.Time
+	ReservationWindow1d   *time.Time
+	ReservationWindow7d   *time.Time
+	ProviderActualCostUSD float64
 }
 
 type VideoTaskFinalization struct {
-	TaskID               int64
-	ExpectedVersion      int64
-	Status               string
-	ResultURL            string
-	LastFrameURL         string
-	UsageTotalTokens     *int64
-	CostAmount           float64
-	Currency             string
-	ProviderErrorCode    string
-	ProviderErrorMessage string
-	ErrorMessage         string
-	CompletedAt          time.Time
+	TaskID                int64
+	ExpectedVersion       int64
+	Status                string
+	ResultURL             string
+	LastFrameURL          string
+	UsageTotalTokens      *int64
+	CostAmount            float64
+	Currency              string
+	ProviderErrorCode     string
+	ProviderErrorMessage  string
+	ErrorMessage          string
+	CompletedAt           time.Time
+	Settlement            string
+	ProviderActualCostUSD float64
 }
 
 type VideoTaskFinalizationResult struct {
@@ -100,7 +117,7 @@ type VideoTaskFinalizationResult struct {
 }
 
 type VideoGatewayRepository interface {
-	CreateTask(context.Context, *VideoTask) error
+	ReserveAndCreateTask(context.Context, *VideoTask, float64) error
 	GetTask(context.Context, int64) (*VideoTask, error)
 	GetTaskForScope(context.Context, int64, VideoTaskScope) (*VideoTask, error)
 	CancelTaskForScope(context.Context, int64, VideoTaskScope) (*VideoTask, error)

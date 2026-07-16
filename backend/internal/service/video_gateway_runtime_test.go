@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 )
@@ -29,7 +30,7 @@ func TestSingleSmokeAuthorizationDefaultsDeniedAndIsConsumedOnce(t *testing.T) {
 	}
 }
 
-func TestVideoActualUSDUsesConfiguredTokenPriceAndIgnoresPreflightCapAfterSuccess(t *testing.T) {
+func TestVideoActualUSDComputesProviderCostForSettlementCapDecision(t *testing.T) {
 	cfg := &config.Config{VideoGateway: config.VideoGatewayConfig{SeedanceCNYPerMillionTokens: 2, USDCNYExchangeRate: 7, TinyRealMaximumCNY: 0.1}}
 	got, err := videoActualUSD(1_000_000, cfg)
 	if err != nil {
@@ -45,14 +46,21 @@ func TestVideoActualUSDUsesConfiguredTokenPriceAndIgnoresPreflightCapAfterSucces
 	}
 }
 
-func TestVideoEstimateUSDFailsClosedWithoutCompleteServerPricing(t *testing.T) {
-	valid := &config.Config{VideoGateway: config.VideoGatewayConfig{SeedanceCNYPerMillionTokens: 2, USDCNYExchangeRate: 7, TinyRealEstimateCNY: 1.4, TinyRealMaximumCNY: 2}}
-	got, err := videoEstimateUSD(valid)
+func TestSeedanceAdapterNilClientUsesFiniteTimeout(t *testing.T) {
+	adapter := NewSeedanceAdapter(nil, "https://ark.cn-beijing.volces.com", "synthetic-key")
+	if adapter.client == nil || adapter.client == http.DefaultClient || adapter.client.Timeout != 30*time.Second {
+		t.Fatalf("client=%#v", adapter.client)
+	}
+}
+
+func TestVideoMaximumUSDFailsClosedWithoutServerCapAndFX(t *testing.T) {
+	valid := &config.Config{VideoGateway: config.VideoGatewayConfig{SeedanceCNYPerMillionTokens: 2, USDCNYExchangeRate: 7, TinyRealEstimateCNY: 0.7, TinyRealMaximumCNY: 1.4}}
+	got, err := videoMaximumUSD(valid)
 	if err != nil || got != 0.2 {
 		t.Fatalf("got=%v err=%v", got, err)
 	}
-	for _, bad := range []*config.Config{nil, {}, {VideoGateway: config.VideoGatewayConfig{SeedanceCNYPerMillionTokens: 2, USDCNYExchangeRate: 7, TinyRealEstimateCNY: 3, TinyRealMaximumCNY: 2}}} {
-		if _, err := videoEstimateUSD(bad); err == nil {
+	for _, bad := range []*config.Config{nil, {}, {VideoGateway: config.VideoGatewayConfig{USDCNYExchangeRate: 7}}, {VideoGateway: config.VideoGatewayConfig{SeedanceCNYPerMillionTokens: 2, USDCNYExchangeRate: 7, TinyRealEstimateCNY: 2, TinyRealMaximumCNY: 1}}} {
+		if _, err := videoMaximumUSD(bad); err == nil {
 			t.Fatal("expected fail-closed pricing")
 		}
 	}

@@ -269,7 +269,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	batchImageHandler := handler.NewBatchImageHandler(batchImagePublicService, batchImageDownloadService, batchImageCleanupService)
 	videoGatewayRuntimeRepository := repository.NewVideoGatewayRuntimeRepository(db)
 	singleSmokeAuthorization := service.ProvideVideoSingleSmokeAuthorization()
-	videoGatewayService := service.ProvideVideoGatewayService(videoGatewayRuntimeRepository, singleSmokeAuthorization, billingCacheService, configConfig)
+	videoGatewayService := service.ProvideVideoGatewayService(videoGatewayRuntimeRepository, singleSmokeAuthorization, configConfig, apiKeyService, billingCacheService)
 	videoGatewayHandler := handler.NewVideoGatewayHandler(videoGatewayService)
 	idempotencyCoordinator := service.ProvideIdempotencyCoordinator(idempotencyRepository, configConfig)
 	idempotencyCleanupService := service.ProvideIdempotencyCleanupService(idempotencyRepository, configConfig)
@@ -293,7 +293,9 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	if err != nil {
 		return nil, err
 	}
-	videoGatewayWorker := service.ProvideVideoGatewayWorker(videoGatewayRuntimeRepository, videoKeyEncryptor, usageBillingRepository, configConfig)
+	videoAuthCacheInvalidator := service.ProvideVideoAuthCacheInvalidator(apiKeyService)
+	videoBillingCacheInvalidator := service.ProvideVideoBillingCacheInvalidator(billingCacheService)
+	videoGatewayWorker := service.ProvideVideoGatewayWorker(videoGatewayRuntimeRepository, videoKeyEncryptor, videoAuthCacheInvalidator, videoBillingCacheInvalidator, configConfig)
 	videoGatewayRuntime := service.ProvideVideoGatewayRuntime(videoGatewayWorker, configConfig, singleSmokeAuthorization)
 	scheduledTestRunnerService := service.ProvideScheduledTestRunnerService(scheduledTestPlanRepository, scheduledTestService, accountTestService, rateLimitService, configConfig)
 	paymentOrderExpiryService := service.ProvidePaymentOrderExpiryService(paymentService, leaderLockCache, db)

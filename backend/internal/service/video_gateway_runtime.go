@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"go.uber.org/zap"
 )
 
 type VideoGatewayRuntime struct {
@@ -19,13 +21,13 @@ type VideoGatewayRuntime struct {
 	done   chan struct{}
 }
 
-func ProvideVideoGatewayWorker(repo VideoGatewayRuntimeRepository, encryptor VideoKeyEncryptor, billing UsageBillingRepository, cfg *config.Config) *VideoGatewayWorker {
+func ProvideVideoGatewayWorker(repo VideoGatewayRuntimeRepository, encryptor VideoKeyEncryptor, authCache VideoAuthCacheInvalidator, billingCache VideoBillingCacheInvalidator, cfg *config.Config) *VideoGatewayWorker {
 	timeout := time.Duration(cfg.VideoGateway.HTTPTimeoutSeconds) * time.Second
 	if timeout <= 0 {
 		timeout = 30 * time.Second
 	}
 	client := &http.Client{Timeout: timeout}
-	return NewVideoGatewayWorker(repo, encryptor, func(baseURL, key string) *SeedanceAdapter { return NewSeedanceAdapter(client, baseURL, key) }, billing, cfg)
+	return NewVideoGatewayWorker(repo, encryptor, func(baseURL, key string) *SeedanceAdapter { return NewSeedanceAdapter(client, baseURL, key) }, authCache, billingCache, cfg)
 }
 
 func ProvideVideoGatewayRuntime(worker *VideoGatewayWorker, cfg *config.Config, gate *SingleSmokeAuthorization) *VideoGatewayRuntime {
@@ -56,7 +58,12 @@ func (r *VideoGatewayRuntime) Start() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
-			_ = r.worker.RunOnce(ctx)
+			if err := r.worker.RunOnce(ctx); err != nil && !errors.Is(err, context.Canceled) {
+				logger.L().Error("video_gateway.worker_run_failed",
+					zap.String("component", "service.video_gateway_runtime"),
+					zap.String("error_code", "run_once_failed"),
+					zap.Error(err))
+			}
 			select {
 			case <-ctx.Done():
 				return

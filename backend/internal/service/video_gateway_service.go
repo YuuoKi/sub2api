@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math"
 	"strings"
 
@@ -12,8 +11,13 @@ import (
 
 var ErrVideoBudgetRejected = errors.New("video budget rejected")
 
-type VideoBudgetGuard interface {
-	AuthorizeVideo(context.Context, VideoTaskScope) (float64, error)
+type VideoAuthCacheInvalidator interface {
+	InvalidateAuthCacheByUserID(context.Context, int64)
+}
+
+type VideoBillingCacheInvalidator interface {
+	InvalidateUserBalance(context.Context, int64) error
+	InvalidateAPIKeyRateLimit(context.Context, int64) error
 }
 
 type VideoTaskCreateCommand struct {
@@ -27,39 +31,14 @@ type VideoTaskCreateCommand struct {
 }
 
 type VideoGatewayService struct {
-	repo   VideoGatewayRuntimeRepository
-	gate   *SingleSmokeAuthorization
-	budget VideoBudgetGuard
+	repo         VideoGatewayRuntimeRepository
+	gate         *SingleSmokeAuthorization
+	cfg          *config.Config
+	authCache    VideoAuthCacheInvalidator
+	billingCache VideoBillingCacheInvalidator
 }
 
-type VideoBalanceBudgetGuard struct {
-	billing *BillingCacheService
-	cfg     *config.Config
-}
-
-func NewVideoBalanceBudgetGuard(billing *BillingCacheService, cfg *config.Config) *VideoBalanceBudgetGuard {
-	return &VideoBalanceBudgetGuard{billing: billing, cfg: cfg}
-}
-
-func (g *VideoBalanceBudgetGuard) AuthorizeVideo(ctx context.Context, scope VideoTaskScope) (float64, error) {
-	if g == nil || g.billing == nil || g.cfg == nil {
-		return 0, errors.New("video billing configuration is required")
-	}
-	estimateUSD, err := videoEstimateUSD(g.cfg)
-	if err != nil {
-		return 0, err
-	}
-	balance, err := g.billing.GetUserBalance(ctx, scope.UserID)
-	if err != nil {
-		return 0, err
-	}
-	if balance < estimateUSD {
-		return 0, ErrVideoBudgetRejected
-	}
-	return estimateUSD, nil
-}
-
-func videoEstimateUSD(cfg *config.Config) (float64, error) {
+func videoMaximumUSD(cfg *config.Config) (float64, error) {
 	if cfg == nil {
 		return 0, errors.New("video pricing configuration is incomplete")
 	}
@@ -70,11 +49,11 @@ func videoEstimateUSD(cfg *config.Config) (float64, error) {
 	if pricing.TinyRealEstimateCNY > pricing.TinyRealMaximumCNY {
 		return 0, ErrVideoBudgetRejected
 	}
-	return math.Round((pricing.TinyRealEstimateCNY/pricing.USDCNYExchangeRate)*1e8) / 1e8, nil
+	return math.Round((pricing.TinyRealMaximumCNY/pricing.USDCNYExchangeRate)*1e8) / 1e8, nil
 }
 
-func NewVideoGatewayService(repo VideoGatewayRuntimeRepository, gate *SingleSmokeAuthorization, budget VideoBudgetGuard) *VideoGatewayService {
-	return &VideoGatewayService{repo: repo, gate: gate, budget: budget}
+func NewVideoGatewayService(repo VideoGatewayRuntimeRepository, gate *SingleSmokeAuthorization, cfg *config.Config, authCache VideoAuthCacheInvalidator, billingCache VideoBillingCacheInvalidator) *VideoGatewayService {
+	return &VideoGatewayService{repo: repo, gate: gate, cfg: cfg, authCache: authCache, billingCache: billingCache}
 }
 
 func (s *VideoGatewayService) ListProviders(ctx context.Context, scope VideoTaskScope) ([]VideoProviderAccount, error) {
@@ -98,7 +77,7 @@ func (s *VideoGatewayService) CreateTask(ctx context.Context, cmd VideoTaskCreat
 	if !cmd.SingleSmokeAuthorized {
 		return nil, ErrVideoRealDispatchDenied
 	}
-	if s.gate == nil || !s.gate.Allowed() {
+	if s.cfg == nil || !s.cfg.VideoGateway.WorkerEnabled || s.gate == nil || !s.gate.Allowed() {
 		return nil, ErrVideoRealDispatchDenied
 	}
 	provider, err := s.repo.GetVideoProvider(ctx, cmd.ProviderAccountID, cmd.Scope.GroupID)
@@ -108,19 +87,18 @@ func (s *VideoGatewayService) CreateTask(ctx context.Context, cmd VideoTaskCreat
 	if !provider.Enabled || provider.Provider != "seedance" {
 		return nil, ErrVideoProviderNotFound
 	}
-	if s.budget == nil {
-		return nil, errors.New("video budget guard is required")
-	}
-	if _, err := s.budget.AuthorizeVideo(ctx, cmd.Scope); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrVideoBudgetRejected, err)
+	maximumUSD, err := videoMaximumUSD(s.cfg)
+	if err != nil {
+		return nil, err
 	}
 	task := &VideoTask{APIKeyID: cmd.Scope.APIKeyID, GroupID: cmd.Scope.GroupID, ProviderAccountID: provider.ID,
 		Provider: provider.Provider, Model: SeedanceModel, TaskType: "text_to_video", Prompt: strings.TrimSpace(cmd.Prompt),
 		Status: VideoStatusQueued, CreationKey: strings.TrimSpace(cmd.CreationKey), CreatedBy: cmd.Scope.UserID,
-		DurationSeconds: 4, Resolution: "720p", Currency: "USD"}
-	if err := s.repo.CreateTask(ctx, task); err != nil {
+		DurationSeconds: 4, Resolution: "720p", Currency: "USD", ReservedCostUSD: maximumUSD, ReservationState: VideoReservationReserved}
+	if err := s.repo.ReserveAndCreateTask(ctx, task, maximumUSD); err != nil {
 		return nil, err
 	}
+	invalidateVideoCaches(ctx, s.authCache, s.billingCache, task.CreatedBy, task.APIKeyID)
 	return task, nil
 }
 
@@ -129,5 +107,9 @@ func (s *VideoGatewayService) GetTask(ctx context.Context, id int64, scope Video
 }
 
 func (s *VideoGatewayService) CancelTask(ctx context.Context, id int64, scope VideoTaskScope) (*VideoTask, error) {
-	return s.repo.CancelTaskForScope(ctx, id, scope)
+	task, err := s.repo.CancelTaskForScope(ctx, id, scope)
+	if err == nil {
+		invalidateVideoCaches(ctx, s.authCache, s.billingCache, scope.UserID, scope.APIKeyID)
+	}
+	return task, err
 }

@@ -39,3 +39,23 @@ func TestVideoGatewayControlPlaneMigrationIsAdditiveAndComplete(t *testing.T) {
 		t.Fatal("control plane migration must be additive")
 	}
 }
+
+func TestVideoGatewayReservationMigrationIsAdditiveAndComplete(t *testing.T) {
+	b, err := os.ReadFile("177_wujie_video_gateway_reservations.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sql := strings.ToLower(string(b))
+	for _, required := range []string{
+		"reserved_cost_usd", "reservation_state", "reservation_window_5h_start",
+		"reservation_window_1d_start", "reservation_window_7d_start", "provider_actual_cost_usd",
+		"completion_tokens", "charged_cost_usd",
+	} {
+		if !strings.Contains(sql, required) {
+			t.Errorf("missing %s", required)
+		}
+	}
+	if regexp.MustCompile(`(?m)^\s*(drop|truncate|delete)\b|insert\s+into[\s\S]+select\s`).MatchString(sql) {
+		t.Fatal("reservation migration must be additive")
+	}
+}

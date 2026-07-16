@@ -1616,6 +1616,17 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 func setDefaults() {
 	viper.SetDefault("run_mode", RunModeStandard)
 
+	// Video gateway. Every paid-runtime control defaults inert; operators must
+	// explicitly provide the dedicated key, pricing and both runtime gates.
+	viper.SetDefault("video_gateway.encryption_key", "")
+	viper.SetDefault("video_gateway.worker_enabled", false)
+	viper.SetDefault("video_gateway.worker_interval_seconds", 5)
+	viper.SetDefault("video_gateway.http_timeout_seconds", 30)
+	viper.SetDefault("video_gateway.seedance_cny_per_million_tokens", 0)
+	viper.SetDefault("video_gateway.usd_cny_exchange_rate", 0)
+	viper.SetDefault("video_gateway.tiny_real_estimate_cny", 0)
+	viper.SetDefault("video_gateway.tiny_real_maximum_cny", 0)
+
 	// Server
 	viper.SetDefault("server.host", "0.0.0.0")
 	viper.SetDefault("server.port", 8080)

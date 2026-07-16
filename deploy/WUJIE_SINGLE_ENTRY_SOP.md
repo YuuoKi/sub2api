@@ -86,6 +86,8 @@ docker start wujie-final-sub2
 
 ## 6. Video gateway operator check (no dispatch)
 
+Before starting the approved paid window, configure the dedicated `VIDEO_GATEWAY_ENCRYPTION_KEY`, worker switch, pricing/exchange-rate fields and both CNY estimate/maximum fields in the private `deploy/.env`. Keep `VIDEO_SINGLE_SMOKE_AUTHORIZED=false` until the provider, employee group and budget are reviewed. The canonical compose now forwards these variables explicitly; every paid-runtime control defaults inert. Never reuse the JWT or TOTP key and never print the expanded compose configuration.
+
 1. Open `/admin/video/providers`, bind Seedance to the controlled employee group, save the secret, and verify that only a masked value is rendered.
 2. Keep the provider disabled until the group and model are reviewed. Enabling it alone must not dispatch a request.
 3. Grant the one-time `tiny_real` authorization only inside the approved paid-test window. This records the gate and still performs zero upstream calls.

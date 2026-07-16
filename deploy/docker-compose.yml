@@ -110,6 +110,20 @@ services:
       - TOTP_ENCRYPTION_KEY=${TOTP_ENCRYPTION_KEY:-}
 
       # =======================================================================
+      # Video Gateway (default inert; tiny_real requires explicit operator gates)
+      # =======================================================================
+      # Dedicated key domain. Never reuse JWT or TOTP encryption keys.
+      - VIDEO_GATEWAY_ENCRYPTION_KEY=${VIDEO_GATEWAY_ENCRYPTION_KEY:-}
+      - VIDEO_GATEWAY_WORKER_ENABLED=${VIDEO_GATEWAY_WORKER_ENABLED:-false}
+      - VIDEO_GATEWAY_WORKER_INTERVAL_SECONDS=${VIDEO_GATEWAY_WORKER_INTERVAL_SECONDS:-5}
+      - VIDEO_GATEWAY_HTTP_TIMEOUT_SECONDS=${VIDEO_GATEWAY_HTTP_TIMEOUT_SECONDS:-30}
+      - VIDEO_GATEWAY_SEEDANCE_CNY_PER_MILLION_TOKENS=${VIDEO_GATEWAY_SEEDANCE_CNY_PER_MILLION_TOKENS:-0}
+      - VIDEO_GATEWAY_USD_CNY_EXCHANGE_RATE=${VIDEO_GATEWAY_USD_CNY_EXCHANGE_RATE:-0}
+      - VIDEO_GATEWAY_TINY_REAL_ESTIMATE_CNY=${VIDEO_GATEWAY_TINY_REAL_ESTIMATE_CNY:-0}
+      - VIDEO_GATEWAY_TINY_REAL_MAXIMUM_CNY=${VIDEO_GATEWAY_TINY_REAL_MAXIMUM_CNY:-0}
+      - VIDEO_SINGLE_SMOKE_AUTHORIZED=${VIDEO_SINGLE_SMOKE_AUTHORIZED:-false}
+
+      # =======================================================================
       # Timezone Configuration
       # This affects ALL time operations in the application:
       # - Database timestamps

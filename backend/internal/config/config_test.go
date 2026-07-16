@@ -30,6 +30,29 @@ func TestLoadForBootstrapAllowsMissingJWTSecret(t *testing.T) {
 	}
 }
 
+func TestLoadVideoGatewayConfigFromEnvironment(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("VIDEO_GATEWAY_ENCRYPTION_KEY", strings.Repeat("a", 64))
+	t.Setenv("VIDEO_GATEWAY_WORKER_ENABLED", "true")
+	t.Setenv("VIDEO_GATEWAY_WORKER_INTERVAL_SECONDS", "2")
+	t.Setenv("VIDEO_GATEWAY_HTTP_TIMEOUT_SECONDS", "180")
+	t.Setenv("VIDEO_GATEWAY_SEEDANCE_CNY_PER_MILLION_TOKENS", "9.5")
+	t.Setenv("VIDEO_GATEWAY_USD_CNY_EXCHANGE_RATE", "7.2")
+	t.Setenv("VIDEO_GATEWAY_TINY_REAL_ESTIMATE_CNY", "1.25")
+	t.Setenv("VIDEO_GATEWAY_TINY_REAL_MAXIMUM_CNY", "2.5")
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.Equal(t, strings.Repeat("a", 64), cfg.VideoGateway.EncryptionKey)
+	require.True(t, cfg.VideoGateway.WorkerEnabled)
+	require.Equal(t, 2, cfg.VideoGateway.WorkerIntervalSeconds)
+	require.Equal(t, 180, cfg.VideoGateway.HTTPTimeoutSeconds)
+	require.InDelta(t, 9.5, cfg.VideoGateway.SeedanceCNYPerMillionTokens, 1e-9)
+	require.InDelta(t, 7.2, cfg.VideoGateway.USDCNYExchangeRate, 1e-9)
+	require.InDelta(t, 1.25, cfg.VideoGateway.TinyRealEstimateCNY, 1e-9)
+	require.InDelta(t, 2.5, cfg.VideoGateway.TinyRealMaximumCNY, 1e-9)
+}
+
 func TestNormalizeRunMode(t *testing.T) {
 	tests := []struct {
 		input    string

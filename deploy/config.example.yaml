@@ -1134,3 +1134,17 @@ update:
   # Leave empty for direct connection (recommended for overseas servers)
   # 留空表示直连（适用于海外服务器）
   proxy_url: ""
+
+# =============================================================================
+# Video Gateway (默认关闭；真实 tiny_real 必须显式配置并授权)
+# =============================================================================
+video_gateway:
+  # Dedicated 32-byte hex key; never reuse JWT or TOTP keys.
+  encryption_key: ""
+  worker_enabled: false
+  worker_interval_seconds: 5
+  http_timeout_seconds: 30
+  seedance_cny_per_million_tokens: 0
+  usd_cny_exchange_rate: 0
+  tiny_real_estimate_cny: 0
+  tiny_real_maximum_cny: 0

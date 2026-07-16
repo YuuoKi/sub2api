@@ -34,6 +34,30 @@ describe('无界品牌入口', () => {
     expect(composeSource).toContain('- "127.0.0.1:8080:8080"')
     expect(composeSource).not.toContain('127.0.0.1:${SERVER_PORT:-8080}:8080')
   })
+
+  it('canonical compose 显式接入默认关闭的视频 worker 与 tiny_real 预算门', () => {
+    const requiredVideoEnvironment = [
+      'VIDEO_GATEWAY_ENCRYPTION_KEY',
+      'VIDEO_GATEWAY_WORKER_ENABLED',
+      'VIDEO_GATEWAY_WORKER_INTERVAL_SECONDS',
+      'VIDEO_GATEWAY_HTTP_TIMEOUT_SECONDS',
+      'VIDEO_GATEWAY_SEEDANCE_CNY_PER_MILLION_TOKENS',
+      'VIDEO_GATEWAY_USD_CNY_EXCHANGE_RATE',
+      'VIDEO_GATEWAY_TINY_REAL_ESTIMATE_CNY',
+      'VIDEO_GATEWAY_TINY_REAL_MAXIMUM_CNY',
+      'VIDEO_SINGLE_SMOKE_AUTHORIZED',
+    ] as const
+
+    for (const variable of requiredVideoEnvironment) {
+      expect(composeSource).toContain(`- ${variable}=\${${variable}`)
+    }
+    expect(composeSource).toContain(
+      '- VIDEO_GATEWAY_WORKER_ENABLED=${VIDEO_GATEWAY_WORKER_ENABLED:-false}',
+    )
+    expect(composeSource).toContain(
+      '- VIDEO_SINGLE_SMOKE_AUTHORIZED=${VIDEO_SINGLE_SMOKE_AUTHORIZED:-false}',
+    )
+  })
 })
 
 describe('完整管理后台保护', () => {

@@ -101,7 +101,7 @@ func TestVideoMaximumUSDFailsClosedWithoutServerCapAndFX(t *testing.T) {
 func TestSeedancePollMapsRunningAndValidatesAssets(t *testing.T) {
 	responses := []string{
 		`{"id":"up-1","status":"running"}`,
-		`{"id":"up-1","status":"succeeded","content":{"video_url":"https://cdn.example.test/a.mp4"},"last_frame_url":"https://cdn.example.test/a.jpg","usage":{"completion_tokens":245025}}`,
+		`{"id":"up-1","status":"succeeded","model":"doubao-seedance-2-0-260128","duration":"4","resolution":"720p","content":{"video_url":"https://cdn.example.test/a.mp4"},"last_frame_url":"https://cdn.example.test/a.jpg","usage":{"completion_tokens":245025}}`,
 		`{"id":"up-1","status":"succeeded","content":{"video_url":"http://127.0.0.1/a.mp4"},"usage":{"completion_tokens":1}}`,
 	}
 	client := &http.Client{Transport: videoRoundTripperFunc(func(*http.Request) (*http.Response, error) {
@@ -117,6 +117,11 @@ func TestSeedancePollMapsRunningAndValidatesAssets(t *testing.T) {
 	done, err := a.Poll(context.Background(), "up-1")
 	if err != nil || done.CompletionTokens == nil || *done.CompletionTokens != 245025 {
 		t.Fatalf("done=%#v err=%v", done, err)
+	}
+	if done.UpstreamModel == nil || *done.UpstreamModel != SeedanceModel ||
+		done.UpstreamDurationSeconds == nil || *done.UpstreamDurationSeconds != 4 ||
+		done.UpstreamResolution == nil || *done.UpstreamResolution != "720p" {
+		t.Fatalf("upstream evidence=%#v", done)
 	}
 	if _, err := a.Poll(context.Background(), "up-1"); err == nil {
 		t.Fatal("unsafe asset URL accepted")

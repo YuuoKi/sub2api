@@ -90,6 +90,8 @@ export interface User {
   concurrency: number // Allowed concurrent requests
   rpm_limit?: number // User-level RPM cap (0 = unlimited); effective as fallback when group has no rpm_limit
   status: 'active' | 'disabled' // Account status
+  must_change_password?: boolean
+  temporary_password_expires_at?: string | null
   allowed_groups: number[] | null // Allowed group IDs (null = all non-exclusive groups)
   balance_notify_enabled: boolean
   balance_notify_threshold: number | null
@@ -249,6 +251,7 @@ export interface AuthResponse {
   expires_in?: number     // New: Access Token expiry time in seconds
   token_type: string
   user: User & { run_mode?: 'standard' | 'simple' }
+  mustChangePassword: boolean
 }
 
 export interface CurrentUserResponse extends User {
@@ -1643,7 +1646,6 @@ export interface ApiKeyUsageTrendPoint {
 
 export interface UpdateUserRequest {
   email?: string
-  password?: string
   username?: string
   notes?: string
   role?: 'admin' | 'user'

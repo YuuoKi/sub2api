@@ -2,8 +2,11 @@ package admin
 
 import (
 	"errors"
+	"net"
 	"net/http"
+	"os"
 	"strconv"
+	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
@@ -11,9 +14,19 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type VideoHandler struct{ service *service.VideoAdminService }
+type VideoHandler struct {
+	service                   *service.VideoAdminService
+	handoff                   service.AssetHandoffManager
+	trustDockerLoopbackBridge bool
+}
 
-func NewVideoHandler(s *service.VideoAdminService) *VideoHandler { return &VideoHandler{service: s} }
+func NewVideoHandler(s *service.VideoAdminService) *VideoHandler {
+	return &VideoHandler{
+		service:                   s,
+		handoff:                   s,
+		trustDockerLoopbackBridge: strings.EqualFold(strings.TrimSpace(os.Getenv("ASSET_HANDOFF_TRUST_DOCKER_LOOPBACK_BRIDGE")), "true"),
+	}
+}
 
 type videoProviderRequest struct {
 	GroupID      *int64  `json:"group_id"`
@@ -117,6 +130,55 @@ func (h *VideoHandler) GetTask(c *gin.Context) {
 	}
 	response.Success(c, videoTaskAdminResponse(item))
 }
+func (h *VideoHandler) CreateAssetHandoff(c *gin.Context) {
+	id, ok := videoID(c)
+	if !ok {
+		return
+	}
+	subject, ok := middleware.GetAuthSubjectFromContext(c)
+	if !ok || subject.UserID <= 0 {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	var req struct {
+		AssetKind service.AssetHandoffKind `json:"asset_kind"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "invalid asset handoff request")
+		return
+	}
+	if h.handoff == nil {
+		response.InternalError(c, "Asset handoff is not available")
+		return
+	}
+	issued, err := h.handoff.Issue(c.Request.Context(), subject.UserID, id, req.AssetKind)
+	if writeAssetHandoffError(c, err) {
+		return
+	}
+	response.Success(c, issued)
+}
+func (h *VideoHandler) ConsumeAssetHandoff(c *gin.Context) {
+	if !isTrustedAssetHandoffRequest(c.Request, h.trustDockerLoopbackBridge) {
+		response.Error(c, http.StatusForbidden, "asset handoff consumption is loopback-only")
+		return
+	}
+	if h.handoff == nil {
+		response.InternalError(c, "Asset handoff is not available")
+		return
+	}
+	var req struct {
+		Ticket string `json:"ticket"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || strings.TrimSpace(req.Ticket) == "" {
+		response.BadRequest(c, "asset handoff ticket is required")
+		return
+	}
+	asset, err := h.handoff.Consume(c.Request.Context(), req.Ticket)
+	if writeAssetHandoffError(c, err) {
+		return
+	}
+	response.Success(c, asset)
+}
 func (h *VideoHandler) SystemCheck(c *gin.Context) {
 	item, err := h.service.SystemCheck(c.Request.Context())
 	if response.ErrorFrom(c, err) {
@@ -154,9 +216,81 @@ func writeVideoAdminError(c *gin.Context, err error) bool {
 	}
 	return true
 }
+func writeAssetHandoffError(c *gin.Context, err error) bool {
+	if err == nil {
+		return false
+	}
+	switch {
+	case errors.Is(err, service.ErrAssetHandoffNotFound), errors.Is(err, service.ErrVideoTaskNotFound):
+		response.Error(c, http.StatusNotFound, err.Error())
+	case errors.Is(err, service.ErrAssetHandoffExpired), errors.Is(err, service.ErrAssetHandoffConsumed):
+		response.Error(c, http.StatusGone, err.Error())
+	case errors.Is(err, service.ErrAssetHandoffInvalidIssuer), errors.Is(err, service.ErrAssetHandoffInvalidKind):
+		response.BadRequest(c, err.Error())
+	case errors.Is(err, service.ErrAssetHandoffTaskNotSucceeded), errors.Is(err, service.ErrAssetHandoffAssetMissing),
+		errors.Is(err, service.ErrAssetHandoffInvalidMIME), errors.Is(err, service.ErrAssetHandoffTooLarge),
+		errors.Is(err, service.ErrAssetHandoffUnverifiable):
+		response.Error(c, http.StatusUnprocessableEntity, err.Error())
+	default:
+		response.ErrorFrom(c, err)
+	}
+	return true
+}
+func isRealLoopbackRemote(remoteAddr string) bool {
+	ip := parseRemoteIP(remoteAddr)
+	return ip != nil && ip.IsLoopback()
+}
+func parseRemoteIP(remoteAddr string) net.IP {
+	host, _, err := net.SplitHostPort(strings.TrimSpace(remoteAddr))
+	if err != nil {
+		host = strings.Trim(strings.TrimSpace(remoteAddr), "[]")
+	}
+	ip := net.ParseIP(host)
+	return ip
+}
+func isTrustedAssetHandoffRequest(request *http.Request, trustDockerLoopbackBridge bool) bool {
+	if request == nil {
+		return false
+	}
+	remoteIP := parseRemoteIP(request.RemoteAddr)
+	if remoteIP == nil {
+		return false
+	}
+	if remoteIP.IsLoopback() {
+		return true
+	}
+	if !trustDockerLoopbackBridge || !remoteIP.IsPrivate() {
+		return false
+	}
+	host, port, err := net.SplitHostPort(strings.TrimSpace(request.Host))
+	if err != nil || port != "8080" {
+		return false
+	}
+	hostIP := net.ParseIP(strings.Trim(host, "[]"))
+	return hostIP != nil && hostIP.IsLoopback()
+}
 func videoTaskAdminResponse(t *service.VideoTask) gin.H {
 	if t == nil {
 		return gin.H{}
 	}
-	return gin.H{"id": t.ID, "provider_account_id": t.ProviderAccountID, "provider": t.Provider, "model": t.Model, "task_type": t.TaskType, "prompt": t.Prompt, "status": t.Status, "upstream_task_id": t.UpstreamTaskID, "result_url": t.ResultURL, "last_frame_url": t.LastFrameURL, "error_message": t.ErrorMessage, "provider_error_code": t.ProviderErrorCode, "provider_error_message": t.ProviderErrorMessage, "cost_amount": t.CostAmount, "provider_actual_cost_usd": t.ProviderActualCostUSD, "currency": t.Currency, "real_dispatch_count": t.RealDispatchCount, "dispatch_state": t.DispatchState, "created_by": t.CreatedBy, "created_at": t.CreatedAt, "updated_at": t.UpdatedAt, "completed_at": t.CompletedAt}
+	return gin.H{
+		"id": t.ID, "api_key_id": t.APIKeyID, "group_id": t.GroupID, "provider_account_id": t.ProviderAccountID,
+		"provider": t.Provider, "model": t.Model, "task_type": t.TaskType, "prompt": t.Prompt, "status": t.Status,
+		"request_model": t.Model, "request_duration_seconds": t.DurationSeconds, "request_resolution": t.Resolution,
+		"upstream_model": t.UpstreamModel, "upstream_duration_seconds": t.UpstreamDurationSeconds,
+		"upstream_resolution": t.UpstreamResolution, "billing_model": t.BillingModel,
+		"billing_duration_seconds": t.BillingDurationSeconds, "billing_resolution": t.BillingResolution,
+		"upstream_task_id": t.UpstreamTaskID, "result_url": t.ResultURL, "last_frame_url": t.LastFrameURL,
+		"duration_seconds": t.DurationSeconds, "resolution": t.Resolution, "usage_total_tokens": t.UsageTotalTokens,
+		"error_message": t.ErrorMessage, "provider_error_code": t.ProviderErrorCode, "provider_error_message": t.ProviderErrorMessage,
+		"reserved_cost_usd": t.ReservedCostUSD, "reservation_state": t.ReservationState, "reserved_at": t.ReservedAt,
+		"reservation_window_5h_start": t.ReservationWindow5h, "reservation_window_1d_start": t.ReservationWindow1d,
+		"reservation_window_7d_start": t.ReservationWindow7d, "cost_amount": t.CostAmount,
+		"provider_actual_cost_usd": t.ProviderActualCostUSD, "currency": t.Currency,
+		"balance_before_usd": t.BalanceBeforeUSD, "balance_after_usd": t.BalanceAfterUSD,
+		"balance_delta_usd": t.BalanceDeltaUSD, "authorization_consumed_at": t.AuthorizationConsumedAt,
+		"authorization_consumed_by": t.AuthorizationConsumedBy,
+		"real_dispatch_count":       t.RealDispatchCount, "dispatch_state": t.DispatchState, "created_by": t.CreatedBy,
+		"created_at": t.CreatedAt, "updated_at": t.UpdatedAt, "completed_at": t.CompletedAt,
+	}
 }

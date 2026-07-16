@@ -106,6 +106,8 @@ export default {
     saving: 'Saving...',
     noKeysYet: 'No API keys yet',
     createFirstKey: 'Create your first API key to get started with the API.',
+    emptyPrerequisite: 'Prerequisite: an administrator must finish the employee, group, and upstream account setup and assign you an available group.',
+    viewAvailableGroups: 'View available channels',
     keyCreatedSuccess: 'API key created successfully',
     keyUpdatedSuccess: 'API key updated successfully',
     keyDeletedSuccess: 'API key deleted successfully',
@@ -234,8 +236,8 @@ export default {
 
   // Usage
   usage: {
-    title: 'Usage Records',
-    description: 'View and analyze your API usage history',
+    title: 'My usage',
+    description: 'Review your API requests, tokens, costs, and failures',
     costDetails: 'Cost Breakdown',
     tokenDetails: 'Token Breakdown',
     cacheTtlOverriddenHint: 'Cache TTL Override enabled',

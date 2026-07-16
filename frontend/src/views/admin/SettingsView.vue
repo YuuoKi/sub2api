@@ -7432,6 +7432,7 @@ import ImageUpload from "@/components/common/ImageUpload.vue";
 import BackupSettings from "@/views/admin/BackupView.vue";
 import EmailTemplateEditor from "@/views/admin/settings/EmailTemplateEditor.vue";
 import { useClipboard } from "@/composables/useClipboard";
+import { requestConfirmation } from "@/composables/useAppDialog";
 import { affiliatesAPI, type AffiliateAdminEntry, type SimpleUser as AffiliateSimpleUser } from "@/api/admin/affiliates";
 import { extractApiErrorMessage, extractI18nErrorMessage } from "@/utils/apiError";
 import { useAppStore } from "@/stores";
@@ -8561,7 +8562,7 @@ function quotaPercentage(provider: WebSearchProviderConfig): number {
 async function resetWebSearchUsage(idx: number) {
   const provider = webSearchConfig.providers[idx];
   if (!provider) return;
-  if (!confirm(t("admin.settings.webSearchEmulation.resetUsageConfirm")))
+  if (!(await requestConfirmation({ message: t("admin.settings.webSearchEmulation.resetUsageConfirm"), danger: true })))
     return;
   try {
     await adminAPI.settings.resetWebSearchUsage({
@@ -9911,12 +9912,12 @@ async function createAdminApiKey() {
 }
 
 async function regenerateAdminApiKey() {
-  if (!confirm(t("admin.settings.adminApiKey.regenerateConfirm"))) return;
+  if (!(await requestConfirmation({ message: t("admin.settings.adminApiKey.regenerateConfirm"), danger: true }))) return;
   await createAdminApiKey();
 }
 
 async function deleteAdminApiKey() {
-  if (!confirm(t("admin.settings.adminApiKey.deleteConfirm"))) return;
+  if (!(await requestConfirmation({ message: t("admin.settings.adminApiKey.deleteConfirm"), danger: true }))) return;
   adminApiKeyOperating.value = true;
   try {
     await adminAPI.settings.deleteAdminApiKey();

@@ -7,10 +7,8 @@
 ```powershell
 # cwd: repository root
 docker build -t wujie-sub2api:local .
-
-Push-Location deploy
-docker compose -f docker-compose.yml up -d
-Pop-Location
+./deploy/wujie-local-entry.ps1 Start
+./deploy/wujie-local-entry.ps1 Status
 ```
 
 唯一浏览器入口是 `http://127.0.0.1:8080`。禁止把 Vite `:3000`、外部地址、`weishaw/sub2api:latest` 或 one-off 诊断容器作为验收入口。
@@ -32,7 +30,7 @@ services:
       - RUN_MODE=standard
 ```
 
-数据库、Redis 与 TOTP 等本机配置由 `deploy` 目录的本地环境文件提供；禁止用文档示例覆盖真实值，也禁止打印或展开配置。若 TOTP key 无效，记录 `BLOCKED:totp-encryption-key` 并停止，不得读取、回显或临时改写。
+数据库、Redis 与 TOTP 等本机配置由 `deploy` 目录的本地环境文件提供；禁止用文档示例覆盖真实值，也禁止打印或展开配置。配置导致启动失败时必须原样记录失败并停止，不得读取、回显或临时改写秘密。
 
 ## 前端与导航口径
 
@@ -43,7 +41,9 @@ services:
 
 ## 当前状态
 
-代码、镜像、部署契约与隔离开卡/usage smoke 为**内部可用**；canonical `:8080` 当前 exit 1、无 HTTP，既有 `BLOCKED:totp-encryption-key` 未解除，整体仍为**已阻塞**，不得标记为**可演示**。
+当前 Git HEAD 为 `1e4fdb40`，运行证据基线为 `d6687e89`。canonical `127.0.0.1:8080` 已有 HTTP 200、无界 title、完整管理五段与两次 tiny_real 证据；`blocked=[]`、`open_p0_count=0`、`realCallExecuted=2`，整体为**待复核**。不得外推为生产上线、已 push 或商业交付完成；QCanvas 既有资产回填、W4.2 fake-gateway pilot 与历史 provider key 轮换仍未执行。
+
+当前 `wujie-sub2api:local` 已由 HEAD 上的本轮未提交工作树重建为 `sha256:72b91368ff03b620e430a8cfe6ae4bdaff49716414cf7d8a7bd1dcdf8fb40380`，并通过入口脚本 Stop/Start/Status 门禁；Status 核对不可变 image ID，Start 使用 `--no-deps`，端口检查不要求提升权限。canonical Docker-NAT 只通过显式 compose 开关信任私有 bridge peer + 精确 loopback Host:8080，不读取 XFF。首次强制改密、UX 与资产接力代码完成不代表受保护浏览器走查完成。
 
 ## 回滚
 

@@ -152,6 +152,16 @@
               <!-- Priority 2: Update success - need restart -->
               <div v-else-if="updateSuccess && needRestart" class="space-y-2">
                 <div
+                  v-if="restartState === 'failed' || restartState === 'unknown'"
+                  role="alert"
+                  class="rounded-lg bg-amber-50 p-3 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300"
+                >
+                  <p class="text-sm font-medium">
+                    {{ restartState === 'unknown' ? t('common.unknown') : t('version.updateFailed') }}
+                  </p>
+                  <p class="mt-1 break-words text-xs">{{ restartError }}</p>
+                </div>
+                <div
                   class="flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-800/50 dark:bg-green-900/20"
                 >
                   <div
@@ -227,7 +237,7 @@
                       >({{ restartCountdown }}s)</span
                     >
                   </template>
-                  <span v-else>{{ t('version.restartNow') }}</span>
+                  <span v-else>{{ restartState === 'failed' || restartState === 'unknown' ? t('version.retry') : t('version.restartNow') }}</span>
                 </button>
               </div>
 
@@ -684,6 +694,11 @@ const needRestart = ref(false)
 const updateError = ref('')
 const updateSuccess = ref(false)
 const restartCountdown = ref(0)
+const restartState = ref<'idle' | 'accepted' | 'unknown' | 'failed'>('idle')
+const restartError = ref('')
+let restartCountdownTimer: ReturnType<typeof setInterval> | null = null
+let restartHealthTimer: ReturnType<typeof setTimeout> | null = null
+let restartGeneration = 0
 // Distinguishes the success + restart panel between update and rollback flows
 const successKind = ref<'update' | 'rollback'>('update')
 
@@ -851,54 +866,113 @@ async function handleRollback() {
 async function handleRestart() {
   if (restarting.value) return
 
+  clearRestartTimers()
+  const generation = ++restartGeneration
   restarting.value = true
-  restartCountdown.value = 8
+  restartCountdown.value = 0
+  restartState.value = 'idle'
+  restartError.value = ''
 
   try {
     await restartService()
-    // Service will restart, page will reload automatically or show disconnected
-  } catch (error) {
-    // Expected - connection will be lost during restart
-    console.log('Service restarting...')
-  }
+    restartState.value = 'accepted'
+    startRestartCountdown(generation)
+  } catch (error: unknown) {
+    const message = requestErrorMessage(error, t('errors.networkError'))
+    if (requestErrorStatus(error) !== null) {
+      restartState.value = 'failed'
+      restartError.value = message
+      restarting.value = false
+      return
+    }
 
-  // Start countdown
-  const countdownInterval = setInterval(() => {
+    restartState.value = 'unknown'
+    restartError.value = message
+    void checkServiceAndReload(generation, 0)
+  }
+}
+
+function startRestartCountdown(generation: number) {
+  restartCountdown.value = 8
+  restartCountdownTimer = setInterval(() => {
+    if (generation !== restartGeneration) return
     restartCountdown.value--
     if (restartCountdown.value <= 0) {
-      clearInterval(countdownInterval)
-      // Try to check if service is back before reload
-      checkServiceAndReload()
+      if (restartCountdownTimer) {
+        clearInterval(restartCountdownTimer)
+        restartCountdownTimer = null
+      }
+      void checkServiceAndReload(generation, 0)
     }
   }, 1000)
 }
 
-async function checkServiceAndReload() {
-  const maxRetries = 5
-  const retryDelay = 1000
+async function checkServiceAndReload(generation: number, attempt: number) {
+  if (generation !== restartGeneration) return
 
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      const response = await fetch('/health', {
-        method: 'GET',
-        cache: 'no-cache'
-      })
-      if (response.ok) {
-        // Service is back, reload page
-        window.location.reload()
-        return
-      }
-    } catch {
-      // Service not ready yet
+  let healthFailure = ''
+  try {
+    const response = await fetch('/health', {
+      method: 'GET',
+      cache: 'no-cache'
+    })
+    if (response.ok) {
+      clearRestartTimers()
+      restarting.value = false
+      window.location.reload()
+      return
     }
-
-    if (i < maxRetries - 1) {
-      await new Promise((resolve) => setTimeout(resolve, retryDelay))
-    }
+    healthFailure = response.status
+      ? `Health check returned HTTP ${response.status}`
+      : restartError.value
+  } catch (error: unknown) {
+    healthFailure = requestErrorMessage(error, restartError.value || t('errors.networkError'))
   }
 
-  // After retries, reload anyway
-  window.location.reload()
+  const nextAttempt = attempt + 1
+  if (nextAttempt >= 5) {
+    restartState.value = 'unknown'
+    restartError.value = healthFailure || restartError.value || t('errors.networkError')
+    restarting.value = false
+    restartCountdown.value = 0
+    return
+  }
+
+  restartHealthTimer = setTimeout(() => {
+    restartHealthTimer = null
+    void checkServiceAndReload(generation, nextAttempt)
+  }, 1000)
+}
+
+function requestErrorStatus(error: unknown): number | null {
+  if (!error || typeof error !== 'object' || !('response' in error)) return null
+  const response = error.response
+  if (!response || typeof response !== 'object' || !('status' in response)) return null
+  return typeof response.status === 'number' ? response.status : null
+}
+
+function requestErrorMessage(error: unknown, fallback: string): string {
+  if (error && typeof error === 'object') {
+    if ('response' in error && error.response && typeof error.response === 'object' && 'data' in error.response) {
+      const data = error.response.data
+      if (data && typeof data === 'object' && 'message' in data && typeof data.message === 'string' && data.message) {
+        return data.message
+      }
+    }
+    if ('message' in error && typeof error.message === 'string' && error.message) return error.message
+  }
+  return fallback
+}
+
+function clearRestartTimers() {
+  if (restartCountdownTimer) {
+    clearInterval(restartCountdownTimer)
+    restartCountdownTimer = null
+  }
+  if (restartHealthTimer) {
+    clearTimeout(restartHealthTimer)
+    restartHealthTimer = null
+  }
 }
 
 function handleClickOutside(event: MouseEvent) {
@@ -918,6 +992,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  restartGeneration++
+  clearRestartTimers()
   document.removeEventListener('click', handleClickOutside)
 })
 </script>

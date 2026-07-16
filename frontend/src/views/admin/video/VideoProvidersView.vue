@@ -1,38 +1,97 @@
 <template>
   <AppLayout>
-    <div class="video-providers-view space-y-5">
+    <div class="video-providers-view min-w-0 space-y-5 overflow-x-clip">
       <header class="video-providers-header">
-        <h1 class="video-providers-title text-2xl font-semibold">{{ copy.title }}</h1>
-        <p class="video-providers-description text-sm text-gray-500">{{ copy.description }}</p>
+        <h2 class="video-providers-title text-2xl font-semibold text-gray-900 dark:text-white">视频生成通道</h2>
+        <p class="video-providers-description mt-1 text-sm text-gray-500">仅绑定受控标准员工组；模型、时长、分辨率与上游地址由系统固定。</p>
       </header>
-      <section v-if="contract" class="video-contract card p-5">
-        <h2 class="video-contract-title text-base font-semibold">{{ copy.contract }}</h2>
-        <dl class="video-contract-grid mt-3 grid gap-3 text-sm md:grid-cols-2">
-          <div class="video-contract-field"><dt class="text-gray-500">{{ copy.model }}</dt><dd>{{ contract.default_model }}</dd></div>
-          <div class="video-contract-field"><dt class="text-gray-500">{{ copy.endpoint }}</dt><dd class="break-all">{{ contract.base_url }}</dd></div>
+
+      <section v-if="contract" class="video-contract card p-5" aria-labelledby="video-contract-title">
+        <h2 id="video-contract-title" class="video-contract-title text-base font-semibold">当前固定契约</h2>
+        <dl class="video-contract-grid mt-3 grid gap-3 text-sm sm:grid-cols-2">
+          <div class="video-contract-field"><dt class="text-gray-500">模型</dt><dd class="break-all">{{ contract.default_model }}</dd></div>
+          <div class="video-contract-field"><dt class="text-gray-500">固定规格</dt><dd>{{ contract.duration_seconds }} 秒 / {{ contract.resolution }}</dd></div>
+          <div class="video-contract-field sm:col-span-2"><dt class="text-gray-500">上游地址</dt><dd class="break-all">{{ contract.base_url }}</dd></div>
         </dl>
       </section>
-      <section class="video-provider-form card p-5">
-        <h2 class="video-provider-form-title text-base font-semibold">{{ editingId ? copy.edit : copy.add }}</h2>
-        <form class="video-provider-form-grid mt-4 grid gap-3 md:grid-cols-2" @submit.prevent="save">
-          <input v-model="form.display_name" class="input video-provider-name" required :placeholder="copy.channelName" />
-          <select v-model.number="form.group_id" class="input video-provider-group" required>
-            <option :value="0">{{ copy.group }}</option>
-            <option v-for="group in groups" :key="group.id" :value="group.id">{{ group.name }}</option>
-          </select>
-          <input v-model="form.api_key" class="input video-provider-secret" type="password" autocomplete="new-password" :required="!editingId" :placeholder="editingId ? copy.secretKeep : copy.secret" />
-          <label class="video-provider-enabled flex items-center gap-2 text-sm"><input v-model="form.enabled" type="checkbox" />{{ copy.enableNow }}</label>
-          <div class="video-provider-actions flex gap-2"><button class="btn btn-primary" :disabled="saving || !contract">{{ copy.save }}</button><button v-if="editingId" type="button" class="btn btn-secondary" @click="resetForm">{{ copy.cancel }}</button></div>
+
+      <section class="video-provider-form card p-5" aria-labelledby="video-provider-form-title">
+        <h2 id="video-provider-form-title" class="video-provider-form-title text-base font-semibold">{{ editingId ? '编辑通道' : '新增通道' }}</h2>
+        <form class="video-provider-form-grid mt-4 grid gap-4 md:grid-cols-2" @submit.prevent="save">
+          <div class="video-provider-form-field">
+            <label for="video-provider-name" class="mb-1 block text-sm font-medium">通道名称</label>
+            <input id="video-provider-name" v-model="form.display_name" class="input video-provider-name w-full" required autocomplete="off" />
+          </div>
+          <div class="video-provider-form-field">
+            <label for="video-provider-group" class="mb-1 block text-sm font-medium">受控标准员工组</label>
+            <select id="video-provider-group" v-model.number="form.group_id" class="input video-provider-group w-full" required aria-describedby="video-provider-group-help">
+              <option :value="0" disabled>选择员工组</option>
+              <option v-for="group in groups" :key="group.id" :value="group.id">{{ group.name }}</option>
+            </select>
+            <p id="video-provider-group-help" class="mt-1 text-xs text-gray-500">{{ onlyStandardGroup }}</p>
+          </div>
+          <div class="video-provider-form-field">
+            <label for="video-provider-secret" class="mb-1 block text-sm font-medium">上游 API Key</label>
+            <input id="video-provider-secret" v-model="form.api_key" class="input video-provider-secret w-full" type="password" autocomplete="new-password" :required="!editingId" :placeholder="editingId ? '留空表示不更换' : '输入上游密钥'" />
+            <p class="mt-1 text-xs text-gray-500">保存后只显示脱敏摘要，不回显明文。</p>
+          </div>
+          <label class="video-provider-enabled flex min-h-11 items-center gap-2 self-end text-sm">
+            <input v-model="form.enabled" type="checkbox" />
+            保存后启用
+          </label>
+          <div class="video-provider-actions flex flex-col gap-2 sm:flex-row md:col-span-2">
+            <button class="btn btn-primary" :disabled="saving || !contract">{{ saving ? '正在保存…' : '保存' }}</button>
+            <button v-if="editingId" type="button" class="btn btn-secondary" @click="resetForm">取消编辑</button>
+          </div>
         </form>
       </section>
-      <section class="video-provider-list grid gap-4 xl:grid-cols-2">
-        <article v-for="provider in providers" :key="provider.id" class="video-provider-card card p-5">
-          <div class="video-provider-summary flex items-start justify-between gap-3"><div class="video-provider-identity"><h2 class="font-semibold text-gray-900 dark:text-white">{{ provider.display_name }}</h2><p class="text-sm text-gray-500">{{ provider.group_name }} / {{ provider.default_model }}</p></div><span class="video-provider-state text-sm">{{ provider.enabled ? copy.enabled : copy.disabled }}</span></div>
-          <dl class="video-provider-evidence mt-4 grid grid-cols-2 gap-3 text-sm"><div class="video-provider-secret-state"><dt class="text-gray-500">{{ copy.secretLabel }}</dt><dd>{{ provider.masked_key || copy.notConfigured }}</dd></div><div class="video-provider-grant-state"><dt class="text-gray-500">{{ copy.authorization }}</dt><dd>{{ authLabel(provider) }}</dd></div></dl>
-          <div class="video-provider-card-actions mt-4 flex flex-wrap gap-2"><button class="btn btn-secondary" @click="startEdit(provider)">{{ copy.edit }}</button><button class="btn btn-secondary" @click="toggle(provider)">{{ provider.enabled ? copy.disable : copy.enable }}</button><button class="btn btn-primary" :disabled="!provider.enabled || !provider.api_key_configured || !!provider.tiny_real_authorized_at" @click="authorize(provider)">{{ copy.grant }}</button></div>
+
+      <section class="video-provider-list grid gap-4 xl:grid-cols-2" aria-label="已保存通道">
+        <article v-for="provider in providers" :key="provider.id" class="video-provider-card card min-w-0 p-5">
+          <div class="video-provider-summary flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div class="video-provider-identity min-w-0">
+              <h2 class="break-words font-semibold text-gray-900 dark:text-white">{{ provider.display_name }}</h2>
+              <p class="break-all text-sm text-gray-500">{{ provider.group_name }} / {{ provider.default_model }}</p>
+            </div>
+            <span class="video-provider-state text-sm">{{ provider.enabled ? '已启用' : '已停用' }}</span>
+          </div>
+          <h3 class="mt-4 text-sm font-medium">保存后摘要</h3>
+          <dl class="video-provider-evidence mt-2 grid gap-3 text-sm sm:grid-cols-2">
+            <div class="video-provider-secret-state"><dt class="text-gray-500">密钥</dt><dd class="break-all">{{ provider.masked_key || '未配置' }}</dd></div>
+            <div class="video-provider-group-state"><dt class="text-gray-500">员工组</dt><dd>{{ provider.group_name || '后端未提供' }}</dd></div>
+            <div class="video-provider-contract-state"><dt class="text-gray-500">固定规格</dt><dd>{{ contract ? `${contract.duration_seconds} 秒 / ${contract.resolution}` : '加载失败' }}</dd></div>
+            <div class="video-provider-grant-state"><dt class="text-gray-500">授权状态</dt><dd>{{ authLabel(provider) }}</dd></div>
+          </dl>
+          <div class="video-provider-card-actions mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+            <button type="button" class="btn btn-secondary" @click="startEdit(provider)">编辑</button>
+            <button type="button" class="btn btn-secondary" @click="toggle(provider)">{{ provider.enabled ? '停用' : '启用' }}</button>
+            <button
+              type="button"
+              class="btn btn-primary"
+              :data-testid="`authorize-provider-${provider.id}`"
+              :disabled="!!authorizationDisabledReason(provider)"
+              :aria-describedby="`video-auth-reason-${provider.id}`"
+              @click="openAuthorization(provider)"
+            >
+              授权一次最小真实调用
+            </button>
+          </div>
+          <p :id="`video-auth-reason-${provider.id}`" class="mt-2 text-xs text-gray-500" aria-live="polite">
+            {{ authorizationDisabledReason(provider) || '授权前会再次展示模型、规格、预算门禁与影响范围。' }}
+          </p>
         </article>
-        <p v-if="!providers.length" class="video-provider-empty text-sm text-gray-500">{{ copy.empty }}</p>
+        <p v-if="!providers.length" class="video-provider-empty text-sm text-gray-500">尚未配置通道。</p>
       </section>
+
+      <SeedanceAuthorizationDialog
+        v-if="selectedProvider && contract"
+        :show="authorizationOpen"
+        :provider="selectedProvider"
+        :contract="contract"
+        :submitting="authorizing"
+        @cancel="closeAuthorization"
+        @confirm="confirmAuthorization"
+      />
     </div>
   </AppLayout>
 </template>
@@ -44,24 +103,118 @@ import { adminAPI } from '@/api/admin'
 import type { VideoProviderAccount, VideoProviderContract } from '@/api/admin/video'
 import { useAppStore } from '@/stores'
 import { extractApiErrorMessage } from '@/utils/apiError'
+import SeedanceAuthorizationDialog from './SeedanceAuthorizationDialog.vue'
 
 const app = useAppStore()
 const providers = ref<VideoProviderAccount[]>([])
 const groups = ref<Array<{ id: number; name: string }>>([])
 const contract = ref<VideoProviderContract>()
 const saving = ref(false)
+const authorizing = ref(false)
 const editingId = ref<number | null>(null)
+const authorizationOpen = ref(false)
+const selectedProvider = ref<VideoProviderAccount>()
 const form = reactive({ group_id: 0, display_name: 'Seedance 2.0', api_key: '', enabled: false })
-const copy = {
-  title: '\u89c6\u9891\u751f\u6210\u901a\u9053', description: '\u4ec5\u53ef\u7ed1\u5b9a\u53d7\u63a7\u6807\u51c6\u5458\u5de5\u7ec4\uff0c\u7531\u7cfb\u7edf\u56fa\u5b9a\u552f\u4e00\u6a21\u578b\u548c\u4e0a\u6e38\u5730\u5740\u3002', contract: '\u5f53\u524d\u56fa\u5b9a\u5951\u7ea6', model: '\u6a21\u578b', endpoint: '\u4e0a\u6e38\u5730\u5740', add: '\u65b0\u589e\u901a\u9053', edit: '\u7f16\u8f91\u901a\u9053', channelName: '\u901a\u9053\u540d\u79f0', group: '\u9009\u62e9\u53d7\u63a7\u6807\u51c6\u5458\u5de5\u7ec4', onlyStandardGroup: '\u4ec5\u663e\u793a\u53d7\u63a7\u6807\u51c6\u5458\u5de5\u7ec4', secret: '\u8f93\u5165\u4e0a\u6e38\u5bc6\u94a5', secretKeep: '\u7559\u7a7a\u8868\u793a\u4e0d\u66f4\u6362\u5bc6\u94a5', enableNow: '\u4fdd\u5b58\u540e\u542f\u7528', save: '\u4fdd\u5b58', cancel: '\u53d6\u6d88', enabled: '\u5df2\u542f\u7528', disabled: '\u5df2\u505c\u7528', secretLabel: '\u5bc6\u94a5', notConfigured: '\u672a\u914d\u7f6e', authorization: '\u5355\u6b21\u771f\u5b9e\u9a8c\u6536\u6388\u6743', grant: '\u6388\u6743\u4e00\u6b21\u6700\u5c0f\u771f\u5b9e\u8c03\u7528', enable: '\u542f\u7528', disable: '\u505c\u7528', empty: '\u5c1a\u672a\u914d\u7f6e\u901a\u9053\u3002', pending: '\u5df2\u6388\u6743\uff0c\u5f85\u6267\u884c', consumed: '\u5df2\u6d88\u8d39', notAuthorized: '\u672a\u6388\u6743', confirm: '\u786e\u8ba4\u6388\u6743\u8be5\u901a\u9053\u6267\u884c\u4e00\u6b21\u6700\u5c0f\u771f\u5b9e\u8c03\u7528\uff1f\u6b64\u64cd\u4f5c\u4e0d\u4f1a\u7acb\u5373\u53d1\u8d77\u4e0a\u6e38\u8bf7\u6c42\u3002'
+const onlyStandardGroup = '仅显示受控标准员工组。'
+
+async function load() {
+  try {
+    const [contractData, providerData, groupData] = await Promise.all([
+      adminAPI.video.contract(),
+      adminAPI.video.listProviders(),
+      adminAPI.groups.getAll()
+    ])
+    contract.value = contractData
+    providers.value = providerData.items
+    groups.value = groupData.filter(group => group.subscription_type === 'standard')
+  } catch (error) {
+    app.showError(extractApiErrorMessage(error, '加载视频通道失败'))
+  }
 }
 
-async function load() { try { const [contractData, providerData, groupData] = await Promise.all([adminAPI.video.contract(), adminAPI.video.listProviders(), adminAPI.groups.getAll()]); contract.value = contractData; providers.value = providerData.items; groups.value = groupData.filter(group => group.subscription_type === 'standard') } catch (error) { app.showError(extractApiErrorMessage(error, '\u52a0\u8f7d\u89c6\u9891\u901a\u9053\u5931\u8d25')) } }
-function resetForm() { editingId.value = null; Object.assign(form, { group_id: 0, display_name: 'Seedance 2.0', api_key: '', enabled: false }) }
-function startEdit(provider: VideoProviderAccount) { editingId.value = provider.id; Object.assign(form, { group_id: provider.group_id, display_name: provider.display_name, api_key: '', enabled: provider.enabled }); window.scrollTo({ top: 0, behavior: 'smooth' }) }
-async function save() { saving.value = true; try { if (editingId.value) { await adminAPI.video.updateProvider(editingId.value, { group_id: form.group_id, display_name: form.display_name, enabled: form.enabled, ...(form.api_key ? { api_key: form.api_key } : {}) }) } else { await adminAPI.video.createProvider({ ...form, provider: 'seedance' }) } resetForm(); app.showSuccess('\u901a\u9053\u5df2\u4fdd\u5b58'); await load() } catch (error) { app.showError(extractApiErrorMessage(error, '\u4fdd\u5b58\u5931\u8d25')) } finally { saving.value = false } }
-async function toggle(provider: VideoProviderAccount) { try { await adminAPI.video.updateProvider(provider.id, { enabled: !provider.enabled }); await load() } catch (error) { app.showError(extractApiErrorMessage(error, '\u66f4\u65b0\u5931\u8d25')) } }
-async function authorize(provider: VideoProviderAccount) { if (!window.confirm(copy.confirm)) return; try { await adminAPI.video.authorizeTinyReal(provider.id); app.showSuccess('\u5df2\u8bb0\u5f55\u5355\u6b21\u6388\u6743'); await load() } catch (error) { app.showError(extractApiErrorMessage(error, '\u6388\u6743\u5931\u8d25')) } }
-function authLabel(provider: VideoProviderAccount) { if (provider.tiny_real_consumed_at) return copy.consumed; if (provider.tiny_real_authorized_at) return copy.pending; return copy.notAuthorized }
+function resetForm() {
+  editingId.value = null
+  Object.assign(form, { group_id: 0, display_name: 'Seedance 2.0', api_key: '', enabled: false })
+}
+
+function startEdit(provider: VideoProviderAccount) {
+  editingId.value = provider.id
+  Object.assign(form, { group_id: provider.group_id, display_name: provider.display_name, api_key: '', enabled: provider.enabled })
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+async function save() {
+  saving.value = true
+  try {
+    if (editingId.value) {
+      await adminAPI.video.updateProvider(editingId.value, {
+        group_id: form.group_id,
+        display_name: form.display_name,
+        enabled: form.enabled,
+        ...(form.api_key ? { api_key: form.api_key } : {})
+      })
+    } else {
+      await adminAPI.video.createProvider({ ...form, provider: 'seedance' })
+    }
+    resetForm()
+    app.showSuccess('通道已保存；密钥明文不会再次回显')
+    await load()
+  } catch (error) {
+    app.showError(extractApiErrorMessage(error, '保存失败'))
+  } finally {
+    saving.value = false
+  }
+}
+
+async function toggle(provider: VideoProviderAccount) {
+  try {
+    await adminAPI.video.updateProvider(provider.id, { enabled: !provider.enabled })
+    await load()
+  } catch (error) {
+    app.showError(extractApiErrorMessage(error, '更新失败'))
+  }
+}
+
+function authorizationDisabledReason(provider: VideoProviderAccount): string {
+  if (!contract.value) return '固定契约尚未加载，不能授权。'
+  if (!provider.enabled) return '通道已停用；先启用通道。'
+  if (!provider.api_key_configured) return '密钥未配置；先保存上游密钥。'
+  if (provider.tiny_real_consumed_at) return '该通道的一次性授权已经消费。'
+  if (provider.tiny_real_authorized_at) return '该通道已有待消费授权，不能重复授权。'
+  return ''
+}
+
+function openAuthorization(provider: VideoProviderAccount) {
+  if (authorizationDisabledReason(provider)) return
+  selectedProvider.value = provider
+  authorizationOpen.value = true
+}
+
+function closeAuthorization() {
+  if (authorizing.value) return
+  authorizationOpen.value = false
+}
+
+async function confirmAuthorization() {
+  if (!selectedProvider.value || authorizing.value) return
+  authorizing.value = true
+  try {
+    await adminAPI.video.authorizeTinyReal(selectedProvider.value.id)
+    authorizationOpen.value = false
+    app.showSuccess('已记录单次授权；尚未发起上游请求')
+    await load()
+  } catch (error) {
+    app.showError(extractApiErrorMessage(error, '授权失败'))
+  } finally {
+    authorizing.value = false
+  }
+}
+
+function authLabel(provider: VideoProviderAccount): string {
+  if (provider.tiny_real_consumed_at) return `已消费（${provider.tiny_real_consumed_at}）`
+  if (provider.tiny_real_authorized_at) return `待消费（授权人 #${provider.tiny_real_authorized_by || '未知'}）`
+  return '未授权'
+}
+
 onMounted(load)
 </script>

@@ -117,6 +117,27 @@
           </div>
         </div>
 
+        <div
+          v-if="backupPollingIssue"
+          role="alert"
+          class="mb-3 flex flex-wrap items-center justify-between gap-2 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-900/20 dark:text-amber-300"
+        >
+          <span>{{ t('common.unknown') }}: {{ backupPollingIssue.message }}</span>
+          <button type="button" class="btn btn-secondary btn-xs" @click="retryBackupPolling">
+            {{ t('version.retry') }}
+          </button>
+        </div>
+        <div
+          v-if="restorePollingIssue"
+          role="alert"
+          class="mb-3 flex flex-wrap items-center justify-between gap-2 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-900/20 dark:text-amber-300"
+        >
+          <span>{{ t('common.unknown') }}: {{ restorePollingIssue.message }}</span>
+          <button type="button" class="btn btn-secondary btn-xs" @click="retryRestorePolling">
+            {{ t('version.retry') }}
+          </button>
+        </div>
+
         <div class="overflow-x-auto">
           <table class="w-full min-w-[800px] text-sm">
             <thead>
@@ -284,6 +305,7 @@ import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api'
 import { useAppStore } from '@/stores'
 import type { BackupS3Config, BackupScheduleConfig, BackupRecord } from '@/api/admin/backup'
+import { requestConfirmation, requestTextPrompt } from '@/composables/useAppDialog'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -322,6 +344,10 @@ const manualExpireDays = ref(14)
 const pollingTimer = ref<ReturnType<typeof setInterval> | null>(null)
 const restoringPollingTimer = ref<ReturnType<typeof setInterval> | null>(null)
 const MAX_POLL_COUNT = 900
+const MAX_CONSECUTIVE_POLL_FAILURES = 3
+type PollingIssue = { id: string; message: string }
+const backupPollingIssue = ref<PollingIssue | null>(null)
+const restorePollingIssue = ref<PollingIssue | null>(null)
 
 function updateRecordInList(updated: BackupRecord) {
   const idx = backups.value.findIndex(r => r.id === updated.id)
@@ -332,20 +358,26 @@ function updateRecordInList(updated: BackupRecord) {
 
 function startPolling(backupId: string) {
   stopPolling()
+  backupPollingIssue.value = null
   let count = 0
+  let consecutiveFailures = 0
   pollingTimer.value = setInterval(async () => {
     if (count++ >= MAX_POLL_COUNT) {
       stopPolling()
       creatingBackup.value = false
-      appStore.showWarning(t('admin.backup.operations.backupRunning'))
+      const message = `${t('admin.backup.operations.backupRunning')} (${t('common.unknown')})`
+      backupPollingIssue.value = { id: backupId, message }
+      appStore.showWarning(message)
       return
     }
     try {
       const record = await adminAPI.backup.getBackup(backupId)
+      consecutiveFailures = 0
       updateRecordInList(record)
       if (record.status === 'completed' || record.status === 'failed') {
         stopPolling()
         creatingBackup.value = false
+        backupPollingIssue.value = null
         if (record.status === 'completed') {
           appStore.showSuccess(t('admin.backup.operations.backupCreated'))
         } else {
@@ -353,8 +385,15 @@ function startPolling(backupId: string) {
         }
         await loadBackups()
       }
-    } catch {
-      // 轮询失败时不中断
+    } catch (error: unknown) {
+      consecutiveFailures++
+      if (consecutiveFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+        stopPolling()
+        creatingBackup.value = false
+        const message = requestErrorMessage(error, t('errors.networkError'))
+        backupPollingIssue.value = { id: backupId, message }
+        appStore.showError(message)
+      }
     }
   }, 2000)
 }
@@ -368,20 +407,26 @@ function stopPolling() {
 
 function startRestorePolling(backupId: string) {
   stopRestorePolling()
+  restorePollingIssue.value = null
   let count = 0
+  let consecutiveFailures = 0
   restoringPollingTimer.value = setInterval(async () => {
     if (count++ >= MAX_POLL_COUNT) {
       stopRestorePolling()
       restoringId.value = ''
-      appStore.showWarning(t('admin.backup.operations.restoreRunning'))
+      const message = `${t('admin.backup.operations.restoreRunning')} (${t('common.unknown')})`
+      restorePollingIssue.value = { id: backupId, message }
+      appStore.showWarning(message)
       return
     }
     try {
       const record = await adminAPI.backup.getBackup(backupId)
+      consecutiveFailures = 0
       updateRecordInList(record)
       if (record.restore_status === 'completed' || record.restore_status === 'failed') {
         stopRestorePolling()
         restoringId.value = ''
+        restorePollingIssue.value = null
         if (record.restore_status === 'completed') {
           appStore.showSuccess(t('admin.backup.actions.restoreSuccess'))
         } else {
@@ -389,8 +434,15 @@ function startRestorePolling(backupId: string) {
         }
         await loadBackups()
       }
-    } catch {
-      // 轮询失败时不中断
+    } catch (error: unknown) {
+      consecutiveFailures++
+      if (consecutiveFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+        stopRestorePolling()
+        restoringId.value = ''
+        const message = requestErrorMessage(error, t('errors.networkError'))
+        restorePollingIssue.value = { id: backupId, message }
+        appStore.showError(message)
+      }
     }
   }, 2000)
 }
@@ -400,6 +452,40 @@ function stopRestorePolling() {
     clearInterval(restoringPollingTimer.value)
     restoringPollingTimer.value = null
   }
+}
+
+function retryBackupPolling() {
+  if (!backupPollingIssue.value) return
+  const backupId = backupPollingIssue.value.id
+  creatingBackup.value = true
+  startPolling(backupId)
+}
+
+function retryRestorePolling() {
+  if (!restorePollingIssue.value) return
+  const backupId = restorePollingIssue.value.id
+  restoringId.value = backupId
+  startRestorePolling(backupId)
+}
+
+function requestErrorStatus(error: unknown): number | null {
+  if (!error || typeof error !== 'object' || !('response' in error)) return null
+  const response = error.response
+  if (!response || typeof response !== 'object' || !('status' in response)) return null
+  return typeof response.status === 'number' ? response.status : null
+}
+
+function requestErrorMessage(error: unknown, fallback: string): string {
+  if (error && typeof error === 'object') {
+    if ('response' in error && error.response && typeof error.response === 'object' && 'data' in error.response) {
+      const data = error.response.data
+      if (data && typeof data === 'object' && 'message' in data && typeof data.message === 'string' && data.message) {
+        return data.message
+      }
+    }
+    if ('message' in error && typeof error.message === 'string' && error.message) return error.message
+  }
+  return fallback
 }
 
 function handleVisibilityChange() {
@@ -527,11 +613,11 @@ async function createBackup() {
     // 插入到列表顶部
     backups.value.unshift(record)
     startPolling(record.id)
-  } catch (error: any) {
-    if (error?.response?.status === 409) {
+  } catch (error: unknown) {
+    if (requestErrorStatus(error) === 409) {
       appStore.showWarning(t('admin.backup.operations.alreadyInProgress'))
     } else {
-      appStore.showError(error?.message || t('errors.networkError'))
+      appStore.showError(requestErrorMessage(error, t('errors.networkError')))
     }
     creatingBackup.value = false
   }
@@ -547,26 +633,33 @@ async function downloadBackup(id: string) {
 }
 
 async function restoreBackup(id: string) {
-  if (!window.confirm(t('admin.backup.actions.restoreConfirm'))) return
-  const password = window.prompt(t('admin.backup.actions.restorePasswordPrompt'))
-  if (!password) return
+  const password = await requestTextPrompt({
+    message: t('admin.backup.actions.restoreConfirm'),
+    label: t('admin.backup.actions.restorePasswordPrompt'),
+    inputType: 'password',
+    danger: true
+  })
+  if (password === null) return
   restoringId.value = id
   try {
     const record = await adminAPI.backup.restoreBackup(id, password)
     updateRecordInList(record)
     startRestorePolling(id)
-  } catch (error: any) {
-    if (error?.response?.status === 409) {
+  } catch (error: unknown) {
+    if (requestErrorStatus(error) === 409) {
       appStore.showWarning(t('admin.backup.operations.restoreRunning'))
     } else {
-      appStore.showError(error?.message || t('errors.networkError'))
+      appStore.showError(requestErrorMessage(error, t('errors.networkError')))
     }
     restoringId.value = ''
   }
 }
 
 async function removeBackup(id: string) {
-  if (!window.confirm(t('admin.backup.actions.deleteConfirm'))) return
+  if (!(await requestConfirmation({
+    message: t('admin.backup.actions.deleteConfirm'),
+    danger: true
+  }))) return
   try {
     await adminAPI.backup.deleteBackup(id)
     appStore.showSuccess(t('admin.backup.actions.deleted'))

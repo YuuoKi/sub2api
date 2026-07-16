@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,6 +19,16 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 )
+
+const temporaryPasswordLifetime = 24 * time.Hour
+
+func generateTemporaryPassword() (string, error) {
+	randomBytes := make([]byte, 24)
+	if _, err := rand.Read(randomBytes); err != nil {
+		return "", fmt.Errorf("generate temporary password: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(randomBytes), nil
+}
 
 // User management implementations
 func (s *adminServiceImpl) ListUsers(ctx context.Context, page, pageSize int, filters UserListFilters, sortBy, sortOrder string) ([]User, int64, error) {
@@ -132,17 +144,24 @@ func (s *adminServiceImpl) CreateUser(ctx context.Context, input *CreateUserInpu
 	}
 
 	user := &User{
-		Email:         input.Email,
-		Username:      input.Username,
-		Notes:         input.Notes,
-		Role:          role,
-		Balance:       balance,
-		Concurrency:   input.Concurrency,
-		RPMLimit:      input.RPMLimit,
-		Status:        StatusActive,
-		AllowedGroups: input.AllowedGroups,
+		Email:              input.Email,
+		Username:           input.Username,
+		Notes:              input.Notes,
+		Role:               role,
+		Balance:            balance,
+		Concurrency:        input.Concurrency,
+		RPMLimit:           input.RPMLimit,
+		Status:             StatusActive,
+		MustChangePassword: true,
+		AllowedGroups:      input.AllowedGroups,
 	}
-	if err := user.SetPassword(input.Password); err != nil {
+	temporaryPassword, err := generateTemporaryPassword()
+	if err != nil {
+		return nil, err
+	}
+	expiresAt := time.Now().UTC().Add(temporaryPasswordLifetime)
+	user.TemporaryPasswordExpiresAt = &expiresAt
+	if err := user.SetPassword(temporaryPassword); err != nil {
 		return nil, err
 	}
 	if err := s.userRepo.Create(ctx, user); err != nil {
@@ -154,7 +173,35 @@ func (s *adminServiceImpl) CreateUser(ctx context.Context, input *CreateUserInpu
 			input.ActorAdminID, user.ID)
 	}
 	s.assignDefaultSubscriptions(ctx, user.ID)
+	user.InitialCredential = &InitialCredential{
+		TemporaryPassword: temporaryPassword,
+		ExpiresAt:         expiresAt,
+	}
 	return user, nil
+}
+
+func (s *adminServiceImpl) ResetUserPassword(ctx context.Context, id int64) (*InitialCredential, error) {
+	user, err := s.userRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	temporaryPassword, err := generateTemporaryPassword()
+	if err != nil {
+		return nil, err
+	}
+	expiresAt := time.Now().UTC().Add(temporaryPasswordLifetime)
+	if err := user.SetPassword(temporaryPassword); err != nil {
+		return nil, err
+	}
+	user.MustChangePassword = true
+	user.TemporaryPasswordExpiresAt = &expiresAt
+	if err := s.userRepo.Update(ctx, user); err != nil {
+		return nil, err
+	}
+	if s.authCacheInvalidator != nil {
+		s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, user.ID)
+	}
+	return &InitialCredential{TemporaryPassword: temporaryPassword, ExpiresAt: expiresAt}, nil
 }
 
 // ensureNotLastAdmin 降级管理员前确认系统中仍存在其他管理员，防止零 admin 锁死。
@@ -221,12 +268,6 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 	if input.Email != "" {
 		user.Email = input.Email
 	}
-	if input.Password != "" {
-		if err := user.SetPassword(input.Password); err != nil {
-			return nil, err
-		}
-	}
-
 	if input.Username != nil {
 		user.Username = *input.Username
 	}

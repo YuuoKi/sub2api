@@ -185,6 +185,40 @@ func (_u *UserUpdate) SetNillableStatus(v *string) *UserUpdate {
 	return _u
 }
 
+// SetMustChangePassword sets the "must_change_password" field.
+func (_u *UserUpdate) SetMustChangePassword(v bool) *UserUpdate {
+	_u.mutation.SetMustChangePassword(v)
+	return _u
+}
+
+// SetNillableMustChangePassword sets the "must_change_password" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableMustChangePassword(v *bool) *UserUpdate {
+	if v != nil {
+		_u.SetMustChangePassword(*v)
+	}
+	return _u
+}
+
+// SetTemporaryPasswordExpiresAt sets the "temporary_password_expires_at" field.
+func (_u *UserUpdate) SetTemporaryPasswordExpiresAt(v time.Time) *UserUpdate {
+	_u.mutation.SetTemporaryPasswordExpiresAt(v)
+	return _u
+}
+
+// SetNillableTemporaryPasswordExpiresAt sets the "temporary_password_expires_at" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableTemporaryPasswordExpiresAt(v *time.Time) *UserUpdate {
+	if v != nil {
+		_u.SetTemporaryPasswordExpiresAt(*v)
+	}
+	return _u
+}
+
+// ClearTemporaryPasswordExpiresAt clears the value of the "temporary_password_expires_at" field.
+func (_u *UserUpdate) ClearTemporaryPasswordExpiresAt() *UserUpdate {
+	_u.mutation.ClearTemporaryPasswordExpiresAt()
+	return _u
+}
+
 // SetUsername sets the "username" field.
 func (_u *UserUpdate) SetUsername(v string) *UserUpdate {
 	_u.mutation.SetUsername(v)
@@ -1033,6 +1067,15 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(user.FieldStatus, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.MustChangePassword(); ok {
+		_spec.SetField(user.FieldMustChangePassword, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.TemporaryPasswordExpiresAt(); ok {
+		_spec.SetField(user.FieldTemporaryPasswordExpiresAt, field.TypeTime, value)
+	}
+	if _u.mutation.TemporaryPasswordExpiresAtCleared() {
+		_spec.ClearField(user.FieldTemporaryPasswordExpiresAt, field.TypeTime)
+	}
 	if value, ok := _u.mutation.Username(); ok {
 		_spec.SetField(user.FieldUsername, field.TypeString, value)
 	}
@@ -1858,6 +1901,40 @@ func (_u *UserUpdateOne) SetNillableStatus(v *string) *UserUpdateOne {
 	if v != nil {
 		_u.SetStatus(*v)
 	}
+	return _u
+}
+
+// SetMustChangePassword sets the "must_change_password" field.
+func (_u *UserUpdateOne) SetMustChangePassword(v bool) *UserUpdateOne {
+	_u.mutation.SetMustChangePassword(v)
+	return _u
+}
+
+// SetNillableMustChangePassword sets the "must_change_password" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableMustChangePassword(v *bool) *UserUpdateOne {
+	if v != nil {
+		_u.SetMustChangePassword(*v)
+	}
+	return _u
+}
+
+// SetTemporaryPasswordExpiresAt sets the "temporary_password_expires_at" field.
+func (_u *UserUpdateOne) SetTemporaryPasswordExpiresAt(v time.Time) *UserUpdateOne {
+	_u.mutation.SetTemporaryPasswordExpiresAt(v)
+	return _u
+}
+
+// SetNillableTemporaryPasswordExpiresAt sets the "temporary_password_expires_at" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableTemporaryPasswordExpiresAt(v *time.Time) *UserUpdateOne {
+	if v != nil {
+		_u.SetTemporaryPasswordExpiresAt(*v)
+	}
+	return _u
+}
+
+// ClearTemporaryPasswordExpiresAt clears the value of the "temporary_password_expires_at" field.
+func (_u *UserUpdateOne) ClearTemporaryPasswordExpiresAt() *UserUpdateOne {
+	_u.mutation.ClearTemporaryPasswordExpiresAt()
 	return _u
 }
 
@@ -2738,6 +2815,15 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(user.FieldStatus, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.MustChangePassword(); ok {
+		_spec.SetField(user.FieldMustChangePassword, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.TemporaryPasswordExpiresAt(); ok {
+		_spec.SetField(user.FieldTemporaryPasswordExpiresAt, field.TypeTime, value)
+	}
+	if _u.mutation.TemporaryPasswordExpiresAtCleared() {
+		_spec.ClearField(user.FieldTemporaryPasswordExpiresAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.Username(); ok {
 		_spec.SetField(user.FieldUsername, field.TypeString, value)

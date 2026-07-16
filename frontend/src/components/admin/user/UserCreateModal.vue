@@ -11,17 +11,6 @@
         <input v-model="form.email" type="email" required class="input" :placeholder="t('admin.users.enterEmail')" />
       </div>
       <div>
-        <label class="input-label">{{ t('admin.users.password') }}</label>
-        <div class="flex gap-2">
-          <div class="relative flex-1">
-            <input v-model="form.password" type="text" required class="input pr-10" :placeholder="t('admin.users.enterPassword')" />
-          </div>
-          <button type="button" @click="generateRandomPassword" class="btn btn-secondary px-3">
-            <Icon name="refresh" size="md" />
-          </button>
-        </div>
-      </div>
-      <div>
         <label class="input-label">{{ t('admin.users.username') }}</label>
         <input v-model="form.username" type="text" class="input" :placeholder="t('admin.users.enterUsername')" />
       </div>
@@ -71,12 +60,17 @@ import { reactive, watch } from 'vue'
 import { useI18n } from 'vue-i18n'; import { adminAPI } from '@/api/admin'
 import { useForm } from '@/composables/useForm'
 import BaseDialog from '@/components/common/BaseDialog.vue'
-import Icon from '@/components/icons/Icon.vue'
+import type { InitialCredential } from '@/api/admin/users'
 
 const props = defineProps<{ show: boolean }>()
-const emit = defineEmits(['close', 'success']); const { t } = useI18n()
+const emit = defineEmits<{
+  (event: 'close'): void
+  (event: 'success'): void
+  (event: 'credential', payload: { email: string; credential: InitialCredential }): void
+}>()
+const { t } = useI18n()
 
-const form = reactive({ email: '', password: '', username: '', notes: '', role: 'user' as 'user' | 'admin', balance: '', concurrency: 1, rpm_limit: 0 })
+const form = reactive({ email: '', username: '', notes: '', role: 'user' as 'user' | 'admin', balance: '', concurrency: 1, rpm_limit: 0 })
 
 const { loading, submit } = useForm({
   form,
@@ -87,17 +81,13 @@ const { loading, submit } = useForm({
     if (balance !== '') {
       payload.balance = Number(balance)
     }
-    await adminAPI.users.create(payload)
-    emit('success'); emit('close')
+    const result = await adminAPI.users.create(payload)
+    emit('success')
+    emit('credential', { email: result.user.email, credential: result.initial_credential })
+    emit('close')
   },
   successMsg: t('admin.users.userCreated')
 })
 
-watch(() => props.show, (v) => { if(v) Object.assign(form, { email: '', password: '', username: '', notes: '', role: 'user', balance: '', concurrency: 1, rpm_limit: 0 }) })
-
-const generateRandomPassword = () => {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%^&*'
-  let p = ''; for (let i = 0; i < 16; i++) p += chars.charAt(Math.floor(Math.random() * chars.length))
-  form.password = p
-}
+watch(() => props.show, (v) => { if(v) Object.assign(form, { email: '', username: '', notes: '', role: 'user', balance: '', concurrency: 1, rpm_limit: 0 }) })
 </script>

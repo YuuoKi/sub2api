@@ -186,6 +186,10 @@ func validateJWTForAdmin(
 		AbortWithError(c, 401, "TOKEN_REVOKED", "Token has been revoked (password changed)")
 		return false
 	}
+	if user.MustChangePassword {
+		AbortWithError(c, 403, "PASSWORD_CHANGE_REQUIRED", "Change the temporary password before continuing")
+		return false
+	}
 
 	// 检查管理员权限
 	if !user.IsAdmin() {
@@ -194,8 +198,9 @@ func validateJWTForAdmin(
 	}
 
 	c.Set(string(ContextKeyUser), AuthSubject{
-		UserID:      user.ID,
-		Concurrency: user.Concurrency,
+		UserID:             user.ID,
+		Concurrency:        user.Concurrency,
+		MustChangePassword: user.MustChangePassword,
 	})
 	c.Set(string(ContextKeyUserRole), user.Role)
 	c.Set("auth_method", "jwt")

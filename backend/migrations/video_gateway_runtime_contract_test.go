@@ -84,3 +84,32 @@ func TestVideoGatewayProviderAuthorizationAndCanonicalContract(t *testing.T) {
 		t.Fatal("provider contract migration must be additive-only and must not rewrite or reject historical rows")
 	}
 }
+
+func TestVideoTaskEvidenceMigrationIsAdditiveAndKeepsUnknownProviderFactsNullable(t *testing.T) {
+	b, err := os.ReadFile("181_video_task_delivery_evidence.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sql := strings.ToLower(string(b))
+	for _, required := range []string{
+		"upstream_model", "upstream_duration_seconds", "upstream_resolution",
+		"billing_model", "billing_duration_seconds", "billing_resolution",
+		"balance_before_usd", "balance_after_usd", "balance_delta_usd",
+		"authorization_consumed_at", "authorization_consumed_by",
+	} {
+		if !strings.Contains(sql, required) {
+			t.Errorf("missing %s", required)
+		}
+	}
+	for _, nullable := range []string{
+		"upstream_model", "upstream_duration_seconds", "upstream_resolution",
+		"billing_model", "billing_duration_seconds", "billing_resolution",
+	} {
+		if regexp.MustCompile(nullable + `[^,;]*not\s+null`).MatchString(sql) {
+			t.Errorf("%s must remain nullable when the provider omits it", nullable)
+		}
+	}
+	if regexp.MustCompile(`(?m)^\s*(update|delete|drop|truncate)\b|insert\s+into[\s\S]+select\s`).MatchString(sql) {
+		t.Fatal("video task evidence migration must be additive and must not rewrite history")
+	}
+}

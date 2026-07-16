@@ -45642,6 +45642,8 @@ type UserMutation struct {
 	concurrency                   *int
 	addconcurrency                *int
 	status                        *string
+	must_change_password          *bool
+	temporary_password_expires_at *time.Time
 	username                      *string
 	notes                         *string
 	totp_secret_encrypted         *string
@@ -46233,6 +46235,91 @@ func (m *UserMutation) OldStatus(ctx context.Context) (v string, err error) {
 // ResetStatus resets all changes to the "status" field.
 func (m *UserMutation) ResetStatus() {
 	m.status = nil
+}
+
+// SetMustChangePassword sets the "must_change_password" field.
+func (m *UserMutation) SetMustChangePassword(b bool) {
+	m.must_change_password = &b
+}
+
+// MustChangePassword returns the value of the "must_change_password" field in the mutation.
+func (m *UserMutation) MustChangePassword() (r bool, exists bool) {
+	v := m.must_change_password
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMustChangePassword returns the old "must_change_password" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldMustChangePassword(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMustChangePassword is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMustChangePassword requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMustChangePassword: %w", err)
+	}
+	return oldValue.MustChangePassword, nil
+}
+
+// ResetMustChangePassword resets all changes to the "must_change_password" field.
+func (m *UserMutation) ResetMustChangePassword() {
+	m.must_change_password = nil
+}
+
+// SetTemporaryPasswordExpiresAt sets the "temporary_password_expires_at" field.
+func (m *UserMutation) SetTemporaryPasswordExpiresAt(t time.Time) {
+	m.temporary_password_expires_at = &t
+}
+
+// TemporaryPasswordExpiresAt returns the value of the "temporary_password_expires_at" field in the mutation.
+func (m *UserMutation) TemporaryPasswordExpiresAt() (r time.Time, exists bool) {
+	v := m.temporary_password_expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTemporaryPasswordExpiresAt returns the old "temporary_password_expires_at" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldTemporaryPasswordExpiresAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTemporaryPasswordExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTemporaryPasswordExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTemporaryPasswordExpiresAt: %w", err)
+	}
+	return oldValue.TemporaryPasswordExpiresAt, nil
+}
+
+// ClearTemporaryPasswordExpiresAt clears the value of the "temporary_password_expires_at" field.
+func (m *UserMutation) ClearTemporaryPasswordExpiresAt() {
+	m.temporary_password_expires_at = nil
+	m.clearedFields[user.FieldTemporaryPasswordExpiresAt] = struct{}{}
+}
+
+// TemporaryPasswordExpiresAtCleared returns if the "temporary_password_expires_at" field was cleared in this mutation.
+func (m *UserMutation) TemporaryPasswordExpiresAtCleared() bool {
+	_, ok := m.clearedFields[user.FieldTemporaryPasswordExpiresAt]
+	return ok
+}
+
+// ResetTemporaryPasswordExpiresAt resets all changes to the "temporary_password_expires_at" field.
+func (m *UserMutation) ResetTemporaryPasswordExpiresAt() {
+	m.temporary_password_expires_at = nil
+	delete(m.clearedFields, user.FieldTemporaryPasswordExpiresAt)
 }
 
 // SetUsername sets the "username" field.
@@ -47601,7 +47688,7 @@ func (m *UserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserMutation) Fields() []string {
-	fields := make([]string, 0, 24)
+	fields := make([]string, 0, 26)
 	if m.created_at != nil {
 		fields = append(fields, user.FieldCreatedAt)
 	}
@@ -47631,6 +47718,12 @@ func (m *UserMutation) Fields() []string {
 	}
 	if m.status != nil {
 		fields = append(fields, user.FieldStatus)
+	}
+	if m.must_change_password != nil {
+		fields = append(fields, user.FieldMustChangePassword)
+	}
+	if m.temporary_password_expires_at != nil {
+		fields = append(fields, user.FieldTemporaryPasswordExpiresAt)
 	}
 	if m.username != nil {
 		fields = append(fields, user.FieldUsername)
@@ -47702,6 +47795,10 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 		return m.Concurrency()
 	case user.FieldStatus:
 		return m.Status()
+	case user.FieldMustChangePassword:
+		return m.MustChangePassword()
+	case user.FieldTemporaryPasswordExpiresAt:
+		return m.TemporaryPasswordExpiresAt()
 	case user.FieldUsername:
 		return m.Username()
 	case user.FieldNotes:
@@ -47759,6 +47856,10 @@ func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldConcurrency(ctx)
 	case user.FieldStatus:
 		return m.OldStatus(ctx)
+	case user.FieldMustChangePassword:
+		return m.OldMustChangePassword(ctx)
+	case user.FieldTemporaryPasswordExpiresAt:
+		return m.OldTemporaryPasswordExpiresAt(ctx)
 	case user.FieldUsername:
 		return m.OldUsername(ctx)
 	case user.FieldNotes:
@@ -47865,6 +47966,20 @@ func (m *UserMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetStatus(v)
+		return nil
+	case user.FieldMustChangePassword:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMustChangePassword(v)
+		return nil
+	case user.FieldTemporaryPasswordExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTemporaryPasswordExpiresAt(v)
 		return nil
 	case user.FieldUsername:
 		v, ok := value.(string)
@@ -48072,6 +48187,9 @@ func (m *UserMutation) ClearedFields() []string {
 	if m.FieldCleared(user.FieldDeletedAt) {
 		fields = append(fields, user.FieldDeletedAt)
 	}
+	if m.FieldCleared(user.FieldTemporaryPasswordExpiresAt) {
+		fields = append(fields, user.FieldTemporaryPasswordExpiresAt)
+	}
 	if m.FieldCleared(user.FieldTotpSecretEncrypted) {
 		fields = append(fields, user.FieldTotpSecretEncrypted)
 	}
@@ -48103,6 +48221,9 @@ func (m *UserMutation) ClearField(name string) error {
 	switch name {
 	case user.FieldDeletedAt:
 		m.ClearDeletedAt()
+		return nil
+	case user.FieldTemporaryPasswordExpiresAt:
+		m.ClearTemporaryPasswordExpiresAt()
 		return nil
 	case user.FieldTotpSecretEncrypted:
 		m.ClearTotpSecretEncrypted()
@@ -48156,6 +48277,12 @@ func (m *UserMutation) ResetField(name string) error {
 		return nil
 	case user.FieldStatus:
 		m.ResetStatus()
+		return nil
+	case user.FieldMustChangePassword:
+		m.ResetMustChangePassword()
+		return nil
+	case user.FieldTemporaryPasswordExpiresAt:
+		m.ResetTemporaryPasswordExpiresAt()
 		return nil
 	case user.FieldUsername:
 		m.ResetUsername()

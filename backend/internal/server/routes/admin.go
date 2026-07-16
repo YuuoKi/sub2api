@@ -119,7 +119,16 @@ func registerAdminVideoRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	video.POST("/providers/:id/tiny-real-authorization", h.Admin.Video.AuthorizeTinyReal)
 	video.GET("/tasks", h.Admin.Video.ListTasks)
 	video.GET("/tasks/:id", h.Admin.Video.GetTask)
+	video.POST("/tasks/:id/asset-handoffs", h.Admin.Video.CreateAssetHandoff)
 	video.GET("/system-check", h.Admin.Video.SystemCheck)
+}
+
+// RegisterAssetHandoffRoutes exposes only the one-time loopback consumer.
+// The opaque ticket is the cross-platform bearer capability; this endpoint does
+// not accept user IDs or forwarded identity headers.
+func RegisterAssetHandoffRoutes(v1 *gin.RouterGroup, h *handler.Handlers) {
+	public := v1.Group("/public")
+	public.POST("/asset-handoffs/consume", h.Admin.Video.ConsumeAssetHandoff)
 }
 
 func registerAdminComplianceRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
@@ -274,6 +283,7 @@ func registerUserManagementRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		users.GET("/:id/platform-quotas", h.Admin.User.GetUserPlatformQuotas)
 		users.PUT("/:id/platform-quotas", h.Admin.User.UpdateUserPlatformQuotas)
 		users.POST("/:id/platform-quotas/reset", h.Admin.User.ResetUserPlatformQuotaWindow)
+		users.POST("/:id/reset-password", h.Admin.User.ResetPassword)
 
 		// User attribute values
 		users.GET("/:id/attributes", h.Admin.UserAttribute.GetUserAttributes)

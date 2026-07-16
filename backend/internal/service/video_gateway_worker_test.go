@@ -178,7 +178,7 @@ func TestVideoWorkerConsumesProcessGateAfterAtomicDBClaim(t *testing.T) {
 func TestVideoWorkerDelegatesSuccessfulAtomicCapture(t *testing.T) {
 	tokens := int64(245025)
 	repo := &workerRepoStub{task: &VideoTask{ID: 7, APIKeyID: 8, GroupID: 9, ProviderAccountID: 10, CreatedBy: 11, Model: SeedanceModel, Status: VideoStatusSubmitted, UpstreamTaskID: "up-7", Version: 2, DurationSeconds: 4, Resolution: "720p", ReservedCostUSD: 0.2, ReservationState: VideoReservationReserved}, provider: VideoProviderAccount{ID: 10, GroupID: 9, Enabled: true, BaseURL: "https://ark.cn-beijing.volces.com", EncryptedAPIKey: "cipher"}}
-	responseBody := `{"id":"up-7","status":"succeeded","content":{"video_url":"https://cdn.example.test/v.mp4"},"usage":{"completion_tokens":245025}}`
+	responseBody := `{"id":"up-7","status":"succeeded","model":"doubao-seedance-2-0-260128","duration":"4","resolution":"720p","content":{"video_url":"https://cdn.example.test/v.mp4"},"usage":{"completion_tokens":245025}}`
 	factory := func(base, key string) *SeedanceAdapter {
 		return NewSeedanceAdapter(&http.Client{Transport: videoRoundTripperFunc(func(*http.Request) (*http.Response, error) {
 			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(responseBody)), Header: make(http.Header)}, nil
@@ -193,6 +193,13 @@ func TestVideoWorkerDelegatesSuccessfulAtomicCapture(t *testing.T) {
 	}
 	if len(repo.finalized) != 1 || repo.finalized[0].CostAmount <= 0 || repo.finalized[0].Status != VideoStatusSucceeded || repo.finalized[0].Settlement != VideoSettlementCaptureActual || *repo.finalized[0].UsageTotalTokens != tokens {
 		t.Fatalf("finalized=%#v", repo.finalized)
+	}
+	finalized := repo.finalized[0]
+	if finalized.UpstreamModel == nil || *finalized.UpstreamModel != SeedanceModel ||
+		finalized.UpstreamDurationSeconds == nil || *finalized.UpstreamDurationSeconds != 4 ||
+		finalized.UpstreamResolution == nil || *finalized.UpstreamResolution != "720p" ||
+		finalized.BillingModel != nil || finalized.BillingDurationSeconds != nil || finalized.BillingResolution != nil {
+		t.Fatalf("finalization evidence=%#v", finalized)
 	}
 	if len(authCache.users) != 1 || len(billingCache.users) != 1 || len(billingCache.keys) != 1 {
 		t.Fatalf("caches were not invalidated")

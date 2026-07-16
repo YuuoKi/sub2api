@@ -182,6 +182,16 @@ const routes: RouteRecordRaw[] = [
     redirect: '/home'
   },
   {
+    path: '/change-temporary-password',
+    name: 'ForcePasswordChange',
+    component: () => import('@/views/auth/ForcePasswordChangeView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Change temporary password'
+    }
+  },
+  {
     path: '/dashboard',
     name: 'Dashboard',
     component: () => import('@/views/user/DashboardView.vue'),
@@ -829,6 +839,16 @@ router.beforeEach(async (to, _from, next) => {
       path: '/login',
       query: { redirect: to.fullPath } // Save intended destination
     })
+    return
+  }
+
+  const mustChangePassword = authStore.user?.must_change_password === true
+  if (mustChangePassword && to.path !== '/change-temporary-password') {
+    next('/change-temporary-password')
+    return
+  }
+  if (!mustChangePassword && to.path === '/change-temporary-password') {
+    next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
     return
   }
 

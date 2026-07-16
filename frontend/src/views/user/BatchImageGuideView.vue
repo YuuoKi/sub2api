@@ -750,6 +750,7 @@ import Select, { type SelectOption } from '@/components/common/Select.vue'
 import SearchInput from '@/components/common/SearchInput.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { useClipboard } from '@/composables/useClipboard'
+import { requestConfirmation } from '@/composables/useAppDialog'
 import { getPersistedPageSize, setPersistedPageSize } from '@/composables/usePersistedPageSize'
 import { useAppStore } from '@/stores/app'
 import { keysAPI } from '@/api'
@@ -1759,7 +1760,7 @@ async function cancelSelected() {
   if (!currentJob.value) return
   const key = keyForSelectedBatch() || requireApiKey()
   if (!key) return
-  if (!window.confirm(batchImageText('cancelConfirm'))) return
+  if (!(await requestConfirmation({ message: batchImageText('cancelConfirm'), danger: true }))) return
   cancelling.value = true
   try {
     const job = await cancelBatchImageJob(key.key, currentJob.value.id)
@@ -1895,7 +1896,7 @@ async function deleteJob(job: BatchImageJobRow) {
   closeMoreMenu()
   const key = apiKeyForJob(job)
   if (!key) return
-  if (!window.confirm(batchImageText('deleteConfirm'))) return
+  if (!(await requestConfirmation({ message: batchImageText('deleteConfirm'), danger: true }))) return
   deletingBatchId.value = job.id
   try {
     await deleteBatchImageJobRecord(key.key, job.id)
@@ -1911,7 +1912,7 @@ async function deleteJob(job: BatchImageJobRow) {
 async function deleteSelectedJobs() {
   const rows = selectedRows.value.filter(job => canDeleteRecord(job))
   if (bulkDeleting.value || rows.length === 0) return
-  if (!window.confirm(batchImageText('deleteSelectedConfirm'))) return
+  if (!(await requestConfirmation({ message: batchImageText('deleteSelectedConfirm'), danger: true }))) return
   bulkDeleting.value = true
   try {
     for (const row of rows) {

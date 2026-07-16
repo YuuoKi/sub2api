@@ -122,7 +122,6 @@ type AdminService interface {
 // CreateUserInput represents input for creating a new user via admin operations.
 type CreateUserInput struct {
 	Email         string
-	Password      string
 	Username      string
 	Notes         string
 	Role          string // 空字符串表示使用默认角色(user);合法值 admin/user
@@ -134,9 +133,13 @@ type CreateUserInput struct {
 	ActorAdminID int64
 }
 
+type InitialCredential struct {
+	TemporaryPassword string    `json:"temporary_password"`
+	ExpiresAt         time.Time `json:"expires_at"`
+}
+
 type UpdateUserInput struct {
 	Email         string
-	Password      string
 	Username      *string
 	Notes         *string
 	Role          string   // 空字符串表示"未提供"(不修改);合法值 admin/user

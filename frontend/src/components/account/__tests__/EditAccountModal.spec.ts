@@ -216,6 +216,21 @@ function buildVertexAccount() {
   } as any
 }
 
+function buildGeminiApiKeyAccount() {
+  const account = buildAccount()
+  account.id = 6
+  account.name = 'Gemini API Key'
+  account.platform = 'gemini'
+  account.credentials = {
+    api_key: 'AIza-secret-1234',
+    base_url: 'https://generativelanguage.googleapis.com',
+    model_mapping: {
+      'gemini-2.5-flash': 'gemini-2.5-flash'
+    }
+  }
+  return account
+}
+
 function buildAntigravityAccount(projectId = 'configured-project') {
   return {
     id: 3,
@@ -765,6 +780,57 @@ describe('EditAccountModal', () => {
     expect(updateAccountMock).not.toHaveBeenCalled()
   })
 
+  it('uses the dedicated Gemini API Key form with masked secret and collapsed advanced fields', () => {
+    const wrapper = mountModal(buildGeminiApiKeyAccount())
+
+    expect(wrapper.get('[data-testid="gemini-api-key-edit-form"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="gemini-api-key-input"]').attributes('type')).toBe('password')
+    expect(wrapper.find('[data-testid="gemini-vertex-edit-form"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="gemini-api-key-advanced"]').attributes('open')).toBeUndefined()
+  })
+
+  it('requires a masked Gemini API Key review before updating', async () => {
+    const account = buildGeminiApiKeyAccount()
+    account.credentials_status = { has_api_key: true }
+    updateAccountMock.mockReset()
+    updateAccountMock.mockResolvedValue(account)
+    checkMixedChannelRiskMock.mockReset()
+    checkMixedChannelRiskMock.mockResolvedValue({ has_risk: false })
+    const wrapper = mountModal(account)
+
+    await wrapper.get<HTMLInputElement>('[data-testid="gemini-api-key-input"]').setValue('AIza-new-secret-9876')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+
+    expect(updateAccountMock).not.toHaveBeenCalled()
+    const review = wrapper.get('[data-testid="gemini-api-key-review"]')
+    expect(review.text()).toContain('••••9876')
+    expect(review.text()).not.toContain('AIza-new-secret-9876')
+
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    expect(updateAccountMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses the dedicated Gemini Vertex form and reviews only Vertex requirements', async () => {
+    const account = buildVertexAccount()
+    account.credentials_status = { has_service_account_json: true }
+    updateAccountMock.mockReset()
+    updateAccountMock.mockResolvedValue(account)
+    checkMixedChannelRiskMock.mockReset()
+    checkMixedChannelRiskMock.mockResolvedValue({ has_risk: false })
+    const wrapper = mountModal(account)
+
+    expect(wrapper.get('[data-testid="gemini-vertex-edit-form"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="gemini-api-key-input"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="gemini-vertex-advanced"]').attributes('open')).toBeUndefined()
+
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    expect(updateAccountMock).not.toHaveBeenCalled()
+    expect(wrapper.get('[data-testid="gemini-vertex-review"]').text()).toContain('demo-project')
+
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    expect(updateAccountMock).toHaveBeenCalledTimes(1)
+  })
+
   it('allows saving Vertex SA account when backend redacted service_account_json but credentials_status reports it exists', async () => {
     // 新前端 + 新后端：响应已脱敏，credentials 里没有 service_account_json，credentials_status.has_service_account_json=true
     const account = buildVertexAccount()
@@ -783,6 +849,7 @@ describe('EditAccountModal', () => {
     const wrapper = mountModal(account)
 
     await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
 
     expect(updateAccountMock).toHaveBeenCalledTimes(1)
     expect(updateAccountMock.mock.calls[0]?.[1]?.credentials?.project_id).toBe('demo-project')
@@ -800,6 +867,7 @@ describe('EditAccountModal', () => {
 
     const wrapper = mountModal(account)
 
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
     await wrapper.get('form#edit-account-form').trigger('submit.prevent')
 
     expect(updateAccountMock).toHaveBeenCalledTimes(1)

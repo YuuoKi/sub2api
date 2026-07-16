@@ -21,6 +21,8 @@ func UserFromServiceShallow(u *service.User) *User {
 		FrozenBalance:              u.FrozenBalance,
 		Concurrency:                u.Concurrency,
 		Status:                     u.Status,
+		MustChangePassword:         u.MustChangePassword,
+		TemporaryPasswordExpiresAt: u.TemporaryPasswordExpiresAt,
 		AllowedGroups:              u.AllowedGroups,
 		LastActiveAt:               u.LastActiveAt,
 		CreatedAt:                  u.CreatedAt,

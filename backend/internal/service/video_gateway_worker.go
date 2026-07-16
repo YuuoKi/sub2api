@@ -56,43 +56,43 @@ func (w *VideoGatewayWorker) RunOnce(ctx context.Context) error {
 		}
 		if polled.Status == VideoStatusSucceeded {
 			if polled.CompletionTokens == nil || *polled.CompletionTokens <= 0 {
-				err = w.finalize(ctx, task, VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version, Status: VideoStatusFailed,
+				err = w.finalize(ctx, task, videoFinalizationWithUpstreamEvidence(VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version, Status: VideoStatusFailed,
 					ResultURL: polled.ResultURL, LastFrameURL: polled.LastFrameURL, ProviderErrorCode: "billing_usage_missing",
-					ProviderErrorMessage: "provider success omitted billable completion tokens", ErrorMessage: "provider success omitted billable completion tokens", Currency: "USD", Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()})
+					ProviderErrorMessage: "provider success omitted billable completion tokens", ErrorMessage: "provider success omitted billable completion tokens", Currency: "USD", Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()}, polled))
 				return err
 			}
 			actualUSD, costErr := videoActualUSD(*polled.CompletionTokens, w.cfg)
 			if costErr != nil {
-				err = w.finalize(ctx, task, VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version, Status: VideoStatusFailed,
+				err = w.finalize(ctx, task, videoFinalizationWithUpstreamEvidence(VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version, Status: VideoStatusFailed,
 					ResultURL: polled.ResultURL, LastFrameURL: polled.LastFrameURL, UsageTotalTokens: polled.CompletionTokens,
 					ProviderErrorCode: "billing_configuration_invalid", ProviderErrorMessage: "video billing configuration is invalid",
-					ErrorMessage: "video billing configuration is invalid", Currency: "USD", Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()})
+					ErrorMessage: "video billing configuration is invalid", Currency: "USD", Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()}, polled))
 				return err
 			}
 			if polled.ResultURL == "" {
-				err = w.finalize(ctx, task, VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version, Status: VideoStatusFailed,
+				err = w.finalize(ctx, task, videoFinalizationWithUpstreamEvidence(VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version, Status: VideoStatusFailed,
 					LastFrameURL: polled.LastFrameURL, UsageTotalTokens: polled.CompletionTokens, ProviderActualCostUSD: actualUSD,
 					ProviderErrorCode: "result_asset_missing", ProviderErrorMessage: "provider success omitted video asset",
-					ErrorMessage: "provider success omitted video asset", Currency: "USD", Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()})
+					ErrorMessage: "provider success omitted video asset", Currency: "USD", Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()}, polled))
 				return err
 			}
 			if actualUSD-task.ReservedCostUSD > 0.00000001 {
-				err = w.finalize(ctx, task, VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version, Status: VideoStatusFailed,
+				err = w.finalize(ctx, task, videoFinalizationWithUpstreamEvidence(VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version, Status: VideoStatusFailed,
 					ResultURL: polled.ResultURL, LastFrameURL: polled.LastFrameURL, UsageTotalTokens: polled.CompletionTokens,
 					CostAmount: task.ReservedCostUSD, ProviderActualCostUSD: actualUSD, Currency: "USD", Settlement: VideoSettlementCaptureReserved,
 					ProviderErrorCode: "budget_actual_exceeded", ProviderErrorMessage: "provider cost exceeded reserved maximum",
-					ErrorMessage: "provider cost exceeded reserved maximum", CompletedAt: time.Now().UTC()})
+					ErrorMessage: "provider cost exceeded reserved maximum", CompletedAt: time.Now().UTC()}, polled))
 				return err
 			}
-			err = w.finalize(ctx, task, VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version, Status: polled.Status,
+			err = w.finalize(ctx, task, videoFinalizationWithUpstreamEvidence(VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version, Status: polled.Status,
 				ResultURL: polled.ResultURL, LastFrameURL: polled.LastFrameURL, UsageTotalTokens: polled.CompletionTokens,
-				CostAmount: actualUSD, ProviderActualCostUSD: actualUSD, Currency: "USD", Settlement: VideoSettlementCaptureActual, CompletedAt: time.Now().UTC()})
+				CostAmount: actualUSD, ProviderActualCostUSD: actualUSD, Currency: "USD", Settlement: VideoSettlementCaptureActual, CompletedAt: time.Now().UTC()}, polled))
 			return err
 		}
-		err = w.finalize(ctx, task, VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version, Status: polled.Status,
+		err = w.finalize(ctx, task, videoFinalizationWithUpstreamEvidence(VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version, Status: polled.Status,
 			ResultURL: polled.ResultURL, LastFrameURL: polled.LastFrameURL,
 			ProviderErrorCode: polled.ErrorCode, ProviderErrorMessage: polled.ErrorMessage, ErrorMessage: polled.ErrorMessage,
-			Currency: "USD", Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()})
+			Currency: "USD", Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()}, polled))
 		return err
 	}
 	if w.gate == nil || !w.gate.Allowed() {
@@ -138,6 +138,16 @@ func (w *VideoGatewayWorker) RunOnce(ctx context.Context) error {
 		case <-time.After(100 * time.Millisecond):
 		}
 	}
+}
+
+func videoFinalizationWithUpstreamEvidence(input VideoTaskFinalization, task *VideoProviderTask) VideoTaskFinalization {
+	if task == nil {
+		return input
+	}
+	input.UpstreamModel = task.UpstreamModel
+	input.UpstreamDurationSeconds = task.UpstreamDurationSeconds
+	input.UpstreamResolution = task.UpstreamResolution
+	return input
 }
 
 func (w *VideoGatewayWorker) finalize(ctx context.Context, task *VideoTask, input VideoTaskFinalization) error {

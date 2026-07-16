@@ -391,9 +391,9 @@
           <template #empty>
             <EmptyState
               :title="t('admin.groups.noGroupsYet')"
-              :description="t('admin.groups.createFirstGroup')"
-              :action-text="t('admin.groups.createGroup')"
-              @action="openCreateModal"
+              :description="t('admin.groups.emptyPrerequisite')"
+              :action-text="t('admin.groups.viewEmployees')"
+              action-to="/admin/users"
             />
           </template>
         </DataTable>

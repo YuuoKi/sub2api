@@ -960,6 +960,8 @@ func (s *UserService) ChangePassword(ctx context.Context, userID int64, req Chan
 	// Increment TokenVersion to invalidate all existing tokens
 	// This ensures that any tokens issued before the password change become invalid
 	user.TokenVersion++
+	user.MustChangePassword = false
+	user.TemporaryPasswordExpiresAt = nil
 
 	if err := s.userRepo.Update(ctx, user); err != nil {
 		return fmt.Errorf("update user: %w", err)

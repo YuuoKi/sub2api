@@ -213,6 +213,14 @@ export const useAuthStore = defineStore('auth', () => {
       token.value = response.access_token
       refreshTokenValue.value = response.refresh_token
 
+      if (user.value) {
+        user.value = {
+          ...user.value,
+          must_change_password: response.mustChangePassword,
+        }
+        localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user.value))
+      }
+
       // Schedule next refresh (this also updates tokenExpiresAt and localStorage)
       scheduleTokenRefresh(response.expires_in)
     } catch (error) {
@@ -294,6 +302,7 @@ export const useAuthStore = defineStore('auth', () => {
       runMode.value = response.user.run_mode
     }
     const { run_mode: _run_mode, ...userData } = response.user
+    userData.must_change_password = response.mustChangePassword
     user.value = userData
 
     // Persist to localStorage

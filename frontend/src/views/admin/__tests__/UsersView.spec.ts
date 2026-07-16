@@ -9,20 +9,22 @@ const {
   getAllGroups,
   getBatchUsersUsage,
   listEnabledDefinitions,
-  getBatchUserAttributes
+  getBatchUserAttributes,
+  toggleStatus
 } = vi.hoisted(() => ({
   listUsers: vi.fn(),
   getAllGroups: vi.fn(),
   getBatchUsersUsage: vi.fn(),
   listEnabledDefinitions: vi.fn(),
-  getBatchUserAttributes: vi.fn()
+  getBatchUserAttributes: vi.fn(),
+  toggleStatus: vi.fn()
 }))
 
 vi.mock('@/api/admin', () => ({
   adminAPI: {
     users: {
       list: listUsers,
-      toggleStatus: vi.fn(),
+      toggleStatus,
       delete: vi.fn()
     },
     groups: {
@@ -104,6 +106,7 @@ describe('admin UsersView', () => {
     getBatchUsersUsage.mockReset()
     listEnabledDefinitions.mockReset()
     getBatchUserAttributes.mockReset()
+    toggleStatus.mockReset()
 
     listUsers.mockResolvedValue({
       items: [createAdminUser()],
@@ -116,6 +119,7 @@ describe('admin UsersView', () => {
     getBatchUsersUsage.mockResolvedValue({ stats: {} })
     listEnabledDefinitions.mockResolvedValue([])
     getBatchUserAttributes.mockResolvedValue({ values: {} })
+    toggleStatus.mockResolvedValue(createAdminUser({ status: 'disabled' }))
   })
 
   afterEach(() => {
@@ -263,5 +267,81 @@ describe('admin UsersView', () => {
       }),
       expect.any(Object)
     )
+  })
+
+  it('requires an in-app confirmation before disabling and does not mutate status on failure', async () => {
+    toggleStatus.mockRejectedValueOnce(new Error('request failed'))
+    const actionsTableStub = {
+      props: ['columns', 'data'],
+      template: `
+        <div>
+          <div v-for="row in data" :key="row.id">
+            <slot name="cell-actions" :row="row" />
+          </div>
+        </div>
+      `
+    }
+    const confirmDialogStub = {
+      props: ['show', 'title', 'message'],
+      emits: ['confirm', 'cancel'],
+      template: `
+        <div v-if="show" data-test="confirm-dialog">
+          <span data-test="confirm-message">{{ message }}</span>
+          <button data-test="confirm-disable" @click="$emit('confirm')">confirm</button>
+          <button data-test="cancel-disable" @click="$emit('cancel')">cancel</button>
+        </div>
+      `
+    }
+    const wrapper = mount(UsersView, {
+      attachTo: document.body,
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          TablePageLayout: { template: '<div><slot name="table" /></div>' },
+          DataTable: actionsTableStub,
+          ConfirmDialog: confirmDialogStub,
+          Pagination: true,
+          EmptyState: true,
+          GroupBadge: true,
+          Select: true,
+          UserAttributesConfigModal: true,
+          UserConcurrencyCell: true,
+          UserCreateModal: true,
+          UserEditModal: true,
+          InitialCredentialDialog: true,
+          UserApiKeysModal: true,
+          UserAllowedGroupsModal: true,
+          UserBalanceModal: true,
+          UserBalanceHistoryModal: true,
+          GroupReplaceModal: true,
+          Icon: true
+        }
+      }
+    })
+
+    await flushPromises()
+    const actionsButton = wrapper.get('[data-user-actions="42"]')
+    expect(actionsButton.attributes('aria-label')).toContain('scoped@example.com')
+    await actionsButton.trigger('click')
+    document.querySelector<HTMLButtonElement>('[aria-label="admin.users.disable scoped@example.com"]')?.click()
+    await flushPromises()
+
+    expect(toggleStatus).not.toHaveBeenCalled()
+    expect(wrapper.get('[data-test="confirm-message"]').text()).toContain('scoped@example.com')
+    await wrapper.get('[data-test="cancel-disable"]').trigger('click')
+    await flushPromises()
+    expect(toggleStatus).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(actionsButton.element)
+
+    await actionsButton.trigger('click')
+    document.querySelector<HTMLButtonElement>('[aria-label="admin.users.disable scoped@example.com"]')?.click()
+    await flushPromises()
+    await wrapper.get('[data-test="confirm-disable"]').trigger('click')
+    await flushPromises()
+
+    expect(toggleStatus).toHaveBeenCalledWith(42, 'disabled')
+    expect(wrapper.get('[data-test="confirm-dialog"]').exists()).toBe(true)
+    expect(listUsers).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
   })
 })

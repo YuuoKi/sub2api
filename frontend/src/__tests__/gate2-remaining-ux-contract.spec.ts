@@ -1,0 +1,87 @@
+import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { getAdminSteps } from '@/components/Guide/steps'
+
+const source = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8')
+
+describe('Gate 2 remaining UX contract', () => {
+  it('does not render registration before the public runtime setting is loaded and enabled', () => {
+    const login = source('src/views/auth/LoginView.vue')
+    expect(login).toContain('publicSettingsLoaded && registrationEnabled && !backendModeEnabled')
+    expect(login).toContain('registrationEnabled.value = settings.registration_enabled === true')
+    expect(login).toContain('const registrationEnabled = ref<boolean>(false)')
+  })
+
+  it('hard-cuts onboarding to four Wujie operator steps with an explicit skip path', () => {
+    const steps = getAdminSteps((key) => key)
+    expect(steps).toHaveLength(4)
+    expect(steps.map((step) => step.element)).toEqual([
+      '#sidebar-user-manage',
+      '#sidebar-group-manage',
+      '#sidebar-channel-manage',
+      '#sidebar-global-usage'
+    ])
+    for (const step of steps) {
+      expect(step.popover?.showButtons).toContain('close')
+    }
+
+    for (const locale of ['src/i18n/locales/zh/misc.ts', 'src/i18n/locales/en/misc.ts']) {
+      const contents = source(locale)
+      const onboarding = contents.slice(contents.indexOf('  onboarding:'), contents.indexOf('  payment:'))
+      expect(onboarding).not.toContain('Sub2API')
+      expect(onboarding).not.toContain('<div')
+      expect(onboarding).not.toContain('<ul')
+      expect(onboarding).not.toMatch(/[🚀🎉👋💡🎯🔗🔑📊]/u)
+    }
+  })
+
+  it('uses role-specific usage names in Chinese and English', () => {
+    const zhCommon = source('src/i18n/locales/zh/common.ts')
+    const enCommon = source('src/i18n/locales/en/common.ts')
+    const zhUsage = source('src/i18n/locales/zh/dashboard.ts')
+    const enUsage = source('src/i18n/locales/en/dashboard.ts')
+    const zhAdmin = source('src/i18n/locales/zh/admin/resources.ts')
+    const enAdmin = source('src/i18n/locales/en/admin/resources.ts')
+    const sidebar = source('src/components/layout/AppSidebar.vue')
+
+    expect(zhCommon).toContain("myUsage: '我的用量'")
+    expect(zhCommon).toContain("globalUsage: '全局用量'")
+    expect(enCommon).toContain("myUsage: 'My usage'")
+    expect(enCommon).toContain("globalUsage: 'Global usage'")
+    expect(zhUsage).toContain("title: '我的用量'")
+    expect(enUsage).toContain("title: 'My usage'")
+    expect(zhAdmin).toContain("title: '全局用量'")
+    expect(enAdmin).toContain("title: 'Global usage'")
+    expect(sidebar).toContain("t('nav.myUsage')")
+    expect(sidebar).toContain("t('nav.globalUsage')")
+  })
+
+  it('adds prerequisite-aware chained empty states without creating data automatically', () => {
+    const groups = source('src/views/admin/GroupsView.vue')
+    const accounts = source('src/views/admin/AccountsView.vue')
+    const keys = source('src/views/user/KeysView.vue')
+
+    expect(groups).toContain("action-to=\"/admin/users\"")
+    expect(groups).toContain("admin.groups.emptyPrerequisite")
+    expect(accounts).toContain("admin.accounts.emptyPrerequisite")
+    expect(accounts).toContain("groups.length === 0")
+    expect(accounts).toContain("'/admin/groups'")
+    expect(keys).toContain("keys.emptyPrerequisite")
+    expect(keys).toContain("groups.length === 0")
+    expect(keys).toContain("'/available-channels'")
+  })
+
+  it('keeps AppHeader as the only level-one heading owner for video pages', () => {
+    for (const path of [
+      'src/views/admin/video/VideoProvidersView.vue',
+      'src/views/admin/video/VideoTasksView.vue',
+      'src/views/admin/video/VideoTaskDetailView.vue',
+      'src/views/admin/video/VideoSystemCheckView.vue'
+    ]) {
+      const view = source(path)
+      expect(view).not.toContain('<h1')
+      expect(view).toContain('<h2')
+    }
+  })
+})

@@ -78,16 +78,29 @@ func jwtAuth(authService *service.AuthService, userService jwtUserReader, activi
 		}
 
 		c.Set(string(ContextKeyUser), AuthSubject{
-			UserID:      user.ID,
-			Concurrency: user.Concurrency,
+			UserID:             user.ID,
+			Concurrency:        user.Concurrency,
+			MustChangePassword: user.MustChangePassword,
 		})
 		c.Set(string(ContextKeyUserRole), user.Role)
 		if activityToucher != nil {
 			activityToucher.TouchLastActiveForUser(c.Request.Context(), user)
 		}
 
+		if user.MustChangePassword && !isTemporaryCredentialAllowedRequest(c.Request.Method, c.Request.URL.Path) {
+			AbortWithError(c, 403, "PASSWORD_CHANGE_REQUIRED", "Change the temporary password before continuing")
+			return
+		}
+
 		c.Next()
 	}
+}
+
+func isTemporaryCredentialAllowedRequest(method, path string) bool {
+	if method == "PUT" && (path == "/api/v1/user/password" || path == "/user/password") {
+		return true
+	}
+	return method == "GET" && (path == "/api/v1/auth/me" || path == "/auth/me" || path == "/api/v1/user/profile" || path == "/user/profile")
 }
 
 // Deprecated: prefer GetAuthSubjectFromContext in auth_subject.go.

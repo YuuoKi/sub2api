@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -186,13 +187,12 @@ func (h *SystemHandler) RestartService(c *gin.Context) {
 			release("", succeeded)
 		}()
 
-		// Schedule service restart in background after sending response
-		// This ensures the client receives the success response before the service restarts
-		go func() {
-			// Wait a moment to ensure the response is sent
-			time.Sleep(500 * time.Millisecond)
-			sysutil.RestartServiceAsync()
-		}()
+		// RestartService validates that this runtime can actually schedule a
+		// restart before the endpoint acknowledges the request. The utility
+		// delays process exit briefly so the JSON response can still flush.
+		if err := sysutil.RestartService(); err != nil {
+			return nil, fmt.Errorf("schedule service restart: %w", err)
+		}
 		succeeded = true
 		return gin.H{
 			"message":      "Service restart initiated",

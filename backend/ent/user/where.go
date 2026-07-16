@@ -105,6 +105,16 @@ func Status(v string) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldStatus, v))
 }
 
+// MustChangePassword applies equality check predicate on the "must_change_password" field. It's identical to MustChangePasswordEQ.
+func MustChangePassword(v bool) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldMustChangePassword, v))
+}
+
+// TemporaryPasswordExpiresAt applies equality check predicate on the "temporary_password_expires_at" field. It's identical to TemporaryPasswordExpiresAtEQ.
+func TemporaryPasswordExpiresAt(v time.Time) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldTemporaryPasswordExpiresAt, v))
+}
+
 // Username applies equality check predicate on the "username" field. It's identical to UsernameEQ.
 func Username(v string) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldUsername, v))
@@ -683,6 +693,66 @@ func StatusEqualFold(v string) predicate.User {
 // StatusContainsFold applies the ContainsFold predicate on the "status" field.
 func StatusContainsFold(v string) predicate.User {
 	return predicate.User(sql.FieldContainsFold(FieldStatus, v))
+}
+
+// MustChangePasswordEQ applies the EQ predicate on the "must_change_password" field.
+func MustChangePasswordEQ(v bool) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldMustChangePassword, v))
+}
+
+// MustChangePasswordNEQ applies the NEQ predicate on the "must_change_password" field.
+func MustChangePasswordNEQ(v bool) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldMustChangePassword, v))
+}
+
+// TemporaryPasswordExpiresAtEQ applies the EQ predicate on the "temporary_password_expires_at" field.
+func TemporaryPasswordExpiresAtEQ(v time.Time) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldTemporaryPasswordExpiresAt, v))
+}
+
+// TemporaryPasswordExpiresAtNEQ applies the NEQ predicate on the "temporary_password_expires_at" field.
+func TemporaryPasswordExpiresAtNEQ(v time.Time) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldTemporaryPasswordExpiresAt, v))
+}
+
+// TemporaryPasswordExpiresAtIn applies the In predicate on the "temporary_password_expires_at" field.
+func TemporaryPasswordExpiresAtIn(vs ...time.Time) predicate.User {
+	return predicate.User(sql.FieldIn(FieldTemporaryPasswordExpiresAt, vs...))
+}
+
+// TemporaryPasswordExpiresAtNotIn applies the NotIn predicate on the "temporary_password_expires_at" field.
+func TemporaryPasswordExpiresAtNotIn(vs ...time.Time) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldTemporaryPasswordExpiresAt, vs...))
+}
+
+// TemporaryPasswordExpiresAtGT applies the GT predicate on the "temporary_password_expires_at" field.
+func TemporaryPasswordExpiresAtGT(v time.Time) predicate.User {
+	return predicate.User(sql.FieldGT(FieldTemporaryPasswordExpiresAt, v))
+}
+
+// TemporaryPasswordExpiresAtGTE applies the GTE predicate on the "temporary_password_expires_at" field.
+func TemporaryPasswordExpiresAtGTE(v time.Time) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldTemporaryPasswordExpiresAt, v))
+}
+
+// TemporaryPasswordExpiresAtLT applies the LT predicate on the "temporary_password_expires_at" field.
+func TemporaryPasswordExpiresAtLT(v time.Time) predicate.User {
+	return predicate.User(sql.FieldLT(FieldTemporaryPasswordExpiresAt, v))
+}
+
+// TemporaryPasswordExpiresAtLTE applies the LTE predicate on the "temporary_password_expires_at" field.
+func TemporaryPasswordExpiresAtLTE(v time.Time) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldTemporaryPasswordExpiresAt, v))
+}
+
+// TemporaryPasswordExpiresAtIsNil applies the IsNil predicate on the "temporary_password_expires_at" field.
+func TemporaryPasswordExpiresAtIsNil() predicate.User {
+	return predicate.User(sql.FieldIsNull(FieldTemporaryPasswordExpiresAt))
+}
+
+// TemporaryPasswordExpiresAtNotNil applies the NotNil predicate on the "temporary_password_expires_at" field.
+func TemporaryPasswordExpiresAtNotNil() predicate.User {
+	return predicate.User(sql.FieldNotNull(FieldTemporaryPasswordExpiresAt))
 }
 
 // UsernameEQ applies the EQ predicate on the "username" field.

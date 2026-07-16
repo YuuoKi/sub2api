@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -81,13 +82,16 @@ func ValidateTinyRealContract(r VideoCreateRequest) error {
 }
 
 type VideoProviderTask struct {
-	UpstreamTaskID   string `json:"id"`
-	Status           string `json:"status"`
-	ResultURL        string `json:"result_url"`
-	LastFrameURL     string `json:"last_frame_url"`
-	CompletionTokens *int64 `json:"completion_tokens"`
-	ErrorCode        string `json:"error_code"`
-	ErrorMessage     string `json:"error_message"`
+	UpstreamTaskID          string  `json:"id"`
+	Status                  string  `json:"status"`
+	ResultURL               string  `json:"result_url"`
+	LastFrameURL            string  `json:"last_frame_url"`
+	CompletionTokens        *int64  `json:"completion_tokens"`
+	ErrorCode               string  `json:"error_code"`
+	ErrorMessage            string  `json:"error_message"`
+	UpstreamModel           *string `json:"-"`
+	UpstreamDurationSeconds *int    `json:"-"`
+	UpstreamResolution      *string `json:"-"`
 }
 
 type SeedanceAdapter struct {
@@ -205,9 +209,12 @@ func (a *SeedanceAdapter) Poll(ctx context.Context, upstreamTaskID string) (*Vid
 		return nil, fmt.Errorf("seedance poll failed: http_%d", resp.StatusCode)
 	}
 	var parsed struct {
-		ID           string `json:"id"`
-		Status       string `json:"status"`
-		LastFrameURL string `json:"last_frame_url"`
+		ID           string          `json:"id"`
+		Status       string          `json:"status"`
+		Model        string          `json:"model"`
+		Duration     json.RawMessage `json:"duration"`
+		Resolution   string          `json:"resolution"`
+		LastFrameURL string          `json:"last_frame_url"`
 		Content      struct {
 			VideoURL     string `json:"video_url"`
 			LastFrameURL string `json:"last_frame_url"`
@@ -223,6 +230,10 @@ func (a *SeedanceAdapter) Poll(ctx context.Context, upstreamTaskID string) (*Vid
 	}
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		return nil, errors.New("seedance poll response is invalid")
+	}
+	upstreamDuration, err := parseOptionalProviderDuration(parsed.Duration)
+	if err != nil {
+		return nil, errors.New("seedance poll response has invalid duration")
 	}
 	status, err := normalizeSeedanceStatus(parsed.Status)
 	if err != nil {
@@ -243,7 +254,39 @@ func (a *SeedanceAdapter) Poll(ctx context.Context, upstreamTaskID string) (*Vid
 		}
 	}
 	return &VideoProviderTask{UpstreamTaskID: parsed.ID, Status: status, ResultURL: parsed.Content.VideoURL, LastFrameURL: lastFrame,
-		CompletionTokens: parsed.Usage.CompletionTokens, ErrorCode: sanitizeProviderCode(parsed.Error.Code), ErrorMessage: sanitizeProviderMessage(parsed.Error.Message)}, nil
+		CompletionTokens: parsed.Usage.CompletionTokens, ErrorCode: sanitizeProviderCode(parsed.Error.Code), ErrorMessage: sanitizeProviderMessage(parsed.Error.Message),
+		UpstreamModel: optionalTrimmedString(parsed.Model), UpstreamDurationSeconds: upstreamDuration,
+		UpstreamResolution: optionalTrimmedString(parsed.Resolution)}, nil
+}
+
+func optionalTrimmedString(value string) *string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
+}
+
+func parseOptionalProviderDuration(raw json.RawMessage) (*int, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil, nil
+	}
+	var value int
+	if err := json.Unmarshal(raw, &value); err != nil {
+		var text string
+		if stringErr := json.Unmarshal(raw, &text); stringErr != nil {
+			return nil, err
+		}
+		parsed, parseErr := strconv.Atoi(strings.TrimSpace(text))
+		if parseErr != nil {
+			return nil, parseErr
+		}
+		value = parsed
+	}
+	if value <= 0 {
+		return nil, errors.New("duration must be positive")
+	}
+	return &value, nil
 }
 
 func validatePublicHTTPSAssetURL(raw string) error {

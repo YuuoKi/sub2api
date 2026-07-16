@@ -78,11 +78,12 @@ type LoginRequest struct {
 
 // AuthResponse 认证响应格式（匹配前端期望）
 type AuthResponse struct {
-	AccessToken  string    `json:"access_token"`
-	RefreshToken string    `json:"refresh_token,omitempty"` // 新增：Refresh Token
-	ExpiresIn    int       `json:"expires_in,omitempty"`    // 新增：Access Token有效期（秒）
-	TokenType    string    `json:"token_type"`
-	User         *dto.User `json:"user"`
+	AccessToken        string    `json:"access_token"`
+	RefreshToken       string    `json:"refresh_token,omitempty"` // 新增：Refresh Token
+	ExpiresIn          int       `json:"expires_in,omitempty"`    // 新增：Access Token有效期（秒）
+	TokenType          string    `json:"token_type"`
+	User               *dto.User `json:"user"`
+	MustChangePassword bool      `json:"mustChangePassword"`
 }
 
 func ensureLoginUserActive(user *service.User) error {
@@ -113,18 +114,20 @@ func (h *AuthHandler) respondWithTokenPair(c *gin.Context, user *service.User) {
 			return
 		}
 		response.Success(c, AuthResponse{
-			AccessToken: token,
-			TokenType:   "Bearer",
-			User:        dto.UserFromService(user),
+			AccessToken:        token,
+			TokenType:          "Bearer",
+			User:               dto.UserFromService(user),
+			MustChangePassword: user.MustChangePassword,
 		})
 		return
 	}
 	response.Success(c, AuthResponse{
-		AccessToken:  tokenPair.AccessToken,
-		RefreshToken: tokenPair.RefreshToken,
-		ExpiresIn:    tokenPair.ExpiresIn,
-		TokenType:    "Bearer",
-		User:         dto.UserFromService(user),
+		AccessToken:        tokenPair.AccessToken,
+		RefreshToken:       tokenPair.RefreshToken,
+		ExpiresIn:          tokenPair.ExpiresIn,
+		TokenType:          "Bearer",
+		User:               dto.UserFromService(user),
+		MustChangePassword: user.MustChangePassword,
 	})
 }
 
@@ -653,10 +656,21 @@ type RefreshTokenRequest struct {
 
 // RefreshTokenResponse 刷新Token响应
 type RefreshTokenResponse struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	ExpiresIn    int    `json:"expires_in"` // Access Token有效期（秒）
-	TokenType    string `json:"token_type"`
+	AccessToken        string `json:"access_token"`
+	RefreshToken       string `json:"refresh_token"`
+	ExpiresIn          int    `json:"expires_in"` // Access Token有效期（秒）
+	TokenType          string `json:"token_type"`
+	MustChangePassword bool   `json:"mustChangePassword"`
+}
+
+func newRefreshTokenResponse(result *service.TokenPairWithUser) RefreshTokenResponse {
+	return RefreshTokenResponse{
+		AccessToken:        result.AccessToken,
+		RefreshToken:       result.RefreshToken,
+		ExpiresIn:          result.ExpiresIn,
+		TokenType:          "Bearer",
+		MustChangePassword: result.MustChangePassword,
+	}
 }
 
 // RefreshToken 刷新Token
@@ -680,12 +694,7 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, RefreshTokenResponse{
-		AccessToken:  result.AccessToken,
-		RefreshToken: result.RefreshToken,
-		ExpiresIn:    result.ExpiresIn,
-		TokenType:    "Bearer",
-	})
+	response.Success(c, newRefreshTokenResponse(result))
 }
 
 // LogoutRequest 登出请求

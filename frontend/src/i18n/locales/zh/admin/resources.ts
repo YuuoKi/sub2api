@@ -503,8 +503,8 @@ export default {
 
     // Usage Records
     usage: {
-      title: '使用记录',
-      description: '查看和管理所有用户的使用记录',
+      title: '全局用量',
+      description: '核对所有员工的请求、tokens、费用与失败记录',
       userFilter: '用户',
       searchUserPlaceholder: '按邮箱搜索用户...',
       searchApiKeyPlaceholder: '按名称搜索 API 密钥...',

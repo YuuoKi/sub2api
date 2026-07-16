@@ -33,6 +33,7 @@ const fakeUser = {
   allowed_groups: null,
   created_at: '2024-01-01',
   updated_at: '2024-01-01',
+  must_change_password: false,
 }
 
 const fakeAdminUser = {
@@ -48,6 +49,7 @@ const fakeAuthResponse = {
   refresh_token: 'refresh-token-456',
   expires_in: 3600,
   token_type: 'Bearer',
+  mustChangePassword: false,
   user: { ...fakeUser },
 }
 
@@ -155,6 +157,29 @@ describe('useAuthStore', () => {
       expect(localStorage.getItem('auth_user')).toBeNull()
       expect(localStorage.getItem('refresh_token')).toBeNull()
       expect(localStorage.getItem('token_expires_at')).toBeNull()
+    })
+  })
+
+  describe('refresh token restriction', () => {
+    it('keeps a refreshed temporary-credential session on the forced-password-change path', async () => {
+      mockLogin.mockResolvedValue({ ...fakeAuthResponse, expires_in: 121 })
+      mockRefreshToken.mockResolvedValue({
+        access_token: 'refreshed-access-token',
+        refresh_token: 'refreshed-refresh-token',
+        expires_in: 3600,
+        token_type: 'Bearer',
+        mustChangePassword: true,
+      })
+      const store = useAuthStore()
+
+      await store.login({ email: 'test@example.com', password: 'temporary-password' })
+      await vi.advanceTimersByTimeAsync(1_000)
+
+      expect(mockRefreshToken).toHaveBeenCalledTimes(1)
+      expect(store.user?.must_change_password).toBe(true)
+      expect(JSON.parse(localStorage.getItem('auth_user') ?? '{}')).toMatchObject({
+        must_change_password: true,
+      })
     })
   })
 

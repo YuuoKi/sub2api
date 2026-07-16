@@ -158,6 +158,34 @@ func (_c *UserCreate) SetNillableStatus(v *string) *UserCreate {
 	return _c
 }
 
+// SetMustChangePassword sets the "must_change_password" field.
+func (_c *UserCreate) SetMustChangePassword(v bool) *UserCreate {
+	_c.mutation.SetMustChangePassword(v)
+	return _c
+}
+
+// SetNillableMustChangePassword sets the "must_change_password" field if the given value is not nil.
+func (_c *UserCreate) SetNillableMustChangePassword(v *bool) *UserCreate {
+	if v != nil {
+		_c.SetMustChangePassword(*v)
+	}
+	return _c
+}
+
+// SetTemporaryPasswordExpiresAt sets the "temporary_password_expires_at" field.
+func (_c *UserCreate) SetTemporaryPasswordExpiresAt(v time.Time) *UserCreate {
+	_c.mutation.SetTemporaryPasswordExpiresAt(v)
+	return _c
+}
+
+// SetNillableTemporaryPasswordExpiresAt sets the "temporary_password_expires_at" field if the given value is not nil.
+func (_c *UserCreate) SetNillableTemporaryPasswordExpiresAt(v *time.Time) *UserCreate {
+	if v != nil {
+		_c.SetTemporaryPasswordExpiresAt(*v)
+	}
+	return _c
+}
+
 // SetUsername sets the "username" field.
 func (_c *UserCreate) SetUsername(v string) *UserCreate {
 	_c.mutation.SetUsername(v)
@@ -620,6 +648,10 @@ func (_c *UserCreate) defaults() error {
 		v := user.DefaultStatus
 		_c.mutation.SetStatus(v)
 	}
+	if _, ok := _c.mutation.MustChangePassword(); !ok {
+		v := user.DefaultMustChangePassword
+		_c.mutation.SetMustChangePassword(v)
+	}
 	if _, ok := _c.mutation.Username(); !ok {
 		v := user.DefaultUsername
 		_c.mutation.SetUsername(v)
@@ -707,6 +739,9 @@ func (_c *UserCreate) check() error {
 		if err := user.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "User.status": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.MustChangePassword(); !ok {
+		return &ValidationError{Name: "must_change_password", err: errors.New(`ent: missing required field "User.must_change_password"`)}
 	}
 	if _, ok := _c.mutation.Username(); !ok {
 		return &ValidationError{Name: "username", err: errors.New(`ent: missing required field "User.username"`)}
@@ -811,6 +846,14 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(user.FieldStatus, field.TypeString, value)
 		_node.Status = value
+	}
+	if value, ok := _c.mutation.MustChangePassword(); ok {
+		_spec.SetField(user.FieldMustChangePassword, field.TypeBool, value)
+		_node.MustChangePassword = value
+	}
+	if value, ok := _c.mutation.TemporaryPasswordExpiresAt(); ok {
+		_spec.SetField(user.FieldTemporaryPasswordExpiresAt, field.TypeTime, value)
+		_node.TemporaryPasswordExpiresAt = &value
 	}
 	if value, ok := _c.mutation.Username(); ok {
 		_spec.SetField(user.FieldUsername, field.TypeString, value)
@@ -1264,6 +1307,36 @@ func (u *UserUpsert) UpdateStatus() *UserUpsert {
 	return u
 }
 
+// SetMustChangePassword sets the "must_change_password" field.
+func (u *UserUpsert) SetMustChangePassword(v bool) *UserUpsert {
+	u.Set(user.FieldMustChangePassword, v)
+	return u
+}
+
+// UpdateMustChangePassword sets the "must_change_password" field to the value that was provided on create.
+func (u *UserUpsert) UpdateMustChangePassword() *UserUpsert {
+	u.SetExcluded(user.FieldMustChangePassword)
+	return u
+}
+
+// SetTemporaryPasswordExpiresAt sets the "temporary_password_expires_at" field.
+func (u *UserUpsert) SetTemporaryPasswordExpiresAt(v time.Time) *UserUpsert {
+	u.Set(user.FieldTemporaryPasswordExpiresAt, v)
+	return u
+}
+
+// UpdateTemporaryPasswordExpiresAt sets the "temporary_password_expires_at" field to the value that was provided on create.
+func (u *UserUpsert) UpdateTemporaryPasswordExpiresAt() *UserUpsert {
+	u.SetExcluded(user.FieldTemporaryPasswordExpiresAt)
+	return u
+}
+
+// ClearTemporaryPasswordExpiresAt clears the value of the "temporary_password_expires_at" field.
+func (u *UserUpsert) ClearTemporaryPasswordExpiresAt() *UserUpsert {
+	u.SetNull(user.FieldTemporaryPasswordExpiresAt)
+	return u
+}
+
 // SetUsername sets the "username" field.
 func (u *UserUpsert) SetUsername(v string) *UserUpsert {
 	u.Set(user.FieldUsername, v)
@@ -1676,6 +1749,41 @@ func (u *UserUpsertOne) SetStatus(v string) *UserUpsertOne {
 func (u *UserUpsertOne) UpdateStatus() *UserUpsertOne {
 	return u.Update(func(s *UserUpsert) {
 		s.UpdateStatus()
+	})
+}
+
+// SetMustChangePassword sets the "must_change_password" field.
+func (u *UserUpsertOne) SetMustChangePassword(v bool) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.SetMustChangePassword(v)
+	})
+}
+
+// UpdateMustChangePassword sets the "must_change_password" field to the value that was provided on create.
+func (u *UserUpsertOne) UpdateMustChangePassword() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateMustChangePassword()
+	})
+}
+
+// SetTemporaryPasswordExpiresAt sets the "temporary_password_expires_at" field.
+func (u *UserUpsertOne) SetTemporaryPasswordExpiresAt(v time.Time) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.SetTemporaryPasswordExpiresAt(v)
+	})
+}
+
+// UpdateTemporaryPasswordExpiresAt sets the "temporary_password_expires_at" field to the value that was provided on create.
+func (u *UserUpsertOne) UpdateTemporaryPasswordExpiresAt() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateTemporaryPasswordExpiresAt()
+	})
+}
+
+// ClearTemporaryPasswordExpiresAt clears the value of the "temporary_password_expires_at" field.
+func (u *UserUpsertOne) ClearTemporaryPasswordExpiresAt() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.ClearTemporaryPasswordExpiresAt()
 	})
 }
 
@@ -2293,6 +2401,41 @@ func (u *UserUpsertBulk) SetStatus(v string) *UserUpsertBulk {
 func (u *UserUpsertBulk) UpdateStatus() *UserUpsertBulk {
 	return u.Update(func(s *UserUpsert) {
 		s.UpdateStatus()
+	})
+}
+
+// SetMustChangePassword sets the "must_change_password" field.
+func (u *UserUpsertBulk) SetMustChangePassword(v bool) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.SetMustChangePassword(v)
+	})
+}
+
+// UpdateMustChangePassword sets the "must_change_password" field to the value that was provided on create.
+func (u *UserUpsertBulk) UpdateMustChangePassword() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateMustChangePassword()
+	})
+}
+
+// SetTemporaryPasswordExpiresAt sets the "temporary_password_expires_at" field.
+func (u *UserUpsertBulk) SetTemporaryPasswordExpiresAt(v time.Time) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.SetTemporaryPasswordExpiresAt(v)
+	})
+}
+
+// UpdateTemporaryPasswordExpiresAt sets the "temporary_password_expires_at" field to the value that was provided on create.
+func (u *UserUpsertBulk) UpdateTemporaryPasswordExpiresAt() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateTemporaryPasswordExpiresAt()
+	})
+}
+
+// ClearTemporaryPasswordExpiresAt clears the value of the "temporary_password_expires_at" field.
+func (u *UserUpsertBulk) ClearTemporaryPasswordExpiresAt() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.ClearTemporaryPasswordExpiresAt()
 	})
 }
 

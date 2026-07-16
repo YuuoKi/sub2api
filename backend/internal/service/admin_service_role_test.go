@@ -15,9 +15,8 @@ func TestAdminService_CreateUser_WithAdminRole(t *testing.T) {
 	svc := &adminServiceImpl{userRepo: repo}
 
 	user, err := svc.CreateUser(context.Background(), &CreateUserInput{
-		Email:    "admin@test.com",
-		Password: "strong-pass",
-		Role:     RoleAdmin,
+		Email: "admin@test.com",
+		Role:  RoleAdmin,
 	})
 	require.NoError(t, err)
 	require.Equal(t, RoleAdmin, user.Role)
@@ -28,8 +27,7 @@ func TestAdminService_CreateUser_DefaultsToUserRole(t *testing.T) {
 	svc := &adminServiceImpl{userRepo: repo}
 
 	user, err := svc.CreateUser(context.Background(), &CreateUserInput{
-		Email:    "plain@test.com",
-		Password: "strong-pass",
+		Email: "plain@test.com",
 	})
 	require.NoError(t, err)
 	require.Equal(t, RoleUser, user.Role)
@@ -40,9 +38,8 @@ func TestAdminService_CreateUser_InvalidRoleRejected(t *testing.T) {
 	svc := &adminServiceImpl{userRepo: repo}
 
 	_, err := svc.CreateUser(context.Background(), &CreateUserInput{
-		Email:    "bad@test.com",
-		Password: "strong-pass",
-		Role:     "superuser",
+		Email: "bad@test.com",
+		Role:  "superuser",
 	})
 	require.Error(t, err)
 	require.Empty(t, repo.created, "非法角色不应写入用户")

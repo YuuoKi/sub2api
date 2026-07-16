@@ -32,8 +32,10 @@ func TestVideoGatewayRepositoryReservesBudgetAndCreatesTaskInOneTransaction(t *t
 	require.NoError(t, repo.ReserveAndCreateTask(context.Background(), task, 0.2))
 	require.EqualValues(t, 31, task.ID)
 	require.Equal(t, service.VideoReservationReserved, task.ReservationState)
+	require.NotNil(t, task.BalanceBeforeUSD)
+	require.Equal(t, 10.0, *task.BalanceBeforeUSD)
 
-	mock.ExpectQuery(regexp.QuoteMeta("FROM video_tasks")).WithArgs(int64(31)).WillReturnRows(videoTaskRows(now).AddRow(int64(31), int64(11), int64(12), int64(7), "seedance", service.SeedanceModel, "text_to_video", "test prompt", "queued", "", "", "", 4, "720p", nil, 0, "USD", 0, "", "", "", "creation-1", int64(1), "pending", int64(9), now, now, nil, 0.2, "reserved", now, now, now, now, 0))
+	mock.ExpectQuery(regexp.QuoteMeta("FROM video_tasks")).WithArgs(int64(31)).WillReturnRows(videoTaskRows(now).AddRow(int64(31), int64(11), int64(12), int64(7), "seedance", service.SeedanceModel, "text_to_video", "test prompt", "queued", "", "", "", 4, "720p", nil, 0, "USD", 0, "", "", "", "creation-1", int64(1), "pending", int64(9), now, now, nil, 0.2, "reserved", now, now, now, now, 0, nil, nil, nil, nil, nil, nil, 10.0, nil, nil, nil, nil))
 	stored, err := repo.GetTask(context.Background(), 31)
 	require.NoError(t, err)
 	require.Equal(t, task.Prompt, stored.Prompt)
@@ -48,7 +50,7 @@ func TestVideoGatewayRepositoryClaimsRunnableTasks(t *testing.T) {
 	t.Cleanup(func() { _ = db.Close() })
 	repo := NewVideoGatewayRepository(db)
 	now := time.Now().UTC()
-	mock.ExpectQuery("FOR UPDATE SKIP LOCKED").WithArgs(2, 90).WillReturnRows(videoTaskRows(now).AddRow(int64(4), int64(21), int64(22), int64(2), "seedance", "doubao-seedance-2-0-260128", "text_to_video", "prompt", "queued", "", "", "", 4, "720p", nil, 0, "USD", 0, "", "", "", "claim-4", int64(1), "pending", int64(13), now, now, nil, 0.2, "reserved", now, now, now, now, 0))
+	mock.ExpectQuery("FOR UPDATE SKIP LOCKED").WithArgs(2, 90).WillReturnRows(videoTaskRows(now).AddRow(int64(4), int64(21), int64(22), int64(2), "seedance", "doubao-seedance-2-0-260128", "text_to_video", "prompt", "queued", "", "", "", 4, "720p", nil, 0, "USD", 0, "", "", "", "claim-4", int64(1), "pending", int64(13), now, now, nil, 0.2, "reserved", now, now, now, now, 0, nil, nil, nil, nil, nil, nil, 10.0, nil, nil, nil, nil))
 	tasks, err := repo.ClaimRunnableTasks(context.Background(), 2, 90*time.Second)
 	require.NoError(t, err)
 	require.Len(t, tasks, 1)
@@ -93,14 +95,14 @@ func TestVideoGatewayRepositoryTerminalFinalizationIsIdempotent(t *testing.T) {
 
 	tokens := int64(10)
 	mock.ExpectBegin()
-	mock.ExpectQuery("SELECT .* FROM video_tasks WHERE id=\\$1 FOR UPDATE").WithArgs(int64(8)).WillReturnRows(videoTaskRows(now).AddRow(int64(8), int64(11), int64(12), int64(7), "seedance", service.SeedanceModel, "text_to_video", "prompt", "running", "up-8", "", "", 4, "720p", nil, 0, "USD", 1, "", "", "", "creation-8", int64(1), "accepted", int64(9), now, now, nil, 0.2, "reserved", now, now, now, now, 0))
+	mock.ExpectQuery("SELECT .* FROM video_tasks WHERE id=\\$1 FOR UPDATE").WithArgs(int64(8)).WillReturnRows(videoTaskRows(now).AddRow(int64(8), int64(11), int64(12), int64(7), "seedance", service.SeedanceModel, "text_to_video", "prompt", "running", "up-8", "", "", 4, "720p", nil, 0, "USD", 1, "", "", "", "creation-8", int64(1), "accepted", int64(9), now, now, nil, 0.2, "reserved", now, now, now, now, 0, nil, nil, nil, nil, nil, nil, 10.0, nil, nil, nil, nil))
 	mock.ExpectQuery("INSERT INTO usage_billing_dedup").WithArgs("video:8", int64(11), sqlmock.AnyArg()).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(1)))
 	mock.ExpectQuery("SELECT request_fingerprint FROM usage_billing_dedup_archive").WithArgs("video:8", int64(11)).WillReturnError(sql.ErrNoRows)
-	mock.ExpectExec("UPDATE users SET balance=balance").WithArgs(0.1, 0.2, int64(9)).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery("UPDATE users SET balance=balance").WithArgs(0.1, 0.2, int64(9)).WillReturnRows(sqlmock.NewRows([]string{"balance"}).AddRow(9.9))
 	mock.ExpectExec("UPDATE api_keys SET quota_used").WithArgs(0.1, now, now, now, int64(11), service.StatusAPIKeyQuotaExhausted, service.StatusAPIKeyActive).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectQuery("UPDATE video_tasks SET status").WithArgs(int64(8), int64(1), service.VideoStatusSucceeded,
 		"https://assets.invalid/result.mp4", "", "", sqlmock.AnyArg(), 0.1, "USD", "", "", now,
-		service.VideoReservationCaptured, 0.1).WillReturnRows(sqlmock.NewRows([]string{"version"}).AddRow(int64(2)))
+		service.VideoReservationCaptured, 0.1, nil, nil, nil, nil, nil, nil, 9.9, sqlmock.AnyArg()).WillReturnRows(sqlmock.NewRows([]string{"version"}).AddRow(int64(2)))
 	mock.ExpectExec("INSERT INTO video_usage_logs").WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
 	input := service.VideoTaskFinalization{TaskID: 8, ExpectedVersion: 1, Status: service.VideoStatusSucceeded, ResultURL: "https://assets.invalid/result.mp4", UsageTotalTokens: &tokens, CostAmount: 0.1, ProviderActualCostUSD: 0.1, Currency: "USD", Settlement: service.VideoSettlementCaptureActual, CompletedAt: now}
@@ -109,7 +111,7 @@ func TestVideoGatewayRepositoryTerminalFinalizationIsIdempotent(t *testing.T) {
 	require.True(t, result.Applied)
 
 	mock.ExpectBegin()
-	mock.ExpectQuery("SELECT .* FROM video_tasks WHERE id=\\$1 FOR UPDATE").WithArgs(int64(8)).WillReturnRows(videoTaskRows(now).AddRow(int64(8), int64(11), int64(12), int64(7), "seedance", service.SeedanceModel, "text_to_video", "prompt", "succeeded", "up-8", "https://assets.invalid/result.mp4", "", 4, "720p", tokens, 0.1, "USD", 1, "", "", "", "creation-8", int64(2), "accepted", int64(9), now, now, now, 0.2, "captured", now, now, now, now, 0.1))
+	mock.ExpectQuery("SELECT .* FROM video_tasks WHERE id=\\$1 FOR UPDATE").WithArgs(int64(8)).WillReturnRows(videoTaskRows(now).AddRow(int64(8), int64(11), int64(12), int64(7), "seedance", service.SeedanceModel, "text_to_video", "prompt", "succeeded", "up-8", "https://assets.invalid/result.mp4", "", 4, "720p", tokens, 0.1, "USD", 1, "", "", "", "creation-8", int64(2), "accepted", int64(9), now, now, now, 0.2, "captured", now, now, now, now, 0.1, nil, nil, nil, nil, nil, nil, 10.0, 9.9, -0.1, nil, nil))
 	mock.ExpectRollback()
 	replay, err := repo.FinalizeTask(context.Background(), input)
 	require.NoError(t, err)
@@ -125,7 +127,7 @@ func TestVideoGatewayRepositoryCancelRejectsDispatchedTask(t *testing.T) {
 	scope := service.VideoTaskScope{UserID: 1, APIKeyID: 2, GroupID: 3}
 	now := time.Now().UTC()
 	mock.ExpectBegin()
-	mock.ExpectQuery("SELECT .* FROM video_tasks").WithArgs(int64(9), int64(1), int64(2), int64(3)).WillReturnRows(videoTaskRows(now).AddRow(int64(9), int64(2), int64(3), int64(7), "seedance", service.SeedanceModel, "text_to_video", "prompt", "submitted", "up-9", "", "", 4, "720p", nil, 0, "USD", 1, "", "", "", "creation-9", int64(2), "accepted", int64(1), now, now, nil, 0.2, "reserved", now, now, now, now, 0))
+	mock.ExpectQuery("SELECT .* FROM video_tasks").WithArgs(int64(9), int64(1), int64(2), int64(3)).WillReturnRows(videoTaskRows(now).AddRow(int64(9), int64(2), int64(3), int64(7), "seedance", service.SeedanceModel, "text_to_video", "prompt", "submitted", "up-9", "", "", 4, "720p", nil, 0, "USD", 1, "", "", "", "creation-9", int64(2), "accepted", int64(1), now, now, nil, 0.2, "reserved", now, now, now, now, 0, nil, nil, nil, nil, nil, nil, 10.0, nil, nil, nil, nil))
 	mock.ExpectRollback()
 	_, err = repo.CancelTaskForScope(context.Background(), 9, scope)
 	require.ErrorIs(t, err, service.ErrVideoCancelConflict)
@@ -143,5 +145,5 @@ func TestValidateVideoSettlementRejectsMismatchedActualCost(t *testing.T) {
 }
 
 func videoTaskRows(now time.Time) *sqlmock.Rows {
-	return sqlmock.NewRows([]string{"id", "api_key_id", "group_id", "provider_account_id", "provider", "model", "task_type", "prompt", "status", "upstream_task_id", "result_url", "last_frame_url", "duration_seconds", "resolution", "usage_total_tokens", "cost_amount", "currency", "real_dispatch_count", "provider_error_code", "provider_error_message", "error_message", "creation_key", "version", "dispatch_state", "created_by", "created_at", "updated_at", "completed_at", "reserved_cost_usd", "reservation_state", "reserved_at", "reservation_window_5h_start", "reservation_window_1d_start", "reservation_window_7d_start", "provider_actual_cost_usd"})
+	return sqlmock.NewRows([]string{"id", "api_key_id", "group_id", "provider_account_id", "provider", "model", "task_type", "prompt", "status", "upstream_task_id", "result_url", "last_frame_url", "duration_seconds", "resolution", "usage_total_tokens", "cost_amount", "currency", "real_dispatch_count", "provider_error_code", "provider_error_message", "error_message", "creation_key", "version", "dispatch_state", "created_by", "created_at", "updated_at", "completed_at", "reserved_cost_usd", "reservation_state", "reserved_at", "reservation_window_5h_start", "reservation_window_1d_start", "reservation_window_7d_start", "provider_actual_cost_usd", "upstream_model", "upstream_duration_seconds", "upstream_resolution", "billing_model", "billing_duration_seconds", "billing_resolution", "balance_before_usd", "balance_after_usd", "balance_delta_usd", "authorization_consumed_at", "authorization_consumed_by"})
 }

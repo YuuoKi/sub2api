@@ -239,6 +239,7 @@ import type {
 } from "@/api/admin/settings";
 import { useAppStore } from "@/stores";
 import { extractApiErrorMessage } from "@/utils/apiError";
+import { requestConfirmation } from "@/composables/useAppDialog";
 
 const { t, locale } = useI18n();
 const appStore = useAppStore();
@@ -659,7 +660,7 @@ async function refreshPreview() {
 
 async function restoreOfficial() {
   if (!selectedEvent.value || !selectedLocale.value) return;
-  if (!window.confirm(t("admin.settings.emailTemplates.restoreConfirm"))) return;
+  if (!(await requestConfirmation({ message: t("admin.settings.emailTemplates.restoreConfirm"), danger: true }))) return;
 
   restoring.value = true;
   try {

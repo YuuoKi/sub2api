@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 )
 
 var (
@@ -57,10 +58,23 @@ type VideoAdminRepository interface {
 type VideoAdminService struct {
 	repo      VideoAdminRepository
 	encryptor VideoKeyEncryptor
+	handoff   *AssetHandoffService
 }
 
 func NewVideoAdminService(repo VideoAdminRepository, encryptor VideoKeyEncryptor) *VideoAdminService {
-	return &VideoAdminService{repo: repo, encryptor: encryptor}
+	return &VideoAdminService{
+		repo:      repo,
+		encryptor: encryptor,
+		handoff:   NewAssetHandoffService(repo, NewHTTPAssetInspector(), time.Now, nil),
+	}
+}
+
+func (s *VideoAdminService) Issue(ctx context.Context, issuerID, taskID int64, kind AssetHandoffKind) (*IssuedAssetHandoff, error) {
+	return s.handoff.Issue(ctx, issuerID, taskID, kind)
+}
+
+func (s *VideoAdminService) Consume(ctx context.Context, ticket string) (*ConsumedAssetHandoff, error) {
+	return s.handoff.Consume(ctx, ticket)
 }
 
 func (s *VideoAdminService) ListProviders(ctx context.Context) ([]VideoProviderAccount, error) {

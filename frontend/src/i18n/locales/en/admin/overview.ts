@@ -845,6 +845,8 @@ export default {
       },
       noGroupsYet: 'No groups yet',
       createFirstGroup: 'Create your first group to organize API keys.',
+      emptyPrerequisite: 'Prerequisite: open the employee account first, then configure the group the employee may use. If no employee exists, go to Employees first.',
+      viewEmployees: 'Go to Employees',
       creating: 'Creating...',
       updating: 'Updating...',
       limitDay: 'd',

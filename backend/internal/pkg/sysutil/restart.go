@@ -2,6 +2,7 @@
 package sysutil
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"runtime"
@@ -22,8 +23,7 @@ import (
 //   - Service configured with Restart=always in systemd unit file
 func RestartService() error {
 	if runtime.GOOS != "linux" {
-		log.Println("Service restart via exit only works on Linux with systemd")
-		return nil
+		return fmt.Errorf("service restart via exit requires Linux with systemd")
 	}
 
 	log.Println("Initiating service restart by graceful exit...")

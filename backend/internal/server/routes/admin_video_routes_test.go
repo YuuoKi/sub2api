@@ -28,6 +28,7 @@ func TestAdminVideoRoutesAreRegistered(t *testing.T) {
 		http.MethodPost + " /api/v1/admin/video/providers/:id/tiny-real-authorization": false,
 		http.MethodGet + " /api/v1/admin/video/tasks":                                  false,
 		http.MethodGet + " /api/v1/admin/video/tasks/:id":                              false,
+		http.MethodPost + " /api/v1/admin/video/tasks/:id/asset-handoffs":              false,
 		http.MethodGet + " /api/v1/admin/video/system-check":                           false,
 	}
 	for _, route := range routes {
@@ -38,6 +39,40 @@ func TestAdminVideoRoutesAreRegistered(t *testing.T) {
 	for route, found := range want {
 		require.True(t, found, route)
 	}
+}
+
+func TestPublicAssetHandoffConsumeRouteIsRegisteredWithoutTrustingForwardedIdentity(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	v1 := router.Group("/api/v1")
+	h := &handler.Handlers{Admin: &handler.AdminHandlers{Video: &adminhandler.VideoHandler{}}}
+	RegisterAssetHandoffRoutes(v1, h)
+
+	found := false
+	for _, route := range router.Routes() {
+		if route.Method == http.MethodPost && route.Path == "/api/v1/public/asset-handoffs/consume" {
+			found = true
+		}
+	}
+	require.True(t, found)
+}
+
+func TestAdminAssetHandoffRouteRejectsEmployeeBeforeHandler(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	admin := router.Group("/api/v1/admin")
+	admin.Use(func(c *gin.Context) {
+		c.Set(string(middleware.ContextKeyUserRole), c.GetHeader("X-Test-Role"))
+		c.Next()
+	}, middleware.AdminOnly())
+	h := &handler.Handlers{Admin: &handler.AdminHandlers{Video: &adminhandler.VideoHandler{}}}
+	registerAdminVideoRoutes(admin, h)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/video/tasks/501/asset-handoffs", nil)
+	req.Header.Set("X-Test-Role", service.RoleUser)
+	responseRecorder := httptest.NewRecorder()
+	router.ServeHTTP(responseRecorder, req)
+	require.Equal(t, http.StatusForbidden, responseRecorder.Code)
 }
 
 func TestAdminVideoContractRejectsEmployeeAndAllowsAdmin(t *testing.T) {

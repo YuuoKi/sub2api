@@ -26,9 +26,25 @@
         <p class="input-hint">{{ t('admin.accounts.notesHint') }}</p>
       </div>
 
+      <GeminiApiKeyEditForm
+        v-if="account.platform === 'gemini' && account.type === 'apikey'"
+        v-model:api-key="editApiKey"
+        v-model:base-url="editBaseUrl"
+        v-model:proxy-id="form.proxy_id"
+        v-model:concurrency="form.concurrency"
+        v-model:load-factor="form.load_factor"
+        v-model:priority="form.priority"
+        v-model:rate-multiplier="form.rate_multiplier"
+        :has-existing-api-key="hasExistingApiKey"
+        :base-url-hint="baseUrlHint"
+        :proxies="proxies"
+        :review="geminiReviewPending"
+      />
+
       <!-- API Key fields (only for apikey type) -->
       <div v-if="account.type === 'apikey'" class="space-y-4">
-        <div>
+        <template v-if="account.platform !== 'gemini'">
+          <div>
           <label class="input-label">{{ t('admin.accounts.baseUrl') }}</label>
           <input
             v-model="editBaseUrl"
@@ -37,16 +53,14 @@
             :placeholder="
               account.platform === 'openai'
                 ? 'https://api.openai.com'
-                : account.platform === 'gemini'
-                  ? 'https://generativelanguage.googleapis.com'
-                  : account.platform === 'antigravity'
-                    ? 'https://cloudcode-pa.googleapis.com'
-                    : 'https://api.anthropic.com'
+                : account.platform === 'antigravity'
+                  ? 'https://cloudcode-pa.googleapis.com'
+                  : 'https://api.anthropic.com'
             "
           />
           <p class="input-hint">{{ baseUrlHint }}</p>
-        </div>
-        <div>
+          </div>
+          <div>
           <label class="input-label">{{ t('admin.accounts.apiKey') }}</label>
           <input
             v-model="editApiKey"
@@ -59,15 +73,14 @@
             :placeholder="
               account.platform === 'openai'
                 ? 'sk-proj-...'
-                : account.platform === 'gemini'
-                  ? 'AIza...'
-                  : account.platform === 'antigravity'
-                    ? 'sk-...'
-                    : 'sk-ant-...'
+                : account.platform === 'antigravity'
+                  ? 'sk-...'
+                  : 'sk-ant-...'
             "
           />
           <p class="input-hint">{{ t('admin.accounts.leaveEmptyToKeep') }}</p>
-        </div>
+          </div>
+        </template>
 
         <!-- Model Restriction Section (不适用于 Antigravity) -->
         <div v-if="account.platform !== 'antigravity'" class="border-t border-gray-200 pt-4 dark:border-dark-600">
@@ -683,9 +696,24 @@
         </div>
       </div>
 
+      <GeminiVertexEditForm
+        v-if="account.platform === 'gemini' && account.type === 'service_account'"
+        v-model:location="editVertexLocation"
+        v-model:proxy-id="form.proxy_id"
+        v-model:concurrency="form.concurrency"
+        v-model:load-factor="form.load_factor"
+        v-model:priority="form.priority"
+        v-model:rate-multiplier="form.rate_multiplier"
+        :project-id="editVertexProjectId"
+        :client-email="editVertexClientEmail"
+        :has-service-account-json="hasExistingServiceAccountJson"
+        :proxies="proxies"
+        :review="geminiReviewPending"
+      />
+
       <!-- Vertex Service Account -->
       <div v-if="(account.platform === 'gemini' || account.platform === 'anthropic') && account.type === 'service_account'" class="space-y-4">
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div v-if="account.platform !== 'gemini'" class="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label class="input-label">Project ID</label>
             <input
@@ -1400,7 +1428,7 @@
         </div>
       </div>
 
-      <div v-if="!isSparkShadow">
+      <div v-if="!isSparkShadow && account.platform !== 'gemini'">
         <div class="mb-1 flex items-center gap-2">
           <label class="input-label mb-0">{{ t('admin.accounts.proxy') }}</label>
           <ProxyAdBanner />
@@ -1408,7 +1436,7 @@
         <ProxySelector v-model="form.proxy_id" :proxies="proxies" />
       </div>
 
-      <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div v-if="account.platform !== 'gemini'" class="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <div>
           <label class="input-label">{{ t('admin.accounts.concurrency') }}</label>
           <input v-model.number="form.concurrency" type="number" min="1" class="input"
@@ -2491,7 +2519,7 @@
               d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
             ></path>
           </svg>
-          {{ submitting ? t('admin.accounts.updating') : t('common.update') }}
+          {{ submitting ? t('admin.accounts.updating') : geminiReviewPending ? t('common.confirm') : t('common.update') }}
         </button>
       </div>
     </template>
@@ -2517,6 +2545,7 @@ import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { adminAPI } from '@/api/admin'
 import { useQuotaNotifyState } from '@/composables/useQuotaNotifyState'
+import { requestConfirmation } from '@/composables/useAppDialog'
 import type {
   Account,
   Proxy,
@@ -2535,6 +2564,8 @@ import ProxyAdBanner from '@/components/common/ProxyAdBanner.vue'
 import GroupSelector from '@/components/common/GroupSelector.vue'
 import ModelWhitelistSelector from '@/components/account/ModelWhitelistSelector.vue'
 import QuotaLimitCard from '@/components/account/QuotaLimitCard.vue'
+import GeminiApiKeyEditForm from '@/components/account/GeminiApiKeyEditForm.vue'
+import GeminiVertexEditForm from '@/components/account/GeminiVertexEditForm.vue'
 import {
   applyAntigravityProjectID,
   applyHeaderOverride,
@@ -2627,6 +2658,22 @@ const editBedrockApiKeyValue = ref('')
 const editVertexProjectId = ref('')
 const editVertexClientEmail = ref('')
 const editVertexLocation = ref('us-central1')
+const geminiReviewPending = ref(false)
+const accountCredentials = computed<Record<string, unknown>>(() =>
+  (props.account?.credentials as Record<string, unknown> | undefined) || {}
+)
+const hasExistingApiKey = computed(() =>
+  props.account?.credentials_status?.has_api_key ?? Boolean(accountCredentials.value.api_key)
+)
+const hasExistingServiceAccountJson = computed(() => {
+  const status = props.account?.credentials_status
+  if (status) {
+    return Boolean(status.has_service_account_json || status.has_service_account)
+  }
+  return Boolean(
+    accountCredentials.value.service_account_json || accountCredentials.value.service_account
+  )
+})
 const isBedrockAPIKeyMode = computed(() =>
   props.account?.type === 'bedrock' &&
   (props.account?.credentials as Record<string, unknown>)?.auth_mode === 'apikey'
@@ -3139,6 +3186,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     return
   }
   antigravityMixedChannelConfirmed.value = false
+  geminiReviewPending.value = false
   showMixedChannelWarning.value = false
   mixedChannelWarningDetails.value = null
   mixedChannelWarningRawMessage.value = ''
@@ -3455,6 +3503,24 @@ watch(
   { immediate: true }
 )
 
+watch(
+  [
+    editBaseUrl,
+    editApiKey,
+    editVertexLocation,
+    () => form.name,
+    () => form.notes,
+    () => form.proxy_id,
+    () => form.concurrency,
+    () => form.load_factor,
+    () => form.priority,
+    () => form.rate_multiplier
+  ],
+  () => {
+    if (geminiReviewPending.value) geminiReviewPending.value = false
+  }
+)
+
 // Model mapping helpers
 const addModelMapping = () => {
   modelMappings.value.push({ from: '', to: '' })
@@ -3533,19 +3599,18 @@ const syncAntigravityUpstreamModels = async () => {
 }
 
 // Error code toggle helper
-const toggleErrorCode = (code: number) => {
+const confirmDangerousErrorCode = async (code: number): Promise<boolean> => {
+  if (code !== 429 && code !== 529) return true
+  return requestConfirmation({
+    message: t(`admin.accounts.customErrorCodes${code}Warning`),
+    danger: true
+  })
+}
+
+const toggleErrorCode = async (code: number) => {
   const index = selectedErrorCodes.value.indexOf(code)
   if (index === -1) {
-    // Adding code - check for 429/529 warning
-    if (code === 429) {
-      if (!confirm(t('admin.accounts.customErrorCodes429Warning'))) {
-        return
-      }
-    } else if (code === 529) {
-      if (!confirm(t('admin.accounts.customErrorCodes529Warning'))) {
-        return
-      }
-    }
+    if (!(await confirmDangerousErrorCode(code))) return
     selectedErrorCodes.value.push(code)
   } else {
     selectedErrorCodes.value.splice(index, 1)
@@ -3553,7 +3618,7 @@ const toggleErrorCode = (code: number) => {
 }
 
 // Add custom error code from input
-const addCustomErrorCode = () => {
+const addCustomErrorCode = async () => {
   const code = customErrorCodeInput.value
   if (code === null || code < 100 || code > 599) {
     appStore.showError(t('admin.accounts.invalidErrorCode'))
@@ -3563,16 +3628,7 @@ const addCustomErrorCode = () => {
     appStore.showInfo(t('admin.accounts.errorCodeExists'))
     return
   }
-  // Check for 429/529 warning
-  if (code === 429) {
-    if (!confirm(t('admin.accounts.customErrorCodes429Warning'))) {
-      return
-    }
-  } else if (code === 529) {
-    if (!confirm(t('admin.accounts.customErrorCodes529Warning'))) {
-      return
-    }
-  }
+  if (!(await confirmDangerousErrorCode(code))) return
   selectedErrorCodes.value.push(code)
   customErrorCodeInput.value = null
 }
@@ -3872,8 +3928,44 @@ const formatDateTimeLocal = formatDateTimeLocalInput
 const parseDateTimeLocal = parseDateTimeLocalInput
 
 // Methods
+function usesGeminiSpecializedForm(): boolean {
+  return props.account?.platform === 'gemini' &&
+    (props.account.type === 'apikey' || props.account.type === 'service_account')
+}
+
+function validateGeminiReviewRequirements(): boolean {
+  if (!props.account) return false
+  if (props.account.type === 'apikey') {
+    if (!editApiKey.value.trim() && !hasExistingApiKey.value) {
+      appStore.showError(t('admin.accounts.apiKeyIsRequired'))
+      return false
+    }
+    return true
+  }
+  if (props.account.type === 'service_account') {
+    if (!editVertexProjectId.value.trim()) {
+      appStore.showError(t('admin.accounts.vertexSaJsonMissingProjectId'))
+      return false
+    }
+    if (!editVertexClientEmail.value.trim()) {
+      appStore.showError(t('admin.accounts.vertexSaJsonMissingClientEmail'))
+      return false
+    }
+    if (!editVertexLocation.value.trim()) {
+      appStore.showError(t('admin.accounts.vertexLocationRequired'))
+      return false
+    }
+    if (!hasExistingServiceAccountJson.value) {
+      appStore.showError(t('admin.accounts.vertexSaJsonRequired'))
+      return false
+    }
+  }
+  return true
+}
+
 const handleClose = () => {
   antigravityMixedChannelConfirmed.value = false
+  geminiReviewPending.value = false
   clearMixedChannelDialog()
   emit('close')
 }
@@ -3910,6 +4002,13 @@ const handleSubmit = async () => {
     appStore.showError(t('admin.accounts.pleaseSelectStatus'))
     return
   }
+
+  if (usesGeminiSpecializedForm() && !geminiReviewPending.value) {
+    if (!validateGeminiReviewRequirements()) return
+    geminiReviewPending.value = true
+    return
+  }
+  geminiReviewPending.value = false
 
   const updatePayload: Record<string, unknown> = { ...form }
   try {

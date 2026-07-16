@@ -93,6 +93,8 @@ func (r *userRepository) Create(ctx context.Context, userIn *service.User) error
 		SetBalance(userIn.Balance).
 		SetConcurrency(userIn.Concurrency).
 		SetStatus(userIn.Status).
+		SetMustChangePassword(userIn.MustChangePassword).
+		SetNillableTemporaryPasswordExpiresAt(userIn.TemporaryPasswordExpiresAt).
 		SetSignupSource(userSignupSourceOrDefault(userIn.SignupSource)).
 		SetNillableLastLoginAt(userIn.LastLoginAt).
 		SetNillableLastActiveAt(userIn.LastActiveAt).
@@ -236,6 +238,8 @@ func (r *userRepository) Update(ctx context.Context, userIn *service.User) error
 		SetBalance(userIn.Balance).
 		SetConcurrency(userIn.Concurrency).
 		SetStatus(userIn.Status).
+		SetMustChangePassword(userIn.MustChangePassword).
+		SetNillableTemporaryPasswordExpiresAt(userIn.TemporaryPasswordExpiresAt).
 		SetBalanceNotifyEnabled(userIn.BalanceNotifyEnabled).
 		SetBalanceNotifyThresholdType(userIn.BalanceNotifyThresholdType).
 		SetNillableBalanceNotifyThreshold(userIn.BalanceNotifyThreshold).
@@ -253,6 +257,9 @@ func (r *userRepository) Update(ctx context.Context, userIn *service.User) error
 	}
 	if userIn.BalanceNotifyThreshold == nil {
 		updateOp = updateOp.ClearBalanceNotifyThreshold()
+	}
+	if userIn.TemporaryPasswordExpiresAt == nil {
+		updateOp = updateOp.ClearTemporaryPasswordExpiresAt()
 	}
 	updated, err := updateOp.Save(txCtx)
 	if err != nil {
@@ -1044,6 +1051,8 @@ func applyUserEntityToService(dst *service.User, src *dbent.User) {
 		return
 	}
 	dst.ID = src.ID
+	dst.MustChangePassword = src.MustChangePassword
+	dst.TemporaryPasswordExpiresAt = src.TemporaryPasswordExpiresAt
 	dst.SignupSource = src.SignupSource
 	dst.LastLoginAt = src.LastLoginAt
 	dst.LastActiveAt = src.LastActiveAt

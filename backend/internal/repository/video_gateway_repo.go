@@ -85,8 +85,12 @@ func (r *videoGatewayRepository) BeginRealDispatch(ctx context.Context, id, vers
 	if grants != 1 {
 		return false, nil
 	}
-	result, err := tx.ExecContext(ctx, `UPDATE video_tasks SET real_dispatch_count=1, dispatch_state='dispatching', version=version+1,
-		updated_at=NOW() WHERE id=$1 AND version=$2 AND status='queued' AND real_dispatch_count=0`, id, version)
+	result, err := tx.ExecContext(ctx, `UPDATE video_tasks task SET real_dispatch_count=1, dispatch_state='dispatching', version=task.version+1,
+		authorization_consumed_at=provider.tiny_real_consumed_at,
+		authorization_consumed_by=provider.tiny_real_authorized_by, updated_at=NOW()
+		FROM video_provider_accounts provider
+		WHERE task.id=$1 AND task.version=$2 AND task.status='queued' AND task.real_dispatch_count=0
+		AND provider.id=task.provider_account_id`, id, version)
 	if err != nil {
 		return false, err
 	}
@@ -255,6 +259,7 @@ func (r *videoGatewayRepository) ReserveAndCreateTask(ctx context.Context, task 
 	}
 	task.Provider = provider
 	task.ReservedCostUSD = maximumUSD
+	task.BalanceBeforeUSD = &balance
 	task.ReservationState = service.VideoReservationReserved
 	task.ReservedAt = &now
 	task.ReservationWindow5h = &start5h.Time
@@ -263,13 +268,14 @@ func (r *videoGatewayRepository) ReserveAndCreateTask(ctx context.Context, task 
 	err = tx.QueryRowContext(ctx, `INSERT INTO video_tasks
 		(provider_account_id, provider, model, task_type, prompt, status, creation_key, created_by,
 		 api_key_id, group_id, duration_seconds, resolution, reserved_cost_usd, reservation_state,
-		 reserved_at, reservation_window_5h_start, reservation_window_1d_start, reservation_window_7d_start)
-		VALUES ($1,$2,$3,$4,$5,$6,NULLIF($7,''),$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+		 reserved_at, reservation_window_5h_start, reservation_window_1d_start, reservation_window_7d_start,
+		 balance_before_usd)
+		VALUES ($1,$2,$3,$4,$5,$6,NULLIF($7,''),$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
 		RETURNING id, version, created_at, updated_at`,
 		task.ProviderAccountID, task.Provider, task.Model, task.TaskType, task.Prompt,
 		task.Status, task.CreationKey, task.CreatedBy, task.APIKeyID, task.GroupID,
 		task.DurationSeconds, task.Resolution, maximumUSD, service.VideoReservationReserved, now,
-		start5h.Time, start1d.Time, start7d.Time,
+		start5h.Time, start1d.Time, start7d.Time, balance,
 	).Scan(&task.ID, &task.Version, &task.CreatedAt, &task.UpdatedAt)
 	if err != nil {
 		return err
@@ -295,7 +301,11 @@ const videoTaskColumns = `id, COALESCE(api_key_id, 0), COALESCE(group_id, 0), pr
 	provider_error_code, provider_error_message, error_message, COALESCE(creation_key, ''),
 	version, dispatch_state, created_by, created_at, updated_at, completed_at,
 	reserved_cost_usd, reservation_state, reserved_at, reservation_window_5h_start,
-	reservation_window_1d_start, reservation_window_7d_start, provider_actual_cost_usd`
+	reservation_window_1d_start, reservation_window_7d_start, provider_actual_cost_usd,
+	upstream_model, upstream_duration_seconds, upstream_resolution,
+	billing_model, billing_duration_seconds, billing_resolution,
+	balance_before_usd, balance_after_usd, balance_delta_usd,
+	authorization_consumed_at, authorization_consumed_by`
 
 func (r *videoGatewayRepository) GetTask(ctx context.Context, id int64) (*service.VideoTask, error) {
 	db, err := r.requireDB()
@@ -343,12 +353,15 @@ func (r *videoGatewayRepository) CancelTaskForScope(ctx context.Context, id int6
 	if task.Status != service.VideoStatusQueued || task.RealDispatchCount != 0 || task.DispatchState != "pending" {
 		return nil, service.ErrVideoCancelConflict
 	}
-	if err = settleVideoReservation(ctx, tx, task, 0); err != nil {
+	balanceAfter, err := settleVideoReservation(ctx, tx, task, 0)
+	if err != nil {
 		return nil, err
 	}
+	balanceDelta := balanceDeltaFrom(task.BalanceBeforeUSD, balanceAfter)
 	task, err = scanVideoTask(tx.QueryRowContext(ctx, `UPDATE video_tasks SET status='cancelled', reservation_state=$2,
-		cost_amount=0, completed_at=NOW(), version=version+1, worker_claimed_at=NULL, worker_claimed_until=NULL, updated_at=NOW()
-		WHERE id=$1 RETURNING `+videoTaskColumns, id, service.VideoReservationReleased))
+		cost_amount=0, balance_after_usd=$3, balance_delta_usd=$4, completed_at=NOW(), version=version+1,
+		worker_claimed_at=NULL, worker_claimed_until=NULL, updated_at=NOW()
+		WHERE id=$1 RETURNING `+videoTaskColumns, id, service.VideoReservationReleased, balanceAfter, balanceDelta))
 	if err != nil {
 		return nil, err
 	}
@@ -438,24 +451,33 @@ func (r *videoGatewayRepository) FinalizeTask(ctx context.Context, input service
 			return service.VideoTaskFinalizationResult{}, err
 		}
 	}
-	if err = settleVideoReservation(ctx, tx, task, charge); err != nil {
+	balanceAfter, err := settleVideoReservation(ctx, tx, task, charge)
+	if err != nil {
 		return service.VideoTaskFinalizationResult{}, err
 	}
+	balanceDelta := balanceDeltaFrom(task.BalanceBeforeUSD, balanceAfter)
 	var version int64
 	err = tx.QueryRowContext(ctx, `UPDATE video_tasks SET status=$3, result_url=$4, last_frame_url=$5,
 		error_message=$6, usage_total_tokens=$7, cost_amount=$8, currency=$9,
 		provider_error_code=$10, provider_error_message=$11, completed_at=$12, version=version+1,
 		worker_claimed_at=NULL, worker_claimed_until=NULL, reservation_state=$13,
 		provider_actual_cost_usd=$14, balance_charged_at=CASE WHEN $8::numeric > 0 THEN NOW() ELSE NULL END,
+		upstream_model=$15, upstream_duration_seconds=$16, upstream_resolution=$17,
+		billing_model=$18, billing_duration_seconds=$19, billing_resolution=$20,
+		balance_after_usd=$21, balance_delta_usd=$22,
 		updated_at=NOW() WHERE id=$1 AND version=$2 RETURNING version`, input.TaskID, input.ExpectedVersion, input.Status,
 		input.ResultURL, input.LastFrameURL, input.ErrorMessage, input.UsageTotalTokens, charge,
 		input.Currency, input.ProviderErrorCode, input.ProviderErrorMessage, input.CompletedAt,
-		reservationState, input.ProviderActualCostUSD).Scan(&version)
+		reservationState, input.ProviderActualCostUSD, input.UpstreamModel, input.UpstreamDurationSeconds, input.UpstreamResolution,
+		input.BillingModel, input.BillingDurationSeconds, input.BillingResolution, balanceAfter, balanceDelta).Scan(&version)
 	if err != nil {
 		return service.VideoTaskFinalizationResult{}, err
 	}
 	task.Status, task.ResultURL, task.LastFrameURL = input.Status, input.ResultURL, input.LastFrameURL
 	task.UsageTotalTokens, task.CostAmount, task.ProviderActualCostUSD = input.UsageTotalTokens, charge, input.ProviderActualCostUSD
+	task.UpstreamModel, task.UpstreamDurationSeconds, task.UpstreamResolution = input.UpstreamModel, input.UpstreamDurationSeconds, input.UpstreamResolution
+	task.BillingModel, task.BillingDurationSeconds, task.BillingResolution = input.BillingModel, input.BillingDurationSeconds, input.BillingResolution
+	task.BalanceAfterUSD, task.BalanceDeltaUSD = &balanceAfter, balanceDelta
 	if err = insertVideoUsageLog(ctx, tx, task); err != nil {
 		return service.VideoTaskFinalizationResult{}, err
 	}
@@ -497,24 +519,23 @@ func validateVideoSettlement(task *service.VideoTask, input service.VideoTaskFin
 	}
 }
 
-func settleVideoReservation(ctx context.Context, tx *sql.Tx, task *service.VideoTask, charge float64) error {
+func settleVideoReservation(ctx context.Context, tx *sql.Tx, task *service.VideoTask, charge float64) (float64, error) {
 	refund := task.ReservedCostUSD - charge
 	if refund < -0.00000001 {
-		return service.ErrVideoBudgetRejected
+		return 0, service.ErrVideoBudgetRejected
 	}
-	result, err := tx.ExecContext(ctx, `UPDATE users SET balance=balance+$1,
+	var balanceAfter float64
+	err := tx.QueryRowContext(ctx, `UPDATE users SET balance=balance+$1,
 		frozen_balance=COALESCE(frozen_balance,0)-$2, updated_at=NOW()
-		WHERE id=$3 AND deleted_at IS NULL AND COALESCE(frozen_balance,0)>=$2`, refund, task.ReservedCostUSD, task.CreatedBy)
+		WHERE id=$3 AND deleted_at IS NULL AND COALESCE(frozen_balance,0)>=$2
+		RETURNING balance`, refund, task.ReservedCostUSD, task.CreatedBy).Scan(&balanceAfter)
 	if err != nil {
-		return err
-	}
-	if affected, affectedErr := result.RowsAffected(); affectedErr != nil || affected != 1 {
-		if affectedErr != nil {
-			return affectedErr
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, errors.New("video frozen balance is insufficient")
 		}
-		return errors.New("video frozen balance is insufficient")
+		return 0, err
 	}
-	result, err = tx.ExecContext(ctx, `UPDATE api_keys SET quota_used=GREATEST(0,quota_used-$1),
+	result, err := tx.ExecContext(ctx, `UPDATE api_keys SET quota_used=GREATEST(0,quota_used-$1),
 		status=CASE WHEN status=$6 AND (quota=0 OR GREATEST(0,quota_used-$1)<quota) THEN $7 ELSE status END,
 		usage_5h=CASE WHEN window_5h_start IS NOT DISTINCT FROM $2 THEN GREATEST(0,usage_5h-$1) ELSE usage_5h END,
 		usage_1d=CASE WHEN window_1d_start IS NOT DISTINCT FROM $3 THEN GREATEST(0,usage_1d-$1) ELSE usage_1d END,
@@ -523,16 +544,24 @@ func settleVideoReservation(ctx context.Context, tx *sql.Tx, task *service.Video
 		timePtrValue(task.ReservationWindow5h), timePtrValue(task.ReservationWindow1d), timePtrValue(task.ReservationWindow7d), task.APIKeyID,
 		service.StatusAPIKeyQuotaExhausted, service.StatusAPIKeyActive)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	affected, err := result.RowsAffected()
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if affected != 1 {
-		return errors.New("video api key reservation is missing")
+		return 0, errors.New("video api key reservation is missing")
 	}
-	return nil
+	return balanceAfter, nil
+}
+
+func balanceDeltaFrom(balanceBefore *float64, balanceAfter float64) *float64 {
+	if balanceBefore == nil {
+		return nil
+	}
+	delta := balanceAfter - *balanceBefore
+	return &delta
 }
 
 func claimVideoBillingKey(ctx context.Context, tx *sql.Tx, task *service.VideoTask, input service.VideoTaskFinalization, charge float64) error {
@@ -593,8 +622,10 @@ func (r *videoGatewayRepository) requireDB() (*sql.DB, error) {
 
 func scanVideoTask(scanner videoRowScanner) (*service.VideoTask, error) {
 	task := &service.VideoTask{}
-	var completed, reservedAt, reservation5h, reservation1d, reservation7d sql.NullTime
-	var usage sql.NullInt64
+	var completed, reservedAt, reservation5h, reservation1d, reservation7d, authorizationConsumedAt sql.NullTime
+	var usage, upstreamDuration, billingDuration, authorizationConsumedBy sql.NullInt64
+	var upstreamModel, upstreamResolution, billingModel, billingResolution sql.NullString
+	var balanceBefore, balanceAfter, balanceDelta sql.NullFloat64
 	if err := scanner.Scan(&task.ID, &task.APIKeyID, &task.GroupID, &task.ProviderAccountID,
 		&task.Provider, &task.Model, &task.TaskType, &task.Prompt, &task.Status, &task.UpstreamTaskID, &task.ResultURL,
 		&task.LastFrameURL, &task.DurationSeconds, &task.Resolution, &usage, &task.CostAmount,
@@ -602,7 +633,9 @@ func scanVideoTask(scanner videoRowScanner) (*service.VideoTask, error) {
 		&task.ErrorMessage,
 		&task.CreationKey, &task.Version, &task.DispatchState, &task.CreatedBy,
 		&task.CreatedAt, &task.UpdatedAt, &completed, &task.ReservedCostUSD, &task.ReservationState,
-		&reservedAt, &reservation5h, &reservation1d, &reservation7d, &task.ProviderActualCostUSD); err != nil {
+		&reservedAt, &reservation5h, &reservation1d, &reservation7d, &task.ProviderActualCostUSD,
+		&upstreamModel, &upstreamDuration, &upstreamResolution, &billingModel, &billingDuration, &billingResolution,
+		&balanceBefore, &balanceAfter, &balanceDelta, &authorizationConsumedAt, &authorizationConsumedBy); err != nil {
 		return nil, err
 	}
 	if usage.Valid {
@@ -622,6 +655,41 @@ func scanVideoTask(scanner videoRowScanner) (*service.VideoTask, error) {
 	}
 	if reservation7d.Valid {
 		task.ReservationWindow7d = &reservation7d.Time
+	}
+	if upstreamModel.Valid {
+		task.UpstreamModel = &upstreamModel.String
+	}
+	if upstreamDuration.Valid {
+		value := int(upstreamDuration.Int64)
+		task.UpstreamDurationSeconds = &value
+	}
+	if upstreamResolution.Valid {
+		task.UpstreamResolution = &upstreamResolution.String
+	}
+	if billingModel.Valid {
+		task.BillingModel = &billingModel.String
+	}
+	if billingDuration.Valid {
+		value := int(billingDuration.Int64)
+		task.BillingDurationSeconds = &value
+	}
+	if billingResolution.Valid {
+		task.BillingResolution = &billingResolution.String
+	}
+	if balanceBefore.Valid {
+		task.BalanceBeforeUSD = &balanceBefore.Float64
+	}
+	if balanceAfter.Valid {
+		task.BalanceAfterUSD = &balanceAfter.Float64
+	}
+	if balanceDelta.Valid {
+		task.BalanceDeltaUSD = &balanceDelta.Float64
+	}
+	if authorizationConsumedAt.Valid {
+		task.AuthorizationConsumedAt = &authorizationConsumedAt.Time
+	}
+	if authorizationConsumedBy.Valid {
+		task.AuthorizationConsumedBy = &authorizationConsumedBy.Int64
 	}
 	return task, nil
 }

@@ -386,6 +386,15 @@
               </button>
             </div>
           </template>
+          <template #empty>
+            <EmptyState
+              :title="t('admin.accounts.noAccountsYet')"
+              :description="t('admin.accounts.emptyPrerequisite')"
+              :action-text="groups.length === 0 ? t('admin.accounts.createGroupFirst') : t('admin.accounts.addUpstreamAccount')"
+              :action-to="groups.length === 0 ? '/admin/groups' : undefined"
+              @action="showCreate = true"
+            />
+          </template>
         </DataTable>
         </div>
       </template>
@@ -435,9 +444,11 @@ import { adminAPI } from '@/api/admin'
 import { useTableLoader } from '@/composables/useTableLoader'
 import { useSwipeSelect, type SwipeSelectVirtualContext } from '@/composables/useSwipeSelect'
 import { useTableSelection } from '@/composables/useTableSelection'
+import { requestConfirmation } from '@/composables/useAppDialog'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 import DataTable from '@/components/common/DataTable.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 import HelpTooltip from '@/components/common/HelpTooltip.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
@@ -1330,9 +1341,9 @@ const toggleSelectAllVisible = (event: Event) => {
   const target = event.target as HTMLInputElement
   toggleVisible(target.checked)
 }
-const handleBulkDelete = async () => { if(!confirm(t('common.confirm'))) return; try { await Promise.all(selIds.value.map(id => adminAPI.accounts.delete(id))); clearSelection(); reload() } catch (error) { console.error('Failed to bulk delete accounts:', error) } }
+const handleBulkDelete = async () => { if (!(await requestConfirmation({ message: t('common.confirm'), danger: true }))) return; try { await Promise.all(selIds.value.map(id => adminAPI.accounts.delete(id))); clearSelection(); reload() } catch (error) { console.error('Failed to bulk delete accounts:', error) } }
 const handleBulkResetStatus = async () => {
-  if (!confirm(t('common.confirm'))) return
+  if (!(await requestConfirmation({ message: t('common.confirm'), danger: true }))) return
   try {
     const result = await adminAPI.accounts.batchClearError(selIds.value)
     if (result.failed > 0) {
@@ -1348,7 +1359,7 @@ const handleBulkResetStatus = async () => {
   }
 }
 const handleBulkRefreshToken = async () => {
-  if (!confirm(t('common.confirm'))) return
+  if (!(await requestConfirmation({ message: t('common.confirm'), danger: true }))) return
   try {
     const result = await adminAPI.accounts.batchRefresh(selIds.value)
     if (result.failed > 0) {

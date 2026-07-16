@@ -106,6 +106,8 @@ export default {
     saving: '保存中...',
     noKeysYet: '暂无 API 密钥',
     createFirstKey: '创建您的第一个 API 密钥以开始使用 API。',
+    emptyPrerequisite: '前置条件：管理员先完成员工、分组和上游账号配置，并为您分配可用分组。',
+    viewAvailableGroups: '查看可用渠道',
     keyCreatedSuccess: 'API 密钥创建成功',
     keyUpdatedSuccess: 'API 密钥更新成功',
     keyDeletedSuccess: 'API 密钥删除成功',
@@ -239,8 +241,8 @@ export default {
 
   // Usage
   usage: {
-    title: '使用记录',
-    description: '查看和分析您的 API 使用历史',
+    title: '我的用量',
+    description: '查看本人 API 请求、tokens、费用与失败记录',
     costDetails: '费用明细',
     tokenDetails: 'Token 明细',
     cacheTtlOverriddenHint: '缓存 TTL Override 已启用',

@@ -852,6 +852,8 @@ export default {
       platformNotEditable: '创建后不可更改平台',
       noGroupsYet: '暂无分组',
       createFirstGroup: '创建您的第一个分组来组织 API 密钥。',
+      emptyPrerequisite: '前置条件：先确认员工已开通，再为员工配置可使用的分组。若员工尚未开通，请先前往员工管理。',
+      viewEmployees: '前往员工管理',
       creating: '创建中...',
       updating: '更新中...',
       limitDay: '日',

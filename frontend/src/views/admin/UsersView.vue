@@ -597,23 +597,23 @@
 
               <!-- Toggle Status Button (not for admin) -->
               <button
-                v-if="row.role !== 'admin'"
+                v-if="row.role !== 'admin' && row.status === 'disabled'"
                 @click="handleToggleStatus(row)"
+                :aria-label="`${t('admin.users.enable')} ${row.email}`"
                 :class="[
                   'flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors',
-                  row.status === 'active'
-                    ? 'hover:bg-orange-50 hover:text-orange-600 dark:hover:bg-orange-900/20 dark:hover:text-orange-400'
-                    : 'hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400'
+                  'hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400'
                 ]"
               >
-                <Icon v-if="row.status === 'active'" name="ban" size="sm" />
-                <Icon v-else name="checkCircle" size="sm" />
-                <span class="text-xs">{{ row.status === 'active' ? t('admin.users.disable') : t('admin.users.enable') }}</span>
+                <Icon name="checkCircle" size="sm" />
+                <span class="text-xs">{{ t('admin.users.enable') }}</span>
               </button>
 
               <!-- More Actions Menu Trigger -->
               <button
                 @click="openActionMenu(row, $event)"
+                :data-user-actions="row.id"
+                :aria-label="`${t('common.more')} ${row.email}`"
                 class="action-menu-trigger flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-dark-700 dark:hover:text-white"
                 :class="{ 'bg-gray-100 text-gray-900 dark:bg-dark-700 dark:text-white': activeMenuId === row.id }"
               >
@@ -717,6 +717,16 @@
 
               <div class="my-1 border-t border-gray-100 dark:border-dark-700"></div>
 
+              <button
+                v-if="user.role !== 'admin' && user.status === 'active'"
+                class="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                :aria-label="`${t('admin.users.disable')} ${user.email}`"
+                @click="requestDisable(user); closeActionMenu()"
+              >
+                <Icon name="ban" size="sm" :stroke-width="2" />
+                {{ t('admin.users.disable') }}
+              </button>
+
               <!-- Delete (not for admin) -->
               <button
                 v-if="user.role !== 'admin'"
@@ -733,8 +743,22 @@
     </Teleport>
 
     <ConfirmDialog :show="showDeleteDialog" :title="t('admin.users.deleteUser')" :message="t('admin.users.deleteConfirm', { email: deletingUser?.email })" :danger="true" @confirm="confirmDelete" @cancel="showDeleteDialog = false" />
-    <UserCreateModal :show="showCreateModal" @close="showCreateModal = false" @success="loadUsers" />
-    <UserEditModal :show="showEditModal" :user="editingUser" @close="closeEditModal" @success="loadUsers" />
+    <ConfirmDialog
+      :show="showDisableDialog"
+      title="确认禁用员工"
+      :message="disableConfirmMessage"
+      :danger="true"
+      @confirm="confirmDisable"
+      @cancel="cancelDisable"
+    />
+    <UserCreateModal :show="showCreateModal" @close="showCreateModal = false" @success="loadUsers" @credential="showInitialCredential" />
+    <UserEditModal :show="showEditModal" :user="editingUser" @close="closeEditModal" @success="loadUsers" @credential="showInitialCredential" />
+    <InitialCredentialDialog
+      :show="credentialDialog.show"
+      :email="credentialDialog.email"
+      :credential="credentialDialog.credential"
+      @close="closeInitialCredential"
+    />
     <UserPlatformQuotaModal
       :show="showPlatformQuotaModal"
       :user="platformQuotaUser"
@@ -751,7 +775,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
@@ -787,6 +811,8 @@ import UserAllowedGroupsModal from '@/components/admin/user/UserAllowedGroupsMod
 import UserBalanceModal from '@/components/admin/user/UserBalanceModal.vue'
 import UserBalanceHistoryModal from '@/components/admin/user/UserBalanceHistoryModal.vue'
 import GroupReplaceModal from '@/components/admin/user/GroupReplaceModal.vue'
+import InitialCredentialDialog from '@/components/admin/user/InitialCredentialDialog.vue'
+import type { InitialCredential } from '@/api/admin/users'
 
 const appStore = useAppStore()
 
@@ -1281,6 +1307,13 @@ const pagination = reactive({
 const showCreateModal = ref(false)
 const showEditModal = ref(false)
 const showDeleteDialog = ref(false)
+const showDisableDialog = ref(false)
+const disablingUser = ref<AdminUser | null>(null)
+const credentialDialog = reactive<{ show: boolean; email: string; credential: InitialCredential | null }>({
+  show: false,
+  email: '',
+  credential: null
+})
 const showApiKeysModal = ref(false)
 const showAttributesModal = ref(false)
 const showPlatformQuotaModal = ref(false)
@@ -1673,18 +1706,81 @@ const closeEditModal = () => {
   editingUser.value = null
 }
 
-const handleToggleStatus = async (user: AdminUser) => {
-  const newStatus = user.status === 'active' ? 'disabled' : 'active'
+const statusErrorMessage = (error: unknown): string => {
+  if (typeof error === 'object' && error !== null && 'response' in error) {
+    const response = (error as { response?: { data?: { detail?: unknown } } }).response
+    if (typeof response?.data?.detail === 'string') return response.data.detail
+  }
+  return t('admin.users.failedToToggle')
+}
+
+const applyUserStatus = async (user: AdminUser, newStatus: 'active' | 'disabled'): Promise<boolean> => {
   try {
     await adminAPI.users.toggleStatus(user.id, newStatus)
     appStore.showSuccess(
       newStatus === 'active' ? t('admin.users.userEnabled') : t('admin.users.userDisabled')
     )
-    loadUsers()
-  } catch (error: any) {
-    appStore.showError(error.response?.data?.detail || t('admin.users.failedToToggle'))
+    await loadUsers()
+    return true
+  } catch (error: unknown) {
+    appStore.showError(statusErrorMessage(error))
     console.error('Error toggling user status:', error)
+    return false
   }
+}
+
+const handleToggleStatus = async (user: AdminUser): Promise<void> => {
+  if (user.status === 'active') {
+    requestDisable(user)
+    return
+  }
+  await applyUserStatus(user, 'active')
+}
+
+const disableConfirmMessage = computed(() => {
+  if (!disablingUser.value) return ''
+  return `员工 ${disablingUser.value.email}（ID ${disablingUser.value.id}）将无法登录，已有 API Key 也会停止工作。`
+})
+
+const requestDisable = (user: AdminUser): void => {
+  disablingUser.value = user
+  showDisableDialog.value = true
+}
+
+const restoreStatusActionFocus = (userID: number): void => {
+  void nextTick(() => {
+    const trigger = document.querySelector<HTMLButtonElement>(`[data-user-actions="${userID}"]`)
+    trigger?.focus()
+  })
+}
+
+const cancelDisable = (): void => {
+  const userID = disablingUser.value?.id
+  showDisableDialog.value = false
+  disablingUser.value = null
+  if (userID) restoreStatusActionFocus(userID)
+}
+
+const confirmDisable = async (): Promise<void> => {
+  const user = disablingUser.value
+  if (!user) return
+  const succeeded = await applyUserStatus(user, 'disabled')
+  if (!succeeded) return
+  showDisableDialog.value = false
+  disablingUser.value = null
+  restoreStatusActionFocus(user.id)
+}
+
+const showInitialCredential = (payload: { email: string; credential: InitialCredential }): void => {
+  credentialDialog.email = payload.email
+  credentialDialog.credential = { ...payload.credential }
+  credentialDialog.show = true
+}
+
+const closeInitialCredential = (): void => {
+  credentialDialog.show = false
+  credentialDialog.email = ''
+  credentialDialog.credential = null
 }
 
 const handleViewApiKeys = (user: AdminUser) => {

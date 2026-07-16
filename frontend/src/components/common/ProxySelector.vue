@@ -1,6 +1,7 @@
 <template>
   <div class="relative" ref="containerRef">
     <button
+      :id="triggerId"
       type="button"
       @click="toggle"
       :disabled="disabled"
@@ -189,10 +190,12 @@ interface ProxyTestResult {
 interface Props {
   modelValue: number | null
   proxies: Proxy[]
+  triggerId?: string
   disabled?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  triggerId: undefined,
   disabled: false
 })
 

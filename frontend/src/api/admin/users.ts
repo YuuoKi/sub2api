@@ -44,6 +44,16 @@ export interface AdminBoundAuthIdentity {
   channel?: AdminBoundAuthIdentityChannel | null
 }
 
+export interface InitialCredential {
+  temporary_password: string
+  expires_at: string
+}
+
+export interface AdminCreateUserResponse {
+  user: AdminUser
+  initial_credential: InitialCredential
+}
+
 /**
  * List all users with pagination
  * @param page - Page number (default: 1)
@@ -118,7 +128,6 @@ export async function getById(id: number, includeDeleted = false): Promise<Admin
  */
 export async function create(userData: {
   email: string
-  password: string
   username?: string
   notes?: string
   role?: 'admin' | 'user'
@@ -126,9 +135,16 @@ export async function create(userData: {
   concurrency?: number
   rpm_limit?: number
   allowed_groups?: number[] | null
-}): Promise<AdminUser> {
-  const { data } = await apiClient.post<AdminUser>('/admin/users', userData)
+}): Promise<AdminCreateUserResponse> {
+  const { data } = await apiClient.post<AdminCreateUserResponse>('/admin/users', userData)
   return data
+}
+
+export async function resetPassword(id: number): Promise<InitialCredential> {
+  const { data } = await apiClient.post<{ initial_credential: InitialCredential }>(
+    `/admin/users/${id}/reset-password`
+  )
+  return data.initial_credential
 }
 
 /**
@@ -391,6 +407,7 @@ export const usersAPI = {
   getUserBalanceHistory,
   replaceGroup,
   bindUserAuthIdentity,
+  resetPassword,
   getPlatformQuotas,
   updatePlatformQuotas,
   resetPlatformQuotaWindow,

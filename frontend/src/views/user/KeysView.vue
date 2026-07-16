@@ -420,8 +420,9 @@
           <template #empty>
             <EmptyState
               :title="t('keys.noKeysYet')"
-              :description="t('keys.createFirstKey')"
-              :action-text="t('keys.createKey')"
+              :description="groups.length === 0 ? t('keys.emptyPrerequisite') : t('keys.createFirstKey')"
+              :action-text="groups.length === 0 ? t('keys.viewAvailableGroups') : t('keys.createKey')"
+              :action-to="groups.length === 0 ? '/available-channels' : undefined"
               @action="showCreateModal = true"
             />
           </template>

@@ -1,0 +1,113 @@
+package handler
+
+import (
+	"errors"
+	"net/http"
+	"strconv"
+
+	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
+	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
+	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/gin-gonic/gin"
+)
+
+type VideoGatewayHandler struct{ service *service.VideoGatewayService }
+
+func NewVideoGatewayHandler(s *service.VideoGatewayService) *VideoGatewayHandler {
+	return &VideoGatewayHandler{service: s}
+}
+
+type videoCreateBody struct {
+	ProviderAccountID     int64   `json:"provider_account_id" binding:"required"`
+	Prompt                string  `json:"prompt" binding:"required"`
+	Duration              int     `json:"duration" binding:"required"`
+	Resolution            string  `json:"resolution" binding:"required"`
+	SingleSmokeAuthorized bool    `json:"single_smoke_authorized" binding:"required"`
+	CreationKey           string  `json:"creation_key"`
+	MaximumCost           float64 `json:"maximum_cost" binding:"required"`
+}
+
+func videoScope(c *gin.Context) (service.VideoTaskScope, bool) {
+	key, ok := middleware.GetAPIKeyFromContext(c)
+	if !ok || key == nil || key.User == nil || key.GroupID == nil || *key.GroupID <= 0 {
+		response.Error(c, http.StatusForbidden, "complete employee API-key scope is required")
+		return service.VideoTaskScope{}, false
+	}
+	return service.VideoTaskScope{UserID: key.User.ID, APIKeyID: key.ID, GroupID: *key.GroupID}, true
+}
+
+func (h *VideoGatewayHandler) Providers(c *gin.Context) {
+	if _, ok := videoScope(c); !ok {
+		return
+	}
+	items, err := h.service.ListProviders(c.Request.Context())
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "failed to list video providers")
+		return
+	}
+	response.Success(c, items)
+}
+
+func (h *VideoGatewayHandler) Create(c *gin.Context) {
+	scope, ok := videoScope(c)
+	if !ok {
+		return
+	}
+	var body videoCreateBody
+	if err := c.ShouldBindJSON(&body); err != nil {
+		response.BadRequest(c, "invalid video task request")
+		return
+	}
+	task, err := h.service.CreateTask(c.Request.Context(), service.VideoTaskCreateCommand{Scope: scope, ProviderAccountID: body.ProviderAccountID,
+		Prompt: body.Prompt, Duration: body.Duration, Resolution: body.Resolution, SingleSmokeAuthorized: body.SingleSmokeAuthorized,
+		CreationKey: body.CreationKey, MaximumCost: body.MaximumCost})
+	if err != nil {
+		writeVideoError(c, err)
+		return
+	}
+	response.Accepted(c, videoTaskResponse(task))
+}
+
+func (h *VideoGatewayHandler) Get(c *gin.Context)    { h.withTask(c, false) }
+func (h *VideoGatewayHandler) Cancel(c *gin.Context) { h.withTask(c, true) }
+
+func (h *VideoGatewayHandler) withTask(c *gin.Context, cancel bool) {
+	scope, ok := videoScope(c)
+	if !ok {
+		return
+	}
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		response.BadRequest(c, "invalid video task id")
+		return
+	}
+	var task *service.VideoTask
+	if cancel {
+		task, err = h.service.CancelTask(c.Request.Context(), id, scope)
+	} else {
+		task, err = h.service.GetTask(c.Request.Context(), id, scope)
+	}
+	if err != nil {
+		writeVideoError(c, err)
+		return
+	}
+	response.Success(c, videoTaskResponse(task))
+}
+
+func writeVideoError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, service.ErrVideoTaskNotFound):
+		response.Error(c, http.StatusNotFound, "video task not found")
+	case errors.Is(err, service.ErrVideoRealDispatchDenied), errors.Is(err, service.ErrVideoRealDispatchConsumed), errors.Is(err, service.ErrVideoBudgetRejected):
+		response.Error(c, http.StatusForbidden, err.Error())
+	default:
+		response.BadRequest(c, service.RedactVideoSecrets(err.Error()))
+	}
+}
+
+func videoTaskResponse(t *service.VideoTask) gin.H {
+	return gin.H{"id": t.ID, "provider": t.Provider, "model": t.Model, "status": t.Status, "upstream_task_id": t.UpstreamTaskID,
+		"result_url": t.ResultURL, "last_frame_url": t.LastFrameURL, "duration": t.DurationSeconds, "resolution": t.Resolution,
+		"usage_total_tokens": t.UsageTotalTokens, "cost": t.CostAmount, "currency": t.Currency, "real_dispatch_count": t.RealDispatchCount,
+		"provider_error_code": t.ProviderErrorCode, "provider_error_message": t.ProviderErrorMessage, "error": t.ErrorMessage}
+}

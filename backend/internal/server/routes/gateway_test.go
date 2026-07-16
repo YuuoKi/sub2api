@@ -28,6 +28,7 @@ func newGatewayRoutesTestRouter(platform ...string) *gin.Engine {
 		&handler.Handlers{
 			Gateway:       &handler.GatewayHandler{},
 			OpenAIGateway: &handler.OpenAIGatewayHandler{},
+			VideoGateway:  &handler.VideoGatewayHandler{},
 		},
 		servermiddleware.APIKeyAuthMiddleware(func(c *gin.Context) {
 			groupID := int64(1)
@@ -45,6 +46,25 @@ func newGatewayRoutesTestRouter(platform ...string) *gin.Engine {
 	)
 
 	return router
+}
+
+func TestVideoGatewayCanonicalRoutesAreRegistered(t *testing.T) {
+	router := newGatewayRoutesTestRouter()
+	wanted := map[string]bool{
+		http.MethodGet + " /v1/video/providers":         false,
+		http.MethodPost + " /v1/video/tasks":            false,
+		http.MethodGet + " /v1/video/tasks/:id":         false,
+		http.MethodPost + " /v1/video/tasks/:id/cancel": false,
+	}
+	for _, route := range router.Routes() {
+		key := route.Method + " " + route.Path
+		if _, ok := wanted[key]; ok {
+			wanted[key] = true
+		}
+	}
+	for route, registered := range wanted {
+		require.True(t, registered, route)
+	}
 }
 
 func TestGatewayRoutesOpenAIResponsesCompactPathIsRegistered(t *testing.T) {

@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"database/sql"
+	"os"
+	"strings"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
@@ -452,6 +454,14 @@ func ProvideAPIKeyAuthCacheInvalidator(apiKeyService *APIKeyService) APIKeyAuthC
 	return apiKeyService
 }
 
+func ProvideVideoSingleSmokeAuthorization() *SingleSmokeAuthorization {
+	return NewSingleSmokeAuthorization(strings.EqualFold(strings.TrimSpace(os.Getenv("VIDEO_SINGLE_SMOKE_AUTHORIZED")), "true"))
+}
+
+func ProvideVideoGatewayService(repo VideoGatewayRuntimeRepository, gate *SingleSmokeAuthorization, billing *BillingCacheService) *VideoGatewayService {
+	return NewVideoGatewayService(repo, gate, NewVideoBalanceBudgetGuard(billing))
+}
+
 // ProvideBackupService creates and starts BackupService
 func ProvideBackupService(
 	settingRepo SettingRepository,
@@ -562,6 +572,8 @@ var ProviderSet = wire.NewSet(
 	NewUserService,
 	ProvideAPIKeyService,
 	ProvideAPIKeyAuthCacheInvalidator,
+	ProvideVideoSingleSmokeAuthorization,
+	ProvideVideoGatewayService,
 	NewGroupService,
 	NewAccountService,
 	NewProxyService,

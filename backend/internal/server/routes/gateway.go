@@ -85,6 +85,14 @@ func RegisterGatewayRoutes(
 		})
 	}
 	// API网关（Claude API兼容）
+	video := r.Group("/v1/video")
+	video.Use(bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth))
+	{
+		video.GET("/providers", h.VideoGateway.Providers)
+		video.POST("/tasks", h.VideoGateway.Create)
+		video.GET("/tasks/:id", h.VideoGateway.Get)
+		video.POST("/tasks/:id/cancel", h.VideoGateway.Cancel)
+	}
 	gateway := r.Group("/v1")
 	gateway.Use(bodyLimit)
 	gateway.Use(clientRequestID)

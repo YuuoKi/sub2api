@@ -1,0 +1,1092 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>北极星 V5.0 · 无界智能画布 × 无界 AI 管理中台 · 总规划（最终版）</title>
+  <style>
+    :root {
+      --bg: #0e1117;
+      --paper: #151922;
+      --paper-2: #1c2230;
+      --ink: #f4f0e8;
+      --muted: #c7c0b6;
+      --faint: #8f887e;
+      --line: #343b4a;
+      --gold: #d7a84f;
+      --gold-soft: rgba(215, 168, 79, .16);
+      --blue: #67a6d9;
+      --blue-soft: rgba(103, 166, 217, .14);
+      --green: #7fb77e;
+      --green-soft: rgba(127, 183, 126, .14);
+      --red: #d7786f;
+      --red-soft: rgba(215, 120, 111, .14);
+      --purple: #a88bd8;
+      --purple-soft: rgba(168, 139, 216, .14);
+      --font: "Microsoft YaHei", "PingFang SC", "Segoe UI", Arial, sans-serif;
+      --mono: Consolas, "SFMono-Regular", "Cascadia Code", monospace;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--font);
+      line-height: 1.72;
+    }
+    a { color: var(--blue); text-decoration: none; }
+    code {
+      font-family: var(--mono);
+      background: rgba(255,255,255,.07);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 5px;
+      padding: .1em .35em;
+      font-size: .92em;
+      color: #f2d394;
+    }
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 34px 22px 80px; }
+    .hero {
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.018));
+      padding: 30px;
+      border-radius: 10px;
+    }
+    .eyebrow {
+      color: var(--gold);
+      font-family: var(--mono);
+      font-weight: 700;
+      letter-spacing: .08em;
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+    h1 {
+      font-size: 38px;
+      line-height: 1.18;
+      margin: 10px 0 12px;
+      letter-spacing: 0;
+    }
+    .subtitle { color: var(--muted); max-width: 930px; font-size: 16px; }
+    .statusbar {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 22px;
+    }
+    .sbi, .card, section, .phase, .adr {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+    .sbi { padding: 13px 14px; min-height: 90px; }
+    .sbi .k { color: var(--faint); font-family: var(--mono); font-size: 12px; }
+    .sbi .v { margin-top: 5px; font-size: 14px; color: var(--ink); }
+    nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 18px 0 0;
+    }
+    nav a {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 7px 10px;
+      color: var(--muted);
+      background: rgba(255,255,255,.03);
+      font-size: 13px;
+    }
+    section { margin-top: 18px; padding: 24px; }
+    h2 { font-size: 26px; margin: 0 0 4px; line-height: 1.28; letter-spacing: 0; }
+    .h2zh { color: var(--gold); font-weight: 700; margin-bottom: 12px; }
+    h3 { font-size: 18px; margin: 24px 0 8px; line-height: 1.35; }
+    h4 { font-size: 15px; margin: 0 0 8px; line-height: 1.35; }
+    p { margin: .45em 0; }
+    .lead { color: var(--muted); font-size: 15px; }
+    .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    .card { padding: 16px; color: var(--muted); }
+    .card h4 { color: var(--ink); }
+    .callout {
+      margin: 14px 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+      color: var(--muted);
+    }
+    .ok { background: var(--green-soft); border-color: rgba(127,183,126,.35); }
+    .warn { background: var(--gold-soft); border-color: rgba(215,168,79,.35); }
+    .bad { background: var(--red-soft); border-color: rgba(215,120,111,.36); }
+    .info { background: var(--blue-soft); border-color: rgba(103,166,217,.35); }
+    .purple { background: var(--purple-soft); border-color: rgba(168,139,216,.35); }
+    .tbl-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; margin-top: 12px; }
+    table { width: 100%; border-collapse: collapse; min-width: 840px; }
+    th, td { border-bottom: 1px solid var(--line); padding: 10px 12px; vertical-align: top; font-size: 13.5px; }
+    th { color: var(--gold); text-align: left; background: rgba(255,255,255,.035); }
+    tr:last-child td { border-bottom: 0; }
+    .st {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 2px 9px;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+      border: 1px solid transparent;
+    }
+    .st-use { background: var(--green-soft); color: #bce0b9; border-color: rgba(127,183,126,.35); }
+    .st-demo { background: var(--blue-soft); color: #b8d9f4; border-color: rgba(103,166,217,.35); }
+    .st-review { background: var(--gold-soft); color: #efcf89; border-color: rgba(215,168,79,.35); }
+    .st-block { background: var(--red-soft); color: #f0b0aa; border-color: rgba(215,120,111,.35); }
+    .st-frozen { background: var(--purple-soft); color: #d1c1ef; border-color: rgba(168,139,216,.35); }
+    .src { color: var(--faint); font-size: 12.5px; font-family: var(--mono); margin-top: 12px; }
+    .ev { color: #f2d394; font-family: var(--mono); font-size: .94em; }
+    .phase, .adr { padding: 15px 17px; margin: 12px 0; }
+    .phase .pn, .adr .an { color: var(--gold); font-family: var(--mono); font-size: 12px; font-weight: 700; }
+    .phase ul, .card ul { margin: .35em 0; padding-left: 1.2em; }
+    .phase li, .card li { margin: .25em 0; color: var(--muted); }
+    .flow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-top: 12px;
+    }
+    .node {
+      border: 1px solid var(--line);
+      background: var(--paper-2);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 13px;
+      color: var(--ink);
+    }
+    .arr { color: var(--gold); font-family: var(--mono); }
+    pre {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      background: #0b0e13;
+      border-radius: 8px;
+      padding: 14px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    footer {
+      color: var(--faint);
+      border-top: 1px solid var(--line);
+      margin-top: 24px;
+      padding-top: 16px;
+      font-size: 12.5px;
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    @media (max-width: 860px) {
+      h1 { font-size: 30px; }
+      .statusbar, .grid2, .grid3 { grid-template-columns: 1fr; }
+      .hero, section { padding: 20px; }
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">北极星 V5.0 · NORTH STAR · FINAL · 状态同步 2026-07-16</div>
+    <h1>无界智能画布 × 无界 AI 管理中台 · 总规划（最终版）</h1>
+    <p class="subtitle"><b>本文件是唯一总规划真相源。</b>完整迭代链见 <code>#lineage</code>（含 <code>归档老文件/</code> 五份 202606 起源文档）。任务先读本文对应章节，再读仓内 <code>00_START_HERE.md</code> 或 Sub2API <code>docs/superpowers/codex-handoff/</code>。V5.0 在 V4.1 全文保留基础上，吸收 2026-07-04 至 07-05 完整交付事实；V4.1 时代的「真实供应商调用已冻结」已解除，替换为 <code>production_authorized</code> 受控放行纪律。今后分工：<b>Fable 5 做规划</b>、<b>Codex 执行后端</b>、<b>Composer 2.5 深度跑任务</b>（前端/走查/集成，鼓励多思考）。</p>
+    <div class="statusbar">
+      <div class="sbi"><div class="k">Sub2API 管理中台</div><div class="v"><span class="st st-review">待复核</span><br>canonical <code>127.0.0.1:8080</code> HTTP 200；完整管理面、开卡、员工 key、usage 与真实图片/视频已留证。</div></div>
+      <div class="sbi"><div class="k">真实 Seedance</div><div class="v"><span class="st st-review">待复核</span><br>canonical tiny_real 1 次成功，上游 task 与本地 MP4/尾帧、usage/费用差分已落证。</div></div>
+      <div class="sbi"><div class="k">计费与对账</div><div class="v"><span class="st st-review">待复核</span><br>Gemini + Seedance 共两次真实调用，合计 <code>$0.3980 / ¥2.8656</code>，员工余额差分一致。</div></div>
+      <div class="sbi"><div class="k">QCanvas</div><div class="v"><span class="st st-use">内部可用</span><br>包内全量门禁与 W4.R1-R4 代码修复内部可用；本环未提供画布 projectId/flowId，未绕过 skill 回填。</div></div>
+      <div class="sbi"><div class="k">Strategy</div><div class="v"><span class="st st-frozen">已冻结</span><br>公开商业化、多租户、skill 自动总结 v1、完整剪辑台；等内部产线稳定后再解冻。</div></div>
+      <div class="sbi"><div class="k">真相源版本</div><div class="v"><b>V5.0 状态同步</b><br>2026-07-16 · 含 V4.1 全文归档 · 07-05 大段保留为历史快照</div></div>
+    </div>
+    <nav>
+      <a href="#final-closeout-20260716">07-16 收口</a>
+      <a href="#evidence-first">证据基准</a>
+      <a href="#lineage">文档脉络</a>
+      <a href="#agent-workflow">三模型分工</a>
+      <a href="#north-star">北极星定位</a>
+      <a href="#delivered">本轮交付</a>
+      <a href="#current-state">当前状态</a>
+      <a href="#v3-to-v41-delta">V3→V4.1</a>
+      <a href="#v41-to-v50-delta">V4.1→V5.0</a>
+      <a href="#coverage-map">覆盖映射</a>
+      <a href="#architecture">目标架构</a>
+      <a href="#console">管理中台</a>
+      <a href="#billing">计费对账</a>
+      <a href="#contracts">契约</a>
+      <a href="#roadmap">路线图</a>
+      <a href="#guardrails">红线</a>
+      <a href="#review-package">审查包</a>
+      <a href="#next-prompt">后续提示词</a>
+    </nav>
+  </header>
+
+  <section id="final-closeout-20260716">
+    <h2>2026-07-16 双平台最终收口 · 当前状态增补</h2>
+    <div class="h2zh">本节优先于下方 2026-07-05 状态快照；旧证据保留为历史，不得覆盖当前 HEAD 与人工 gate。</div>
+    <div class="callout"><b>当前结论：</b>非人工产品/代码 <code>open_p0_count=0</code>，两个人工 gate 均已由真实运行证据解除，双平台整体进入 <span class="st st-review">待复核</span>。canonical <code>:8080</code>、完整管理面、管理员开卡、员工 key/usage、Gemini 图片与 Seedance 视频均有证据；<code>realCallExecuted=2</code>，合计约 <code>¥2.8656</code>。这不等于商业交付完成、已上线或已 push。</div>
+    <div class="tbl-wrap"><table>
+      <tr><th>Wave</th><th>当前证据</th><th>状态</th></tr>
+      <tr><td>W1–W2 · Sub2API 基线</td><td>本地部署准备 <code>793d3553</code>；Gemini 图片映射 <code>ca4c72f4</code>；隔离开卡/usage smoke <code>440f0607</code>；并发缓存测试修复 <code>05949083</code>。</td><td><span class="st st-use">内部可用</span></td></tr>
+      <tr><td>W3 · QCanvas</td><td>DEV owner-scope migration/备份证据；结算诊断 <code>addc394</code>；Web 113 files / 708 tests，API 87 files / 595 tests + 3 opt-in skips，typecheck/build 通过。</td><td><span class="st st-use">内部可用</span></td></tr>
+      <tr><td>W4.R1–R4 · QCanvas</td><td><code>205572da</code> rebind、<code>ff3a2d4</code> accepted-task receipt、<code>b06e4d8</code> pilot 原子事务、<code>9c2cd57</code> mock 计费元数据；最新 API 89 files / 633 tests + 3 opt-in skips。</td><td><span class="st st-use">内部可用</span></td></tr>
+      <tr><td>G1 · canonical 管理闭环</td><td><code>wujie-sub2api:local</code> 在 loopback <code>:8080</code> HTTP 200，无界 title，<code>:3000</code> 无监听；登录、完整管理面、开卡、员工 key、usage 五段截图齐全。</td><td><span class="st st-review">待复核</span></td></tr>
+      <tr><td>G2 · 真实 tiny_real</td><td>Gemini PNG 1 次 + Seedance MP4 1 次，无重试；Seedance 上游 task <code>cgt-20260716174852-8p5hj</code>，两次合计 <code>$0.3980 / ¥2.8656</code>，本地资产与账本差分齐全。</td><td><span class="st st-review">待复核</span></td></tr>
+      <tr><td>当前运行 gate</td><td><code>blocked[]=[]</code>；TOTP 与真实付费 gate 均已真正解除。process-only 单次付费门已恢复关闭，禁止继续追加真实调用。</td><td><span class="st st-review">待复核</span></td></tr>
+    </table></div>
+    <div class="callout"><b>决策 1/2 保持：</b>Sub2API 唯一前端是“完整管理后台 + 无界品牌”，不启用 <code>video_gateway_demo</code> 全隐藏、不藏管理页；本地唯一入口是本地镜像 <code>wujie-sub2api:local</code> 的 <code>127.0.0.1:8080</code>，<code>RUN_MODE=standard</code>，禁止 Vite <code>:3000</code> 与 <code>weishaw/sub2api:latest</code> 验收。</div>
+  </section>
+
+  <section id="evidence-first">
+    <h2>Evidence First</h2>
+    <div class="h2zh">证据基准：先列真相，再给架构判断</div>
+    <p class="lead">V5.0 延续 V4.1 第一原则：证据先于断言。凡是只来自历史审查包、静态源码、上一轮 transcript 或代理报告的事实，必须标注证据等级；凡是未在本轮重跑的门禁，不能写成新鲜验证。V5.0 新增最高等级「真实运行时验证」。</p>
+
+    <h3>源文件（四层 · 归档在 <code>归档老文件/</code>）</h3>
+    <div class="grid2">
+      <div class="card">
+        <h4>起源层（2026-06，只读归档）</h4>
+        <ul>
+          <li><code>归档老文件/无界AI生产系统_总规划兼方向矫正书_20260618.html</code> — 16 环节数据飞轮逻辑图（Provider 池 → 统一 API → 采集 → skill → 反哺）</li>
+          <li><code>归档老文件/北极星V2_无界AI生产资产中台.html</code> — 三柱（N 账号→一条 API / skill / 三级权限）、七个错误复盘、M0～M6 标尺、易用性铁律</li>
+          <li><code>归档老文件/QCanvas行动手册_可执行_20260621.html</code> — Studio V2 壳层七原则、D1/D2 决策门、G-A～S-2 可执行工单（画布侧仍有效）</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>架构层（2026-07-02，只读归档）</h4>
+        <ul>
+          <li><code>归档老文件/北极星V3_无界智能画布_无界AI管理中台_完全架构书_20260702.html</code> — 双系统、七痛点、六阶段来龙去脉、7-Day Loop、C4/ADR-1～8</li>
+          <li><code>归档老文件/北极星V4_无界智能画布_无界AI管理中台_前瞻架构书_20260702.html</code> — 三回路、五层资产、ADR-9～16、Identity/Ledger/Skill 专章</li>
+          <li><code>北极星V4.1_...20260702.html</code>（同目录，紫色横幅只读对照）</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>收敛层（2026-07-02～04）</h4>
+        <ul>
+          <li><code>_review/capture-arming-D2-20260702-G3/SUMMARY.md</code>（G3 受控 dev，历史）</li>
+          <li><code>_review/phase-a-prime-tiny-real_20260702/success_result.json</code>（Tiny Real 三证，历史）</li>
+          <li>QCanvas D2 审查包、命门β commit 映射</li>
+          <li><code>1ed941c3-8695-4126-ade6-f43f6e738d28.jsonl</code>（早期会话，历史）</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>V5.0 交付链（2026-07-04～05 · 当前执行证据）</h4>
+        <ul>
+          <li>会话 <code>39111c4b-f9e2-4448-9be0-8ab9b307a46c.jsonl</code>（主执行链）</li>
+          <li>会话 <code>c7dbefd7-5729-4f46-b01c-aedd82934581.jsonl</code>（V5.0 FINAL 合并 + V4.1 全文并入）</li>
+          <li><code>docs/superpowers/plans/2026-07-04-console-v2-roadmap.md</code></li>
+          <li><code>docs/superpowers/codex-handoff/deliverables/</code>（13 份 review + R2-A/R2-C partial + 收口）</li>
+          <li>Codex 任务书：<code>CODEX_TASK_BILLING.md</code>、<code>API_CONTRACT.md</code>、<code>R1.md</code>、<code>PRODUCTION_VERIFY.md</code></li>
+          <li><code>docs/api/video-gateway-contract.md</code>、<code>image-gateway-contract.md</code></li>
+          <li>PR <a href="https://github.com/Wei-Shaw/sub2api/pull/3726">#3726</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>复核边界（继承 V4.1）</h3>
+    <div class="grid2">
+      <div class="card">
+        <h4>已做（V5.0 本轮）</h4>
+        <ul>
+          <li>真实付费 Seedance 任务 + 余额扣减（R2-A）</li>
+          <li>dev 容器浏览器两轮端到端走查（<code>127.0.0.1:18081</code>）</li>
+          <li><code>go test ./...</code>、golangci-lint、vue-tsc、eslint、critical vitest 全绿</li>
+          <li>并行子智能体巡查 Sub2API + QCanvas（2026-07-05）</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>未做 / 纪律</h4>
+        <ul>
+          <li>R2-B 图片真实冒烟；R2-C 基线对账已 partial（1 条视频），3+3 扩样仍待做</li>
+          <li>未读取 <code>.env</code> 明文入文档；密钥只登记元数据</li>
+          <li>QCanvas root pnpm 仍 <span class="st st-block">已阻塞</span>；hono-api 全量 tsc <span class="st st-review">待复核</span></li>
+          <li>长会话压缩后：以文件与测试为准，不以会话记忆为准</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>证据等级（六级）</h3>
+    <div class="tbl-wrap"><table>
+      <tr><th>等级</th><th>含义</th><th>V5.0 用法</th></tr>
+      <tr><td><b>真实运行时验证</b></td><td>真实 provider 调用、真实扣费、浏览器走查、门禁全绿。</td><td>最高级；R2-A、控制台走查属于此级。</td></tr>
+      <tr><td>源码可检索</td><td>当前文件中可搜索到代码、常量、路由或契约。</td><td>结构事实，不等于运行闭环。</td></tr>
+      <tr><td>审查包既有证据</td><td>历史或最新审查包记录过命令、结果、日志、SQL。</td><td>可引用，不能写成本轮重跑。</td></tr>
+      <tr><td>本轮只读复核</td><td>只读代理与主线复核过文件、Git 状态和文档。</td><td>可用于纠偏状态词（V4.1 继承）。</td></tr>
+      <tr><td>运行时未重跑</td><td>测试、构建、服务、SQL、截图未在本轮重新执行。</td><td>必须保留「待复核」。</td></tr>
+      <tr><td>真实调用未授权</td><td>涉及付费 provider、密钥、生产数据或外部影响。</td><td>按 production_authorized 纪律；未授权账号受限。</td></tr>
+    </table></div>
+
+    <h3>代码库巡查快照（2026-07-05 晚 · 归档核对刷新）</h3>
+    <div class="tbl-wrap"><table>
+      <tr><th>对象</th><th>巡查结论</th><th>证据路径</th></tr>
+      <tr><td>Sub2API 控制台 v2</td><td><span class="st st-use">内部可用</span> 4 业务 Vue 页 + 工具组件 + demo 六导航</td><td><code>BossOverviewView</code>、<code>KeyVaultView</code>、<code>StaffView</code>、<code>AiRecordsView</code>、<code>AnimatedNumber.vue</code>；<code>AppSidebar.vue</code> demo 模式 5 顶栏 + 系统折叠组</td></tr>
+      <tr><td>Sub2API AI 调用记录入口</td><td><span class="st st-review">待复核</span> 路由存在，侧栏无直链</td><td><code>router/index.ts</code> <code>/admin/console/ai-records</code>；由 <code>VideoTasksView</code> 内链跳转</td></tr>
+      <tr><td>Sub2API 契约文档</td><td>存在（v3 真相源）</td><td><code>docs/api/video-gateway-contract.md</code>、<code>image-gateway-contract.md</code></td></tr>
+      <tr><td>Sub2API migration</td><td>149–154 均存在</td><td><code>backend/migrations/149_*.sql</code> … <code>154_*.sql</code></td></tr>
+      <tr><td>Sub2API 计费/成员类型</td><td>存在；<code>user_member_type.go</code> 已 track</td><td><code>video_gateway_billing.go</code>、<code>billing_service.go</code>、<code>user_member_type.go</code></td></tr>
+      <tr><td>Sub2API 分支</td><td><code>wujie/video-capture-moat-20260702</code></td><td>worktree HEAD</td></tr>
+      <tr><td>Sub2API 2C 历史页</td><td><span class="st st-frozen">已冻结</span> 仍在代码，demo 模式门控隐藏（V3 约 21 页）</td><td><code>frontend/src/router/index.ts</code>、<code>utils/productMode.ts</code></td></tr>
+      <tr><td>QCanvas 五件套</td><td>均存在（root/docs 双份）</td><td><code>00/01/02_START_HERE</code> 等</td></tr>
+      <tr><td>QCanvas 命门β / 字段缝</td><td>content[] v3 已接线（seam-v3）；命门人眼仍待判</td><td><code>packages/schemas/generation-contract/sub2api-video-field-seam-v3.snapshot.json</code>；审查包 <code>docs/reviews/GAP_MAP_CLOSEOUT_20260709/</code>、<code>Q1_PILOT_20260708/</code>、<code>S2D_REAL_20260709/</code></td></tr>
+      <tr><td>QCanvas 壳层三面板</td><td><span class="st st-use">内部可用</span>（mock 可演示）History/Library 已接服务端；Chat 诚实「待接入」</td><td><code>StudioV2WorkbenchShell.tsx</code> + <code>listServerAssets</code> / <code>listSub2ApiVideoGenerations</code>；证据 <code>Q1_PILOT_20260708</code></td></tr>
+      <tr><td>QCanvas LATEST 审查包</td><td>20260704 Bug Audit Repair，<span class="st st-review">待复核</span></td><td><code>docs/reviews/LATEST_REVIEW_PACKAGE.html</code></td></tr>
+      <tr><td>QCanvas root pnpm</td><td><span class="st st-block">已阻塞</span></td><td><code>00_START_HERE.md</code> 记载</td></tr>
+    </table></div>
+
+    <div class="callout warn"><b>关键修正（V4.1 继承）：</b>V4 曾写「静态复扫 8/8 通过」，不能替代运行时门禁。V4 静态结论降级为「本轮只读复核」。</div>
+    <div class="callout ok"><b>关键升级（V5.0）：</b>最高证据从 Phase A' Tiny Real 单次三证，升级为 R2-A 正式生产路径：任务 <code>cgt-20260705162538-bd5cl</code>、108,900 tokens、¥5.0094、余额 $20.00→$19.30、<code>pricing_source=provider_usage</code>、<code>balance_charged_at</code> 已标记。</div>
+  </section>
+
+  <section id="agent-workflow">
+    <h2>Agent Workflow</h2>
+    <div class="h2zh">三模型分工：Fable 5 规划 · Codex 执行 · Composer 2.5 深度任务</div>
+    <p class="lead">今后所有工程任务默认按此三角分工。老板拍板与 Key 授权不变；规划与执行分离；不懂就派出多智能体巡查代码库，再写入本真相源。</p>
+    <div class="tbl-wrap"><table>
+      <tr><th>角色</th><th>模型</th><th>职责</th><th>禁区</th><th>交付物</th></tr>
+      <tr>
+        <td><b>规划</b></td>
+        <td><b>Fable 5</b></td>
+        <td>读北极星 V5.0 → 拆 Phase → 写任务书/验收标准/审查包模板 → 复核 Codex/Composer 产出 → 更新本真相源</td>
+        <td>不直接改代码（除非老板另授权）</td>
+        <td>北极星更新、<code>CODEX_TASK_*.md</code>、复核结论、路线图修订</td>
+      </tr>
+      <tr>
+        <td><b>后端执行</b></td>
+        <td><b>Codex</b></td>
+        <td>按 <code>codex-handoff</code> 任务书做后端/迁移/计费/契约/配置；<b>单会话顺序执行</b></td>
+        <td>不改 <code>frontend/**</code>（除非任务书明确）；<b>禁止两个 Codex 会话并行改同仓</b></td>
+        <td><code>deliverables/YYYY-MM-DD-*-review.md</code></td>
+      </tr>
+      <tr>
+        <td><b>深度任务</b></td>
+        <td><b>Composer 2.5</b></td>
+        <td>前端、浏览器走查、多步集成、易用性打磨；<b>鼓励多思考、多巡查、多验证再动手</b>；可无限使用跑任务</td>
+        <td>不越权改后端契约（除非 Fable 5 任务书写明）</td>
+        <td>前端 diff、走查记录、门禁输出、UX 改进</td>
+      </tr>
+    </table></div>
+    <div class="callout info"><b>执行纪律：</b>① 任何「已实现」断言写入规划前，必须 explore 子智能体或 grep+read 验证；② 单仓执行（一个任务只写一个 Git root）；③ 宣称「计费完成」必须以余额真实变动为证；④ 跨仓先读本 HTML，再读仓内 <code>00_START_HERE.md</code>。</div>
+    <div class="callout purple"><b>读序：</b>北极星 V5.0（本文件）→ 任务书（Fable 5 写）→ Codex/Composer 执行 → 审查包 → Fable 5 复核 → 必要时更新本文件。</div>
+  </section>
+
+  <section id="north-star">
+    <h2>North Star</h2>
+    <div class="h2zh">继承 V2→V3→V4：为什么做、服务谁、两仓为什么不能混</div>
+    <p class="lead">无界互娱的主线不是做一个 AI 视频演示，而是做 AI 中短剧 / 漫剧生产公司 + AI 生产工具公司。系统价值不是卖 token，而是把散落的 AI 账号、员工生产、结果资产、成本与经验沉淀成可管理、可记录、可复用、可商业化的生产飞轮。V5.0 首次可以宣称：这个飞轮的"管钱"一环已经真实转动。</p>
+
+    <div class="callout ok"><b>一句话商业定位（V2/V3 至今不变）：</b>帮 AI 内容公司把 <b>N 个上游密钥/账号收敛成一条受控 API</b>，把员工生产经验沉淀成可复用 skill 的企业级管理系统。<b>我们不卖 token，卖「管住 AI 生产」。</b></div>
+
+    <h3>三柱价值（V2 起源 · 202606）</h3>
+    <div class="grid3">
+      <div class="card"><h4>资产侧 · N 账号 → 一条 API</h4><p>即梦 / 可灵 / NanoBanana / GPT-Image / Seedance 等多 provider、多账号、含逆向与负载均衡，统一收敛为一条出口；按员工/工具身份开卡，调用数据回收归总。Sub2API 侧调度与计费 V5.0 已真实验证（R2-A）。</p></div>
+      <div class="card"><h4>经验侧 · 每次生产 → skill</h4><p>prompt、参数、用图、结果、成本、采用信号全量采集（<code>ai_generation_content</code> 已在真实链路运行）；skill 草稿与人审仍 <span class="st st-frozen">已冻结</span>，等两周真实账本稳定。</p></div>
+      <div class="card"><h4>管理侧 · 三级权限各看各的</h4><p>老板 3 秒扫读成本与异常；管理者傻瓜化开卡配额度；员工像「网吧网管」看自己花了多少。控制台 v2 已按此 IA 落地（<code>#console</code>）。</p></div>
+    </div>
+
+    <h3>七个真实痛点（V3 · 仍成立）</h3>
+    <div class="tbl-wrap"><table>
+      <tr><th>#</th><th>痛点</th><th>V5.0 进展</th></tr>
+      <tr><td>1</td><td>账号资产分散、成本不可控</td><td><span class="st st-use">内部可用</span> 密钥库双标签 + 真实扣费 + 统一归总</td></tr>
+      <tr><td>2</td><td>生产不沉淀</td><td><span class="st st-use">内部可用</span> chat/video 采集在真实链路；QCanvas History/Library 已接服务端（mock 可演示）；Chat 待接入</td></tr>
+      <tr><td>3</td><td>老板看不见</td><td><span class="st st-use">内部可用</span> 总览动画卡 + 趋势 + 排行 + 通道红条</td></tr>
+      <tr><td>4</td><td>管理难分配</td><td><span class="st st-use">内部可用</span> 成员与开卡 + human/tool 双类型</td></tr>
+      <tr><td>5</td><td>入口太碎</td><td><span class="st st-review">待复核</span> QCanvas Studio V2 仍是主入口，S2 契约升级待做</td></tr>
+      <tr><td>6</td><td>人走经验走</td><td><span class="st st-frozen">已冻结</span> skill 自动总结；采集已运行</td></tr>
+      <tr><td>7</td><td>building 回避 selling</td><td>教训写入 <code>#guardrails</code>；R2-A 证明「真钱真任务」已出现</td></tr>
+    </table></div>
+
+    <div class="callout warn"><b>易用性是核心卖点（V2 铁律 · 非「最后美化」）：</b>把 80 页 2C 卖货后台的认知负担丢给用户 = 没做产品。老板第一屏拿走一个结论；管理者 3 步内开卡；报错说人话；菜单按产线逻辑命名（员工/密钥/成本/任务），不是「渠道/订阅/兑换码」。Composer 2.5 接前端任务时，易用性验收与功能验收同等权重。</div>
+
+    <div class="flow">
+      <span class="node">老板密钥入库（密钥库）</span><span class="arr">→</span>
+      <span class="node">成员/工具开卡（强绑定 API Key）</span><span class="arr">→</span>
+      <span class="node">员工在画布生产</span><span class="arr">→</span>
+      <span class="node">调用记录 + 真实扣费</span><span class="arr">→</span>
+      <span class="node">提示词与内容采集</span><span class="arr">→</span>
+      <span class="node">统一花费总览 + skill</span><span class="arr">→</span>
+      <span class="node">降本与商业化</span>
+    </div>
+    <div class="grid3" style="margin-top:14px">
+      <div class="card"><h4>老板 / 超管</h4><p>核心操作面只有两个：密钥库录密钥、总览看钱看人看异常。通道异常会以红条主动上浮到总览，永远不需要点开"生成通道"技术页。</p></div>
+      <div class="card"><h4>中间管理者</h4><p>开卡（员工/工具双类型）、设额度与有效期、启停卡片、查每人调用明细与提示词采集。Phase B 补采用回填与额度告警。</p></div>
+      <div class="card"><h4>员工 / 设计师</h4><p>在 QCanvas 生产素材；在中台"我的卡片"里看自己的 Key 与用量。每张卡强绑定 <code>user_id</code>，离职只停卡、不换全池密钥。</p></div>
+    </div>
+    <h3>双系统边界</h3>
+    <div class="grid2">
+      <div class="card"><h4>QCanvas 负责</h4><p>Studio V2 画布、节点交互、prompt/参数/首帧资产、生成任务发起、前端轮询、候选区回填、Hono bridge。</p><p>不负责：账号池、成本治理、员工权限体系、provider 账号调度、skill 引擎。</p></div>
+      <div class="card"><h4>Sub2API 负责</h4><p>统一 API、provider/account/key 管理、预算并发、任务调度、用量成本与真实扣费、<code>ai_generation_content</code> 采集、redaction/retention、老板管理中台。</p><p>不负责：画布 UI、节点体验、剪辑台与时间轴。</p></div>
+    </div>
+  </section>
+
+  <section id="delivered">
+    <h2>Delivered This Round</h2>
+    <div class="h2zh">本轮交付账：2026-07-04 → 07-05 完整执行链（V5.0 的事实基础）</div>
+    <p class="lead">这一轮采用"Claude 主线规划复查 + Codex 后端执行 + 审查包交接"的三方工作流，按下面顺序完成了七个批次。全部代码已提交（<code>fe526f2c</code> 后端 / <code>ef258118</code> 前端 / <code>89f17ca7</code> 文档 / <code>c1cd3767</code> P0-4 / <code>732ba3de</code> R2），PR #3726 已开。</p>
+    <div class="tbl-wrap"><table>
+      <tr><th>批次</th><th>内容</th><th>执行者</th><th>状态</th></tr>
+      <tr>
+        <td><b>① 控制台业务化重构</b></td>
+        <td>拆除"演示壳"（试跑任务/系统检查主导航），重排为老板业务流：总览（动画数字卡 + 花费趋势 + 模型分布 + 成员排行）/ 密钥库（通用 AI 账号 + 视频供应商双标签）/ 成员与开卡 / 任务记录（视频任务 + AI 调用记录 + 提示词采集）/ 系统（折叠组收纳试跑、生成通道、系统检查）。后端补齐管理员替员工开卡三接口：<code>POST /admin/users/:id/api-keys</code>、<code>PUT/DELETE /admin/api-keys/:id</code>。</td>
+        <td>Claude</td>
+        <td><span class="st st-use">内部可用</span></td>
+      </tr>
+      <tr>
+        <td><b>② P0-3 成员类型</b></td>
+        <td><code>member_type: human | tool</code>，用 <code>users.notes</code> 的 <code>[工具]</code> 前缀实现（不加表、不迁移），工具账号走开卡流程与人分开统计，修复"外部工具花的钱算到管理员头上"的归属污染。前端"外部工具接入"导航移除，并入成员与开卡。</td>
+        <td>Codex 后端 / Claude 前端</td>
+        <td><span class="st st-use">内部可用</span></td>
+      </tr>
+      <tr>
+        <td><b>③ 计费补齐 V-1～V-5</b></td>
+        <td>V-1 NB2（<code>gemini-3.1-flash-image-preview</code>）四档图价 $0.045/0.067/0.101/0.151（修复此前按 $0.134 多收一倍）；V-2 Seedance 真实 token 计价引擎（46 元/百万 tokens，用上游返回的真实 usage）；V-3 对账字段 <code>currency / pricing_source / pricing_version</code> + <code>usd_cny_rate</code> 设置；V-4 总览统一归总 <code>unified_total_actual_cost</code>（LLM+图片+视频并表）；V-5 LLM 兜底价修正（Opus 4.8 / Sonnet 5 / Fable 5 / Haiku 3.5）。官方资费全部经上网核实后写死进任务书。</td>
+        <td>Codex</td>
+        <td><span class="st st-use">内部可用</span></td>
+      </tr>
+      <tr>
+        <td><b>④ 调用标准补齐 A-1～A-4</b></td>
+<td>A-1 视频创建契约升级为 content[] 多模态数组：最多 9 参考图 + 3 参考视频 + 3 参考音频，带 <code>role</code>（first_frame/last_frame/reference_*），支持 <code>generate_audio</code>、<code>return_last_frame</code>（漫剧续拍关键能力）；旧单数字段兼容是 07-05 历史策略，07-16 已硬切 v3。A-2 轮询响应增强：真实 usage tokens、实际分辨率/时长、尾帧 URL 落库并返回；A-3 Gemini 图像通道：/v1/messages 路径透传 <code>imageConfig</code>/<code>responseModalities</code>、补 512(0.5K) 档、按实际出图张数计费、URL→fileData 转换；A-4 两份对外契约文档固化 + QCanvas 契约测试。</td>
+        <td>Codex</td>
+        <td><span class="st st-use">内部可用</span></td>
+      </tr>
+      <tr>
+        <td><b>⑤ R1 定向修复</b></td>
+        <td>Claude 复查发现两个商用 blocker 并由 Codex 修复：R1-A 视频真实扣用户余额（原子 claim <code>balance_charged_at</code> → CNY 按汇率折 USD → <code>DeductBalance</code> + <code>QueueDeductBalance</code>，重试不双扣）；R1-B <code>production_authorized</code> 账号跳过 1–5 秒 smoke 限制，正式通道 4–15 秒放行；R1-C <code>video_usage_logs</code> UNIQUE 幂等（migration 154）；R1-D Ark 官方轮询金样本测试；R1-E <code>SUB2API_MEDIA_URL_ALLOWLIST</code>。共 6 个 migration（149–154）。</td>
+        <td>Claude 复查 / Codex 执行</td>
+        <td><span class="st st-use">内部可用</span></td>
+      </tr>
+      <tr>
+        <td><b>⑥ R1-G 前端接入 + P0-4</b></td>
+        <td>修契约 bug <code>inactive</code>→<code>disabled</code>（原来启停卡会 400）；成员与开卡支持工具类型与筛选；总览总花费卡切换到统一口径、排行加视频花费列与工具徽标；任务记录按币种显示 ¥/$、图片徽标（图片 ×N · 2K）；P0-4 通道异常红条告警（总览顶部一键跳密钥库 <code>?tab=video</code>）。浏览器两轮端到端走查通过。</td>
+        <td>Claude</td>
+        <td><span class="st st-use">内部可用</span> <span class="st st-demo">可演示</span></td>
+      </tr>
+      <tr>
+        <td><b>⑦ R2-A 真实付费冒烟</b></td>
+        <td>老板临时授权 Seedance 2.0 Key，走正式 API-key 路径（无 trial_mode）：任务 #4 <b>succeeded</b>（约 2.7 分钟）、上游 <code>cgt-20260705162538-bd5cl</code>、108,900 tokens、¥5.0094、余额 $20.00 → $19.30、<code>pricing_source=provider_usage</code>。审查包已标 <code>done</code>。临时 Key 已提醒废弃，明文未入 git。</td>
+        <td>Claude（老板授权）</td>
+        <td><span class="st st-use">内部可用</span></td>
+      </tr>
+    </table></div>
+    <div class="callout info"><b>工作流结论（沉淀为 #agent-workflow）：</b>Fable 5 出任务书 → Codex 单会话按序执行 → deliverables 审查包 → Fable 5 独立复核 → Composer 2.5 接前端/走查（多思考）。教训：审查包可能比生产乐观；两个 Codex 会话禁止并行改同仓；计费完成以余额真实变动为证。<br><b>历史注记：</b>本轮 #delivered 执行者栏「Claude」= 2026-07-04～05 历史角色；2026-07-05 起规划统一为 Fable 5。</div>
+  </section>
+
+  <section id="current-state">
+    <h2>Current State</h2>
+    <div class="h2zh">当前状态矩阵：只用五个状态词（历史证据 + 当前状态双表）</div>
+
+    <h3>表 A · 历史证据（V4.1 时代，勿删引用）</h3>
+    <div class="tbl-wrap"><table>
+      <tr><th>对象</th><th>状态（历史）</th><th>依据</th><th>备注</th></tr>
+      <tr>
+        <td>QCanvas 命门β字段缝</td>
+        <td><span class="st st-use">内部可用</span> <span class="st st-review">待复核</span></td>
+        <td>D2 审查包 <code>570d1a1→d0de53b</code> 等；轮询 <code>140×3000ms</code></td>
+        <td>v2 仍为顶层单 URL；S2 待升 content[]</td>
+      </tr>
+      <tr>
+        <td>Sub2API 受控 dev 采集闭环（G3）</td>
+        <td><span class="st st-use">内部可用</span></td>
+        <td><code>_review/capture-arming-D2-20260702-G3/SUMMARY.md</code>；mock video + SQL</td>
+        <td>历史 mock/dev 证据，追溯用</td>
+      </tr>
+      <tr>
+        <td>Sub2API Phase A' tiny real 三证</td>
+        <td><span class="st st-use">内部可用</span> <span class="st st-demo">可演示</span></td>
+        <td><code>success_result.json</code>：<code>task_id=1</code>、<code>admin_is_live=true</code></td>
+        <td>受控单次；已被 R2-A 超越</td>
+      </tr>
+      <tr>
+        <td>SkillEngine v0</td>
+        <td><span class="st st-frozen">已冻结</span></td>
+        <td>disabled / not-implemented skeleton</td>
+        <td>无 skill_assets 表、无人审流程</td>
+      </tr>
+      <tr>
+        <td>真实供应商（V4.1 口径）</td>
+        <td><span class="st st-frozen">已冻结</span></td>
+        <td>Phase A' 单次后重新冻结</td>
+        <td>V5.0 已解冻为受控放行</td>
+      </tr>
+    </table></div>
+    <div class="callout warn"><b>不要写错（V4.1 继承）：</b>G3「内部可用」只覆盖受控 dev + mock provider；Phase A' 只覆盖受控单次三证，不代表日常真实调用已解冻。</div>
+
+    <h3>表 B · 当前状态（V5.0，2026-07-16 同步）</h3>
+    <div class="tbl-wrap"><table>
+      <tr><th>对象</th><th>状态</th><th>依据</th><th>缺口 / 风险</th></tr>
+      <tr>
+        <td>Sub2API 老板管理中台（控制台 v2）</td>
+        <td><span class="st st-review">待复核</span></td>
+        <td>当前 HEAD <code>15880e23</code>；完整管理后台、无界品牌、本地镜像、唯一 loopback <code>:8080</code>，五段浏览器与真实 usage 证据齐全</td>
+        <td>尚待本轮独立冷审；不得外推为公网部署或商业交付完成</td>
+      </tr>
+      <tr>
+        <td>真实 Seedance 商用链路</td>
+        <td><span class="st st-review">待复核</span></td>
+        <td>2026-07-16 canonical tiny_real 真实成功；上游 task、MP4/尾帧、87300 tokens、费用与余额差分均已落证</td>
+        <td>单次受控验收，不代表日常真实调用长期解冻；process gate 已恢复关闭</td>
+      </tr>
+      <tr>
+        <td>计费准确性（LLM/图片/视频）</td>
+        <td><span class="st st-review">待复核</span></td>
+        <td>Gemini `$0.0585` + Seedance `$0.3395`，员工余额 `$3.0000 → $2.6020`，合计约 `¥2.8656`</td>
+        <td>Gemini 请求 1K 但 usage 记录为 2K，列为 P1 计费透明度问题</td>
+      </tr>
+      <tr>
+        <td>视频调用标准（Sub2API content[]）</td>
+        <td><span class="st st-use">内部可用</span> <span class="st st-review">待复核</span></td>
+        <td>契约文档 + 金样本 + 1 条真实任务</td>
+        <td>多参考图/音频/尾帧续拍高级形态未全验证</td>
+      </tr>
+      <tr>
+        <td>QCanvas 整体产品</td>
+        <td><span class="st st-review">待复核</span></td>
+        <td>W4 收口基线 <code>07b0757</code>；W3 全量门禁与 W4.R1-R4 产品代码修复内部可用；canonical Sub2API 图片/视频真实闭环已完成</td>
+        <td>本环未提供 QCanvas projectId/flowId，现有真实资产尚未通过 tapcanvas-api 回填指定画布</td>
+      </tr>
+      <tr>
+        <td>员工 skill 系统</td>
+        <td><span class="st st-review">待复核</span></td>
+        <td>采集已在真实链路；后端标注/周报接口存在</td>
+        <td>前端 skill 一期未做；自动总结仍冻结</td>
+      </tr>
+      <tr>
+        <td>公开商业化、多租户</td>
+        <td><span class="st st-frozen">已冻结</span></td>
+        <td>无 tenant/org/workspace 模型</td>
+        <td>等内部产线稳定后再决策</td>
+      </tr>
+    </table></div>
+    <div class="callout"><b>当前交付分层：</b>2026-07-16 canonical 管理五段与两次真实 tiny_real 已解除两个人工 gate，双平台整体进入 <span class="st st-review">待复核</span>；这只证明本机受控闭环，不等于商业交付完成、生产上线或已 push。</div>
+  </section>
+
+  <section id="v3-to-v41-delta">
+    <h2>V3 → V4.1 Delta</h2>
+    <div class="h2zh">历史归档：哪些继承、哪些改写、哪些降级（V4.1 原文保留）</div>
+    <div class="tbl-wrap"><table>
+      <tr><th>主题</th><th>V3</th><th>V4</th><th>V4.1 判定</th><th>V5.0 注记</th></tr>
+      <tr><td>战略定位</td><td>账号资产 → API → 生产 → 采集 → skill</td><td>继承并扩成三回路</td><td><span class="st st-review">待复核</span> 规划锚点</td><td>仍有效；管钱环节 V5.0 已转动</td></tr>
+      <tr><td>video 采集</td><td>写为已阻塞 / Day4 目标</td><td>写为已接线</td><td><span class="st st-use">内部可用</span> 受控 dev</td><td>升级为真实付费链路（R2-A）</td></tr>
+      <tr><td>命门β主干化</td><td>首要任务</td><td>曾写首攻阻塞</td><td><span class="st st-review">待复核</span> D2 已主干化</td><td>QCanvas 仍 v2 单 URL，S2 待升</td></tr>
+      <tr><td>证据纪律</td><td>质量门 + 审查包</td><td>新增 Shell 问题记录</td><td><span class="st st-review">待复核</span> 前置第一节</td><td>V5.0 加六级证据 + 巡查快照</td></tr>
+      <tr><td>roadmap</td><td>7-Day Loop</td><td>Phase A-D</td><td><span class="st st-review">待复核</span> A0-A3/B/C/D</td><td>A0-A3 Sub2API 侧已完成；见 #roadmap 归档</td></tr>
+      <tr><td>状态词</td><td>含额外高阶状态</td><td>仍有高阶表述</td><td>只保留五个状态词</td><td>V5.0 保持</td></tr>
+    </table></div>
+  </section>
+
+  <section id="v41-to-v50-delta">
+    <h2>V4.1 → V5.0 Delta</h2>
+    <div class="h2zh">哪些升级、哪些解冻、哪些保持</div>
+    <div class="tbl-wrap"><table>
+      <tr><th>主题</th><th>V4.1 口径</th><th>V5.0 判定</th></tr>
+      <tr><td>真实供应商调用</td><td><span class="st st-frozen">已冻结</span>（Phase A' 单次后重新冻结）</td><td><b>解冻为受控放行</b>：<code>production_authorized</code> 账号级 gate + 老板逐 Key 授权；未授权账号保持 smoke 限制。R2-A 是第一条正式证据。</td></tr>
+      <tr><td>Sub2API 最新入口</td><td>Phase A' Tiny Real 三证成功包</td><td>升级为 <code>codex-handoff/deliverables/</code> 全系列 + R2 收口文档 <code>2026-07-05-R2-closeout-summary.md</code>；PR #3726 为代码入口。</td></tr>
+      <tr><td>管理后台形态</td><td>未定义（V4.1 只关注采集链路）</td><td><b>新增专章</b>：老板业务流六项导航已落地，"演示壳"教训写入红线。</td></tr>
+      <tr><td>计费</td><td>未展开（隐含在账本层）</td><td><b>新增专章</b>：三层价格解析 + 官方对账字段 + 统一归总，是本版最大增量。</td></tr>
+<tr><td>视频字段缝契约</td><td><code>reference_image_url</code> 单数字段 v2 snapshot</td><td>升级为 content[] 多模态契约（v3 语义）；v2 只作历史 snapshot，不是运行兼容目标，契约文档为真相源。</td></tr>
+      <tr><td>五层资产栈层 1（账号）</td><td><span class="st st-review">待复核</span></td><td><span class="st st-use">内部可用</span>：密钥库双标签管理 + 连通性测试 + 脱敏展示。</td></tr>
+      <tr><td>五层资产栈层 3（账本）</td><td><span class="st st-use">内部可用</span>（仅采集）</td><td>升级：采集 + 真实计费 + 真实扣减 + 统一归总四位一体。</td></tr>
+      <tr><td>skill（层 4）</td><td><span class="st st-frozen">已冻结</span></td><td>部分升温为 <span class="st st-review">待复核</span>：采集账本已在真实链路积累，后端标注/周报接口存在；自动总结仍冻结。</td></tr>
+      <tr><td>商业化（层 5）</td><td><span class="st st-frozen">已冻结</span></td><td>保持 <span class="st st-frozen">已冻结</span>。</td></tr>
+      <tr><td>状态词</td><td>五个状态词</td><td>保持，另加最高证据等级「真实运行时验证」。</td></tr>
+    </table></div>
+  </section>
+
+  <section id="lineage">
+    <h2>Document Lineage</h2>
+    <div class="h2zh">文档脉络：从 202606 方向矫正到 V5.0 的完整迭代链</div>
+    <p class="lead">V5.0 不逐字复制归档 HTML，但<b>每一版决策的来处必须可查</b>。以下按时间序排列；物理文件均在 <code>归档老文件/</code>（均已加「已被 V5.0 取代」横幅；V4.1 在同目录根层）。读规划问题时：先查本表 → 再查对应归档章节 → 最后用代码巡查验证。</p>
+
+    <h3>版本时间线</h3>
+    <div class="tbl-wrap"><table>
+      <tr><th>版本</th><th>日期</th><th>文件</th><th>核心贡献</th><th>V5.0 承接</th></tr>
+      <tr><td><b>方向矫正书</b></td><td>2026-06-18</td><td><code>无界AI生产系统_总规划兼方向矫正书_20260618.html</code></td><td>16 环节数据飞轮 SVG 逻辑图：Provider 池 → 统一调用 → 全量采集 → skill 炼化 → 反哺画布 + 三级控制台</td><td><code>#north-star</code> 飞轮；<code>#architecture</code> 三回路语义</td></tr>
+      <tr><td><b>V2 资产中台</b></td><td>2026-06</td><td><code>北极星V2_无界AI生产资产中台.html</code></td><td>三柱价值、七个错误复盘、M0～M6 里程碑标尺、易用性三层用户、One API 语义</td><td><code>#north-star</code>、<code>#guardrails</code>、本表 M 标尺映射</td></tr>
+      <tr><td><b>QCanvas 行动手册</b></td><td>2026-06-21</td><td><code>QCanvas行动手册_可执行_20260621.html</code></td><td>Studio V2 七条执行原则、D1/D2 决策门、G-A～S-2 工单（壳层 vs 真生成分离）</td><td>QCanvas S2 仍引用；壳层 mock 状态见巡查快照</td></tr>
+      <tr><td><b>V3 完全架构书</b></td><td>2026-07-02</td><td><code>北极星V3_...20260702.html</code></td><td>双系统边界、七痛点、六阶段来龙去脉、7-Day Loop、C4 L1-3、ADR-1～8</td><td><code>#north-star</code>、<code>#roadmap</code> A0 归档、<code>#architecture</code></td></tr>
+      <tr><td><b>V4 前瞻架构书</b></td><td>2026-07-02</td><td><code>北极星V4_...20260702.html</code></td><td>三回路、五层资产、ADR-9～16、Identity/Ledger/Skill 专章、Metrics</td><td><code>#architecture</code> ADR 表、Skill Loop</td></tr>
+      <tr><td><b>V4.1 总规划</b></td><td>2026-07-02</td><td><code>北极星V4.1_...20260702.html</code></td><td>证据优先、五状态词、Phase A0～D、契约纪律、Tiny Real gate</td><td>全文并入 V5.0（见 <code>#coverage-map</code>）</td></tr>
+      <tr><td><b>V5.0 FINAL</b></td><td>2026-07-05</td><td><b>本文件</b></td><td>07-04～05 七批次交付、控制台 v2、计费/契约、R2-A、三模型分工</td><td>历史基线</td></tr>
+      <tr><td><b>V5.0 状态同步</b></td><td>2026-07-16</td><td><b>本文件 #final-closeout-20260716</b></td><td>Wave1–4 最终收口；QCanvas <code>07b0757</code>、Sub2API <code>00f98a95</code>；非人工 P0=0；两个人工 gate 保留</td><td>当前唯一状态增补</td></tr>
+    </table></div>
+
+    <h3>V2 七个错误 → V5.0 对策（精简保留 · 仍有效）</h3>
+    <div class="tbl-wrap"><table>
+      <tr><th>错误</th><th>V2 表述</th><th>V5.0 现状 / 对策</th></tr>
+      <tr><td>1 装错骨架</td><td>2C 卖货后台当内部中台</td><td>控制台 v2 业务 IA 已换骨；~21 页 2C 仍靠 demo 门控隐藏，未物理删除 → <span class="st st-frozen">已冻结</span> 专项盘点（Phase D）</td></tr>
+      <tr><td>2 采集口关着</td><td>usage_log 不存 prompt/结果</td><td><code>ai_generation_content</code> 已在真实链路运行 → <span class="st st-use">内部可用</span></td></tr>
+      <tr><td>3 验证点当主战场</td><td>抠单字段 neglect 护城河</td><td>R2-A 证明端到端真链路；S2 才扩画布高级参数</td></tr>
+      <tr><td>4 贴皮代替换骨</td><td>demo 折叠 ≠ 改对</td><td>教训写入 <code>#console</code> 产品纪律；禁止演示模式固化</td></tr>
+      <tr><td>5 分支熵增</td><td>真相分散多分支</td><td>收敛至 <code>wujie/video-capture-moat-20260702</code> + PR #3726；北极星为跨仓指针</td></tr>
+      <tr><td>6 局部 READY</td><td>mock 当产品 READY</td><td>五状态词 + 六级证据；QCanvas 壳层仍 <span class="st st-review">待复核</span></td></tr>
+      <tr><td>7 building 回避 selling</td><td>团队用不上</td><td>控制台可演示 + R2-A 真扣费；易用性升格为 P0</td></tr>
+    </table></div>
+
+    <h3>V2 M0～M6 标尺 → V5.0 当前格（代码真相对齐）</h3>
+    <div class="tbl-wrap"><table>
+      <tr><th>标尺</th><th>原意</th><th>V5.0 判定</th><th>证据</th></tr>
+<tr><td>M0 止血定基</td><td>收敛分支与锚点</td><td><span class="st st-use">内部可用</span></td><td>五件套 + 北极星链 + 单 feature 分支</td></tr>
+<tr><td>M1 开采集口</td><td>prompt/结果结构化入库</td><td><span class="st st-use">内部可用</span></td><td><code>ai_generation_content</code> + 真实 R2-A 链路</td></tr>
+<tr><td>M2 真链路+身份</td><td>员工卡→API→真出片→采集</td><td><span class="st st-use">内部可用</span>（Sub2API 侧历史证据）</td><td>R2-A；2026-07-16 当前双平台运行受人工 gate 阻塞</td></tr>
+      <tr><td>M3 多 provider adapter</td><td>统一 adapter 层</td><td><span class="st st-use">内部可用</span> <span class="st st-review">待复核</span></td><td>LLM/图/视频网关存在；NB2 真实冒烟待 R2-B</td></tr>
+      <tr><td>M4 策略+管理后台换骨</td><td>三级后台</td><td><span class="st st-use">内部可用</span> <span class="st st-demo">可演示</span></td><td>控制台 v2 六导航</td></tr>
+      <tr><td>M5 Skill 引擎</td><td>护城河核心</td><td><span class="st st-frozen">已冻结</span></td><td>采集运行；skill_assets 无表</td></tr>
+      <tr><td>M6 易用+登录+部署</td><td>团队可交付</td><td><span class="st st-review">待复核</span></td><td>中台易用性走查通过；QCanvas 壳层 mock；登录/部署未产品化</td></tr>
+    </table></div>
+
+    <h3>QCanvas 行动手册 · 七原则（画布任务仍约束）</h3>
+    <div class="grid3">
+      <div class="card"><h4>01 复用 &gt; 重建</h4><p>动工前 grep 既有 shell（GenerationPanel、catalog、候选池等），禁止重造。</p></div>
+      <div class="card"><h4>02 先 IA 后逻辑</h4><p>工具条/面板先对齐信息架构，生成逻辑后置切片接。</p></div>
+      <div class="card"><h4>03 诚实优先</h4><p>积分算不出标「待接入」；ThinkingBlock 必须来自真实执行。</p></div>
+      <div class="card"><h4>04 视觉期不碰契约</h4><p>provider/JWT/schema 不动；S-1/S-2 真生成独立工单（现对应 S2）。</p></div>
+      <div class="card"><h4>05 token 纪律</h4><p>颜色/间距走 <code>--sv2-*</code>，禁硬编码。</p></div>
+      <div class="card"><h4>06 验收即截图</h4><p>Playwright 截图 + 8 维自评 ≥8 才合入。</p></div>
+      <div class="card"><h4>07 两道门先拍板</h4><p>D1 第 5 型节点（Agent vs storyboard）；D2 边界（画布 vs 时间轴/剪辑 — 建议第一阶段先砍）。</p></div>
+    </div>
+    <div class="callout info"><b>20260618 逻辑图 16 环节：</b>与 V2 飞轮同构，强调「白送 / 接真 / 新建 / 商品」四类节点标签。完整 SVG 与节点速查见 <code>归档老文件/无界AI生产系统_总规划兼方向矫正书_20260618.html</code>（已加「已被 V5.0 取代」横幅）；V5.0 不在此重复 SVG，只保留语义对齐。</div>
+  </section>
+
+  <section id="coverage-map">
+    <h2>Coverage Map</h2>
+    <div class="h2zh">全版本内容覆盖表（归档 V0～V4.1 + V5.0 承接）</div>
+    <p class="lead">防交叉、防误读索引。V5.0 不逐字复制任何归档 HTML，但每一块来源与承接位置必须可查。</p>
+    <h3>归档层（202606）覆盖</h3>
+    <div class="tbl-wrap"><table>
+      <tr><th>归档章节</th><th>来源文件</th><th>V5.0 承接</th><th>处理</th></tr>
+      <tr><td>16 环节飞轮逻辑图</td><td>20260618 方向矫正书</td><td><code>#lineage</code>、<code>#north-star</code> 飞轮</td><td>语义继承，SVG 留归档</td></tr>
+      <tr><td>三柱 / One API / M0～M6</td><td>V2</td><td><code>#lineage</code> M 标尺、<code>#north-star</code> 三柱</td><td>已映射并更新状态</td></tr>
+      <tr><td>七个错误复盘</td><td>V2 / V3 Why</td><td><code>#lineage</code> 七错误表、<code>#guardrails</code></td><td>已精简保留</td></tr>
+      <tr><td>易用性三层用户</td><td>V2 Usability</td><td><code>#north-star</code>、<code>#console</code></td><td>已升格为 P0 原则</td></tr>
+      <tr><td>七原则 / D1 D2 / 工单 G-A～S-2</td><td>QCanvas 行动手册</td><td><code>#lineage</code>、QCanvas S2 提示词</td><td>画布侧仍有效；工单勾选状态以代码为准</td></tr>
+    </table></div>
+    <h3>V3 章节覆盖</h3>
+    <div class="tbl-wrap"><table>
+      <tr><th>V3 章节</th><th>V4.1 承接</th><th>V5.0 承接</th><th>处理</th></tr>
+      <tr><td>Why / Two Systems</td><td><code>#north-star</code></td><td><code>#north-star</code></td><td>已继承</td></tr>
+      <tr><td>Timeline / 7-Day Loop</td><td><code>#roadmap</code></td><td><code>#roadmap</code> A0-A3 归档 + S1-S2</td><td>已合并</td></tr>
+      <tr><td>Ground Truth / Matrix</td><td><code>#evidence-first</code>、<code>#current-state</code></td><td>双表 + 巡查快照</td><td>已扩展</td></tr>
+      <tr><td>C4 Level 1-3</td><td><code>#architecture</code></td><td><code>#architecture</code></td><td>已补入</td></tr>
+      <tr><td>Data & Events / API Contracts</td><td><code>#contracts</code></td><td><code>#contracts</code> v2+v3 双列</td><td>已合并</td></tr>
+      <tr><td>ADR-1 到 ADR-8</td><td><code>#guardrails</code>、<code>#contracts</code></td><td>同上 + ADR-9～16</td><td>已合并</td></tr>
+      <tr><td>Freeze / Guardrails / Next</td><td><code>#guardrails</code>、<code>#next-prompt</code></td><td>同上 + <code>#agent-workflow</code></td><td>已继承</td></tr>
+    </table></div>
+    <h3>V4 章节覆盖</h3>
+    <div class="tbl-wrap"><table>
+      <tr><th>V4 章节</th><th>V4.1 承接</th><th>V5.0 承接</th><th>处理</th></tr>
+      <tr><td>Why / Who & What</td><td><code>#north-star</code></td><td><code>#north-star</code></td><td>已继承</td></tr>
+      <tr><td>Ground Truth Delta</td><td><code>#current-state</code>、<code>#v3-to-v41-delta</code></td><td>双表 + <code>#v41-to-v50-delta</code></td><td>已改写</td></tr>
+      <tr><td>Three Loops / Asset Stack</td><td><code>#architecture</code></td><td><code>#architecture</code></td><td>已继承，状态升级</td></tr>
+      <tr><td>Target C4</td><td><code>#architecture</code></td><td><code>#architecture</code></td><td>已补入</td></tr>
+      <tr><td>Identity & Policy</td><td><code>#architecture</code></td><td><code>#architecture</code> + <code>#console</code></td><td>Phase B 部分已落地</td></tr>
+      <tr><td>Production Ledger</td><td><code>#architecture</code></td><td><code>#architecture</code> + <code>#billing</code></td><td>扩展为记录+计费+扣费</td></tr>
+      <tr><td>Skill Loop</td><td><code>#architecture</code></td><td><code>#architecture</code></td><td>采集已解冻</td></tr>
+      <tr><td>ADR-9 到 ADR-16</td><td><code>#architecture</code></td><td><code>#architecture</code> ADR 表</td><td>ADR-14 已更新</td></tr>
+      <tr><td>Roadmap / Evidence / Next</td><td><code>#roadmap</code> 等</td><td>全章节 + 三模型提示词</td><td>已合并</td></tr>
+    </table></div>
+    <h3>V5.0 新增专章</h3>
+    <div class="tbl-wrap"><table>
+      <tr><th>专章</th><th>位置</th><th>说明</th></tr>
+      <tr><td>三模型分工</td><td><code>#agent-workflow</code></td><td>Fable 5 / Codex / Composer 2.5</td></tr>
+      <tr><td>本轮交付账</td><td><code>#delivered</code></td><td>2026-07-04～05 七批次</td></tr>
+      <tr><td>管理中台形态</td><td><code>#console</code></td><td>六导航老板业务流</td></tr>
+      <tr><td>计费与对账</td><td><code>#billing</code></td><td>算得准/扣得动/对得上</td></tr>
+      <tr><td>V4.1→V5.0 Delta</td><td><code>#v41-to-v50-delta</code></td><td>升级与解冻记录</td></tr>
+      <tr><td>文档脉络 / 归档索引</td><td><code>#lineage</code></td><td>五份归档 + M 标尺 + 七原则</td></tr>
+    </table></div>
+  </section>
+
+  <section id="architecture">
+    <h2>Target Architecture</h2>
+    <div class="h2zh">三回路与五层资产：V5.0 按真实证据重新标定</div>
+    <h3>三条回路</h3>
+    <div class="grid3">
+      <div class="card"><h4>回路 1：生产回路</h4><p>QCanvas 发起任务 → Hono bridge → Sub2API 受控执行 → 结果回候选区。<b>Sub2API 侧正式路径已真实跑通</b>（R2-A）；QCanvas 侧需按 content[] 新契约升级后复核。</p></div>
+      <div class="card"><h4>回路 2：数据回路</h4><p>成功任务写入 <code>ai_generation_content</code> + <code>video_usage_logs</code>（UNIQUE 幂等），真实扣减用户余额，Admin 统一归总。<b>已在真实付费链路验证</b>。</p></div>
+      <div class="card"><h4>回路 3：技能回路</h4><p>真实账本 → 提示词采集（已运行）→ 标注采纳/质量分（后端有、前端待暴露）→ 经验周报 → skill 草稿与人审（仍冻结）。</p></div>
+    </div>
+    <h3>五层资产栈</h3>
+    <div class="tbl-wrap"><table>
+      <tr><th>层</th><th>资产</th><th>当前状态</th><th>下一步</th></tr>
+      <tr><td>1</td><td>账号与 provider 能力（密钥库）</td><td><span class="st st-use">内部可用</span></td><td>录入真实生产密钥；<code>production_authorized</code> 按账号逐个授权。</td></tr>
+      <tr><td>2</td><td>生产任务与结果资产</td><td><span class="st st-use">内部可用</span> <span class="st st-review">待复核</span></td><td>Sub2API 侧闭环成立；QCanvas 端资产预览/下载/复用与尾帧续拍待接入验证；成品素材归档（视频链接会过期）是硬缺口。</td></tr>
+      <tr><td>3</td><td>统一生产账本（记录+计费+扣费+归总）</td><td><span class="st st-use">内部可用</span></td><td>R2-B 图片冒烟 + 批量对账抽检 + 每周账本报告。</td></tr>
+      <tr><td>4</td><td>员工经验与 skill</td><td><span class="st st-review">待复核</span>（采集已运行）/ <span class="st st-frozen">已冻结</span>（自动总结）</td><td>skill 一期：前端暴露标注与周报；自动总结等两周真实数据。</td></tr>
+      <tr><td>5</td><td>对外商业封装</td><td><span class="st st-frozen">已冻结</span></td><td>等内部产线跑稳后再设计。</td></tr>
+    </table></div>
+    <h3>Target C4 映射</h3>
+    <div class="tbl-wrap"><table>
+      <tr><th>C4 层</th><th>V5.0 口径</th><th>当前状态</th><th>边界</th></tr>
+      <tr><td>Level 1 系统上下文</td><td>无界互娱内部生产系统：QCanvas 创作前台 + Sub2API 管理中台。中台已升级为"老板可日常使用的管钱账房"。</td><td><span class="st st-use">内部可用</span></td><td>不写成公网平台，不写成多租户 SaaS。</td></tr>
+      <tr><td>Level 2 容器</td><td>QCanvas web / Hono bridge / agents；Sub2API backend / 控制台 v2 前端 / database（migration 至 154）/ 审查包体系。</td><td><span class="st st-use">内部可用</span>（Sub2API 侧）</td><td>双仓只通过契约文档对齐；一个执行任务不得同时写两个仓。</td></tr>
+      <tr><td>Level 3 QCanvas</td><td>Studio V2、生成表单、字段缝、轮询、候选区回填。</td><td><span class="st st-review">待复核</span></td><td>content[] v3 已接线；History/Library 服务端已接（Q1 Pilot）；Chat 诚实待接入；真出片/命门待人闸（S2-D 有主干证据，默认 fail-closed）。</td></tr>
+      <tr><td>Level 3 Sub2API</td><td>provider/account/key/member_type/task/billing/generation-content/admin 中台。</td><td><span class="st st-use">内部可用</span> <span class="st st-demo">可演示</span></td><td>正式通道按 production_authorized 逐账号放行。</td></tr>
+      <tr><td>数据边界</td><td><code>ai_generation_content</code>、<code>video_tasks</code>（content JSON 列、尾帧、usage tokens）、<code>video_usage_logs</code>（UNIQUE 幂等、currency/pricing_source）、<code>users.notes</code> member_type 约定。</td><td><span class="st st-use">内部可用</span></td><td>skill_assets、adoption API 仍是规划，不写成已实现。</td></tr>
+    </table></div>
+    <h3>Identity & Policy</h3>
+    <div class="grid2">
+      <div class="card">
+        <h4>当前身份事实（较 V4.1 前进）</h4>
+        <p>已落地：User（员工）+ 工具账号（<code>member_type: tool</code>，notes 前缀约定）+ API Key 强绑定 + 管理员代开卡 + 余额/额度/有效期/启停。老板-管理者-员工三视图在中台成立。</p>
+      </div>
+      <div class="card">
+        <h4>Phase B 仍要补</h4>
+        <p>卡额度 80%/100% 告警、月度总预算（settings + 总览进度条）、组长权限分层、<b>adoption_status / quality_score 人工回填 UI</b>（V4.1 Phase B 原文）。Team/tenant 只保留预备边界。</p>
+      </div>
+    </div>
+    <h3>Skill Loop</h3>
+    <div class="tbl-wrap"><table>
+      <tr><th>环节</th><th>当前口径</th><th>解冻条件</th></tr>
+      <tr><td>经验采集</td><td><span class="st st-use">内部可用</span> 脱敏提示词与结果已随真实链路自动入库。</td><td>已解冻（本轮达成）。</td></tr>
+      <tr><td>标注与周报</td><td><span class="st st-review">待复核</span> 后端接口存在（采纳/质量分、经验周报），前端未暴露。</td><td>skill 一期前端补上界面即最小闭环。</td></tr>
+      <tr><td>skill 草稿资产</td><td><span class="st st-frozen">已冻结</span> 无 <code>skill_assets</code> 持久表。</td><td>至少连续两周真实生产账本稳定，字段、成本、采用信号可追溯。</td></tr>
+      <tr><td>人审工作流 / runtime 同步</td><td><span class="st st-frozen">已冻结</span></td><td>管理者可审核、驳回、版本化；只有 approved skill 可同步且可回滚。</td></tr>
+    </table></div>
+
+    <h3>ADR-9 到 ADR-16 处理表（V4.1 原文保留，V5.0 更新状态）</h3>
+    <div class="tbl-wrap"><table>
+      <tr><th>ADR</th><th>处理</th><th>V5.0 状态</th></tr>
+      <tr><td>ADR-9 三回路作为总架构</td><td>保留：生产、数据、技能回路为 V5.0 主体。</td><td><span class="st st-use">内部可用</span>（Sub2API 侧数据回路已真实验证）</td></tr>
+      <tr><td>ADR-10 五层资产栈</td><td>保留：账号、任务、账本、skill、商业封装分层。</td><td><span class="st st-review">待复核</span> 层 1/3 升级，层 2/4 部分前进</td></tr>
+      <tr><td>ADR-11 Production Ledger</td><td>目标视图；V5.0 扩展为记录+计费+扣费+归总。</td><td><span class="st st-use">内部可用</span>（账本四位一体）</td></tr>
+      <tr><td>ADR-12 Identity & Policy</td><td>Phase B：内部角色与预算；tenant 延后。</td><td><span class="st st-review">待复核</span> 成员开卡/member_type 已落地</td></tr>
+      <tr><td>ADR-13 Skill 资产化</td><td>草稿、人审、approved、runtime 同步仅规划。</td><td><span class="st st-frozen">已冻结</span>（采集已运行）</td></tr>
+      <tr><td>ADR-14 真实 provider gate</td><td>V4.1：每次单独授权。V5.0：<code>production_authorized</code> 受控放行 + 老板逐 Key 授权。</td><td><span class="st st-use">内部可用</span>（R2-A 证据）</td></tr>
+      <tr><td>ADR-15 审查包成为交付单元</td><td>保留；扩展为 Fable/Codex/Composer 三角 + deliverables。</td><td><span class="st st-use">内部可用</span></td></tr>
+      <tr><td>ADR-16 商业化延后</td><td>保留：三回路稳定后再开公开商业化。</td><td><span class="st st-frozen">已冻结</span></td></tr>
+    </table></div>
+
+    <h3>Production Ledger 语义（V4.1 原文 + V5.0 扩展）</h3>
+    <p class="lead">统一生产账本方向不变。V4.1 把 ProductionEvent 作为目标视图而非已落地接口，短期只用 <code>ai_generation_content</code>、video task、admin stats/samples。V5.0 已扩展：同一账本链路加上真实计费（<code>video_usage_logs</code>、<code>usage_logs</code>）、真实扣减（<code>balance_charged_at</code>）、总览归总（<code>unified_total_actual_cost</code>），且经 R2-A 真实运行时验证。</p>
+  </section>
+
+  <section id="console">
+    <h2>Management Console</h2>
+    <div class="h2zh">管理中台产品形态：V5.0 新增专章（已落地事实）</div>
+    <p class="lead">V4.1 之前的中台是 <code>VITE_PRODUCT_MODE</code> 演示壳（总览/试跑任务/任务记录/外部工具接入/系统检查），老板看不懂也用不上。本轮按"网吧开卡"业务逻辑重排，以下形态已上线 dev 并通过走查。</p>
+    <div class="tbl-wrap"><table>
+      <tr><th>导航</th><th>给谁用</th><th>内容</th></tr>
+      <tr><td><b>总览</b></td><td>老板</td><td>四张动画数字卡（总花费 / AI 调用次数 / 今日视频 / 活跃成员，SVG 环形描边 + 数字滚动）、花费趋势面积图、"用了什么 AI"模型分布环形图、成员消费排行（AI 花费 + 视频花费、工具徽标）、视频生产快照；近 7 天/30 天/本月切换；<b>通道异常红条告警</b>一键跳密钥库。总花费口径为 <code>unified_total_actual_cost</code>（LLM+图片+视频并表）。</td></tr>
+      <tr><td><b>密钥库</b></td><td>老板</td><td>双标签：通用 AI 账号（Claude/OpenAI/Gemini，老板视角表单：平台+名称+密钥+备注，连通性测试）/ 视频供应商（Seedance 等，凭证状态、启停、测试）。密钥全程脱敏，支持 <code>?tab=video</code> 深链。</td></tr>
+      <tr><td><b>成员与开卡</b></td><td>管理者</td><td>员工与工具双类型（<code>member_type</code>）、全部/员工/工具筛选、今日/累计花费列、新增成员/工具弹窗、一键开卡（额度+有效期）、完整 Key 只显示一次可复制、展开每人全部卡片并启停/删除（状态契约统一为 <code>active/disabled</code>）。</td></tr>
+      <tr><td><b>任务记录</b></td><td>管理者/老板</td><td>视频任务（发起人真实归属、按币种 ¥/$ 显示花费）+ AI 调用记录（按员工/模型/日期筛选、图片徽标"图片 ×N · 2K"、行级明细）+ 提示词采集标签（脱敏提示词与结果摘要）。</td></tr>
+      <tr><td><b>系统</b>（折叠组）</td><td>技术</td><td>试跑任务（消防演习：不花钱验证链路、新人练手、故障时区分我方/供应商问题）、生成通道（调度细节，老板不需要用）、系统检查。收进折叠组，平时不碍眼但不删除。</td></tr>
+    </table></div>
+    <div class="callout warn"><b>产品纪律（教训固化 · 含 V2 易用性）：</b>① 不给老板看技术页——异常必须主动上浮到总览；② "演示模式"只能是临时形态；③ 工具账号必须走开卡，禁止挂管理员名下；④ 菜单按产线逻辑命名，报错说人话；⑤ Key 申请后须一键可复制（V2 铁律）。</div>
+  </section>
+
+  <section id="billing">
+    <h2>Billing & Reconciliation</h2>
+    <div class="h2zh">计费与对账：V5.0 新增专章（算得准、扣得动、对得上）</div>
+    <div class="grid3">
+      <div class="card">
+        <h4>算得准</h4>
+        <ul>
+          <li>LLM：三层价格解析（渠道自定义 → LiteLLM 价表 → 硬编码兜底），标准价/实收价分离，兜底价含 Opus 4.8 / Sonnet 5 / Fable 5 / Haiku 3.5 修正。</li>
+          <li>图片：NB2 按尺寸四档（0.5K $0.045 / 1K $0.067 / 2K $0.101 / 4K $0.151），按响应<b>实际出图张数</b>计费，512 档归一化。</li>
+          <li>视频：Seedance 按上游返回<b>真实 usage tokens</b> × 官方单价（纯生成 46 元/百万 tokens），不估算。</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>扣得动</h4>
+        <ul>
+          <li>视频成功 terminal 后原子 claim <code>balance_charged_at</code>，CNY 按 <code>usd_cny_rate</code>（默认 7.2）折 USD，走 <code>DeductBalance</code> + <code>QueueDeductBalance</code>（与 LLM 同路径）。</li>
+          <li>幂等双保险：扣费 claim + <code>video_usage_logs</code> UNIQUE(video_task_id)，worker 重试不双扣、失败任务不扣。</li>
+          <li>R2-A 实证：¥5.0094 → -$0.69575，余额 $20.00 → $19.30，折算一致。</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>对得上</h4>
+        <ul>
+          <li>每条流水携带 <code>currency / pricing_source / pricing_version</code>；<code>pricing_source=provider_usage</code> 表示可与官方账单精确对账。</li>
+          <li>总览统一口径 <code>unified_total_actual_cost</code>，按币种展示 ¥/$。</li>
+          <li>已知限制：历史旧账标 USD/fallback 不可回溯对账；批量对账抽检（R2-C 扩样）待做。</li>
+        </ul>
+      </div>
+    </div>
+    <div class="callout bad"><b>本轮抓出的三个真问题（引以为戒）：</b>① NB2 曾按 Nano Banana Pro 的 $0.134 记账，是官方价的约 2 倍；② 视频扣费函数曾是 no-op 空操作，"看着有钱、实际没扣"；③ 视频花费曾不并入总览总花费。三者均已修复并有测试与真实链路证据——但这说明<b>审查包宣称"计费完成"必须以"余额真实变动"为准</b>。</div>
+  </section>
+
+  <section id="contracts">
+    <h2>Contracts</h2>
+    <div class="h2zh">双仓契约：遗留 v2 + 当前 v3 真相源 + 规划中</div>
+    <div class="grid3">
+      <div class="card">
+        <h4>遗留 v2（历史兼容快照，QCanvas 当前不再以此为主契约）</h4>
+        <ul>
+          <li><code>packages/schemas/generation-contract/sub2api-video-field-seam-v2.snapshot.json</code>（QCanvas）</li>
+          <li>顶层 snake_case：<code>task_type</code>、<code>reference_image_url</code>、<code>reference_video_url</code>、<code>aspect_ratio</code>、<code>duration</code>、<code>resolution</code></li>
+          <li>QCanvas → Hono → Sub2API 字段缝；轮询 <code>140×3000ms</code></li>
+          <li><code>ai_generation_content</code> + <code>task_id</code> video 采集账本</li>
+          <li>Admin generation-content stats / samples 只读视图</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>当前 v3 真相源（Sub2API + QCanvas 已接线）</h4>
+        <ul>
+          <li><code>docs/api/video-gateway-contract.md</code>：content[] 多模态（≤9 图 / ≤3 视频 / ≤3 音频 + role）、<code>generate_audio</code> / <code>camera_fixed</code> / <code>watermark</code> / <code>return_last_frame</code>、4–15 秒正式档、轮询 usage/尾帧；完整字段<b>以 md 为准</b></li>
+          <li><code>docs/api/image-gateway-contract.md</code>：imageConfig、512/1K/2K/4K、多图计费、<code>thoughtSignature</code> 注意项</li>
+          <li>QCanvas 已接 <code>content[]</code> v3、usage 与尾帧字段；当前缺口是受人工 gate 控制的真实运行复核，不是再次做字段升级。</li>
+          <li>Admin：<code>member_type</code>、<code>active|disabled</code>、dashboard 统一花费字段；代开卡三接口见 <code>#delivered</code> ①</li>
+          <li>环境：<code>SUB2API_MEDIA_URL_ALLOWLIST</code>、<code>production_authorized</code>、<code>SUB2API_VIDEO_REAL_SMOKE_ENABLED</code>（试跑 vs 正式）</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>规划中 / 不写成已实现</h4>
+        <ul>
+          <li>QCanvas 尾帧续拍高级形态与真实付费运行扩样（需单独人工 gate）</li>
+          <li>adoption 回流 UI、skill 一期前端</li>
+          <li><code>skill_assets</code> 持久表与人审工作流</li>
+          <li>卡额度告警、月度预算、成品素材归档</li>
+          <li>真实 tenant/org/workspace 模型</li>
+        </ul>
+      </div>
+    </div>
+    <div class="callout info"><b>契约纪律（2026-07-16 硬切）：</b>跨仓只读对齐；默认单仓写。当前运行单一路径是 v3；v2 只作历史快照与证据，不再作为运行兼容目标，禁止新增双轨兼容层。双侧修改拆两个独立任务，各有 git status、diff、测试、审查包。</div>
+  </section>
+
+  <section id="roadmap">
+    <h2>Roadmap</h2>
+    <div class="h2zh">V5.0 路线图：商用签字冲刺 → 日常运营 → 技能与商业化</div>
+    <div class="callout ok"><b>已完成（V5.0 本轮）：</b>控制台业务化重构、P0-3、V-1～A-4、R1、R1-G、P0-4、R2-A。Sub2API 侧 Phase A0～A3 目标已全部达成或超越。</div>
+    <div class="callout warn"><b>执行边界（V4.1 继承）：</b>每个执行任务只进入一个 Git root；跨仓任务只允许只读比对、契约快照或差异报告。真实付费调用须老板逐 Key 授权。</div>
+
+    <h3>PHASE A0～A3 · 已完成归档（V4.1 原文保留）</h3>
+    <div class="phase">
+<div class="pn">PHASE A0-QCanvas · 真相源与脏基线收敛 <span class="st st-use">内部可用</span></div>
+      <h4>只进入 QCanvas 仓</h4>
+      <ul>
+        <li>更新五件套，使 <code>00_START_HERE.md</code>、<code>01_PROJECT_BASELINE.md</code>、<code>02_CURRENT_REALITY_STATUS.md</code>、<code>docs/goals/03_CURRENT_GOAL.md</code> 与 D2 最新审查包一致。</li>
+        <li>记录命门β commit 映射、<code>140 x 3000ms</code> 轮询预算、<code>sub2api-video-field-seam-v2.snapshot.json</code>。</li>
+        <li>冻结或说明 dirty/untracked；不做清理、删除、reset、clean。</li>
+        <li>只允许更新 QCanvas 真相源与审查包指针，不改 Sub2API 文件。</li>
+      </ul>
+    </div>
+    <div class="phase">
+<div class="pn">PHASE A0-Sub2API · 当前入口与成功事实收敛 <span class="st st-use">内部可用</span></div>
+      <h4>只进入 Sub2API 仓</h4>
+      <ul>
+        <li>Phase A' Tiny Real 三证成功包曾为入口；现升级为 <code>codex-handoff/deliverables/</code> + PR #3726。</li>
+        <li>G3 与 <code>blocked_result.json</code> 固定为历史材料。</li>
+        <li><code>deploy/.env</code> 与根 <code>.env</code>：只登记存在性，不读取内容。</li>
+        <li>只允许更新 Sub2API 真相源与审查包指针，不改 QCanvas 文件。</li>
+      </ul>
+    </div>
+    <div class="phase">
+<div class="pn">PHASE A0-北极星 · 总规划审查包 <span class="st st-use">内部可用</span></div>
+      <h4>只处理北极星目录</h4>
+      <ul>
+        <li>V4.1 生成于 2026-07-02；V5.0 最终版于 2026-07-05（本文件）。</li>
+        <li>不启动服务，不读取密钥，不写两个代码仓。</li>
+      </ul>
+    </div>
+    <div class="phase">
+      <div class="pn">PHASE A1 · 只读契约快照 <span class="st st-review">待复核</span></div>
+      <h4>可以读两个仓，但不能写两个仓</h4>
+      <ul>
+        <li>读取 QCanvas 与 Sub2API 的 video 字段缝、task_id、generation-content 契约，生成 snapshot 或差异报告。</li>
+        <li>输出两侧测试计划；落地时拆成 QCanvas 侧与 Sub2API 侧任务。</li>
+        <li>快照须记录来源文件、commit/branch、git status、生成命令和哈希。</li>
+      </ul>
+    </div>
+    <div class="phase">
+      <div class="pn">PHASE A2-QCanvas · D2 mock/dev 复核 <span class="st st-review">待复核</span></div>
+      <h4>只复核 QCanvas，不触发真实 provider</h4>
+      <ul>
+        <li>重跑 D2 包内 web/api/agents 测试，记录命令、退出码、日志路径。</li>
+        <li>单独记录 <code>apps/web tsc --noEmit</code> 债务；若仍红，整体保持 <span class="st st-review">待复核</span>。</li>
+        <li>浏览器验证只验证 mock/dev 用户路径，不代表真实供应商链路。</li>
+      </ul>
+    </div>
+    <div class="phase">
+<div class="pn">PHASE A2-Sub2API · G3 受控 dev 复核 <span class="st st-use">内部可用</span></div>
+      <h4>只复核 Sub2API mock/dev</h4>
+      <ul>
+        <li>G3 路径曾确认 chat + mock video + SQL + Admin。</li>
+        <li>已被控制台 v2 + R2-A 真实链路超越。</li>
+      </ul>
+    </div>
+    <div class="phase">
+<div class="pn">PHASE A3 · Tiny Real 人类 gate <span class="st st-demo">可演示</span>（历史）</div>
+      <h4>Sub2API 真实调用（老板授权）</h4>
+      <ul>
+        <li>Phase A' 受控单次三证已通过（历史）。</li>
+        <li>V5.0 R2-A 正式生产路径付费冒烟 succeeded（当前最高证据）。</li>
+        <li>真实 tiny 调用不得与 QCanvas 验证混在同一任务里。</li>
+      </ul>
+    </div>
+
+    <h3>前瞻路线（S1 起）</h3>
+    <div class="phase">
+      <div class="pn">PHASE S1 · 商用签字冲刺（Sub2API 仓，1 周内）</div>
+      <h4>把"能用"变成"敢签字"</h4>
+      <ul>
+        <li><b>R2-B</b>：NB2 图片网关真实冒烟（1 次真实出图，验证 512/1K 档计费与多图张数）。执行者：Codex（任务书已在 <code>CODEX_TASK_PRODUCTION_VERIFY.md</code>）。</li>
+        <li><b>R2-C 扩样</b>：3 条视频 + 3 张图片的计费对账抽检，与火山/Google 官方账单逐条核对。</li>
+        <li>正式环境配置固化：生产密钥入库、<code>production_authorized</code> 授权、media allowlist 域名清单（QCanvas 素材域 + Ark CDN），老板拍板。</li>
+        <li>9:16 竖屏与 v2v 变体各跑 1 条真实任务（漫剧主力格式）。</li>
+        <li>PR #3726 合并（review 重点看最近 5 个 commit）。</li>
+      </ul>
+    </div>
+    <div class="phase">
+      <div class="pn">PHASE S2 · QCanvas 契约升级（历史计划，当前 <span class="st st-use">内部可用</span>）</div>
+      <h4>content[] / usage / 尾帧字段已接线；以下原计划改写为当前证据与剩余 gate</h4>
+      <ul>
+        <li>已完成：字段缝升级到 <code>content[]</code> 数组，并接入 usage tokens 与尾帧 URL。</li>
+        <li>已完成：2026-07-16 QCanvas 包内全量门禁与五件套真相源同步。</li>
+        <li>已阻塞：双平台浏览器回填依赖 canonical Sub2API HTTP；真实任务还需单独付费授权。</li>
+      </ul>
+    </div>
+    <div class="phase">
+      <div class="pn">PHASE B · 运营强化（Sub2API 仓）</div>
+      <h4>把"老板看得见"做成内部日常</h4>
+      <ul>
+        <li>卡额度 80%/100% 告警（总览标黄/红）。</li>
+        <li>月度总预算存 settings + 总览进度条（老板拍板数字）。</li>
+        <li>成品素材归档：视频结果从"会过期的链接"变成可归档、可预览、可复用的资产（对内容公司是硬缺口）。</li>
+        <li>让 adoption_status / quality_score 从人工回填开始有真数据（V4.1 Phase B 原文）。</li>
+        <li>总览点员工下钻到其调用明细；任务记录加视频缩略图预览。</li>
+        <li>每周账本报告：入库条数、成本、采用率、异常。</li>
+      </ul>
+    </div>
+    <div class="phase">
+      <div class="pn">PHASE C · Skill 一期与人审第一圈</div>
+      <h4>人走了经验留下，但先不自动化过头</h4>
+      <ul>
+        <li>skill 一期（前端为主）：暴露已有的"采纳/质量分标注"与"经验周报"接口，形成经验沉淀最小闭环。</li>
+        <li>建立 <code>skill_assets</code> 草稿表和审核页；由真实账本产草稿，管理者审核后才进入 approved。</li>
+        <li>SkillEngine v1 只有在连续两周内部真实数据稳定后解冻。</li>
+      </ul>
+    </div>
+    <div class="phase">
+      <div class="pn">PHASE D · 商业层预备（保持冻结，仅规划）</div>
+      <h4>等内部产线跑稳后再卖出去</h4>
+      <ul>
+        <li>决定实例隔离还是租户模型；组长权限分层（团队超 10 人再做）。</li>
+        <li>专项盘点 2C/通用历史页面；未经授权不删除、不批量替换。</li>
+        <li>输出对外方案，但不暴露内部资产、成本、key、供应商细节。</li>
+      </ul>
+    </div>
+    <h3>明确不做（继承教训）</h3>
+    <div class="callout bad">不给员工开完整管理后台；不做多租户（当前阶段）；不让老板操作"生成通道"技术页；不在两个 Codex 会话里并行改同一个仓；不把演示模式固化成产品形态。</div>
+  </section>
+
+  <section id="guardrails">
+    <h2>Guardrails</h2>
+    <div class="h2zh">红线与冻结：按 V5.0 事实更新</div>
+    <div class="grid2">
+      <div class="card">
+        <h4>五个状态词</h4>
+        <p><span class="st st-use">内部可用</span> <span class="st st-demo">可演示</span> <span class="st st-review">待复核</span> <span class="st st-block">已阻塞</span> <span class="st st-frozen">已冻结</span></p>
+        <p>禁止使用含糊进度词，不用百分比，不把局部链路写成整体交付状态。"计费完成"类结论必须以余额真实变动为证。</p>
+      </div>
+      <div class="card">
+        <h4>高风险停止条件</h4>
+        <ul>
+          <li>真实付费调用：必须老板逐 Key 授权 + <code>production_authorized</code> 账号 gate + 用后即废临时 Key。</li>
+          <li>密钥、token、账号、cookie、JWT、API Key 内容：不读取、不打印、不入 git（本轮临时 Key 已按此执行并提醒废弃）。</li>
+          <li>push / deploy / reset / clean / rebase / 不可逆删除：需明确授权（本轮 push+PR 是老板授权后走 fork 流程完成）。</li>
+          <li>跨仓大范围改动、公开发布、真实用户影响。</li>
+        </ul>
+      </div>
+    </div>
+    <div class="callout bad"><b>当前冻结项（较 V4.1 收窄）：</b>skill 自动总结（v1）、完整剪辑台、多租户、公开商业化、删除 2C 历史页。<b>已解冻项</b>：真实供应商调用（受控放行）、员工经验采集、老板管理后台日常使用。</div>
+    <div class="callout warn"><b>运维红线（新增）：</b>① R2-A 使用的临时 Seedance Key 必须确认已在火山方舟控制台废弃；② 走查测试数据（员工 zoucha-test 及测试卡）演示前清理；③ 生产环境 env（SEEDANCE_API_KEY 等）只放本机 env 文件，永不提交。</div>
+  </section>
+
+  <section id="review-package">
+    <h2>Review Package</h2>
+    <div class="h2zh">审查包体系：Fable 5 / Codex / Composer 2.5 三角协作</div>
+    <p class="lead">重要工程任务的正式交接单元。流程：<b>Fable 5</b> 写任务书与验收标准 → <b>Codex</b> 执行后端并按模板产出 deliverables → <b>Composer 2.5</b> 接前端/走查（多思考、多验证）→ <b>Fable 5</b> 独立复核后更新本真相源。</p>
+    <div class="tbl-wrap"><table>
+      <tr><th>类型</th><th>位置与要求</th></tr>
+      <tr><td>Fable 5 规划产出</td><td>北极星 V5.0 更新、<code>docs/superpowers/plans/</code>、<code>CODEX_TASK_*.md</code>、复核结论（pass/fail 表 + 证据）</td></tr>
+      <tr><td>Codex 任务书</td><td><code>docs/superpowers/codex-handoff/CODEX_START_HERE.md</code> + 专项任务书。禁区：不改 frontend（除非写明）、不读 .env、不 push、单会话顺序执行。</td></tr>
+      <tr><td>Codex 交付审查包</td><td><code>deliverables/YYYY-MM-DD-&lt;任务ID&gt;-review.md</code>：pass/fail、测试名证据、给 Composer 的前端说明、老板决策项、回滚。状态：done / blocked / partial。</td></tr>
+      <tr><td>Composer 2.5 产出</td><td>前端 diff、浏览器走查记录、门禁命令输出；易用性问题记入审查包或 issue。</td></tr>
+      <tr><td>QCanvas 阶段包</td><td>同步 <code>docs/reviews/LATEST_REVIEW_PACKAGE.html</code> 与 <code>docs/LATEST_REVIEW_PACKAGE.md</code>（V4.1 继承）</td></tr>
+      <tr><td>北极星</td><td><b>本文件是唯一规划真相源</b>；重大状态变化须新版本或附审查包，禁止悄改结论。</td></tr>
+    </table></div>
+    <div class="callout info"><b>复核纪律：</b>审查包可能比生产乐观。Fable 5 复核须：独立复跑关键单测、grep 关键实现（如扣费是否 no-op）、检查未 track 文件。宣称「计费完成」以余额真实变动为证。</div>
+  </section>
+
+  <section id="next-prompt">
+    <h2>Next Prompt</h2>
+    <div class="h2zh">可复制后续提示词：按模型分流，默认单仓执行</div>
+
+    <h3>Fable 5 · 规划开场白</h3>
+    <pre><code>你是无界互娱项目的规划代理（Fable 5）。
+请先完整阅读唯一真相源：
+D:\Codex创业任务\QCanvas（无界版）\北极星\北极星V5.0_无界智能画布_无界AI管理中台_总规划_最终版_20260705.html
+重点章节：#agent-workflow、#current-state、#roadmap、#contracts。
+任何状态断言写入规划前，必须派出 explore 子智能体巡查 Sub2API（D:\sub2api-trunk）或 QCanvas 代码库验证。
+你的产出：任务书、验收标准、审查包模板、北极星更新草案。不直接改代码（除非老板另授权）。
+状态词只允许：内部可用、可演示、待复核、已阻塞、已冻结。</code></pre>
+
+    <h3>Codex · 执行开场白</h3>
+    <pre><code>你是 Sub2API 仓库的后端执行代理（Codex）。
+请先读 docs/superpowers/codex-handoff/CODEX_START_HERE.md，再读当前专项任务书（如 CODEX_TASK_PRODUCTION_VERIFY.md）。
+按任务书顺序单会话执行；禁止两个 Codex 会话并行改同一仓库；禁止改 frontend/**（除非任务书明确）。
+做完后在 docs/superpowers/codex-handoff/deliverables/ 写审查包并告知路径。
+验证：go test ./...、golangci-lint、git diff --check、secret-scan 全绿。</code></pre>
+
+    <h3>Composer 2.5 · 深度任务开场白</h3>
+    <pre><code>你是无界互娱项目的深度任务代理（Composer 2.5）。可无限使用，但请多思考、多巡查、多验证再动手。
+先读北极星 V5.0 对应章节（#console 易用性、#contracts 前端契约、#roadmap 当前 Phase）。
+不懂就派出 explore 子智能体查代码库，不要凭会话记忆断言。
+你的强项：前端控制台、浏览器走查、多步集成、易用性打磨。不要越权改后端契约（除非 Fable 5 任务书写明）。
+验证：pnpm --dir frontend run lint:check + typecheck、make test-frontend-critical；走查记录写入审查包或对话交付。</code></pre>
+
+    <h3>历史归档 · QCanvas-A0（V4.1，回溯用）</h3>
+    <pre><code>请按北极星 V5.0 #roadmap 中 PHASE A0-QCanvas 执行：只进入 D:\Codex创业任务\QCanvas（无界版）\QCanvas。
+边界：不跑真实 provider，不读取 .env/key，不 push，不修改 Sub2API。
+先只读确认 git status、LATEST_REVIEW_PACKAGE、命门β D2 映射、140×3000ms、sub2api-video-field-seam-v2.snapshot.json。
+只更新 QCanvas 真相源与审查包指针。</code></pre>
+
+    <h3>历史归档 · Sub2API-A0（V4.1，回溯用）</h3>
+    <pre><code>请按北极星 V5.0 #roadmap 中 PHASE A0-Sub2API 执行：只进入 D:\sub2api-trunk。
+边界：不跑真实 provider，不读取 .env/key，不 push，不修改 QCanvas。
+先只读确认 git status、codex-handoff/deliverables/、PR #3726 状态。
+只更新 Sub2API 真相源与审查包指针。</code></pre>
+
+    <h3>历史归档 · A1 只读契约快照</h3>
+    <pre><code>请按北极星 V5.0 执行 A1：允许读取 QCanvas 与 Sub2API，禁止写入两个仓。
+生成契约快照或差异报告：QCanvas v2 单 URL 字段缝 vs Sub2API v3 content[] 契约。
+报告含来源文件、branch/status、哈希、两侧测试计划。落地时拆成两个独立授权任务。</code></pre>
+
+    <h3>Codex-S1 · 商用签字冲刺（R2-B + R2-C）</h3>
+    <pre><code>你是 Sub2API 仓库的后端执行代理。请先完整读 docs/superpowers/codex-handoff/CODEX_START_HERE.md 与 CODEX_TASK_PRODUCTION_VERIFY.md。
+本次只做：R2-B（NB2 图片网关一次真实出图冒烟，验证 512/1K 档计费与实际出图张数计费）与 R2-C 扩样（3 视频 + 3 图片计费对账抽检）。
+边界：不改 frontend/**，不读 .env 明文，真实调用前必须确认老板已提供 Key 并授权；不 push / deploy。
+交付：deliverables/YYYY-MM-DD-R2-B-review.md 与 R2-C-review.md，含真实调用证据（脱敏）、计费流水、与官方单价的逐条核对表。
+验证门禁：go test ./... 与 golangci-lint run ./... 全绿。</code></pre>
+
+    <h3>QCanvas-S2 契约升级</h3>
+    <pre><code>请按北极星 V5.0 执行 QCanvas-S2：只进入 QCanvas 仓，一个任务只写这一个 Git root。
+先读 Sub2API 侧契约真相源：docs/api/video-gateway-contract.md 与 image-gateway-contract.md（只读，不改 Sub2API）。
+目标：把 video 字段缝从单数 reference_image_url 升级为 content[] 多模态数组（role/first_frame/last_frame/reference_*），
+接入轮询增强字段（usage tokens、实际分辨率时长、last_frame_url 用于续拍），旧路径行为不变并有回归测试。
+边界：不跑真实 provider（真实回填另开授权任务），不读取 .env/key，不 push。
+交付：包内门禁重跑记录 + 更新五件套真相源 + 单一审查包。</code></pre>
+
+    <h3>Sub2API-B 运营强化</h3>
+    <pre><code>请按北极星 V5.0 执行 Sub2API-B：只进入 D:\sub2api-trunk。
+按优先级实现：① 卡额度 80%/100% 告警（后端阈值 + 总览标色）；② 月度总预算 settings + 总览进度条（预算数字先用占位，老板拍板后改）；
+③ 成品素材归档最小版（成功视频结果转存 + 过期前可下载）；④ 总览员工下钻到调用明细。
+遵守 handler → service → repository 分层与 depguard；前端沿用控制台 v2 深色青绿风格与中文文案。
+验证：make test-backend、pnpm --dir frontend run lint:check + typecheck、make test-frontend-critical；涉及计费路径跑安全审查。</code></pre>
+
+    <h3>北极星 V5.0 审查包</h3>
+    <pre><code>请为北极星 V5.0 生成规划审查包：只处理北极星目录与规划文档，不进入两个代码仓写文件。
+审查包必须记录 V4.1 → V5.0 差异、本轮交付证据链（deliverables 清单、PR #3726、R2-A 三证）、静态校验、风险与回滚方案。
+状态词只允许：内部可用、可演示、待复核、已阻塞、已冻结。</code></pre>
+  </section>
+
+  <footer>
+    <span>北极星 V5.0 · 无界智能画布 × 无界 AI 管理中台 · 最终版（唯一真相源）· 状态同步 2026-07-16 · 含归档脉络与代码巡查刷新</span>
+    <span>状态口径：内部可用 / 可演示 / 待复核 / 已阻塞 / 已冻结 · 含 V4.1 全文归档 · Fable 5 规划 / Codex 执行 / Composer 2.5 深度任务</span>
+  </footer>
+</div>
+</body>
+</html>

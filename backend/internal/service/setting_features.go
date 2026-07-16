@@ -11,6 +11,8 @@ import (
 	"math"
 	"strconv"
 	"strings"
+
+	"github.com/Wei-Shaw/sub2api/internal/branding"
 )
 
 // IsRegistrationEnabled 检查是否开放注册
@@ -172,10 +174,10 @@ func (s *SettingService) IsTotpEncryptionKeyConfigured() bool {
 // GetSiteName 获取网站名称
 func (s *SettingService) GetSiteName(ctx context.Context) string {
 	value, err := s.settingRepo.GetValue(ctx, SettingKeySiteName)
-	if err != nil || value == "" {
-		return "Sub2API"
+	if err != nil {
+		return branding.DefaultProductName
 	}
-	return value
+	return branding.ResolveProductName(value)
 }
 
 // GetDefaultConcurrency 获取默认并发量

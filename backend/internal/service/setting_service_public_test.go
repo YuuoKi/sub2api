@@ -19,7 +19,11 @@ func (s *settingPublicRepoStub) Get(ctx context.Context, key string) (*Setting, 
 }
 
 func (s *settingPublicRepoStub) GetValue(ctx context.Context, key string) (string, error) {
-	panic("unexpected GetValue call")
+	value, ok := s.values[key]
+	if !ok {
+		return "", ErrSettingNotFound
+	}
+	return value, nil
 }
 
 func (s *settingPublicRepoStub) Set(ctx context.Context, key, value string) error {
@@ -76,6 +80,67 @@ func TestSettingService_GetPublicSettings_ExposesTablePreferences(t *testing.T) 
 	require.NoError(t, err)
 	require.Equal(t, 50, settings.TableDefaultPageSize)
 	require.Equal(t, []int{20, 50, 100}, settings.TablePageSizeOptions)
+}
+
+func TestSettingService_GetPublicSettings_NormalizesSiteName(t *testing.T) {
+	tests := []struct {
+		name     string
+		siteName string
+		want     string
+	}{
+		{name: "missing", want: "无界 · 企业 AI 管理中台"},
+		{name: "blank", siteName: "   ", want: "无界 · 企业 AI 管理中台"},
+		{name: "upstream default", siteName: "Sub2API", want: "无界 · 企业 AI 管理中台"},
+		{name: "custom", siteName: "  My Custom Console  ", want: "My Custom Console"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := &settingPublicRepoStub{values: map[string]string{}}
+			if tt.siteName != "" {
+				repo.values[SettingKeySiteName] = tt.siteName
+			}
+			svc := NewSettingService(repo, &config.Config{})
+
+			settings, err := svc.GetPublicSettings(context.Background())
+			require.NoError(t, err)
+			require.Equal(t, tt.want, settings.SiteName)
+		})
+	}
+}
+
+func TestSettingService_ParseSettings_NormalizesSiteName(t *testing.T) {
+	svc := NewSettingService(&settingPublicRepoStub{values: map[string]string{}}, &config.Config{})
+
+	require.Equal(t, "无界 · 企业 AI 管理中台", svc.parseSettings(map[string]string{}).SiteName)
+	require.Equal(t, "无界 · 企业 AI 管理中台", svc.parseSettings(map[string]string{SettingKeySiteName: "Sub2API"}).SiteName)
+	require.Equal(t, "My Custom Console", svc.parseSettings(map[string]string{SettingKeySiteName: "  My Custom Console  "}).SiteName)
+}
+
+func TestSettingService_GetSiteName_NormalizesSiteName(t *testing.T) {
+	tests := []struct {
+		name    string
+		present bool
+		value   string
+		want    string
+	}{
+		{name: "missing", want: "无界 · 企业 AI 管理中台"},
+		{name: "blank", present: true, value: "  ", want: "无界 · 企业 AI 管理中台"},
+		{name: "upstream default", present: true, value: "Sub2API", want: "无界 · 企业 AI 管理中台"},
+		{name: "custom", present: true, value: "  My Custom Console  ", want: "My Custom Console"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := &settingPublicRepoStub{values: map[string]string{}}
+			if tt.present {
+				repo.values[SettingKeySiteName] = tt.value
+			}
+			svc := NewSettingService(repo, &config.Config{})
+
+			require.Equal(t, tt.want, svc.GetSiteName(context.Background()))
+		})
+	}
 }
 
 func TestSettingService_GetPublicSettings_ExposesForceEmailOnThirdPartySignup(t *testing.T) {

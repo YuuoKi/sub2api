@@ -27,26 +27,40 @@ func TestInjectSiteTitle(t *testing.T) {
 
 		result := injectSiteTitle(html, settingsJSON)
 
-		assert.Contains(t, string(result), "<title>MyCustomSite - AI API Gateway</title>")
+		assert.Contains(t, string(result), "<title>MyCustomSite</title>")
 		assert.NotContains(t, string(result), "Sub2API")
+		assert.NotContains(t, string(result), "AI API Gateway")
 	})
 
-	t.Run("returns_unchanged_when_site_name_empty", func(t *testing.T) {
+	t.Run("uses_wujie_brand_when_site_name_empty", func(t *testing.T) {
 		html := []byte(`<html><head><title>Sub2API - AI API Gateway</title></head><body></body></html>`)
 		settingsJSON := []byte(`{"site_name":""}`)
 
 		result := injectSiteTitle(html, settingsJSON)
 
-		assert.Equal(t, string(html), string(result))
+		assert.Contains(t, string(result), "<title>无界 · 企业 AI 管理中台</title>")
+		assert.NotContains(t, string(result), "Sub2API")
 	})
 
-	t.Run("returns_unchanged_when_site_name_missing", func(t *testing.T) {
+	t.Run("uses_wujie_brand_when_site_name_missing", func(t *testing.T) {
 		html := []byte(`<html><head><title>Sub2API - AI API Gateway</title></head><body></body></html>`)
 		settingsJSON := []byte(`{"other_field":"value"}`)
 
 		result := injectSiteTitle(html, settingsJSON)
 
-		assert.Equal(t, string(html), string(result))
+		assert.Contains(t, string(result), "<title>无界 · 企业 AI 管理中台</title>")
+		assert.NotContains(t, string(result), "Sub2API")
+	})
+
+	t.Run("normalizes_upstream_default_to_wujie_brand", func(t *testing.T) {
+		html := []byte(`<html><head><title>Sub2API - AI API Gateway</title></head><body></body></html>`)
+		settingsJSON := []byte(`{"site_name":"Sub2API"}`)
+
+		result := injectSiteTitle(html, settingsJSON)
+
+		assert.Contains(t, string(result), "<title>无界 · 企业 AI 管理中台</title>")
+		assert.NotContains(t, string(result), "Sub2API")
+		assert.NotContains(t, string(result), "AI API Gateway")
 	})
 
 	t.Run("returns_unchanged_when_invalid_json", func(t *testing.T) {
@@ -95,7 +109,7 @@ func TestInjectSiteTitle(t *testing.T) {
 
 		result := injectSiteTitle(html, settingsJSON)
 
-		assert.Contains(t, string(result), "<title>A&amp;B - AI API Gateway</title>")
+		assert.Contains(t, string(result), "<title>A&amp;B</title>")
 	})
 
 	t.Run("preserves_rest_of_html", func(t *testing.T) {
@@ -107,7 +121,8 @@ func TestInjectSiteTitle(t *testing.T) {
 		assert.Contains(t, string(result), `<meta charset="UTF-8">`)
 		assert.Contains(t, string(result), `<script src="app.js"></script>`)
 		assert.Contains(t, string(result), `<div id="app"></div>`)
-		assert.Contains(t, string(result), "<title>TestSite - AI API Gateway</title>")
+		assert.Contains(t, string(result), "<title>TestSite</title>")
+		assert.NotContains(t, string(result), "AI API Gateway")
 	})
 }
 
@@ -234,6 +249,25 @@ func TestFrontendServer_InjectSettings(t *testing.T) {
 }
 
 func TestFrontendServer_ServeIndexHTML(t *testing.T) {
+	t.Run("serves_wujie_raw_title_for_legacy_site_name", func(t *testing.T) {
+		provider := &mockSettingsProvider{
+			settings: map[string]string{"site_name": "Sub2API"},
+		}
+		server, err := NewFrontendServer(provider)
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+		c.Set(middleware.CSPNonceKey, "test-nonce")
+
+		server.serveIndexHTML(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Contains(t, w.Body.String(), "<title>无界 · 企业 AI 管理中台</title>")
+		assert.NotContains(t, w.Body.String(), "Sub2API - AI API Gateway")
+	})
+
 	t.Run("serves_html_with_nonce", func(t *testing.T) {
 		provider := &mockSettingsProvider{
 			settings: map[string]string{"test": "value"},

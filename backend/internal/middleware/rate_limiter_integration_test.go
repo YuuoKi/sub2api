@@ -122,7 +122,14 @@ func ensureDockerAvailable(t *testing.T) {
 	if dockerAvailable() {
 		return
 	}
-	t.Skip("Docker 未启用，跳过依赖 testcontainers 的集成测试")
+	exitCode, event := integrationDockerUnavailablePolicy(
+		os.Getenv("CI"),
+		os.Getenv("SUB2API_ALLOW_INTEGRATION_SKIP"),
+	)
+	if exitCode != 0 {
+		t.Fatalf("%s: docker unavailable for middleware integration tests", event)
+	}
+	t.Skipf("%s: docker unavailable; local diagnostic skip enabled", event)
 }
 
 func dockerAvailable() bool {

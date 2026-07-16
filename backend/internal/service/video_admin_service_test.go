@@ -75,6 +75,14 @@ func TestVideoAdminServiceForcesCanonicalEndpointAndModel(t *testing.T) {
 	require.Equal(t, SeedanceModel, derefString(repo.updated.DefaultModel))
 }
 
+func TestVideoAdminServiceRejectsInvalidTinyRealAuthorizationIdentity(t *testing.T) {
+	svc := NewVideoAdminService(&fakeVideoAdminRepo{}, fakeVideoEncryptor{})
+	_, err := svc.AuthorizeTinyReal(context.Background(), 0, 7)
+	require.ErrorIs(t, err, ErrVideoAdminInvalidRequest)
+	_, err = svc.AuthorizeTinyReal(context.Background(), 7, 0)
+	require.ErrorIs(t, err, ErrVideoAdminInvalidRequest)
+}
+
 func stringPointer(value string) *string { return &value }
 func derefString(value *string) string {
 	if value == nil {

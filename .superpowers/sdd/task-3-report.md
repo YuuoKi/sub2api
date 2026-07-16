@@ -35,3 +35,11 @@ Status: 内部可用；canonical runtime 待复核
 - Administrator contract route has HTTP employee 403 / administrator 200 coverage. Task detail exposes upstream cost, provider error code and last-frame evidence; load failures are explicit.
 - Real upstream calls executed: 0. Status remains 待复核 until the approved paid smoke produces complete evidence.
 - The PostgreSQL integration assertions for unauthorized zero mutation and concurrent single consumption are committed, but local execution is 待复核 because testcontainers rejects the active rootless Docker context on Windows. Ordinary Go tests, vet, build, frontend typecheck, focused Vitest and production build pass.
+
+## Final important-item closure
+
+- Migration 179 is additive-only: it documents the canonical contract without rewriting historical providers or adding a uniqueness constraint that could reject existing rows.
+- Repository create/update validation rejects new duplicate canonical providers per standard employee group.
+- One-time authorization revalidates the active standard group, canonical model and allowlisted endpoint before recording the grant; missing providers remain 404 and unavailable grants remain 409.
+- The administrator UI filters the selector to standard employee groups and states that restriction explicitly.
+- Process authorization has concurrent-consumption coverage: exactly one caller succeeds and `Allowed()` becomes false after consumption.

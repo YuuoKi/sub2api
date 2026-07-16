@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -30,6 +31,34 @@ func TestSingleSmokeAuthorizationDefaultsDeniedAndIsConsumedOnce(t *testing.T) {
 	}
 	if err := authorized.Consume(); !errors.Is(err, ErrVideoRealDispatchConsumed) {
 		t.Fatalf("second consume error = %v", err)
+	}
+}
+
+func TestSingleSmokeAuthorizationConcurrentConsumeAllowsExactlyOne(t *testing.T) {
+	authorization := NewSingleSmokeAuthorization(true)
+	var wait sync.WaitGroup
+	results := make(chan error, 32)
+	for index := 0; index < 32; index++ {
+		wait.Add(1)
+		go func() { defer wait.Done(); results <- authorization.Consume() }()
+	}
+	wait.Wait()
+	close(results)
+	successes := 0
+	for err := range results {
+		if err == nil {
+			successes++
+			continue
+		}
+		if !errors.Is(err, ErrVideoRealDispatchConsumed) {
+			t.Fatalf("unexpected consume error: %v", err)
+		}
+	}
+	if successes != 1 {
+		t.Fatalf("successful consumes = %d, want 1", successes)
+	}
+	if authorization.Allowed() {
+		t.Fatal("authorization must be unavailable after concurrent consumption")
 	}
 }
 

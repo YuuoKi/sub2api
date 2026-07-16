@@ -75,9 +75,12 @@ func TestVideoGatewayProviderAuthorizationAndCanonicalContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	contractSQL := strings.ToLower(string(contract))
-	for _, required := range []string{"doubao-seedance-2-0-260128", "https://ark.cn-beijing.volces.com/api/v3", "group_id, provider, default_model"} {
+	for _, required := range []string{"doubao-seedance-2-0-260128", "https://ark.cn-beijing.volces.com/api/v3"} {
 		if !strings.Contains(contractSQL, required) {
 			t.Errorf("missing %s", required)
 		}
+	}
+	if regexp.MustCompile(`(?m)^\s*(update|delete|drop|truncate|create\s+unique\s+index)\b`).MatchString(contractSQL) {
+		t.Fatal("provider contract migration must be additive-only and must not rewrite or reject historical rows")
 	}
 }

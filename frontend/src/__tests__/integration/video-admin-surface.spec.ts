@@ -31,6 +31,8 @@ describe('canonical video admin surface', () => {
     const detail = source('src/views/admin/video/VideoTaskDetailView.vue')
     const system = source('src/views/admin/video/VideoSystemCheckView.vue')
     expect(providers).toContain('adminAPI.video.contract()')
+    expect(providers).toContain("group.subscription_type === 'standard'")
+    expect(providers).toContain('onlyStandardGroup')
     expect(providers).not.toContain('v-model="form.default_model"')
     expect(api).toContain('/admin/video/contract')
     expect(detail).toContain('extractApiErrorMessage')

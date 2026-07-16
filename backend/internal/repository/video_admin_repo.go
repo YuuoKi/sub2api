@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
-	"github.com/lib/pq"
 )
 
 type videoAdminRepository struct{ db *sql.DB }
@@ -52,6 +51,16 @@ func (r *videoAdminRepository) ListVideoProviders(ctx context.Context) ([]servic
 	return items, rows.Err()
 }
 func (r *videoAdminRepository) CreateVideoProvider(ctx context.Context, item service.VideoProviderAccount) (*service.VideoProviderAccount, error) {
+	valid, conflict, err := r.validateVideoProviderTarget(ctx, item.GroupID, 0)
+	if err != nil {
+		return nil, err
+	}
+	if !valid {
+		return nil, service.ErrVideoAdminInvalidGroup
+	}
+	if conflict {
+		return nil, service.ErrVideoAdminConflict
+	}
 	row := r.db.QueryRowContext(ctx, `WITH inserted AS (INSERT INTO video_provider_accounts
 		(group_id,provider,display_name,enabled,encrypted_api_key,masked_key,base_url,default_model)
 		SELECT $1,$2,$3,$4,$5,$6,$7,$8 FROM groups
@@ -62,12 +71,29 @@ func (r *videoAdminRepository) CreateVideoProvider(ctx context.Context, item ser
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, service.ErrVideoAdminInvalidGroup
 	}
-	if isVideoProviderUniqueViolation(err) {
-		return nil, service.ErrVideoAdminConflict
-	}
 	return created, err
 }
 func (r *videoAdminRepository) UpdateVideoProvider(ctx context.Context, id int64, in service.VideoProviderAdminUpdate) (*service.VideoProviderAccount, error) {
+	var currentGroupID int64
+	if err := r.db.QueryRowContext(ctx, `SELECT group_id FROM video_provider_accounts WHERE id=$1`, id).Scan(&currentGroupID); errors.Is(err, sql.ErrNoRows) {
+		return nil, service.ErrVideoProviderNotFound
+	} else if err != nil {
+		return nil, err
+	}
+	targetGroupID := currentGroupID
+	if in.GroupID != nil {
+		targetGroupID = *in.GroupID
+	}
+	valid, conflict, err := r.validateVideoProviderTarget(ctx, targetGroupID, id)
+	if err != nil {
+		return nil, err
+	}
+	if !valid {
+		return nil, service.ErrVideoAdminInvalidGroup
+	}
+	if conflict {
+		return nil, service.ErrVideoAdminConflict
+	}
 	row := r.db.QueryRowContext(ctx, `WITH updated AS (UPDATE video_provider_accounts SET
 		group_id=CASE WHEN $2 THEN $3 ELSE group_id END, display_name=CASE WHEN $4 THEN $5 ELSE display_name END,
 		enabled=CASE WHEN $6 THEN $7 ELSE enabled END, encrypted_api_key=CASE WHEN $8 THEN $9 ELSE encrypted_api_key END,
@@ -79,9 +105,6 @@ func (r *videoAdminRepository) UpdateVideoProvider(ctx context.Context, id int64
 		id, in.GroupID != nil, valueInt64(in.GroupID), in.DisplayName != nil, valueString(in.DisplayName), in.Enabled != nil, valueBool(in.Enabled),
 		in.EncryptedAPIKey != nil, valueString(in.EncryptedAPIKey), valueString(in.MaskedKey), in.BaseURL != nil, valueString(in.BaseURL), in.DefaultModel != nil, valueString(in.DefaultModel))
 	item, err := scanVideoAdminProvider(row)
-	if isVideoProviderUniqueViolation(err) {
-		return nil, service.ErrVideoAdminConflict
-	}
 	if errors.Is(err, sql.ErrNoRows) {
 		var exists bool
 		if existsErr := r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM video_provider_accounts WHERE id=$1)`, id).Scan(&exists); existsErr != nil {
@@ -96,13 +119,33 @@ func (r *videoAdminRepository) UpdateVideoProvider(ctx context.Context, id int64
 }
 func (r *videoAdminRepository) AuthorizeTinyReal(ctx context.Context, id, actor int64) (*service.VideoProviderAccount, error) {
 	row := r.db.QueryRowContext(ctx, `WITH updated AS (UPDATE video_provider_accounts SET tiny_real_authorized_at=NOW(), tiny_real_authorized_by=$2, updated_at=NOW()
-		WHERE id=$1 AND provider='seedance' AND enabled=TRUE AND encrypted_api_key<>'' AND tiny_real_authorized_at IS NULL AND tiny_real_consumed_at IS NULL RETURNING *)
-		SELECT `+strings.ReplaceAll(videoAdminProviderColumns, "p.", "updated.")+` FROM updated JOIN groups g ON g.id=updated.group_id`, id, actor)
+		FROM groups candidate WHERE video_provider_accounts.id=$1 AND candidate.id=video_provider_accounts.group_id
+		AND candidate.status='active' AND candidate.subscription_type='standard' AND candidate.deleted_at IS NULL
+		AND video_provider_accounts.provider='seedance' AND video_provider_accounts.default_model=$3 AND video_provider_accounts.base_url=$4
+		AND video_provider_accounts.enabled=TRUE AND video_provider_accounts.encrypted_api_key<>''
+		AND video_provider_accounts.tiny_real_authorized_at IS NULL AND video_provider_accounts.tiny_real_consumed_at IS NULL RETURNING video_provider_accounts.*)
+		SELECT `+strings.ReplaceAll(videoAdminProviderColumns, "p.", "updated.")+` FROM updated JOIN groups g ON g.id=updated.group_id`, id, actor, service.SeedanceModel, service.SeedanceBaseURL)
 	item, err := scanVideoAdminProvider(row)
 	if errors.Is(err, sql.ErrNoRows) {
+		var exists bool
+		if existsErr := r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM video_provider_accounts WHERE id=$1)`, id).Scan(&exists); existsErr != nil {
+			return nil, existsErr
+		}
+		if !exists {
+			return nil, service.ErrVideoProviderNotFound
+		}
 		return nil, service.ErrVideoAdminAuthorizationConflict
 	}
 	return item, err
+}
+
+func (r *videoAdminRepository) validateVideoProviderTarget(ctx context.Context, groupID, excludeID int64) (bool, bool, error) {
+	var valid, conflict bool
+	err := r.db.QueryRowContext(ctx, `SELECT
+		EXISTS(SELECT 1 FROM groups WHERE id=$1 AND status='active' AND subscription_type='standard' AND deleted_at IS NULL),
+		EXISTS(SELECT 1 FROM video_provider_accounts WHERE group_id=$1 AND provider='seedance' AND default_model=$2 AND id<>$3)`,
+		groupID, service.SeedanceModel, excludeID).Scan(&valid, &conflict)
+	return valid, conflict, err
 }
 func (r *videoAdminRepository) ListVideoTasks(ctx context.Context, filter service.VideoAdminTaskFilter) ([]service.VideoTask, int64, error) {
 	where := ""
@@ -166,10 +209,6 @@ func valueString(v *string) string {
 		return ""
 	}
 	return *v
-}
-func isVideoProviderUniqueViolation(err error) bool {
-	var pqErr *pq.Error
-	return errors.As(err, &pqErr) && pqErr.Code == "23505"
 }
 func valueBool(v *bool) bool {
 	if v == nil {

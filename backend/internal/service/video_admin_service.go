@@ -107,6 +107,9 @@ func (s *VideoAdminService) UpdateProvider(ctx context.Context, id int64, in Vid
 	return item, nil
 }
 func (s *VideoAdminService) AuthorizeTinyReal(ctx context.Context, id, actor int64) (*VideoProviderAccount, error) {
+	if id <= 0 || actor <= 0 {
+		return nil, fmt.Errorf("%w: provider and administrator are required", ErrVideoAdminInvalidRequest)
+	}
 	item, err := s.repo.AuthorizeTinyReal(ctx, id, actor)
 	if err == nil {
 		redactVideoProvider(item)

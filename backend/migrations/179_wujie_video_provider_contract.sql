@@ -1,9 +1,7 @@
-UPDATE video_provider_accounts
-SET base_url = 'https://ark.cn-beijing.volces.com/api/v3',
-    default_model = 'doubao-seedance-2-0-260128',
-    updated_at = NOW()
-WHERE provider = 'seedance';
-
-CREATE UNIQUE INDEX IF NOT EXISTS uq_video_provider_seedance_group_model
-    ON video_provider_accounts (group_id, provider, default_model)
-    WHERE provider = 'seedance';
+-- Canonical Seedance provider contract (enforced by the service/repository layer):
+-- model: doubao-seedance-2-0-260128
+-- endpoint: https://ark.cn-beijing.volces.com/api/v3
+--
+-- This migration intentionally performs no historical rewrite and adds no unique
+-- constraint. Existing rows remain untouched; create/update validation prevents
+-- new duplicate canonical providers within the same employee group.

@@ -54,6 +54,14 @@ describe('AppSidebar header styles', () => {
   })
 })
 
+describe('AppSidebar navigation builders', () => {
+  it('keeps role and feature-gated navigation builders intact', () => {
+    expect(componentSource).toContain('const adminNavItems = computed')
+    expect(componentSource).toContain('const userNavItems = computed')
+    expect(componentSource).toContain('applyFeatureFlags')
+  })
+})
+
 describe('AppSidebar video navigation', () => {
   it('makes video trial and task records discoverable for regular users', () => {
     const selfNavBlock = componentSource.match(/function buildSelfNavItems[\s\S]*?return items\n}/)?.[0]

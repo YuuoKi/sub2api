@@ -1,22 +1,21 @@
 <template>
-  <div class="min-h-screen bg-gray-50 dark:bg-dark-950">
-    <!-- Background Decoration -->
-    <div class="pointer-events-none fixed inset-0 bg-mesh-gradient"></div>
-
+  <div class="min-h-screen bg-ui-canvas text-ui-text" data-testid="app-shell">
     <!-- Sidebar -->
     <AppSidebar />
 
     <!-- Main Content Area -->
     <div
-      class="relative min-h-screen transition-all duration-300"
+      class="relative min-h-screen transition-all duration-300 motion-reduce:transition-none"
       :class="[sidebarCollapsed ? 'lg:ml-[72px]' : 'lg:ml-64']"
     >
       <!-- Header -->
       <AppHeader />
 
       <!-- Main Content -->
-      <main class="p-4 md:p-6 lg:p-8">
-        <slot />
+      <main class="p-4 md:p-6 lg:p-8" data-testid="app-main">
+        <div class="mx-auto w-full" :class="{ 'max-w-7xl': !fullWidth }">
+          <slot />
+        </div>
       </main>
     </div>
   </div>
@@ -36,6 +35,10 @@ const appStore = useAppStore()
 const authStore = useAuthStore()
 const sidebarCollapsed = computed(() => appStore.sidebarCollapsed)
 const isAdmin = computed(() => authStore.user?.role === 'admin')
+
+// Data-dense views (e.g. table pages) can opt out of the centered
+// content column by rendering <AppLayout full-width>.
+defineProps<{ fullWidth?: boolean }>()
 
 const { replayTour } = useOnboardingTour({
   storageKey: isAdmin.value ? 'admin_guide' : 'user_guide',

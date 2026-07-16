@@ -1,10 +1,10 @@
 <template>
   <AppLayout>
     <div class="space-y-6">
-      <div class="flex flex-col gap-3 border-b border-gray-200 pb-4 dark:border-dark-700 md:flex-row md:items-center md:justify-between">
+      <div class="flex flex-col gap-3 border-b border-ui-border pb-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? '任务记录' : '任务列表' }}</h1>
-          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          <h1 class="ui-heading">{{ isVideoGatewayDemoMode ? '任务记录' : '任务列表' }}</h1>
+          <p class="ui-subheading mt-1">
             {{ isVideoGatewayDemoMode ? '查看谁发起、当前状态、失败原因。' : '按状态和通道查看最近任务，快速定位结果、失败原因并复制参数重新创建。' }}
           </p>
         </div>
@@ -21,21 +21,23 @@
       </div>
 
       <!-- 演示模式：视频任务 / AI 调用记录 切换 -->
-      <div v-if="isVideoGatewayDemoMode && authStore.isAdmin" class="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5 dark:border-dark-700 dark:bg-dark-800">
-        <span class="rounded-md bg-white px-4 py-1.5 text-sm font-medium text-gray-900 shadow-sm dark:bg-dark-700 dark:text-white">
+      <div v-if="isVideoGatewayDemoMode && authStore.isAdmin" class="inline-flex rounded-lg border border-ui-border bg-ui-canvas/60 p-0.5">
+        <span class="rounded-md bg-ui-surface px-4 py-1.5 text-sm font-medium text-ui-text shadow-sm">
           视频任务
         </span>
         <RouterLink
           to="/admin/console/ai-records"
-          class="rounded-md px-4 py-1.5 text-sm font-medium text-gray-500 transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+          class="rounded-md px-4 py-1.5 text-sm font-medium text-ui-text-muted transition-colors hover:text-ui-text"
         >
           AI 调用记录
         </RouterLink>
       </div>
 
-      <section class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-800">
+      <!-- 简化筛选:状态快捷组 + 任务来源 + 清空,与结果区分离 -->
+      <section class="ui-panel p-4" data-testid="video-task-filters" aria-label="任务筛选">
         <div class="grid gap-3 lg:grid-cols-[1fr_220px_auto] lg:items-center">
-          <div class="flex flex-wrap gap-2">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="text-xs font-medium text-ui-text-muted">状态</span>
             <button
               v-for="item in quickStatusFilters"
               :key="item.label"
@@ -47,7 +49,7 @@
               {{ item.label }}
             </button>
           </div>
-          <select v-model="filters.provider" class="input" @change="resetAndLoad">
+          <select v-model="filters.provider" class="input" aria-label="任务来源筛选" @change="resetAndLoad">
             <option value="">{{ isVideoGatewayDemoMode ? '全部任务来源' : '全部通道' }}</option>
             <option v-for="provider in visibleProviderOptions" :key="provider.value" :value="provider.value">{{ provider.label }}</option>
           </select>
@@ -60,42 +62,49 @@
         </div>
       </section>
 
-      <section data-testid="video-task-mobile-list" class="space-y-3 md:hidden">
+      <section data-testid="video-task-mobile-list" class="space-y-3 md:hidden" aria-label="任务卡片列表">
         <article
           v-for="task in tasks"
           :key="task.id"
-          class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-dark-700 dark:bg-dark-800"
+          class="ui-panel p-4"
         >
           <div class="flex items-start justify-between gap-3">
-            <RouterLink class="font-semibold text-gray-900 dark:text-white" :to="`/admin/video/tasks/${task.id}`">
+            <RouterLink class="font-semibold text-ui-text" :to="`/admin/video/tasks/${task.id}`">
               #{{ task.id }} · {{ taskTypeLabel(task.task_type) }}
             </RouterLink>
             <span class="shrink-0 rounded-md px-2 py-1 text-xs font-medium" :class="statusBadgeClass(task.status)">
               {{ statusLabel(task.status) }}
             </span>
           </div>
-          <p class="mt-2 line-clamp-2 text-sm text-gray-500 dark:text-gray-400">{{ promptDisplayText(task.prompt) }}</p>
+          <div v-if="task.delivery_status" class="mt-2">
+            <span class="inline-flex rounded-md bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-700 dark:bg-slate-500/15 dark:text-slate-200">
+              {{ deliveryStatusLabel(task) }}
+            </span>
+          </div>
+          <p class="ui-subheading mt-2 line-clamp-2">{{ promptDisplayText(task.prompt) }}</p>
           <dl class="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
             <div><dt class="text-gray-400">任务来源</dt><dd class="mt-0.5 text-gray-700 dark:text-gray-200">{{ providerLabel(task.provider) }}</dd></div>
             <div><dt class="text-gray-400">花费</dt><dd class="mt-0.5 text-teal-600 dark:text-teal-300">{{ formatTaskCost(task) }}</dd></div>
             <div><dt class="text-gray-400">处理账号</dt><dd class="mt-0.5 truncate text-gray-700 dark:text-gray-200">{{ routeAccountLabel(task) }}</dd></div>
             <div><dt class="text-gray-400">创建时间</dt><dd class="mt-0.5 text-gray-700 dark:text-gray-200">{{ formatDate(task.created_at) }}</dd></div>
           </dl>
-          <div v-if="task.error_message" class="mt-3 rounded-md bg-red-50 p-2 text-xs text-red-700 dark:bg-red-500/10 dark:text-red-300">
-            {{ errorMessageLabel(task.error_message) }}
+          <div v-if="task.error_message" class="mt-3 rounded-md border border-red-200 bg-red-50 p-2 text-xs leading-5 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
+            <div class="font-medium">失败原因</div>
+            <div>{{ errorMessageLabel(task.error_message) }}</div>
           </div>
           <div class="mt-4 flex flex-wrap gap-2">
+            <a v-if="hasUsableRemoteAsset(task)" class="btn btn-sm btn-outline" :href="task.result_url" target="_blank" rel="noreferrer">打开结果</a>
             <button v-if="task.local_asset_available" class="btn btn-sm btn-outline" type="button" @click="openLocalAsset(task)">本地资产</button>
             <button class="btn btn-sm btn-outline" type="button" @click="copyToCreate(task)">复制参数</button>
             <RouterLink class="btn btn-sm btn-outline" :to="`/admin/video/tasks/${task.id}`">查看详情</RouterLink>
           </div>
         </article>
-        <div v-if="!loading && !tasks.length" class="rounded-xl border border-gray-200 bg-white px-5 py-10 text-center text-sm text-gray-500 dark:border-dark-700 dark:bg-dark-800 dark:text-gray-400">
+        <div v-if="!loading && !tasks.length" class="ui-panel px-5 py-10 text-center text-sm text-ui-text-muted">
           <p>当前还没有任务记录。</p>
           <RouterLink class="btn btn-sm btn-primary mt-4" to="/admin/video/create">试跑一条任务</RouterLink>
         </div>
-        <div v-if="tasks.length" data-testid="video-task-mobile-pagination" class="flex items-center justify-between rounded-lg bg-white px-4 py-3 text-sm dark:bg-dark-800">
-          <span class="text-gray-500">共 {{ pagination.total }} 条</span>
+        <div v-if="tasks.length" data-testid="video-task-mobile-pagination" class="ui-toolbar justify-between text-sm">
+          <span class="text-ui-text-muted">共 {{ pagination.total }} 条</span>
           <div class="flex items-center gap-2">
             <button class="btn btn-sm btn-outline" type="button" :disabled="pagination.page <= 1" @click="changePage(pagination.page - 1)">上一页</button>
             <span>{{ pagination.page }} / {{ pagination.pages }}</span>
@@ -104,7 +113,7 @@
         </div>
       </section>
 
-      <section data-testid="video-task-desktop-table" class="hidden rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-800 md:block">
+      <section data-testid="video-task-desktop-table" class="ui-panel hidden md:block" aria-label="任务表格">
         <div class="overflow-x-auto">
           <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-dark-700">
             <thead class="bg-gray-50 text-left text-xs uppercase text-gray-500 dark:bg-dark-700/40 dark:text-gray-400">
@@ -179,11 +188,12 @@
                         <Icon name="externalLink" size="xs" />
                         打开结果
                       </a>
+                      <span v-if="hasUsableRemoteAsset(task)" class="text-[10px] text-gray-400">远端可交付物</span>
                       <span
                         v-if="task.local_asset_available"
                         class="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-200"
                       >
-                        已归档
+                        本地已归档资产
                       </span>
                     </div>
                     <div
@@ -236,8 +246,8 @@
             </tbody>
           </table>
         </div>
-        <div class="flex items-center justify-between border-t border-gray-200 px-5 py-4 text-sm dark:border-dark-700">
-          <div class="text-gray-500 dark:text-gray-400">共 {{ pagination.total }} 条</div>
+        <div class="flex items-center justify-between border-t border-ui-border px-5 py-4 text-sm">
+          <div class="text-ui-text-muted">共 {{ pagination.total }} 条</div>
           <div class="flex gap-2">
             <button class="btn btn-sm btn-outline" type="button" :disabled="pagination.page <= 1" @click="changePage(pagination.page - 1)">上一页</button>
             <span class="flex items-center px-2 text-gray-700 dark:text-gray-200">{{ pagination.page }} / {{ pagination.pages }}</span>

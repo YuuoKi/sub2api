@@ -166,6 +166,21 @@ describe('VideoTasksView polling', () => {
     vi.useRealTimers()
   })
 
+  it('keeps task filters separate from task results', async () => {
+    wrapper = mount(VideoTasksView, {
+      global: {
+        stubs: {
+          AppLayout: AppLayoutStub,
+          Icon: true
+        }
+      }
+    })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="video-task-filters"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="video-task-desktop-table"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="video-task-mobile-list"]').exists()).toBe(true)
+  })
+
   it('polls list API while non-terminal tasks are visible', async () => {
     wrapper = mount(VideoTasksView, {
       global: {

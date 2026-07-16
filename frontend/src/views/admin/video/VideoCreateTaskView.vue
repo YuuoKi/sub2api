@@ -1,10 +1,10 @@
 <template>
   <AppLayout>
     <div class="space-y-6">
-      <div class="flex flex-col gap-3 border-b border-gray-200 pb-4 dark:border-dark-700 md:flex-row md:items-center md:justify-between">
+      <div class="flex flex-col gap-3 border-b border-ui-border pb-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? '试跑任务' : '创建视频任务' }}</h1>
-          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          <h1 class="ui-heading">{{ isVideoGatewayDemoMode ? '试跑任务' : '创建视频任务' }}</h1>
+          <p class="ui-subheading mt-1">
             {{ isVideoGatewayDemoMode ? '先用一条演示任务检查系统是否能正常接收、处理和记录任务，不会调用真实生成服务。' : '提交文生视频、图生视频或参考视频任务，创建成功后自动进入任务详情。' }}
           </p>
         </div>
@@ -14,39 +14,11 @@
         </RouterLink>
       </div>
 
-      <section v-if="false && isVideoGatewayDemoMode" class="rounded-lg border border-teal-200 bg-teal-50 p-5 dark:border-teal-500/20 dark:bg-teal-500/10">
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p class="text-sm font-medium text-teal-700 dark:text-teal-200">主路径</p>
-            <h2 class="mt-2 text-xl font-semibold text-gray-950 dark:text-white">通过公司统一入口提交 AI 中剧 / 短剧任务</h2>
-            <p class="mt-2 text-sm text-teal-800 dark:text-teal-100">内部页面、脚本、n8n 和自动化工具都通过调用凭证提交任务；中央主机统一选择生成通道、记录镜头决策和经验事件。</p>
-          </div>
-          <RouterLink class="btn btn-primary" to="/admin/video/tasks">
-            <Icon name="document" size="sm" />
-            查看任务记录
-          </RouterLink>
-        </div>
-      </section>
-
-      <section v-if="false && isVideoGatewayDemoMode" class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
-        <div class="grid gap-3 md:grid-cols-6">
-          <div
-            v-for="(step, index) in gatewaySubmitSteps"
-            :key="step.title"
-            class="relative rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-dark-700 dark:bg-dark-700/40"
-          >
-            <div v-if="index > 0" class="absolute -left-2 top-1/2 hidden h-px w-4 bg-gray-300 dark:bg-dark-600 md:block" aria-hidden="true"></div>
-            <div class="text-xs font-medium text-gray-500 dark:text-gray-400">0{{ index + 1 }}</div>
-            <div class="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{{ step.title }}</div>
-          </div>
-        </div>
-      </section>
-
-      <section class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
+      <section class="ui-panel p-5" aria-label="提示词模板">
         <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? '业务提示词模板' : 'Prompt 模板候选' }}</h2>
-            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            <h2 class="text-base font-semibold text-ui-text">{{ isVideoGatewayDemoMode ? '业务提示词模板' : 'Prompt 模板候选' }}</h2>
+            <p class="ui-subheading mt-1">
               {{ isVideoGatewayDemoMode ? '选择 AI 中剧 / 短剧生产模板，快速填入试跑任务参数。' : '选择业务候选，系统会自动填入提示词、任务类型、画幅、时长和分辨率。' }}
             </p>
           </div>
@@ -55,24 +27,25 @@
           <button
             v-for="candidate in promptAssetCandidates"
             :key="candidate.id"
-            class="rounded-lg border border-gray-200 bg-gray-50 p-3 text-left transition hover:border-primary-300 hover:bg-primary-50 dark:border-dark-700 dark:bg-dark-700/30 dark:hover:border-primary-500/40 dark:hover:bg-primary-500/10"
+            class="rounded-xl border border-ui-border bg-ui-canvas/60 p-3 text-left transition hover:border-primary-300 hover:bg-primary-50 dark:hover:border-primary-500/40 dark:hover:bg-primary-500/10"
             type="button"
             @click="applyTemplate(candidate)"
           >
-            <span class="inline-flex rounded-md bg-white px-2 py-1 text-xs font-medium text-gray-500 dark:bg-dark-800 dark:text-gray-300">{{ candidate.category }}</span>
-            <span class="mt-3 block text-sm font-semibold text-gray-900 dark:text-white">{{ candidate.name }}</span>
-            <span class="candidate-prompt mt-2 block text-xs leading-5 text-gray-500 dark:text-gray-400">{{ promptDisplayText(candidate.prompt) }}</span>
-            <span class="mt-3 block text-xs font-medium text-gray-600 dark:text-gray-300">{{ candidate.aspect_ratio }} · {{ candidate.duration }}s · {{ candidate.resolution }}</span>
+            <span class="inline-flex rounded-md bg-ui-surface px-2 py-1 text-xs font-medium text-ui-text-muted">{{ candidate.category }}</span>
+            <span class="mt-3 block text-sm font-semibold text-ui-text">{{ candidate.name }}</span>
+            <span class="candidate-prompt ui-subheading mt-2 block text-xs leading-5">{{ promptDisplayText(candidate.prompt) }}</span>
+            <span class="mt-3 block text-xs font-medium text-ui-text-muted">{{ candidate.aspect_ratio }} · {{ candidate.duration }}s · {{ candidate.resolution }}</span>
           </button>
         </div>
       </section>
 
-      <div class="grid gap-6 xl:grid-cols-[1fr_0.78fr]">
-        <section class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
+      <div class="grid gap-6" :class="{ 'xl:grid-cols-[1fr_0.78fr]': !isVideoGatewayDemoMode }">
+        <!-- 主流程:执行模式与提示词直接可见,高级参数收进折叠区 -->
+        <section class="ui-panel p-5" aria-label="任务参数">
           <form class="space-y-4" @submit.prevent="submitTask">
             <div>
-              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">执行模式</label>
-              <select v-model="executionMode" class="input">
+              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300" for="video-execution-mode">执行模式</label>
+              <select id="video-execution-mode" v-model="executionMode" class="input" data-testid="video-execution-mode">
                 <option value="mock">免费试跑</option>
                 <option value="review_real" :disabled="!reviewRealAvailable">一次真实复核</option>
                 <option value="internal_real" :disabled="!internalRealAvailable">内部真实调用</option>
@@ -105,8 +78,8 @@
               </p>
             </div>
 
-            <details class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-dark-700 dark:bg-dark-700/30">
-              <summary class="cursor-pointer text-sm font-semibold text-gray-900 dark:text-white">高级参数</summary>
+            <details class="rounded-xl border border-ui-border bg-ui-canvas/60 p-4">
+              <summary class="cursor-pointer text-sm font-semibold text-ui-text">高级参数</summary>
               <div class="mt-4 space-y-4">
                 <div>
                   <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">模型偏好（可选）</label>
@@ -155,22 +128,32 @@
               {{ validationMessage }}
             </p>
 
-            <button class="btn btn-primary" type="submit" :disabled="submitting || Boolean(validationMessage)">
+            <button class="btn btn-primary" type="submit" data-testid="video-primary-action" :disabled="submitting || Boolean(validationMessage)">
               <Icon name="play" size="sm" />
               {{ submitting ? '提交中…' : (executionMode === 'mock' ? (isVideoGatewayDemoMode ? '试跑一条任务' : '免费试跑') : '创建真实任务') }}
             </button>
             <p v-if="executionMode === 'mock'" class="text-xs text-gray-500 dark:text-gray-400">这次只检查系统接收、处理和记录能力，不会调用真实生成服务。</p>
           </form>
 
+          <!-- 真实调用确认:醒目阻断式确认,不可错过 -->
           <div
             v-if="confirmRealOpen"
-            class="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4"
-            role="dialog"
+            class="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4"
+            role="alertdialog"
             aria-modal="true"
+            aria-labelledby="video-real-confirm-title"
           >
-            <div class="w-full max-w-md rounded-lg bg-white p-5 shadow-lg dark:bg-dark-800">
-              <h3 class="text-lg font-semibold text-gray-900 dark:text-white">确认真实调用</h3>
-              <ul class="mt-3 space-y-1 text-sm text-gray-600 dark:text-gray-300">
+            <div class="w-full max-w-md rounded-2xl border-2 border-amber-400 bg-white p-5 shadow-2xl dark:border-amber-400/70 dark:bg-dark-800">
+              <div class="flex items-start gap-3">
+                <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-300">
+                  <Icon name="exclamationTriangle" size="md" />
+                </span>
+                <div>
+                  <h3 id="video-real-confirm-title" class="text-lg font-semibold text-gray-900 dark:text-white">确认真实调用</h3>
+                  <p class="mt-1 text-sm font-medium text-amber-700 dark:text-amber-300">这不是免费试跑：提交后会真实计费并占用真实额度。</p>
+                </div>
+              </div>
+              <ul class="mt-4 space-y-1 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-gray-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-gray-200">
                 <li>模型：{{ form.model || '默认' }}</li>
                 <li>时长：{{ form.duration }} 秒</li>
                 <li>分辨率：{{ form.resolution }}</li>
@@ -187,21 +170,10 @@
         </section>
 
         <div v-if="!isVideoGatewayDemoMode" class="space-y-6">
-          <section v-if="isVideoGatewayDemoMode" class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
-            <h2 class="text-base font-semibold text-gray-900 dark:text-white">右侧只做说明，不需要员工手动调度</h2>
+          <section class="ui-panel p-5" aria-label="通道状态">
+            <h2 class="text-base font-semibold text-ui-text">通道状态</h2>
             <div class="mt-4 space-y-3">
-              <div v-for="reason in gatewayReasons" :key="reason" class="flex items-start gap-3 text-sm text-gray-600 dark:text-gray-300">
-                <Icon name="checkCircle" size="sm" class="mt-0.5 shrink-0 text-emerald-600 dark:text-emerald-300" />
-                <span>{{ reason }}</span>
-              </div>
-            </div>
-          </section>
-
-          <section class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
-            <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ isVideoGatewayDemoMode ? '生成通道状态（系统自动参考）' : '通道状态' }}</h2>
-            <p v-if="isVideoGatewayDemoMode" class="mt-1 text-sm text-gray-500 dark:text-gray-400">这些状态帮助解释系统为什么能自动调度，普通员工不需要手动选择。</p>
-            <div class="mt-4 space-y-3">
-              <div v-for="provider in providers" :key="provider.id" class="flex items-center justify-between gap-3 rounded-lg border border-gray-200 p-3 dark:border-dark-700">
+              <div v-for="provider in providers" :key="provider.id" class="flex items-center justify-between gap-3 rounded-xl border border-ui-border p-3">
                 <div class="min-w-0">
                   <span class="inline-flex rounded-md px-2 py-1 text-xs font-medium" :class="providerBadgeClass(provider.provider)">
                     {{ providerDisplayName(provider) }}
@@ -216,13 +188,13 @@
                   <div v-if="provider.route_skip_reason" class="mt-1 text-red-600 dark:text-red-300">{{ humanIssueLabel(provider.route_skip_reason) }}</div>
                 </div>
               </div>
-              <div v-if="!enabledProviders.length" class="rounded-lg border border-dashed border-gray-200 p-4 text-sm text-gray-500 dark:border-dark-700 dark:text-gray-400">
-                {{ isVideoGatewayDemoMode ? '暂无可用生成通道，请先到生成通道页启用演示通道。' : '暂无可用通道，请先到模型通道页面启用演示通道。' }}
+              <div v-if="!enabledProviders.length" class="rounded-lg border border-dashed border-ui-border p-4 text-sm text-ui-text-muted">
+                暂无可用通道，请先到模型通道页面启用演示通道。
               </div>
             </div>
             <RouterLink v-if="authStore.isAdmin" class="btn btn-outline mt-5" to="/admin/video/providers">
               <Icon name="key" size="sm" />
-              {{ isVideoGatewayDemoMode ? '配置生成通道' : '配置模型通道' }}
+              配置模型通道
             </RouterLink>
           </section>
         </div>
@@ -272,22 +244,6 @@ const submitting = ref(false)
 const pendingIdempotencyKey = ref('')
 const confirmRealOpen = ref(false)
 const confirmRealSecond = ref(false)
-
-const gatewaySubmitSteps = [
-  { title: '选择剧种模板' },
-  { title: '填写镜头目标' },
-  { title: '统一入口入队' },
-  { title: '系统推荐引擎' },
-  { title: '记录经验事件' },
-  { title: '回收结果反馈' },
-]
-
-const gatewayReasons = [
-  '员工不接触底层凭证或真实生成账号。',
-  '内部页面、脚本和自动化工具都通过接入密钥提交任务。',
-  '系统记录剧种、场景、镜头目标、提示词结构、引擎选择和结果反馈。',
-  '后续接 Seedance/Kling 授权通道时，员工入口不需要变化。',
-]
 
 const form = reactive<VideoTaskCreatePayload>({
   execution_mode: 'mock',

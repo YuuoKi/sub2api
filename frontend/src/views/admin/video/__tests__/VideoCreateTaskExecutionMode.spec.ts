@@ -91,4 +91,11 @@ describe('VideoCreateTaskView execution_mode', () => {
     resolveCreate({ id: 99 })
     await flushPromises()
   })
+
+  it('keeps execution mode visible beside the primary task action', async () => {
+    const wrapper = mount(VideoCreateTaskView)
+    await flushPromises()
+    expect(wrapper.find('[data-testid="video-execution-mode"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="video-primary-action"]').exists()).toBe(true)
+  })
 })

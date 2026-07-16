@@ -77,7 +77,19 @@ export default {
       groupPricingDesc: 'Configure batch discount and hold ratio',
       systemSettings: 'System Settings',
       configureSystem: 'Configure system settings',
-      failedToLoad: 'Failed to load dashboard statistics'
+      failedToLoad: 'Failed to load dashboard statistics',
+      summary: 'Summary',
+      attention: 'Needs attention',
+      attentionEmpty: 'No exceptions right now. Everything looks normal.',
+      nextActions: 'Next actions',
+      moreMetrics: 'More metrics',
+      errorAccountsAttention: '{count} accounts in error state',
+      rankingUnavailable: 'User spending ranking failed to load.',
+      billingPendingHint: 'Provider statement not uploaded yet — reconciliation is pending.',
+      openReconciliation: 'Open reconciliation',
+      trendsAndRankings: 'Trends & rankings',
+      emptyTitle: 'No dashboard data',
+      emptyDescription: 'Dashboard statistics are unavailable right now.'
     },
 
     providerBilling: {

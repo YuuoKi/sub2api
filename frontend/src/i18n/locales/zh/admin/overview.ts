@@ -71,7 +71,19 @@ export default {
       groupPricingDesc: '设置批量折扣和冻结比例',
       systemSettings: '系统设置',
       configureSystem: '配置系统设置',
-      failedToLoad: '加载仪表盘数据失败'
+      failedToLoad: '加载仪表盘数据失败',
+      summary: '摘要',
+      attention: '需要关注',
+      attentionEmpty: '当前没有异常，运行正常。',
+      nextActions: '下一步操作',
+      moreMetrics: '更多指标',
+      errorAccountsAttention: '{count} 个账号处于错误状态',
+      rankingUnavailable: '用户消费排行加载失败。',
+      billingPendingHint: '供应商账单尚未上传，对账待处理。',
+      openReconciliation: '前往对账',
+      trendsAndRankings: '趋势与排行',
+      emptyTitle: '暂无仪表盘数据',
+      emptyDescription: '当前无法获取仪表盘统计。'
     },
 
     providerBilling: {

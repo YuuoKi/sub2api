@@ -153,4 +153,29 @@ describe('admin DashboardView', () => {
     expect(getBossConclusions).toHaveBeenCalledTimes(1)
     expect(wrapper.text()).toContain('admin.providerBilling.conclusionNotUploaded')
   })
+
+  it('renders the boss dashboard in outcome-first order', async () => {
+    const wrapper = mount(DashboardView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          LoadingSpinner: true,
+          Icon: true,
+          DateRangePicker: true,
+          Select: true,
+          ModelDistributionChart: true,
+          TokenUsageTrend: true,
+          Line: true
+        }
+      }
+    })
+    await flushPromises()
+
+    const ids = ['dashboard-summary', 'dashboard-kpis', 'dashboard-attention', 'dashboard-trends']
+    for (const id of ids) expect(wrapper.find(`[data-testid="${id}"]`).exists()).toBe(true)
+
+    const html = wrapper.html()
+    expect(html.indexOf('dashboard-summary')).toBeLessThan(html.indexOf('dashboard-kpis'))
+    expect(html.indexOf('dashboard-kpis')).toBeLessThan(html.indexOf('dashboard-trends'))
+  })
 })

@@ -1,6 +1,7 @@
 package migrations
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
@@ -27,4 +28,7 @@ func TestVideoGatewayFoundationMigrationContract(t *testing.T) {
 		require.Contains(t, sql, fragment)
 	}
 	require.NotContains(t, strings.ToLower(sql), "insert into video_provider_accounts")
+
+	require.NotRegexp(t, regexp.MustCompile(`(?im)^\s*(?:drop|truncate|delete)\b`), sql)
+	require.NotRegexp(t, regexp.MustCompile(`(?is)\binsert\s+into\b[^;]*\bselect\b`), sql)
 }

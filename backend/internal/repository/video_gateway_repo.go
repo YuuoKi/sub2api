@@ -17,10 +17,14 @@ func NewVideoGatewayRepository(db *sql.DB) service.VideoGatewayRepository {
 }
 
 func (r *videoGatewayRepository) CreateTask(ctx context.Context, task *service.VideoTask) error {
-	if r == nil || r.db == nil || task == nil {
-		return fmt.Errorf("video task repository and task are required")
+	db, err := r.requireDB()
+	if err != nil {
+		return err
 	}
-	return r.db.QueryRowContext(ctx, `INSERT INTO video_tasks
+	if task == nil {
+		return fmt.Errorf("video task is required")
+	}
+	return db.QueryRowContext(ctx, `INSERT INTO video_tasks
 		(provider_account_id, provider, model, task_type, prompt, status, creation_key, created_by)
 		VALUES ($1,$2,$3,$4,$5,$6,NULLIF($7,''),$8)
 		RETURNING id, version, created_at, updated_at`,
@@ -30,10 +34,15 @@ func (r *videoGatewayRepository) CreateTask(ctx context.Context, task *service.V
 }
 
 const videoTaskColumns = `id, provider_account_id, provider, model, task_type, prompt,
-	status, result_url, error_message, version, dispatch_state, created_at, updated_at, completed_at`
+	status, result_url, error_message, COALESCE(creation_key, ''), version, dispatch_state,
+	created_by, created_at, updated_at, completed_at`
 
 func (r *videoGatewayRepository) GetTask(ctx context.Context, id int64) (*service.VideoTask, error) {
-	task, err := scanVideoTask(r.db.QueryRowContext(ctx, `SELECT `+videoTaskColumns+` FROM video_tasks WHERE id = $1`, id))
+	db, err := r.requireDB()
+	if err != nil {
+		return nil, err
+	}
+	task, err := scanVideoTask(db.QueryRowContext(ctx, `SELECT `+videoTaskColumns+` FROM video_tasks WHERE id = $1`, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, service.ErrVideoTaskNotFound
 	}
@@ -41,6 +50,10 @@ func (r *videoGatewayRepository) GetTask(ctx context.Context, id int64) (*servic
 }
 
 func (r *videoGatewayRepository) ClaimRunnableTasks(ctx context.Context, limit int, lease time.Duration) ([]*service.VideoTask, error) {
+	db, err := r.requireDB()
+	if err != nil {
+		return nil, err
+	}
 	if limit <= 0 {
 		limit = 20
 	}
@@ -48,7 +61,7 @@ func (r *videoGatewayRepository) ClaimRunnableTasks(ctx context.Context, limit i
 	if seconds <= 0 {
 		return nil, fmt.Errorf("video task claim lease must be positive")
 	}
-	rows, err := r.db.QueryContext(ctx, `WITH candidates AS (
+	rows, err := db.QueryContext(ctx, `WITH candidates AS (
 		SELECT id FROM video_tasks
 		WHERE status IN ('queued','submitted','running')
 		  AND (worker_claimed_until IS NULL OR worker_claimed_until <= NOW())
@@ -74,10 +87,14 @@ func (r *videoGatewayRepository) ClaimRunnableTasks(ctx context.Context, limit i
 }
 
 func (r *videoGatewayRepository) FinalizeTask(ctx context.Context, input service.VideoTaskFinalization) (service.VideoTaskFinalizationResult, error) {
+	db, err := r.requireDB()
+	if err != nil {
+		return service.VideoTaskFinalizationResult{}, err
+	}
 	if input.Status != service.VideoStatusSucceeded && input.Status != service.VideoStatusFailed && input.Status != service.VideoStatusCancelled {
 		return service.VideoTaskFinalizationResult{}, fmt.Errorf("video finalization requires terminal status")
 	}
-	tx, err := r.db.BeginTx(ctx, nil)
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return service.VideoTaskFinalizationResult{}, err
 	}
@@ -119,12 +136,20 @@ func (r *videoGatewayRepository) FinalizeTask(ctx context.Context, input service
 
 type videoRowScanner interface{ Scan(...any) error }
 
+func (r *videoGatewayRepository) requireDB() (*sql.DB, error) {
+	if r == nil || r.db == nil {
+		return nil, fmt.Errorf("video gateway repository database is required")
+	}
+	return r.db, nil
+}
+
 func scanVideoTask(scanner videoRowScanner) (*service.VideoTask, error) {
 	task := &service.VideoTask{}
 	var completed sql.NullTime
 	if err := scanner.Scan(&task.ID, &task.ProviderAccountID, &task.Provider, &task.Model,
 		&task.TaskType, &task.Prompt, &task.Status, &task.ResultURL, &task.ErrorMessage,
-		&task.Version, &task.DispatchState, &task.CreatedAt, &task.UpdatedAt, &completed); err != nil {
+		&task.CreationKey, &task.Version, &task.DispatchState, &task.CreatedBy,
+		&task.CreatedAt, &task.UpdatedAt, &completed); err != nil {
 		return nil, err
 	}
 	if completed.Valid {

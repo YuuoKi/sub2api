@@ -24,10 +24,12 @@ func TestVideoGatewayRepositoryCreateAndGetTask(t *testing.T) {
 	require.NoError(t, repo.CreateTask(context.Background(), task))
 	require.EqualValues(t, 31, task.ID)
 
-	mock.ExpectQuery(regexp.QuoteMeta("FROM video_tasks")).WithArgs(int64(31)).WillReturnRows(videoTaskRows(now).AddRow(int64(31), int64(7), "seedance", "video-v1", "text_to_video", "test prompt", "queued", "", "", int64(1), "pending", now, now, nil))
+	mock.ExpectQuery(regexp.QuoteMeta("FROM video_tasks")).WithArgs(int64(31)).WillReturnRows(videoTaskRows(now).AddRow(int64(31), int64(7), "seedance", "video-v1", "text_to_video", "test prompt", "queued", "", "", "creation-1", int64(1), "pending", int64(9), now, now, nil))
 	stored, err := repo.GetTask(context.Background(), 31)
 	require.NoError(t, err)
 	require.Equal(t, task.Prompt, stored.Prompt)
+	require.Equal(t, task.CreationKey, stored.CreationKey)
+	require.Equal(t, task.CreatedBy, stored.CreatedBy)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -37,12 +39,40 @@ func TestVideoGatewayRepositoryClaimsRunnableTasks(t *testing.T) {
 	t.Cleanup(func() { _ = db.Close() })
 	repo := NewVideoGatewayRepository(db)
 	now := time.Now().UTC()
-	mock.ExpectQuery("FOR UPDATE SKIP LOCKED").WithArgs(2, 90).WillReturnRows(videoTaskRows(now).AddRow(int64(4), int64(2), "mock", "mock-v1", "text_to_video", "prompt", "queued", "", "", int64(1), "pending", now, now, nil))
+	mock.ExpectQuery("FOR UPDATE SKIP LOCKED").WithArgs(2, 90).WillReturnRows(videoTaskRows(now).AddRow(int64(4), int64(2), "mock", "mock-v1", "text_to_video", "prompt", "queued", "", "", "claim-4", int64(1), "pending", int64(13), now, now, nil))
 	tasks, err := repo.ClaimRunnableTasks(context.Background(), 2, 90*time.Second)
 	require.NoError(t, err)
 	require.Len(t, tasks, 1)
 	require.EqualValues(t, 4, tasks[0].ID)
+	require.Equal(t, "claim-4", tasks[0].CreationKey)
+	require.EqualValues(t, 13, tasks[0].CreatedBy)
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestVideoGatewayRepositoryNilDatabaseFailsExplicitly(t *testing.T) {
+	repo := NewVideoGatewayRepository(nil)
+	ctx := context.Background()
+
+	require.ErrorContains(t, repo.CreateTask(ctx, &service.VideoTask{}), "database is required")
+	_, err := repo.GetTask(ctx, 1)
+	require.ErrorContains(t, err, "database is required")
+	_, err = repo.ClaimRunnableTasks(ctx, 1, time.Second)
+	require.ErrorContains(t, err, "database is required")
+	_, err = repo.FinalizeTask(ctx, service.VideoTaskFinalization{Status: service.VideoStatusSucceeded})
+	require.ErrorContains(t, err, "database is required")
+}
+
+func TestVideoGatewayRepositoryNilReceiverFailsExplicitly(t *testing.T) {
+	var repo *videoGatewayRepository
+	ctx := context.Background()
+
+	require.ErrorContains(t, repo.CreateTask(ctx, &service.VideoTask{}), "database is required")
+	_, err := repo.GetTask(ctx, 1)
+	require.ErrorContains(t, err, "database is required")
+	_, err = repo.ClaimRunnableTasks(ctx, 1, time.Second)
+	require.ErrorContains(t, err, "database is required")
+	_, err = repo.FinalizeTask(ctx, service.VideoTaskFinalization{Status: service.VideoStatusSucceeded})
+	require.ErrorContains(t, err, "database is required")
 }
 
 func TestVideoGatewayRepositoryTerminalFinalizationIsIdempotent(t *testing.T) {
@@ -71,5 +101,5 @@ func TestVideoGatewayRepositoryTerminalFinalizationIsIdempotent(t *testing.T) {
 }
 
 func videoTaskRows(now time.Time) *sqlmock.Rows {
-	return sqlmock.NewRows([]string{"id", "provider_account_id", "provider", "model", "task_type", "prompt", "status", "result_url", "error_message", "version", "dispatch_state", "created_at", "updated_at", "completed_at"})
+	return sqlmock.NewRows([]string{"id", "provider_account_id", "provider", "model", "task_type", "prompt", "status", "result_url", "error_message", "creation_key", "version", "dispatch_state", "created_by", "created_at", "updated_at", "completed_at"})
 }

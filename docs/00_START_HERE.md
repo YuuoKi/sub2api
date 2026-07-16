@@ -6,7 +6,7 @@
 
 canonical `http://127.0.0.1:8080`、无界 embedded 品牌、本地镜像与完整管理后台五段路径已有同实例运行证据；Gemini 图片与 Seedance 2.0 视频各一次真实 tiny_real 也已成功且无重试。`realCallExecuted=2`、`open_p0_count=0`、`blocked=[]`，整体为**待复核**；不得外推为商业交付完成、生产上线或已 push。
 
-2026-07-16 本轮 Gate 1-3 代码已经落在当前未提交工作树：临时凭据与首次强制改密、用户危险操作确认、运维显式失败、Gemini/Seedance UX、请求/上游/计费/余额/授权证据，以及给 QCanvas 的 loopback 一次性既有资产接力。前端完整 Vitest、类型检查和 production build 通过，后端本轮定向 Go 测试通过。代码完成不等于 W4.2 fake pilot 或最终老板受保护路径已经走通。
+2026-07-17 本轮 Gate 1-3 代码已由 Sub2API 功能实现提交 `7cf7404f` 与 QCanvas 功能实现提交 `e7c8af3` 承载；仓库 HEAD 通过 `git rev-parse HEAD` 实时读取。范围包括临时凭据与首次强制改密、用户危险操作确认、运维显式失败、Gemini/Seedance UX、请求/上游/计费/余额/授权证据，以及给 QCanvas 的 loopback 一次性既有资产接力。前端完整 Vitest、类型检查和 production build 通过，后端 `go test ./...` 通过。代码完成不等于 W4.2 fake pilot 或最终老板受保护路径已经走通。
 
 ## 唯一前端定义
 
@@ -46,11 +46,11 @@ canonical `http://127.0.0.1:8080`、无界 embedded 品牌、本地镜像与完�
 
 - 品牌实现：`4dc96e38`。缺失、空白和精确上游站点名统一到无界品牌，自定义站点名保留；embedded raw HTML title 与服务端站点名同源。
 - 部署契约：`00f98a95`。唯一 host 发布为 `127.0.0.1:8080:8080`，独立终审 Critical=0、Important=0。
-- 当前本地镜像：由 HEAD `1e4fdb40` 上的本轮未提交工作树重建，`sha256:72b91368ff03b620e430a8cfe6ae4bdaff49716414cf7d8a7bd1dcdf8fb40380`。
+- 当前本地镜像：由功能实现提交 `7cf7404f` 对应工作树重建，`sha256:72b91368ff03b620e430a8cfe6ae4bdaff49716414cf7d8a7bd1dcdf8fb40380`。
 - 隔离开卡/usage smoke：只显示掩码 key，`usage_delta=1`、`balance_delta=0.00045000`；临时 PostgreSQL/Redis 已终止，无真实 provider 或生产数据。
 - canonical runtime：`http://127.0.0.1:8080` HTTP 200、title 为 `无界 · 企业 AI 管理中台`、镜像为 `wujie-sub2api:local`、host `:3000` 无监听；完整管理面、管理员开卡、员工 Key 与 usage 五段路径已留证。
 - 本轮重新执行 `deploy/wujie-local-entry.ps1 Stop/Start/Status`：Stop 证明 `volumes=untouched`，Start/Status 通过不可变 image ID、8080/title/3000 门禁；Start 使用 `--no-deps`，端口检查无需提升权限。canonical Docker-NAT 的无效票据请求返回 404，证明已进入票据校验层。隔离 DEV 恢复演练通过，未触碰生产或删除已有备份。
-- 当前 Git HEAD：`1e4fdb40`。运行证据基线：`d6687e89`（视频能力落点祖先含 `15880e23`）；`/v1/video/tasks`、管理员视频控制面、原子一次授权/dispatch claim、usage/settlement 与 process-only gate 均已验证。
+- 功能实现提交：`7cf7404f`；仓库 HEAD 通过 `git rev-parse HEAD` 实时读取。运行证据基线：`d6687e89`（视频能力落点祖先含 `15880e23`）；`/v1/video/tasks`、管理员视频控制面、原子一次授权/dispatch claim、usage/settlement 与 process-only gate 均已验证。
 - Gemini 图片真实证据：request `client:995b4b75-be49-4ecd-a8ff-c7bc283fda69`，终态成功，本地 PNG 1336210 bytes，实扣 `$0.0585`；实账 `billedImageSize=2K`（勿再写成已验证 512）。
 - Seedance 2.0 真实证据：local task `1`、upstream task `cgt-20260716174852-8p5hj`、终态 `succeeded`、87300 tokens，本地 MP4/尾帧齐全，实扣 `$0.3395`。
 - 两次合计 `$0.3980` / 约 `¥2.8656`，员工余额 `$3.0000 → $2.6020`，低于授权上限 `¥15`；process-only 单次门已恢复关闭。

@@ -41,9 +41,9 @@ services:
 
 ## 当前状态
 
-当前 Git HEAD 为 `1e4fdb40`，运行证据基线为 `d6687e89`。canonical `127.0.0.1:8080` 已有 HTTP 200、无界 title、完整管理五段与两次 tiny_real 证据；`blocked=[]`、`open_p0_count=0`、`realCallExecuted=2`，整体为**待复核**。不得外推为生产上线、已 push 或商业交付完成；QCanvas 既有资产回填、W4.2 fake-gateway pilot 与历史 provider key 轮换仍未执行。
+Sub2API 功能实现提交为 `7cf7404f`，QCanvas 功能实现提交为 `e7c8af3`；仓库 HEAD 通过 `git rev-parse HEAD` 实时读取。运行证据基线为 `d6687e89`。canonical `127.0.0.1:8080` 已有 HTTP 200、无界 title、完整管理五段与两次 tiny_real 证据；`blocked=[]`、`open_p0_count=0`、`realCallExecuted=2`，整体为**待复核**。不得外推为生产上线、已 push 或商业交付完成；QCanvas 既有资产回填、W4.2 fake-gateway pilot 与历史 provider key 轮换仍未执行。
 
-当前 `wujie-sub2api:local` 已由 HEAD 上的本轮未提交工作树重建为 `sha256:72b91368ff03b620e430a8cfe6ae4bdaff49716414cf7d8a7bd1dcdf8fb40380`，并通过入口脚本 Stop/Start/Status 门禁；Status 核对不可变 image ID，Start 使用 `--no-deps`，端口检查不要求提升权限。canonical Docker-NAT 只通过显式 compose 开关信任私有 bridge peer + 精确 loopback Host:8080，不读取 XFF。首次强制改密、UX 与资产接力代码完成不代表受保护浏览器走查完成。
+当前 `wujie-sub2api:local` 已由功能实现提交 `7cf7404f` 对应工作树重建为 `sha256:72b91368ff03b620e430a8cfe6ae4bdaff49716414cf7d8a7bd1dcdf8fb40380`，并通过入口脚本 Stop/Start/Status 门禁；Status 核对不可变 image ID，Start 使用 `--no-deps`，端口检查不要求提升权限。canonical Docker-NAT 只通过显式 compose 开关信任私有 bridge peer + 精确 loopback Host:8080，不读取 XFF。首次强制改密、UX 与资产接力代码完成不代表受保护浏览器走查完成。
 
 ## 回滚
 

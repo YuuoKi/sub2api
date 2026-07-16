@@ -14,6 +14,7 @@ import (
 	"math"
 	mathrand "math/rand"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -1693,13 +1694,18 @@ func sleepGeminiBackoff(attempt int) {
 }
 
 var (
-	sensitiveQueryParamRegex = regexp.MustCompile(`(?i)([?&](?:key|client_secret|access_token|refresh_token)=)[^&"\s]+`)
+	sensitiveQueryParamRegex = regexp.MustCompile(`(?i)([?&](?:key|client_secret|access_token|refresh_token|proxy)=)[^&"\s]+`)
 	retryInRegex             = regexp.MustCompile(`Please retry in ([0-9.]+)s`)
 )
 
 func sanitizeUpstreamErrorMessage(msg string) string {
 	if msg == "" {
 		return msg
+	}
+	// Decode percent-encoding first so credentials hidden in proxy=http%3A%2F%2Fuser%3Apass%40host
+	// match the sensitive query regex (and so redaction removes the decoded username/password forms).
+	if decoded, err := url.QueryUnescape(msg); err == nil {
+		msg = decoded
 	}
 	return sensitiveQueryParamRegex.ReplaceAllString(msg, `$1***`)
 }

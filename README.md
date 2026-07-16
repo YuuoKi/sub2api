@@ -1,4 +1,6 @@
-# Sub2API
+# 无界 · 企业 AI 管理中台（Sub2API 内部基座）
+
+> 当前收口仓的唯一操作入口是 [`docs/00_START_HERE.md`](docs/00_START_HERE.md)。本机只验收本地镜像 `wujie-sub2api:local` 的 `http://127.0.0.1:8080`，并固定 `RUN_MODE=standard`。禁止用 Vite `:3000`、`weishaw/sub2api:latest` 或 demo/simple 隐藏模式冒充无界管理中台。下方开源项目介绍、赞助与多语言链接只作上游背景，不是本机部署指令。
 
 <div align="center">
 
@@ -10,7 +12,7 @@
 
 <a href="https://trendshift.io/repositories/21823" target="_blank"><img src="https://trendshift.io/api/badge/repositories/21823" alt="Wei-Shaw%2Fsub2api | Trendshift" width="250" height="55"/></a>
 
-**AI API Gateway Platform for Subscription Quota Distribution**
+**无界互娱内部 AI API 管理、开卡、用量与模型调度中台**
 
 English | [中文](README_CN.md) | [日本語](README_JA.md)
 

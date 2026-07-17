@@ -132,20 +132,49 @@ func TestGenerationContentStructuredRedactionPreservesOrdinaryIdentifiers(t *tes
 	}
 }
 
-func TestGenerationContentCollectorRedactsBeforeBoundingValidJSON(t *testing.T) {
+func TestGatewayGenerationPromptSnapshotDisabledReturnsNil(t *testing.T) {
+	svc := &GatewayService{cfg: &config.Config{}}
+	snapshot := svc.SnapshotGenerationPrompt([]byte(strings.Repeat("x", 1024)))
+	if snapshot.Body != nil || snapshot.OriginalBytes != 0 || snapshot.Truncated {
+		t.Fatalf("disabled capture created snapshot: %+v", snapshot)
+	}
+}
+
+func TestGatewayGenerationPromptSnapshotEnabledCopiesOnlyBoundedPrefix(t *testing.T) {
+	svc := &GatewayService{cfg: generationCaptureConfig(64, 32)}
+	body := []byte(strings.Repeat("a", 1024))
+	snapshot := svc.SnapshotGenerationPrompt(body)
+	if len(snapshot.Body) != 64 || snapshot.OriginalBytes != len(body) || !snapshot.Truncated {
+		t.Fatalf("snapshot mismatch: body=%d original=%d truncated=%v", len(snapshot.Body), snapshot.OriginalBytes, snapshot.Truncated)
+	}
+	body[0] = 'z'
+	if snapshot.Body[0] != 'a' {
+		t.Fatal("snapshot must own its bounded bytes")
+	}
+}
+
+func TestGatewayGenerationPromptSnapshotHonorsHardCap(t *testing.T) {
+	svc := &GatewayService{cfg: generationCaptureConfig(1<<30, 32)}
+	snapshot := svc.SnapshotGenerationPrompt([]byte(strings.Repeat("x", maxGenerationPromptMaxBytes+1024)))
+	if len(snapshot.Body) != maxGenerationPromptMaxBytes || !snapshot.Truncated {
+		t.Fatalf("hard-cap snapshot body=%d truncated=%v", len(snapshot.Body), snapshot.Truncated)
+	}
+}
+
+func TestGenerationContentCollectorProcessesBoundedSnapshotAndKeepsOriginalByteCount(t *testing.T) {
 	repo := &generationContentMemoryRepo{}
 	collector := NewGenerationContentCollector(repo, generationCaptureConfig(96, 32))
 	prompt := []byte(`{"messages":[{"content":"safe-prefix ` + strings.Repeat("long text ", 80) + `"}]}`)
-	collector.Collect(context.Background(), GenerationContentCaptureArgs{RequestID: "req-long-json", PromptBody: prompt})
+	collector.Collect(context.Background(), GenerationContentCaptureArgs{RequestID: "req-long-json", PromptBody: prompt, PromptBytes: len(prompt)})
 	if len(repo.rows) != 1 {
 		t.Fatalf("rows=%d, want 1", len(repo.rows))
 	}
-	got := repo.rows[0].PromptRedacted
-	if strings.Contains(got, "non-json payload") || !strings.Contains(got, "safe-prefix") {
-		t.Fatalf("valid oversized JSON lost during redaction/bounding: %q", got)
+	row := repo.rows[0]
+	if row.PromptBytes != len(prompt) {
+		t.Fatalf("persisted prompt bytes=%d, want original %d", row.PromptBytes, len(prompt))
 	}
-	if len(got) > 96 {
-		t.Fatalf("bounded prompt len=%d, want <=96", len(got))
+	if len(row.PromptRedacted) > 96 {
+		t.Fatalf("bounded prompt len=%d, want <=96", len(row.PromptRedacted))
 	}
 }
 

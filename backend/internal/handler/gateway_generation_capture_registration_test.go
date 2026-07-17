@@ -23,6 +23,15 @@ func TestAnthropicGatewayCompletionPointsRegisterGenerationCapture(t *testing.T)
 		if got := strings.Count(string(body), ".CollectGenerationContent(ctx,"); got != test.want {
 			t.Fatalf("%s capture completion points=%d, want %d", test.file, got, test.want)
 		}
+		if got := strings.Count(string(body), ".SnapshotGenerationPrompt("); got != test.want {
+			t.Fatalf("%s safe prompt snapshots=%d, want %d", test.file, got, test.want)
+		}
+		if got := strings.Count(string(body), "PromptBytes: generationPrompt.OriginalBytes"); got != test.want {
+			t.Fatalf("%s original prompt byte metadata=%d, want %d", test.file, got, test.want)
+		}
+		if strings.Contains(string(body), "append([]byte(nil),") {
+			t.Fatalf("%s directly copies an unbounded prompt body", test.file)
+		}
 		assertGenerationCapturePrecedesUsageRecording(t, test.file, string(body))
 	}
 }
@@ -32,7 +41,7 @@ func TestAnthropicFallbackCaptureUsesForwardedAttemptBody(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Count(string(body), "generationPromptBody := append([]byte(nil), attemptParsedReq.Body.Bytes()...)"); got != 1 {
+	if got := strings.Count(string(body), "SnapshotGenerationPrompt(attemptParsedReq.Body.Bytes())"); got != 1 {
 		t.Fatalf("fallback capture forwarded-attempt prompt references=%d, want 1", got)
 	}
 }

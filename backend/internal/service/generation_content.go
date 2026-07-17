@@ -127,7 +127,14 @@ type GenerationContentCaptureArgs struct {
 	Model              string
 	RequestPayloadHash string
 	PromptBody         []byte
+	PromptBytes        int
 	Result             *ForwardResult
+}
+
+type GenerationPromptSnapshot struct {
+	Body          []byte
+	OriginalBytes int
+	Truncated     bool
 }
 
 type GenerationContentCollector struct {
@@ -173,7 +180,12 @@ func (c *GenerationContentCollector) Collect(ctx context.Context, args Generatio
 		}
 	}()
 
-	promptRedacted := truncateStringUTF8(redactGenerationPrompt(args.PromptBody), c.promptMaxBytes())
+	promptInput := truncateValidUTF8(args.PromptBody, c.promptMaxBytes())
+	promptRedacted := truncateStringUTF8(redactGenerationPrompt(promptInput), c.promptMaxBytes())
+	promptBytes := args.PromptBytes
+	if promptBytes < len(args.PromptBody) {
+		promptBytes = len(args.PromptBody)
+	}
 	responseSample := []byte(nil)
 	responseBytes := 0
 	responseTruncated := false
@@ -193,7 +205,7 @@ func (c *GenerationContentCollector) Collect(ctx context.Context, args Generatio
 		RequestPayloadHash: args.RequestPayloadHash,
 		PromptRedacted:     promptRedacted,
 		ResponseRedacted:   responseRedacted,
-		PromptBytes:        len(args.PromptBody),
+		PromptBytes:        promptBytes,
 		ResponseBytes:      responseBytes,
 		ResponseTruncated:  responseTruncated,
 		RedactionVersion:   generationRedactionVersion,
@@ -238,6 +250,19 @@ func (s *GatewayService) SetGenerationContentCollector(collector *GenerationCont
 
 func (s *GatewayService) contentCaptureEnabled() bool {
 	return s != nil && s.cfg != nil && s.cfg.Gateway.ContentCapture.Enabled
+}
+
+func (s *GatewayService) SnapshotGenerationPrompt(body []byte) GenerationPromptSnapshot {
+	if !s.contentCaptureEnabled() {
+		return GenerationPromptSnapshot{}
+	}
+	limit := boundedGenerationBytes(s.cfg.Gateway.ContentCapture.PromptMaxBytes, defaultGenerationPromptMaxBytes, maxGenerationPromptMaxBytes)
+	bounded := truncateValidUTF8(body, limit)
+	return GenerationPromptSnapshot{
+		Body:          append([]byte(nil), bounded...),
+		OriginalBytes: len(body),
+		Truncated:     len(bounded) < len(body),
+	}
 }
 
 func (s *GatewayService) CollectGenerationContent(ctx context.Context, args GenerationContentCaptureArgs) {

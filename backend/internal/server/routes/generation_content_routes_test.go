@@ -2,6 +2,7 @@ package routes
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -18,6 +19,34 @@ import (
 )
 
 type generationContentRoutesRepo struct{ statsCalls int }
+
+type generationContentRoutesSettingRepo struct{ acknowledged bool }
+
+func (r *generationContentRoutesSettingRepo) Get(ctx context.Context, key string) (*service.Setting, error) {
+	value, err := r.GetValue(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	return &service.Setting{Key: key, Value: value}, nil
+}
+func (r *generationContentRoutesSettingRepo) GetValue(context.Context, string) (string, error) {
+	if !r.acknowledged {
+		return "", service.ErrSettingNotFound
+	}
+	payload, _ := json.Marshal(service.AdminComplianceAcknowledgement{Version: service.AdminComplianceVersion, AdminUserID: 1})
+	return string(payload), nil
+}
+func (*generationContentRoutesSettingRepo) Set(context.Context, string, string) error { return nil }
+func (*generationContentRoutesSettingRepo) GetMultiple(context.Context, []string) (map[string]string, error) {
+	return map[string]string{}, nil
+}
+func (*generationContentRoutesSettingRepo) SetMultiple(context.Context, map[string]string) error {
+	return nil
+}
+func (*generationContentRoutesSettingRepo) GetAll(context.Context) (map[string]string, error) {
+	return map[string]string{}, nil
+}
+func (*generationContentRoutesSettingRepo) Delete(context.Context, string) error { return nil }
 
 func (r *generationContentRoutesRepo) Create(context.Context, *service.GenerationContent) error {
 	return nil
@@ -36,18 +65,24 @@ func (r *generationContentRoutesRepo) GetWeeklyReport(_ context.Context, start, 
 	return &service.GenerationContentWeeklyReport{PeriodStart: start, PeriodEnd: end}, nil
 }
 
-func newGenerationContentAdminRouter(auth middleware.AdminAuthMiddleware, repo *generationContentRoutesRepo) *gin.Engine {
+func newGenerationContentAdminRouter(auth middleware.AdminAuthMiddleware, repo *generationContentRoutesRepo, settings *service.SettingService) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	content := adminhandler.NewGenerationContentHandler(repo, &config.Config{}, nil)
 	handlers := &handler.Handlers{Admin: &handler.AdminHandlers{GenerationContent: content}}
-	RegisterAdminRoutes(router.Group("/api/v1"), handlers, auth, nil)
+	RegisterAdminRoutes(router.Group("/api/v1"), handlers, auth, settings)
 	return router
+}
+
+func generationContentTestAdminAuth(c *gin.Context) {
+	c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 1})
+	c.Next()
 }
 
 func TestGenerationContentAdminRoutesRegistered(t *testing.T) {
 	repo := &generationContentRoutesRepo{}
-	router := newGenerationContentAdminRouter(middleware.AdminAuthMiddleware(func(c *gin.Context) { c.Next() }), repo)
+	settings := service.NewSettingService(&generationContentRoutesSettingRepo{acknowledged: true}, &config.Config{})
+	router := newGenerationContentAdminRouter(middleware.AdminAuthMiddleware(generationContentTestAdminAuth), repo, settings)
 	tests := []struct{ method, path, body string }{
 		{http.MethodGet, "/api/v1/admin/generation-content/stats", ""},
 		{http.MethodGet, "/api/v1/admin/generation-content/samples", ""},
@@ -67,9 +102,20 @@ func TestGenerationContentAdminRoutesRequireAdminAuth(t *testing.T) {
 	repo := &generationContentRoutesRepo{}
 	router := newGenerationContentAdminRouter(middleware.AdminAuthMiddleware(func(c *gin.Context) {
 		c.AbortWithStatus(http.StatusUnauthorized)
-	}), repo)
+	}), repo, service.NewSettingService(&generationContentRoutesSettingRepo{acknowledged: true}, &config.Config{}))
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/admin/generation-content/stats", nil))
 	require.Equal(t, http.StatusUnauthorized, recorder.Code)
+	require.Zero(t, repo.statsCalls)
+}
+
+func TestGenerationContentAdminRoutesRequireComplianceAcknowledgement(t *testing.T) {
+	repo := &generationContentRoutesRepo{}
+	settings := service.NewSettingService(&generationContentRoutesSettingRepo{}, &config.Config{})
+	router := newGenerationContentAdminRouter(middleware.AdminAuthMiddleware(generationContentTestAdminAuth), repo, settings)
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/admin/generation-content/stats", nil))
+	require.Equal(t, http.StatusLocked, recorder.Code)
+	require.Contains(t, recorder.Body.String(), "ADMIN_COMPLIANCE_ACK_REQUIRED")
 	require.Zero(t, repo.statsCalls)
 }

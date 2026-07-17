@@ -297,12 +297,29 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 
 		userAgent := c.GetHeader("User-Agent")
 		clientIP := ip.GetClientIP(c)
+		// RequestPayloadHash stays on the inbound body for usage-join parity.
+		// Prompt capture prefers the effective forwarded body (channel model-mapped).
+		requestPayloadHash := service.HashUsageRequestPayload(body)
 		inboundEndpoint := GetInboundEndpoint(c)
 		upstreamEndpoint := resolveOpenAIUpstreamEndpoint(c, account)
 		quotaPlatform := service.QuotaPlatform(c.Request.Context(), apiKey)
 
 		cyberBlocked := service.GetOpsCyberPolicy(c) != nil
+		// Generation-content capture is success-only (err==nil). Partial-image
+		// paths that still record usage with err!=nil intentionally skip capture.
+		var generationPrompt service.GenerationPromptSnapshot
+		if err == nil {
+			generationPrompt = h.gatewayService.SnapshotGenerationPrompt(forwardBody)
+		}
 		h.submitOpenAIUsageRecordTask(c.Request.Context(), result, func(ctx context.Context) {
+			if err == nil {
+				h.gatewayService.CollectGenerationContent(ctx, service.GenerationContentCaptureArgs{
+					RequestID: result.RequestID, UserID: subject.UserID, APIKeyID: apiKey.ID, GroupID: apiKey.GroupID,
+					AccountID: account.ID, Model: reqModel, RequestPayloadHash: requestPayloadHash,
+					PromptBody: generationPrompt.Body, PromptBytes: generationPrompt.OriginalBytes,
+					Result: service.OpenAIResultAsCaptureEvidence(result),
+				})
+			}
 			if err := h.gatewayService.RecordUsage(ctx, &service.OpenAIRecordUsageInput{
 				Result:             result,
 				APIKey:             apiKey,
@@ -313,6 +330,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 				UpstreamEndpoint:   upstreamEndpoint,
 				UserAgent:          userAgent,
 				IPAddress:          clientIP,
+				RequestPayloadHash: requestPayloadHash,
 				APIKeyService:      h.apiKeyService,
 				QuotaPlatform:      quotaPlatform,
 				ChannelUsageFields: channelMapping.ToUsageFields(reqModel, result.UpstreamModel),

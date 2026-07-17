@@ -208,6 +208,10 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	// body-signal compact：上游 unary 等待期间向下游发 SSE 注释行心跳，防止
 	// 反向代理空闲超时掐断长压缩连接（#3887）。首拍延迟一个心跳间隔，快速
 	// 失败仍走 JSON+状态码链路；未标记客户端流式或间隔为 0 时是 no-op。
+	// Capture must wrap before keepalive so the writer chain is
+	// real←capture←keepalive and adjusted written-size accounting stays valid.
+	restoreResponseCapture := h.gatewayService.BeginResponseCapture(c)
+	defer restoreResponseCapture()
 	stopCompactKeepalive := service.StartOpenAICompactSSEKeepalive(c, h.openAICompactKeepaliveInterval())
 	defer stopCompactKeepalive()
 
@@ -520,6 +524,8 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		// 捕获请求信息（用于异步记录，避免在 goroutine 中访问 gin.Context）
 		userAgent := c.GetHeader("User-Agent")
 		clientIP := ip.GetClientIP(c)
+		// RequestPayloadHash stays on the inbound body for usage-join parity.
+		// Prompt capture prefers the effective forwarded body (channel model-mapped).
 		requestPayloadHash := service.HashUsageRequestPayload(body)
 		inboundEndpoint := GetInboundEndpoint(c)
 		upstreamEndpoint := resolveOpenAIUpstreamEndpoint(c, account)
@@ -527,7 +533,21 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 
 		// 使用量记录通过有界 worker 池提交，避免请求热路径创建无界 goroutine。
 		cyberBlocked := service.GetOpsCyberPolicy(c) != nil
+		// Generation-content capture is success-only (err==nil). Partial-image
+		// paths that still record usage with err!=nil intentionally skip capture.
+		var generationPrompt service.GenerationPromptSnapshot
+		if err == nil {
+			generationPrompt = h.gatewayService.SnapshotGenerationPrompt(forwardBody)
+		}
 		h.submitOpenAIUsageRecordTask(c.Request.Context(), result, func(ctx context.Context) {
+			if err == nil {
+				h.gatewayService.CollectGenerationContent(ctx, service.GenerationContentCaptureArgs{
+					RequestID: result.RequestID, UserID: subject.UserID, APIKeyID: apiKey.ID, GroupID: apiKey.GroupID,
+					AccountID: account.ID, Model: reqModel, RequestPayloadHash: requestPayloadHash,
+					PromptBody: generationPrompt.Body, PromptBytes: generationPrompt.OriginalBytes,
+					Result: service.OpenAIResultAsCaptureEvidence(result),
+				})
+			}
 			if err := h.gatewayService.RecordUsage(ctx, &service.OpenAIRecordUsageInput{
 				Result:             result,
 				APIKey:             apiKey,
@@ -992,13 +1012,29 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 
 		userAgent := c.GetHeader("User-Agent")
 		clientIP := ip.GetClientIP(c)
+		// RequestPayloadHash stays on the inbound body for usage-join parity.
+		// Prompt capture prefers the effective forwarded body (channel model-mapped).
 		requestPayloadHash := service.HashUsageRequestPayload(body)
 		inboundEndpoint := GetInboundEndpoint(c)
 		upstreamEndpoint := resolveOpenAIUpstreamEndpoint(c, account)
 		quotaPlatform := service.QuotaPlatform(c.Request.Context(), apiKey)
 
 		cyberBlocked := service.GetOpsCyberPolicy(c) != nil
+		// Generation-content capture is success-only (err==nil). Partial-image
+		// paths that still record usage with err!=nil intentionally skip capture.
+		var generationPrompt service.GenerationPromptSnapshot
+		if err == nil {
+			generationPrompt = h.gatewayService.SnapshotGenerationPrompt(forwardBody)
+		}
 		h.submitOpenAIUsageRecordTask(c.Request.Context(), result, func(ctx context.Context) {
+			if err == nil {
+				h.gatewayService.CollectGenerationContent(ctx, service.GenerationContentCaptureArgs{
+					RequestID: result.RequestID, UserID: subject.UserID, APIKeyID: apiKey.ID, GroupID: apiKey.GroupID,
+					AccountID: account.ID, Model: reqModel, RequestPayloadHash: requestPayloadHash,
+					PromptBody: generationPrompt.Body, PromptBytes: generationPrompt.OriginalBytes,
+					Result: service.OpenAIResultAsCaptureEvidence(result),
+				})
+			}
 			if err := h.gatewayService.RecordUsage(ctx, &service.OpenAIRecordUsageInput{
 				Result:             result,
 				APIKey:             apiKey,

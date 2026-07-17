@@ -57,7 +57,15 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 	body []byte,
 	promptCacheKey string,
 	defaultMappedModel string,
-) (*OpenAIForwardResult, error) {
+) (capturedResult *OpenAIForwardResult, capturedErr error) {
+	responseSink, restoreWriter := s.beginResponseCapture(c)
+	defer restoreWriter()
+	defer func() {
+		if capturedErr == nil {
+			fillOpenAIResponseSample(capturedResult, responseSink)
+		}
+	}()
+
 	restrictionResult := s.detectCodexClientRestriction(c, account, body)
 	logCodexCLIOnlyDetection(ctx, c, account, getAPIKeyIDFromContext(c), restrictionResult, body)
 	if restrictionResult.Enabled && !restrictionResult.Matched {

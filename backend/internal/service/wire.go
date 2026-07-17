@@ -275,6 +275,44 @@ func ProvideGatewayService(
 	return service
 }
 
+// ProvideOpenAIGatewayService wires the shared generation-content collector into
+// the OpenAI gateway without changing NewOpenAIGatewayService used by unit tests.
+func ProvideOpenAIGatewayService(
+	accountRepo AccountRepository,
+	usageLogRepo UsageLogRepository,
+	usageBillingRepo UsageBillingRepository,
+	userRepo UserRepository,
+	userSubRepo UserSubscriptionRepository,
+	userGroupRateRepo UserGroupRateRepository,
+	cache GatewayCache,
+	cfg *config.Config,
+	schedulerSnapshot *SchedulerSnapshotService,
+	concurrencyService *ConcurrencyService,
+	billingService *BillingService,
+	rateLimitService *RateLimitService,
+	billingCacheService *BillingCacheService,
+	httpUpstream HTTPUpstream,
+	deferredService *DeferredService,
+	openAITokenProvider *OpenAITokenProvider,
+	grokTokenProvider *GrokTokenProvider,
+	resolver *ModelPricingResolver,
+	channelService *ChannelService,
+	balanceNotifyService *BalanceNotifyService,
+	settingService *SettingService,
+	userPlatformQuotaRepo UserPlatformQuotaRepository,
+	collector *GenerationContentCollector,
+) *OpenAIGatewayService {
+	svc := NewOpenAIGatewayService(
+		accountRepo, usageLogRepo, usageBillingRepo, userRepo, userSubRepo,
+		userGroupRateRepo, cache, cfg, schedulerSnapshot, concurrencyService,
+		billingService, rateLimitService, billingCacheService, httpUpstream,
+		deferredService, openAITokenProvider, grokTokenProvider, resolver,
+		channelService, balanceNotifyService, settingService, userPlatformQuotaRepo,
+	)
+	svc.SetGenerationContentCollector(collector)
+	return svc
+}
+
 // ProvideTimingWheelService creates and starts TimingWheelService
 func ProvideTimingWheelService() (*TimingWheelService, error) {
 	svc, err := NewTimingWheelService()
@@ -649,7 +687,7 @@ var ProviderSet = wire.NewSet(
 	NewAdminService,
 	ProvideGatewayService,
 	NewGenerationContentCollector,
-	NewOpenAIGatewayService,
+	ProvideOpenAIGatewayService,
 	ProvideBatchImageModelPricingResolver,
 	NewBatchImagePublicService,
 	NewBatchImageDownloadService,

@@ -18,7 +18,19 @@ import (
 )
 
 // Forward forwards request to OpenAI API
-func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, account *Account, body []byte) (*OpenAIForwardResult, error) {
+func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, account *Account, body []byte) (capturedResult *OpenAIForwardResult, capturedErr error) {
+	responseSink, restoreWriter := s.beginResponseCapture(c)
+	defer restoreWriter()
+	defer func() {
+		// Success-only fill: never persist capture evidence on failover/error.
+		// Carve-out: partial-image paths that return (result, err!=nil) for usage
+		// billing also skip fill so generation-content stays err==nil-only
+		// (see TestOpenAIGenerationContentCaptureSkipsFillOnPartialImageErrorPath).
+		if capturedErr == nil {
+			fillOpenAIResponseSample(capturedResult, responseSink)
+		}
+	}()
+
 	startTime := time.Now()
 
 	restrictionResult := s.detectCodexClientRestriction(c, account, body)

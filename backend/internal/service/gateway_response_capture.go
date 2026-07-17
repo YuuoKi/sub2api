@@ -27,24 +27,19 @@ func (s *GatewayService) beginResponseCapture(c *gin.Context) (*cappedSink, func
 	if c == nil || !s.contentCaptureEnabled() {
 		return nil, func() {}
 	}
-	sink := newCappedSink(s.responseCaptureMaxBytes())
-	original := c.Writer
-	c.Writer = &capturingResponseWriter{ResponseWriter: original, sink: sink}
-	return sink, func() { c.Writer = original }
+	return installResponseCapture(c, s.responseCaptureMaxBytes())
 }
 
 func (s *GatewayService) responseCaptureMaxBytes() int {
-	if s != nil && s.cfg != nil {
-		return boundedGenerationBytes(s.cfg.Gateway.ContentCapture.ResponseMaxBytes, defaultGenerationResponseMaxBytes, maxGenerationResponseMaxBytes)
+	if s != nil {
+		return generationResponseCaptureMaxBytes(s.cfg)
 	}
 	return defaultGenerationResponseMaxBytes
 }
 
 func fillResponseSample(result *ForwardResult, sink *cappedSink) {
-	if result == nil || sink == nil {
+	if result == nil {
 		return
 	}
-	result.ResponseSample = append([]byte(nil), sink.Bytes()...)
-	result.ResponseTruncated = sink.Truncated()
-	result.ResponseBytes = sink.Total()
+	fillCappedResponseSample(&result.ResponseSample, &result.ResponseBytes, &result.ResponseTruncated, sink)
 }

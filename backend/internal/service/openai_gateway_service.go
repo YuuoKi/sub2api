@@ -247,6 +247,13 @@ type OpenAIForwardResult struct {
 	// VideoDurationSeconds 是提交时请求的生成时长（xAI 按输出秒数计费），已归一化到 1-15 秒。
 	VideoDurationSeconds int
 
+	// Generation-content response evidence. Populated only when the
+	// disabled-by-default content capture side path wraps the writer and the
+	// forward returns err==nil (success-only; partial-image err!=nil skips fill).
+	ResponseSample    []byte
+	ResponseTruncated bool
+	ResponseBytes     int
+
 	wsReplayInput       []json.RawMessage
 	wsReplayInputExists bool
 }
@@ -371,6 +378,7 @@ type OpenAIGatewayService struct {
 	codexSnapshotThrottle               *accountWriteThrottle
 	openaiCompatSessionResponses        sync.Map
 	openaiCompatAnthropicDigestSessions sync.Map
+	generationCollector                 *GenerationContentCollector
 }
 
 // NewOpenAIGatewayService creates a new OpenAIGatewayService

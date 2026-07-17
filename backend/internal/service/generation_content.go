@@ -249,25 +249,19 @@ func (s *GatewayService) SetGenerationContentCollector(collector *GenerationCont
 }
 
 func (s *GatewayService) contentCaptureEnabled() bool {
-	return s != nil && s.cfg != nil && s.cfg.Gateway.ContentCapture.Enabled
+	return s != nil && generationContentCaptureEnabled(s.cfg)
 }
 
 func (s *GatewayService) SnapshotGenerationPrompt(body []byte) GenerationPromptSnapshot {
-	if !s.contentCaptureEnabled() {
+	if s == nil {
 		return GenerationPromptSnapshot{}
 	}
-	limit := boundedGenerationBytes(s.cfg.Gateway.ContentCapture.PromptMaxBytes, defaultGenerationPromptMaxBytes, maxGenerationPromptMaxBytes)
-	bounded := truncateValidUTF8(body, limit)
-	return GenerationPromptSnapshot{
-		Body:          append([]byte(nil), bounded...),
-		OriginalBytes: len(body),
-		Truncated:     len(bounded) < len(body),
-	}
+	return snapshotGenerationPrompt(s.cfg, body)
 }
 
 func (s *GatewayService) CollectGenerationContent(ctx context.Context, args GenerationContentCaptureArgs) {
-	if s == nil || s.generationCollector == nil || !s.contentCaptureEnabled() {
+	if s == nil {
 		return
 	}
-	s.generationCollector.Collect(ctx, args)
+	collectGenerationContent(ctx, s.cfg, s.generationCollector, args)
 }

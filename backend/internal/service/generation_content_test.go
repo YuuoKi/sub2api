@@ -178,6 +178,80 @@ func TestGenerationContentCollectorProcessesBoundedSnapshotAndKeepsOriginalByteC
 	}
 }
 
+func TestGenerationContentCollectorPreservesPreviewFromTruncatedLargeJSON(t *testing.T) {
+	repo := &generationContentMemoryRepo{}
+	cfg := generationCaptureConfig(128, 32)
+	svc := &GatewayService{cfg: cfg}
+	collector := NewGenerationContentCollector(repo, cfg)
+	prompt := []byte(`{"messages":[{"content":"safe prompt prefix ` + strings.Repeat("multimodal filler ", 100) + `"}]}`)
+	snapshot := svc.SnapshotGenerationPrompt(prompt)
+	collector.Collect(context.Background(), GenerationContentCaptureArgs{
+		RequestID: "req-large-preview", PromptBody: snapshot.Body, PromptBytes: snapshot.OriginalBytes,
+	})
+
+	if len(repo.rows) != 1 {
+		t.Fatalf("rows=%d, want 1", len(repo.rows))
+	}
+	got := repo.rows[0].PromptRedacted
+	if strings.Contains(got, "non-json payload redacted") || !strings.Contains(got, "safe prompt prefix") {
+		t.Fatalf("bounded preview was replaced instead of preserved: %q", got)
+	}
+	if len(got) > 128 {
+		t.Fatalf("preview len=%d, want <=128", len(got))
+	}
+}
+
+func TestGenerationContentCollectorRedactsSecretWhenSnapshotEndsInsideValue(t *testing.T) {
+	repo := &generationContentMemoryRepo{}
+	cfg := generationCaptureConfig(96, 32)
+	svc := &GatewayService{cfg: cfg}
+	collector := NewGenerationContentCollector(repo, cfg)
+	secretPrefix := "LEAKTOKEN1234567890"
+	prompt := []byte(`{"messages":[{"content":"safe"}],"api_key":"` + secretPrefix + strings.Repeat("X9", 100) + `"}`)
+	snapshot := svc.SnapshotGenerationPrompt(prompt)
+	collector.Collect(context.Background(), GenerationContentCaptureArgs{
+		RequestID: "req-truncated-secret", PromptBody: snapshot.Body, PromptBytes: snapshot.OriginalBytes,
+	})
+
+	got := repo.rows[0].PromptRedacted
+	if strings.Contains(got, secretPrefix) || strings.Contains(got, "non-json payload redacted") {
+		t.Fatalf("truncated secret leaked or preview collapsed: %q", got)
+	}
+	if !strings.Contains(got, "api_key") || (!strings.Contains(got, "***") && !strings.Contains(got, "[已脱敏]")) {
+		t.Fatalf("truncated sensitive field lacks redaction evidence: %q", got)
+	}
+}
+
+func TestGenerationContentCollectorSuppressesLargeBase64AndOpaquePayloads(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		payload string
+	}{
+		{name: "opaque", payload: strings.Repeat("Ab3Cd6Ef9Gh2Jk5Lm8Np1Qr4", 20)},
+		{name: "base64", payload: strings.Repeat("QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo0123456789", 20)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			repo := &generationContentMemoryRepo{}
+			cfg := generationCaptureConfig(256, 32)
+			svc := &GatewayService{cfg: cfg}
+			collector := NewGenerationContentCollector(repo, cfg)
+			prompt := []byte(`{"messages":[{"content":"safe"}],"image_data":"` + test.payload + `"}`)
+			snapshot := svc.SnapshotGenerationPrompt(prompt)
+			collector.Collect(context.Background(), GenerationContentCaptureArgs{
+				RequestID: "req-large-" + test.name, PromptBody: snapshot.Body, PromptBytes: snapshot.OriginalBytes,
+			})
+
+			row := repo.rows[0]
+			if strings.Contains(row.PromptRedacted, test.payload[:24]) || !strings.Contains(row.PromptRedacted, "[已脱敏]") {
+				t.Fatalf("%s payload not suppressed: %q", test.name, row.PromptRedacted)
+			}
+			if len(row.PromptRedacted) > 256 || row.PromptBytes != len(prompt) {
+				t.Fatalf("%s bounds/bytes mismatch: preview=%d original=%d", test.name, len(row.PromptRedacted), row.PromptBytes)
+			}
+		})
+	}
+}
+
 func TestGenerationContentCollectorIsFailOpen(t *testing.T) {
 	for _, repo := range []*generationContentMemoryRepo{
 		{err: errors.New("database unavailable")},

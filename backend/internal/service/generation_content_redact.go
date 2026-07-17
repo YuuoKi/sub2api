@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"regexp"
 	"strconv"
 	"strings"
@@ -9,14 +10,22 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/util/logredact"
 )
 
-const generationRedactionVersion = 2
+const generationRedactionVersion = 3
+
+var generationSensitiveKeys = []string{
+	"api_key", "apikey", "x_api_key", "access_key", "secret_key",
+	"token", "session_token", "session", "cookie", "set_cookie",
+	"authorization", "bearer", "password", "passwd", "pwd", "secret",
+	"client_secret", "private_key",
+}
 
 var (
-	generationEmailPattern       = regexp.MustCompile(`[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}`)
-	generationPhonePattern       = regexp.MustCompile(`\+\d[\d().\-\t ]{6,16}\d|\b\d{2,4}[.\-\t ]\d{3,4}[.\-\t ]\d{3,4}\b|\b1[3-9]\d{9}\b`)
-	generationCNIDPattern        = regexp.MustCompile(`\b\d{17}[0-9Xx]\b`)
-	generationCardPattern        = regexp.MustCompile(`\b(?:\d[ -]?){12,18}\d\b`)
-	generationOpaqueTokenPattern = regexp.MustCompile(`[A-Za-z0-9]{20,}`)
+	generationEmailPattern              = regexp.MustCompile(`[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}`)
+	generationPhonePattern              = regexp.MustCompile(`\+\d[\d().\-\t ]{6,16}\d|\b\d{2,4}[.\-\t ]\d{3,4}[.\-\t ]\d{3,4}\b|\b1[3-9]\d{9}\b`)
+	generationCNIDPattern               = regexp.MustCompile(`\b\d{17}[0-9Xx]\b`)
+	generationCardPattern               = regexp.MustCompile(`\b(?:\d[ -]?){12,18}\d\b`)
+	generationOpaqueTokenPattern        = regexp.MustCompile(`[A-Za-z0-9]{20,}`)
+	generationUnterminatedSecretPattern = regexp.MustCompile(`(?i)("(?:api[_-]?key|apikey|x[_-]?api[_-]?key|access[_-]?key|secret[_-]?key|token|session[_-]?token|session|cookie|set[_-]?cookie|authorization|bearer|password|passwd|pwd|secret|client[_-]?secret|private[_-]?key)"\s*:\s*")([^"]*)$`)
 )
 
 func redactGenerationPII(value string) string {
@@ -124,7 +133,14 @@ func redactGenerationPrompt(body []byte) string {
 	if len(body) == 0 {
 		return ""
 	}
-	return redactContentModerationSecrets(redactGenerationPII(redactGenerationStructuredPII(logredact.RedactJSON(body))))
+	var out string
+	if json.Valid(body) {
+		out = logredact.RedactJSON(body, generationSensitiveKeys...)
+	} else {
+		out = logredact.RedactText(string(body), generationSensitiveKeys...)
+		out = generationUnterminatedSecretPattern.ReplaceAllString(out, `${1}***`)
+	}
+	return redactContentModerationSecrets(redactGenerationPII(redactGenerationStructuredPII(out)))
 }
 
 func redactGenerationResponse(sample []byte) string {

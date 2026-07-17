@@ -35,6 +35,10 @@ func ApplyUserMemberTypeToNotes(notes, memberType string) (string, error) {
 	if normalized == "" {
 		return notes, nil
 	}
+	normalized, err := normalizeAndValidateUserMemberType(normalized)
+	if err != nil {
+		return "", err
+	}
 	body := UserMemberNotesBody(notes)
 	switch normalized {
 	case UserMemberTypeHuman:
@@ -44,17 +48,17 @@ func ApplyUserMemberTypeToNotes(notes, memberType string) (string, error) {
 			return toolMemberNotesPrefix, nil
 		}
 		return toolMemberNotesPrefix + " " + body, nil
-	default:
-		return "", ErrInvalidUserMemberType
 	}
+	return "", ErrInvalidUserMemberType
 }
 
 func MergeUserMemberNotes(currentNotes string, notes, memberType *string) (string, error) {
 	targetType := UserMemberTypeFromNotes(currentNotes)
 	if memberType != nil {
-		targetType = normalizeUserMemberType(*memberType)
-		if targetType != UserMemberTypeHuman && targetType != UserMemberTypeTool {
-			return "", ErrInvalidUserMemberType
+		var err error
+		targetType, err = normalizeAndValidateUserMemberType(*memberType)
+		if err != nil {
+			return "", err
 		}
 	}
 	bodySource := currentNotes
@@ -66,4 +70,12 @@ func MergeUserMemberNotes(currentNotes string, notes, memberType *string) (strin
 
 func normalizeUserMemberType(memberType string) string {
 	return strings.ToLower(strings.TrimSpace(memberType))
+}
+
+func normalizeAndValidateUserMemberType(memberType string) (string, error) {
+	normalized := normalizeUserMemberType(memberType)
+	if normalized != UserMemberTypeHuman && normalized != UserMemberTypeTool {
+		return "", ErrInvalidUserMemberType
+	}
+	return normalized, nil
 }

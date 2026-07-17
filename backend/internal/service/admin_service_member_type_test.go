@@ -4,10 +4,22 @@ package service
 
 import (
 	"context"
+	"net/http"
 	"testing"
 
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
+
+type memberTypeLookupCountingRepo struct {
+	*userRepoStub
+	getCalls int
+}
+
+func (r *memberTypeLookupCountingRepo) GetByID(ctx context.Context, id int64) (*User, error) {
+	r.getCalls++
+	return r.userRepoStub.GetByID(ctx, id)
+}
 
 func TestAdminServiceCreateUserAppliesMemberType(t *testing.T) {
 	for _, tt := range []struct {
@@ -80,14 +92,27 @@ func TestAdminServiceUpdateUserPreservesMemberTypeAndNotesBody(t *testing.T) {
 }
 
 func TestAdminServiceUpdateUserRejectsInvalidMemberTypeBeforeRepository(t *testing.T) {
-	repo := &userRepoStub{user: &User{ID: 42, Email: "member@example.com", Notes: "employee", Role: RoleUser, Status: StatusActive}}
-	svc := &adminServiceImpl{userRepo: repo}
-	invalid := "robot"
+	for _, tt := range []struct {
+		name string
+		user *User
+	}{
+		{name: "existing user", user: &User{ID: 42, Email: "member@example.com", Notes: "employee", Role: RoleUser, Status: StatusActive}},
+		{name: "missing user"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := &memberTypeLookupCountingRepo{userRepoStub: &userRepoStub{user: tt.user}}
+			svc := &adminServiceImpl{userRepo: repo}
+			invalid := "robot"
 
-	_, err := svc.UpdateUser(context.Background(), 42, &UpdateUserInput{MemberType: &invalid})
+			_, err := svc.UpdateUser(context.Background(), 42, &UpdateUserInput{MemberType: &invalid})
 
-	require.ErrorIs(t, err, ErrInvalidUserMemberType)
-	require.Empty(t, repo.updated)
+			require.ErrorIs(t, err, ErrInvalidUserMemberType)
+			require.Equal(t, http.StatusBadRequest, infraerrors.Code(err))
+			require.Equal(t, "INVALID_MEMBER_TYPE", infraerrors.Reason(err))
+			require.Zero(t, repo.getCalls, "invalid member_type must fail before any user repository lookup")
+			require.Empty(t, repo.updated)
+		})
+	}
 }
 
 func memberTypeStringPointer(value string) *string { return &value }

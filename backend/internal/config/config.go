@@ -746,6 +746,14 @@ type ImageConcurrencyConfig struct {
 	MaxWaitingRequests int `mapstructure:"max_waiting_requests"`
 }
 
+// ContentCaptureConfig controls the fail-open generation-content side path.
+// It is intentionally disabled by default; zero byte limits use safe service defaults.
+type ContentCaptureConfig struct {
+	Enabled          bool `mapstructure:"enabled"`
+	PromptMaxBytes   int  `mapstructure:"prompt_max_bytes"`
+	ResponseMaxBytes int  `mapstructure:"response_max_bytes"`
+}
+
 const (
 	ImageConcurrencyOverflowModeReject = "reject"
 	ImageConcurrencyOverflowModeWait   = "wait"
@@ -753,6 +761,7 @@ const (
 
 // GatewayConfig API网关相关配置
 type GatewayConfig struct {
+	ContentCapture ContentCaptureConfig `mapstructure:"content_capture"`
 	// 等待上游响应头的超时时间（秒），0表示无超时
 	// 注意：这不影响流式数据传输，只控制等待响应头的时间
 	ResponseHeaderTimeout int `mapstructure:"response_header_timeout"`
@@ -1615,6 +1624,9 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 
 func setDefaults() {
 	viper.SetDefault("run_mode", RunModeStandard)
+	viper.SetDefault("gateway.content_capture.enabled", false)
+	viper.SetDefault("gateway.content_capture.prompt_max_bytes", 256*1024)
+	viper.SetDefault("gateway.content_capture.response_max_bytes", 64*1024)
 
 	// Video gateway. Every paid-runtime control defaults inert; operators must
 	// explicitly provide the dedicated key, pricing and both runtime gates.

@@ -287,7 +287,13 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 		upstreamEndpoint := GetUpstreamEndpoint(c, account.Platform)
 
 		quotaPlatform := service.QuotaPlatform(c.Request.Context(), apiKey)
+		generationPromptBody := append([]byte(nil), body...)
 		h.submitUsageRecordTask(c.Request.Context(), func(ctx context.Context) {
+			h.gatewayService.CollectGenerationContent(ctx, service.GenerationContentCaptureArgs{
+				RequestID: result.RequestID, UserID: subject.UserID, APIKeyID: apiKey.ID, GroupID: apiKey.GroupID,
+				AccountID: account.ID, Model: reqModel, RequestPayloadHash: requestPayloadHash,
+				PromptBody: generationPromptBody, Result: result,
+			})
 			if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
 				Result:             result,
 				QuotaPlatform:      quotaPlatform,

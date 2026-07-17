@@ -35,6 +35,20 @@ func (s *GatewayService) ForwardAsResponses(
 	body []byte,
 	parsed *ParsedRequest,
 ) (*ForwardResult, error) {
+	responseSink, restoreWriter := s.beginResponseCapture(c)
+	defer restoreWriter()
+	return s.forwardAsResponsesWithResponseCapture(ctx, c, account, body, parsed, responseSink)
+}
+
+func (s *GatewayService) forwardAsResponsesWithResponseCapture(
+	ctx context.Context,
+	c *gin.Context,
+	account *Account,
+	body []byte,
+	parsed *ParsedRequest,
+	responseSink *cappedSink,
+) (capturedResult *ForwardResult, capturedErr error) {
+	defer func() { fillResponseSample(capturedResult, responseSink) }()
 	startTime := time.Now()
 
 	// 1. Parse Responses request

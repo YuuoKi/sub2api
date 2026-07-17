@@ -520,7 +520,13 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			// ForceCacheBilling 提前拍成标量，避免 worker 闭包保活 failover 状态里的响应体。
 			forceCacheBilling := fs.ForceCacheBilling
 			quotaPlatform := service.QuotaPlatform(c.Request.Context(), apiKey)
+			generationPromptBody := append([]byte(nil), parsedReq.Body.Bytes()...)
 			h.submitUsageRecordTask(c.Request.Context(), func(ctx context.Context) {
+				h.gatewayService.CollectGenerationContent(ctx, service.GenerationContentCaptureArgs{
+					RequestID: result.RequestID, UserID: subject.UserID, APIKeyID: apiKey.ID, GroupID: apiKey.GroupID,
+					AccountID: account.ID, Model: reqModel, RequestPayloadHash: requestPayloadHash,
+					PromptBody: generationPromptBody, Result: result,
+				})
 				if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
 					Result:             result,
 					QuotaPlatform:      quotaPlatform,
@@ -950,7 +956,13 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			// ForceCacheBilling 提前拍成标量，避免 worker 闭包保活 failover 状态里的响应体。
 			forceCacheBilling := fs.ForceCacheBilling
 			quotaPlatform := service.QuotaPlatform(c.Request.Context(), currentAPIKey)
+			generationPromptBody := append([]byte(nil), attemptParsedReq.Body.Bytes()...)
 			h.submitUsageRecordTask(c.Request.Context(), func(ctx context.Context) {
+				h.gatewayService.CollectGenerationContent(ctx, service.GenerationContentCaptureArgs{
+					RequestID: result.RequestID, UserID: subject.UserID, APIKeyID: currentAPIKey.ID, GroupID: currentAPIKey.GroupID,
+					AccountID: account.ID, Model: reqModel, RequestPayloadHash: requestPayloadHash,
+					PromptBody: generationPromptBody, Result: result,
+				})
 				if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
 					Result:             result,
 					QuotaPlatform:      quotaPlatform,

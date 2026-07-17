@@ -33,6 +33,20 @@ func (s *GatewayService) ForwardAsChatCompletions(
 	body []byte,
 	parsed *ParsedRequest,
 ) (*ForwardResult, error) {
+	responseSink, restoreWriter := s.beginResponseCapture(c)
+	defer restoreWriter()
+	return s.forwardAsChatCompletionsWithResponseCapture(ctx, c, account, body, parsed, responseSink)
+}
+
+func (s *GatewayService) forwardAsChatCompletionsWithResponseCapture(
+	ctx context.Context,
+	c *gin.Context,
+	account *Account,
+	body []byte,
+	parsed *ParsedRequest,
+	responseSink *cappedSink,
+) (capturedResult *ForwardResult, capturedErr error) {
+	defer func() { fillResponseSample(capturedResult, responseSink) }()
 	startTime := time.Now()
 
 	// 1. Parse Chat Completions request

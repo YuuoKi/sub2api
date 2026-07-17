@@ -556,6 +556,12 @@ type ForwardResult struct {
 	ImageOutputSizes   []string
 	ImageSizeSource    string
 	ImageSizeBreakdown map[string]int
+
+	// Generation-content response evidence. These fields are populated only
+	// when the disabled-by-default content capture side path wraps the writer.
+	ResponseSample    []byte
+	ResponseTruncated bool
+	ResponseBytes     int
 }
 
 // UpstreamFailoverError indicates an upstream error that should trigger account failover.
@@ -635,6 +641,7 @@ type GatewayService struct {
 	tlsFPProfileService   *TLSFingerprintProfileService
 	balanceNotifyService  *BalanceNotifyService
 	userPlatformQuotaRepo UserPlatformQuotaRepository
+	generationCollector   *GenerationContentCollector
 }
 
 // NewGatewayService creates a new GatewayService

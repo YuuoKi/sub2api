@@ -88,6 +88,13 @@ func sleepWithContext(ctx context.Context, d time.Duration) error {
 
 // Forward 转发请求到Claude API
 func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *Account, parsed *ParsedRequest) (*ForwardResult, error) {
+	responseSink, restoreWriter := s.beginResponseCapture(c)
+	defer restoreWriter()
+	return s.forwardWithResponseCapture(ctx, c, account, parsed, responseSink)
+}
+
+func (s *GatewayService) forwardWithResponseCapture(ctx context.Context, c *gin.Context, account *Account, parsed *ParsedRequest, responseSink *cappedSink) (capturedResult *ForwardResult, capturedErr error) {
+	defer func() { fillResponseSample(capturedResult, responseSink) }()
 	startTime := time.Now()
 	if parsed == nil {
 		return nil, fmt.Errorf("parse request: empty request")

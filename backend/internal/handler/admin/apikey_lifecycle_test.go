@@ -25,6 +25,8 @@ type lifecycleAPIKeyManagerStub struct {
 	lastUpdateReq    service.UpdateAPIKeyRequest
 	deletedID        int64
 	deletedOwnerID   int64
+	createCalls      int
+	updateCalls      int
 }
 
 func newLifecycleAPIKeyManager(keys ...*service.APIKey) *lifecycleAPIKeyManagerStub {
@@ -37,6 +39,7 @@ func newLifecycleAPIKeyManager(keys ...*service.APIKey) *lifecycleAPIKeyManagerS
 }
 
 func (m *lifecycleAPIKeyManagerStub) Create(_ context.Context, userID int64, req service.CreateAPIKeyRequest) (*service.APIKey, error) {
+	m.createCalls++
 	if m.createErr != nil {
 		return nil, m.createErr
 	}
@@ -59,6 +62,7 @@ func (m *lifecycleAPIKeyManagerStub) GetByID(_ context.Context, id int64) (*serv
 }
 
 func (m *lifecycleAPIKeyManagerStub) Update(_ context.Context, id, userID int64, req service.UpdateAPIKeyRequest) (*service.APIKey, error) {
+	m.updateCalls++
 	if m.updateErr != nil {
 		return nil, m.updateErr
 	}
@@ -119,13 +123,33 @@ func (m *lifecycleAPIKeyManagerStub) Delete(_ context.Context, id, userID int64)
 }
 
 func newLifecycleAPIKeyRouter(manager apiKeyManager) *gin.Engine {
+	return newLifecycleAPIKeyRouterWithAdmin(newStubAdminService(), manager)
+}
+
+func newLifecycleAPIKeyRouterWithAdmin(adminService service.AdminService, manager apiKeyManager) *gin.Engine {
 	gin.SetMode(gin.TestMode)
-	h := &AdminAPIKeyHandler{adminService: newStubAdminService(), apiKeys: manager}
+	h := &AdminAPIKeyHandler{adminService: adminService, apiKeys: manager}
 	router := gin.New()
 	router.POST("/api/v1/admin/users/:id/api-keys", h.CreateForUser)
 	router.PUT("/api/v1/admin/api-keys/:id", h.UpdateGroup)
 	router.DELETE("/api/v1/admin/api-keys/:id", h.Delete)
 	return router
+}
+
+type countingAPIKeyMutationAdminService struct {
+	*stubAdminService
+	groupMutationCalls int
+	resetMutationCalls int
+}
+
+func (s *countingAPIKeyMutationAdminService) AdminUpdateAPIKeyGroupID(ctx context.Context, keyID int64, groupID *int64) (*service.AdminUpdateAPIKeyGroupIDResult, error) {
+	s.groupMutationCalls++
+	return s.stubAdminService.AdminUpdateAPIKeyGroupID(ctx, keyID, groupID)
+}
+
+func (s *countingAPIKeyMutationAdminService) AdminResetAPIKeyRateLimitUsage(ctx context.Context, keyID int64) (*service.APIKey, error) {
+	s.resetMutationCalls++
+	return s.stubAdminService.AdminResetAPIKeyRateLimitUsage(ctx, keyID)
 }
 
 func performAPIKeyLifecycleRequest(router *gin.Engine, method, path, body string) *httptest.ResponseRecorder {
@@ -150,6 +174,57 @@ func TestAdminAPIKeyCreateReturnsOnlyNewSecret(t *testing.T) {
 	require.Equal(t, 2.0, manager.lastCreateReq.RateLimit5h)
 	require.Contains(t, recorder.Body.String(), "sk-new-one-time-secret")
 	require.NotContains(t, recorder.Body.String(), "sk-existing-must-not-leak")
+}
+
+func TestAdminAPIKeyCreateIdempotencyStoresAndReplaysSanitizedResponse(t *testing.T) {
+	repo := newMemoryIdempotencyRepoStub()
+	cfg := service.DefaultIdempotencyConfig()
+	service.SetDefaultIdempotencyCoordinator(service.NewIdempotencyCoordinator(repo, cfg))
+	t.Cleanup(func() { service.SetDefaultIdempotencyCoordinator(nil) })
+
+	manager := newLifecycleAPIKeyManager()
+	router := newLifecycleAPIKeyRouter(manager)
+	call := func() *httptest.ResponseRecorder {
+		recorder := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodPost, "/api/v1/admin/users/42/api-keys", bytes.NewBufferString(`{"name":"员工卡"}`))
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Idempotency-Key", "create-key-once")
+		router.ServeHTTP(recorder, request)
+		return recorder
+	}
+
+	first := call()
+	require.Equal(t, http.StatusOK, first.Code)
+	var firstBody struct {
+		Data struct {
+			Key string `json:"key"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(first.Body.Bytes(), &firstBody))
+	require.Equal(t, "sk-new-one-time-secret", firstBody.Data.Key)
+	require.Empty(t, first.Header().Get("X-Idempotency-Replayed"))
+
+	stored, err := repo.GetByScopeAndKeyHash(context.Background(), "admin.users.api_keys.create", service.HashIdempotencyKey("create-key-once"))
+	require.NoError(t, err)
+	require.NotNil(t, stored)
+	require.NotNil(t, stored.ResponseBody)
+	var storedBody struct {
+		Key string `json:"key"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(*stored.ResponseBody), &storedBody))
+	require.Empty(t, storedBody.Key)
+
+	replay := call()
+	require.Equal(t, http.StatusOK, replay.Code)
+	require.Equal(t, "true", replay.Header().Get("X-Idempotency-Replayed"))
+	var replayBody struct {
+		Data struct {
+			Key string `json:"key"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(replay.Body.Bytes(), &replayBody))
+	require.Empty(t, replayBody.Data.Key)
+	require.Equal(t, 1, manager.createCalls)
 }
 
 func TestAdminAPIKeyListDoesNotExposeExistingSecret(t *testing.T) {
@@ -231,6 +306,34 @@ func TestAdminAPIKeyUpdateValidationAndNotFound(t *testing.T) {
 
 	recorder := performAPIKeyLifecycleRequest(newLifecycleAPIKeyRouter(newLifecycleAPIKeyManager()), http.MethodPut, "/api/v1/admin/api-keys/999", `{"name":"x"}`)
 	require.Equal(t, http.StatusNotFound, recorder.Code)
+}
+
+func TestAdminAPIKeyUpdateRejectsMixedOrEmptyMutationBeforeSideEffects(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+	}{
+		{name: "field and group", body: `{"name":"new","group_id":2}`},
+		{name: "field and rate reset", body: `{"name":"new","reset_rate_limit_usage":true}`},
+		{name: "group and rate reset", body: `{"group_id":2,"reset_rate_limit_usage":true}`},
+		{name: "all categories", body: `{"name":"new","group_id":2,"reset_rate_limit_usage":true}`},
+		{name: "empty", body: `{}`},
+		{name: "negative group preflight", body: `{"group_id":-1}`},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			manager := newLifecycleAPIKeyManager(&service.APIKey{ID: 10, UserID: 1, Key: "sk-secret", Status: service.StatusActive})
+			adminService := &countingAPIKeyMutationAdminService{stubAdminService: newStubAdminService()}
+			router := newLifecycleAPIKeyRouterWithAdmin(adminService, manager)
+			recorder := performAPIKeyLifecycleRequest(router, http.MethodPut, "/api/v1/admin/api-keys/10", test.body)
+
+			require.Equal(t, http.StatusBadRequest, recorder.Code)
+			require.Zero(t, manager.updateCalls, "APIKeyService.Update must not run")
+			require.Zero(t, adminService.groupMutationCalls, "group mutation must not run")
+			require.Zero(t, adminService.resetMutationCalls, "rate-limit reset must not run")
+		})
+	}
 }
 
 func TestAdminAPIKeyDeleteResolvesOwnerAndHandlesNotFound(t *testing.T) {

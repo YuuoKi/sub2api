@@ -173,8 +173,7 @@ func TestAdminAPIKeyHandler_UpdateGroup_ServiceError(t *testing.T) {
 	require.Equal(t, http.StatusInternalServerError, rec.Code)
 }
 
-// H2: empty body → group_id is nil → no-op, returns original key
-func TestAdminAPIKeyHandler_UpdateGroup_EmptyBody_NoChange(t *testing.T) {
+func TestAdminAPIKeyHandler_UpdateGroup_EmptyBody_Rejected(t *testing.T) {
 	router := setupAPIKeyHandler(newStubAdminService())
 
 	rec := httptest.NewRecorder()
@@ -182,19 +181,8 @@ func TestAdminAPIKeyHandler_UpdateGroup_EmptyBody_NoChange(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(rec, req)
 
-	require.Equal(t, http.StatusOK, rec.Code)
-
-	var resp struct {
-		Code int `json:"code"`
-		Data struct {
-			APIKey struct {
-				ID int64 `json:"id"`
-			} `json:"api_key"`
-		} `json:"data"`
-	}
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	require.Equal(t, 0, resp.Code)
-	require.Equal(t, int64(10), resp.Data.APIKey.ID)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	require.Contains(t, rec.Body.String(), "exactly one mutation category")
 }
 
 // M2: service returns GROUP_NOT_ACTIVE → handler maps to 400
@@ -228,7 +216,7 @@ func TestAdminAPIKeyHandler_UpdateGroup_NegativeGroupID(t *testing.T) {
 	router.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusBadRequest, rec.Code)
-	require.Contains(t, rec.Body.String(), "INVALID_GROUP_ID")
+	require.Contains(t, rec.Body.String(), "group_id must be non-negative")
 }
 
 // failingUpdateGroupService overrides AdminUpdateAPIKeyGroupID to return an error.

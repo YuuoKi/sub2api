@@ -94,13 +94,23 @@ func (h *AdminAPIKeyHandler) CreateForUser(c *gin.Context) {
 		UserID int64                    `json:"user_id"`
 		Body   AdminCreateAPIKeyRequest `json:"body"`
 	}{UserID: userID, Body: req}
-	executeAdminIdempotentJSON(c, "admin.users.api_keys.create", idempotencyPayload, service.DefaultWriteIdempotencyTTL(), func(ctx context.Context) (any, error) {
+	executeAdminIdempotentJSONWithStoredResponseSanitizer(c, "admin.users.api_keys.create", idempotencyPayload, service.DefaultWriteIdempotencyTTL(), sanitizeCreatedAPIKeyForReplay, func(ctx context.Context) (any, error) {
 		key, createErr := h.apiKeys.Create(ctx, userID, serviceRequest)
 		if createErr != nil {
 			return nil, createErr
 		}
 		return dto.APIKeyFromService(key), nil
 	})
+}
+
+func sanitizeCreatedAPIKeyForReplay(data any) any {
+	key, ok := data.(*dto.APIKey)
+	if !ok || key == nil {
+		return data
+	}
+	sanitized := *key
+	sanitized.Key = ""
+	return &sanitized
 }
 
 type AdminUpdateAPIKeyRequest struct {
@@ -119,6 +129,37 @@ type AdminUpdateAPIKeyRequest struct {
 func (r *AdminUpdateAPIKeyRequest) hasFieldUpdates() bool {
 	return r.Name != nil || r.Status != nil || r.Quota != nil || r.ResetQuota != nil ||
 		r.ExpiresAt != nil || r.RateLimit5h != nil || r.RateLimit1d != nil || r.RateLimit7d != nil
+}
+
+type adminAPIKeyMutationKind int
+
+const (
+	adminAPIKeyMutationFields adminAPIKeyMutationKind = iota + 1
+	adminAPIKeyMutationGroup
+	adminAPIKeyMutationRateLimitReset
+)
+
+func (r *AdminUpdateAPIKeyRequest) mutationKind() (adminAPIKeyMutationKind, error) {
+	fieldMutation := r.hasFieldUpdates()
+	groupMutation := r.GroupID != nil
+	rateLimitResetMutation := r.ResetRateLimitUsage != nil && *r.ResetRateLimitUsage
+
+	count := 0
+	for _, selected := range []bool{fieldMutation, groupMutation, rateLimitResetMutation} {
+		if selected {
+			count++
+		}
+	}
+	if count != 1 {
+		return 0, errAdminAPIKeyValidation("request must select exactly one mutation category: fields, group, or rate-limit reset")
+	}
+	if fieldMutation {
+		return adminAPIKeyMutationFields, nil
+	}
+	if groupMutation {
+		return adminAPIKeyMutationGroup, nil
+	}
+	return adminAPIKeyMutationRateLimitReset, nil
 }
 
 // UpdateGroup handles all administrator-managed API key fields.
@@ -143,36 +184,24 @@ func (h *AdminAPIKeyHandler) UpdateGroup(c *gin.Context) {
 		response.BadRequest(c, err.Error())
 		return
 	}
-
-	var resetKey *service.APIKey
-	if req.ResetRateLimitUsage != nil && *req.ResetRateLimitUsage {
-		resetKey, err = h.adminService.AdminResetAPIKeyRateLimitUsage(c.Request.Context(), keyID)
-		if err != nil {
-			response.ErrorFrom(c, err)
-			return
-		}
+	mutationKind, err := req.mutationKind()
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
 	}
 
-	var fieldUpdatedKey *service.APIKey
-	if req.hasFieldUpdates() {
-		fieldUpdatedKey, err = h.applyFieldUpdates(c.Request.Context(), keyID, &req)
-		if err != nil {
-			response.ErrorFrom(c, err)
-			return
-		}
+	result := &service.AdminUpdateAPIKeyGroupIDResult{}
+	switch mutationKind {
+	case adminAPIKeyMutationFields:
+		result.APIKey, err = h.applyFieldUpdates(c.Request.Context(), keyID, &req)
+	case adminAPIKeyMutationGroup:
+		result, err = h.adminService.AdminUpdateAPIKeyGroupID(c.Request.Context(), keyID, req.GroupID)
+	case adminAPIKeyMutationRateLimitReset:
+		result.APIKey, err = h.adminService.AdminResetAPIKeyRateLimitUsage(c.Request.Context(), keyID)
 	}
-
-	result, err := h.adminService.AdminUpdateAPIKeyGroupID(c.Request.Context(), keyID, req.GroupID)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
-	}
-	if req.GroupID == nil {
-		if fieldUpdatedKey != nil {
-			result.APIKey = fieldUpdatedKey
-		} else if resetKey != nil {
-			result.APIKey = resetKey
-		}
 	}
 
 	response.Success(c, struct {
@@ -268,6 +297,9 @@ func validateAdminCreateAPIKeyRequest(req *AdminCreateAPIKeyRequest) error {
 func validateAdminUpdateAPIKeyRequest(req *AdminUpdateAPIKeyRequest) error {
 	if req.Status != nil && *req.Status != service.StatusAPIKeyActive && *req.Status != service.StatusAPIKeyDisabled {
 		return errAdminAPIKeyValidation("status must be active or disabled")
+	}
+	if req.GroupID != nil && *req.GroupID < 0 {
+		return errAdminAPIKeyValidation("group_id must be non-negative")
 	}
 	if err := validateAdminAPIKeyAmounts(req.Quota, req.RateLimit5h, req.RateLimit1d, req.RateLimit7d); err != nil {
 		return err

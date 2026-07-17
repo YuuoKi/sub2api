@@ -87,6 +87,9 @@ type IdempotencyExecuteOptions struct {
 	Payload        any
 	TTL            time.Duration
 	RequireKey     bool
+	// SanitizeStoredResponse transforms only the persisted/replayed response.
+	// The first successful caller still receives the original execute result.
+	SanitizeStoredResponse func(any) any
 }
 
 type IdempotencyExecuteResult struct {
@@ -417,7 +420,11 @@ func (c *IdempotencyCoordinator) Execute(
 		return nil, execErr
 	}
 
-	storedBody, marshalErr := c.marshalStoredResponse(data)
+	storedData := data
+	if opts.SanitizeStoredResponse != nil {
+		storedData = opts.SanitizeStoredResponse(data)
+	}
+	storedBody, marshalErr := c.marshalStoredResponse(storedData)
 	if marshalErr != nil {
 		RecordIdempotencyStoreUnavailable(opts.Route, opts.Scope, "marshal_response_error")
 		logIdempotencyAudit(opts.Route, opts.Scope, keyHash, "processing->store_unavailable", false, map[string]string{

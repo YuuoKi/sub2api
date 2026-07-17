@@ -152,6 +152,7 @@ type UserSpendingRankingItem struct {
 	ActualCost float64 `json:"actual_cost"` // 实际扣除
 	Requests   int64   `json:"requests"`
 	Tokens     int64   `json:"tokens"`
+	MemberType string  `json:"member_type"`
 }
 
 // UserSpendingRankingResponse represents ranking rows plus total spend for the time range.

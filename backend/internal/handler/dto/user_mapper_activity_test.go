@@ -1,6 +1,7 @@
 package dto
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -30,4 +31,20 @@ func TestUserFromServiceAdmin_MapsActivityTimestamps(t *testing.T) {
 	require.NotNil(t, out.LastUsedAt)
 	require.WithinDuration(t, lastActiveAt, *out.LastActiveAt, time.Second)
 	require.WithinDuration(t, lastUsedAt, *out.LastUsedAt, time.Second)
+}
+
+func TestUserFromServiceAdminSeparatesMemberTypeFromNotesStorage(t *testing.T) {
+	tool := UserFromServiceAdmin(&service.User{Notes: "  [工具] [工具] storyboard runner  "})
+	require.NotNil(t, tool)
+	require.Equal(t, service.UserMemberTypeTool, tool.MemberType)
+	require.Equal(t, "storyboard runner", tool.Notes)
+	encoded, err := json.Marshal(tool)
+	require.NoError(t, err)
+	require.NotContains(t, string(encoded), "[工具]", "DTO must not leak the notes storage prefix")
+	require.Contains(t, string(encoded), `"member_type":"tool"`)
+
+	human := UserFromServiceAdmin(&service.User{Notes: " designer "})
+	require.NotNil(t, human)
+	require.Equal(t, service.UserMemberTypeHuman, human.MemberType)
+	require.Equal(t, "designer", human.Notes)
 }

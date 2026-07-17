@@ -58,6 +58,7 @@ type CreateUserRequest struct {
 	Password      json.RawMessage `json:"password"`
 	Username      string          `json:"username"`
 	Notes         string          `json:"notes"`
+	MemberType    string          `json:"member_type" binding:"omitempty,oneof=human tool"`
 	Role          string          `json:"role" binding:"omitempty,oneof=admin user"`
 	Balance       *float64        `json:"balance"`
 	Concurrency   int             `json:"concurrency"`
@@ -72,6 +73,7 @@ type UpdateUserRequest struct {
 	Password      json.RawMessage `json:"password"`
 	Username      *string         `json:"username"`
 	Notes         *string         `json:"notes"`
+	MemberType    *string         `json:"member_type" binding:"omitempty,oneof=human tool"`
 	Role          string          `json:"role" binding:"omitempty,oneof=admin user"`
 	Balance       *float64        `json:"balance"`
 	Concurrency   *int            `json:"concurrency"`
@@ -284,6 +286,7 @@ func (h *UserHandler) Create(c *gin.Context) {
 		Email:         req.Email,
 		Username:      req.Username,
 		Notes:         req.Notes,
+		MemberType:    req.MemberType,
 		Role:          req.Role,
 		Balance:       req.Balance,
 		Concurrency:   req.Concurrency,
@@ -353,6 +356,7 @@ func (h *UserHandler) Update(c *gin.Context) {
 		Email:         req.Email,
 		Username:      req.Username,
 		Notes:         req.Notes,
+		MemberType:    req.MemberType,
 		Role:          req.Role,
 		Balance:       req.Balance,
 		Concurrency:   req.Concurrency,

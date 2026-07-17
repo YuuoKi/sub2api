@@ -142,11 +142,19 @@ func (s *adminServiceImpl) CreateUser(ctx context.Context, input *CreateUserInpu
 	if err != nil {
 		return nil, err
 	}
+	memberType := input.MemberType
+	if strings.TrimSpace(memberType) == "" {
+		memberType = UserMemberTypeHuman
+	}
+	notes, err := ApplyUserMemberTypeToNotes(input.Notes, memberType)
+	if err != nil {
+		return nil, err
+	}
 
 	user := &User{
 		Email:              input.Email,
 		Username:           input.Username,
-		Notes:              input.Notes,
+		Notes:              notes,
 		Role:               role,
 		Balance:            balance,
 		Concurrency:        input.Concurrency,
@@ -271,8 +279,12 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 	if input.Username != nil {
 		user.Username = *input.Username
 	}
-	if input.Notes != nil {
-		user.Notes = *input.Notes
+	if input.Notes != nil || input.MemberType != nil {
+		mergedNotes, mergeErr := MergeUserMemberNotes(user.Notes, input.Notes, input.MemberType)
+		if mergeErr != nil {
+			return nil, mergeErr
+		}
+		user.Notes = mergedNotes
 	}
 
 	if input.Status != "" {

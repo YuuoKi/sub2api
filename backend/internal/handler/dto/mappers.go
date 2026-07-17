@@ -71,7 +71,8 @@ func UserFromServiceAdmin(u *service.User) *AdminUser {
 	}
 	return &AdminUser{
 		User:       *base,
-		Notes:      u.Notes,
+		Notes:      service.UserMemberNotesBody(u.Notes),
+		MemberType: service.UserMemberTypeFromNotes(u.Notes),
 		LastUsedAt: u.LastUsedAt,
 		GroupRates: u.GroupRates,
 	}

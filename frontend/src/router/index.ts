@@ -40,6 +40,15 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/internal-pilot',
+    name: 'InternalPilot',
+    component: () => import('@/views/InternalPilotView.vue'),
+    meta: {
+      requiresAuth: false,
+      title: '内部使用'
+    }
+  },
+  {
     path: '/login',
     name: 'Login',
     component: () => import('@/views/auth/LoginView.vue'),
@@ -477,6 +486,39 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/admin/video/VideoSystemCheckView.vue'),
     meta: { requiresAuth: true, requiresAdmin: true, title: '\u89c6\u9891\u7cfb\u7edf\u68c0\u67e5' }
   },
+
+  // ==================== Console v2 Business Routes ====================
+  {
+    path: '/admin/console/overview',
+    name: 'AdminConsoleOverview',
+    component: () => import('@/views/admin/console/BossOverviewView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, title: '控制台总览' }
+  },
+  {
+    path: '/admin/console/key-vault',
+    name: 'AdminConsoleKeyVault',
+    component: () => import('@/views/admin/console/KeyVaultView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, title: '密钥库' }
+  },
+  {
+    path: '/admin/console/staff',
+    name: 'AdminConsoleStaff',
+    component: () => import('@/views/admin/console/StaffView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, title: '成员与开卡' }
+  },
+  {
+    path: '/admin/console/ai-records',
+    name: 'AdminConsoleAiRecords',
+    component: () => import('@/views/admin/console/AiRecordsView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, title: 'AI 调用记录' }
+  },
+  {
+    path: '/admin/generation-content',
+    name: 'AdminGenerationContent',
+    component: () => import('@/views/admin/GenerationContentView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, title: '生成内容' }
+  },
+
   {
     path: '/admin/channels',
     redirect: '/admin/channels/pricing'

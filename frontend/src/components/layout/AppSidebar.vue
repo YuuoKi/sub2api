@@ -684,6 +684,31 @@ const adminNavItems = computed((): NavItem[] => {
       ],
     },
     {
+      path: '/admin/console/overview',
+      label: '\u63a7\u5236\u53f0\u603b\u89c8',
+      icon: DashboardIcon,
+    },
+    {
+      path: '/admin/console/key-vault',
+      label: '\u5bc6\u94a5\u5e93',
+      icon: KeyIcon,
+    },
+    {
+      path: '/admin/console/staff',
+      label: '\u6210\u5458\u4e0e\u5f00\u5361',
+      icon: UsersIcon,
+    },
+    {
+      path: '/admin/console/ai-records',
+      label: 'AI \u8bb0\u5f55',
+      icon: ChartIcon,
+    },
+    {
+      path: '/admin/generation-content',
+      label: '\u751f\u6210\u5185\u5bb9',
+      icon: FolderIcon,
+    },
+    {
       path: '/admin/channels',
       label: t('nav.channelManagement'),
       icon: ChannelIcon,

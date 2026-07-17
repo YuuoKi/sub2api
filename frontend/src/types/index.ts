@@ -111,6 +111,8 @@ export interface AdminUser extends User {
   group_rates?: Record<number, number>
   // 当前并发数（仅管理员列表接口返回）
   current_concurrency?: number
+  // 成员类型：human（员工）或 tool（外部工具账号），源自 notes 前缀约定
+  member_type?: 'human' | 'tool'
 }
 
 export interface LoginRequest {
@@ -1528,6 +1530,11 @@ export interface DashboardStats {
   // 性能指标
   rpm: number // 近5分钟平均每分钟请求数
   tpm: number // 近5分钟平均每分钟Token数
+
+  // 公司月度总预算（人民币）
+  monthly_budget_cny?: number
+  monthly_spend_cny?: number
+  monthly_budget_usage_percent?: number
 }
 
 export interface UsageStatsResponse {
@@ -1623,6 +1630,8 @@ export interface UserSpendingRankingItem {
   actual_cost: number
   requests: number
   tokens: number
+  // 成员类型：human（员工）或 tool（外部工具账号）
+  member_type?: 'human' | 'tool'
 }
 
 export interface UserSpendingRankingResponse {
@@ -1648,6 +1657,8 @@ export interface UpdateUserRequest {
   email?: string
   username?: string
   notes?: string
+  // 成员类型：human（员工）或 tool（外部工具账号）
+  member_type?: 'human' | 'tool'
   role?: 'admin' | 'user'
   balance?: number
   concurrency?: number

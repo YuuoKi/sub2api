@@ -130,6 +130,8 @@ export async function create(userData: {
   email: string
   username?: string
   notes?: string
+  // 成员类型：human（员工）或 tool（外部工具账号）
+  member_type?: 'human' | 'tool'
   role?: 'admin' | 'user'
   balance?: number
   concurrency?: number

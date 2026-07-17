@@ -115,22 +115,26 @@ export async function list(
  * @param params - Query parameters for filtering
  * @returns Usage statistics
  */
-export async function getStats(params: {
-  user_id?: number
-  api_key_id?: number
-  account_id?: number
-  group_id?: number
-  model?: string
-  request_type?: UsageRequestType
-  stream?: boolean
-  period?: string
-  start_date?: string
-  end_date?: string
-  timezone?: string
-  nocache?: number
-}): Promise<AdminUsageStatsResponse> {
+export async function getStats(
+  params: {
+    user_id?: number
+    api_key_id?: number
+    account_id?: number
+    group_id?: number
+    model?: string
+    request_type?: UsageRequestType
+    stream?: boolean
+    period?: string
+    start_date?: string
+    end_date?: string
+    timezone?: string
+    nocache?: number
+  },
+  options?: { signal?: AbortSignal }
+): Promise<AdminUsageStatsResponse> {
   const { data } = await apiClient.get<AdminUsageStatsResponse>('/admin/usage/stats', {
-    params
+    params,
+    signal: options?.signal
   })
   return data
 }

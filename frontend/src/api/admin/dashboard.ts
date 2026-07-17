@@ -324,6 +324,26 @@ export async function getBatchApiKeysUsage(
   return data
 }
 
+/**
+ * Update the company-wide monthly budget (CNY) shown on the Console overview.
+ * @param monthlyBudgetCNY - Monthly budget in CNY (0 clears the budget)
+ * @returns Updated budget snapshot (budget / spend / usage percent)
+ */
+export async function updateMonthlyBudget(monthlyBudgetCNY: number): Promise<{
+  monthly_budget_cny: number
+  monthly_spend_cny: number
+  monthly_budget_usage_percent: number
+}> {
+  const { data } = await apiClient.put<{
+    monthly_budget_cny: number
+    monthly_spend_cny: number
+    monthly_budget_usage_percent: number
+  }>('/admin/dashboard/monthly-budget', {
+    monthly_budget_cny: monthlyBudgetCNY
+  })
+  return data
+}
+
 export const dashboardAPI = {
   getStats,
   getRealtimeMetrics,
@@ -335,7 +355,8 @@ export const dashboardAPI = {
   getUserUsageTrend,
   getUserSpendingRanking,
   getBatchUsersUsage,
-  getBatchApiKeysUsage
+  getBatchApiKeysUsage,
+  updateMonthlyBudget
 }
 
 export default dashboardAPI

@@ -20,6 +20,15 @@ export interface VideoTaskAdmin {
   balance_before_usd: number | null; balance_after_usd: number | null; balance_delta_usd: number | null
   authorization_consumed_at: string | null; authorization_consumed_by: number | null
   real_dispatch_count: number; dispatch_state: string; created_by: number; created_at: string; updated_at: string; completed_at?: string
+  // 定价来源与快照（Task 2C1 canonical pricing provenance）
+  pricing_source?: string; pricing_version?: string
+  pricing_cny_per_million_completion_tokens?: number | null
+  pricing_usd_cny_exchange_rate?: number | null
+  pricing_maximum_cny?: number | null
+  // 本地资产落盘状态（Task 2C2 local asset persistence）
+  local_asset_available?: boolean
+  local_asset_download_url?: string | null
+  local_asset_saved_at?: string | null
 }
 export interface VideoSystemCheck { provider_count: number; enabled_provider_count: number; authorized_provider_count: number; task_count: number; real_dispatch_count: number; global_tiny_real_consumed: boolean }
 export interface VideoTaskPage { items: VideoTaskAdmin[]; total: number; page: number; page_size: number; pages: number }

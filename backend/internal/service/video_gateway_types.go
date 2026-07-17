@@ -33,6 +33,8 @@ const (
 	VideoSimulationTaskTypeTextToVideo    = "text_to_video"
 	VideoSimulationDurationSeconds        = 4
 	VideoSimulationResolution             = "720p"
+	VideoSimulationListMaxItems           = 100
+	VideoSimulationListPromptMaxBytes     = 4 * 1024
 )
 
 var (
@@ -46,6 +48,7 @@ var (
 	ErrVideoSimulationAPIKeyNotOwned       = errors.New("video simulation api key is not owned by caller")
 	ErrVideoSimulationCreationKeyConflict  = errors.New("video simulation creation_key conflicts with an existing task")
 	ErrVideoSimulationResultNotReady       = errors.New("video simulation result is not ready")
+	ErrVideoSimulationPromptTooLarge       = errors.New("video simulation prompt exceeds maximum size")
 )
 
 // VideoTaskEvent is an append-only lifecycle record for video_tasks.

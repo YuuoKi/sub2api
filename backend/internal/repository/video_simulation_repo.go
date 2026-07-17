@@ -226,7 +226,8 @@ func (r *videoGatewayRepository) ListSimulationTasksForOwner(ctx context.Context
 	rows, err := db.QueryContext(ctx, `SELECT `+videoTaskColumns+`
 		FROM video_tasks
 		WHERE created_by = $1 AND provider = $2
-		ORDER BY id DESC`, userID, service.VideoProviderMock)
+		ORDER BY id DESC
+		LIMIT $3`, userID, service.VideoProviderMock, service.VideoSimulationListMaxItems)
 	if err != nil {
 		return nil, err
 	}
@@ -263,7 +264,7 @@ func (r *videoGatewayRepository) ClaimMockRunnableTasks(ctx context.Context, lim
 	// reclaim never flips succeeded→failed; insert uses ON CONFLICT DO NOTHING.
 	rows, err := db.QueryContext(ctx, `WITH candidates AS (
 		SELECT vt.id FROM video_tasks vt
-		WHERE vt.provider = 'mock'
+		WHERE vt.provider = $4
 		  AND (vt.worker_claimed_until IS NULL OR vt.worker_claimed_until <= NOW())
 		  AND (
 			vt.status IN ('queued','submitted','running')
@@ -281,7 +282,7 @@ func (r *videoGatewayRepository) ClaimMockRunnableTasks(ctx context.Context, lim
 		UPDATE video_tasks task SET worker_claimed_at = NOW(),
 		worker_claimed_until = NOW() + ($2::int * INTERVAL '1 second')
 		FROM candidates WHERE task.id = candidates.id RETURNING task.*
-	) SELECT `+videoTaskColumns+` FROM claimed`, limit, seconds, mockSucceededContentReclaimSeconds)
+	) SELECT `+videoTaskColumns+` FROM claimed`, limit, seconds, mockSucceededContentReclaimSeconds, service.VideoProviderMock)
 	if err != nil {
 		return nil, err
 	}
@@ -442,17 +443,17 @@ func (r *videoGatewayRepository) CaptureTaskLinkedContent(ctx context.Context, t
 		groupID = task.GroupID
 	}
 	requestID := fmt.Sprintf("simulation-task-%d", task.ID)
+	promptRedacted, promptBytes, redactionVersion := service.PrepareSimulationCapturedPrompt(task.Prompt)
+	response := "模拟视频结果"
 	const query = `
 INSERT INTO ai_generation_content (
     request_id, api_key_id, user_id, group_id, task_id, model,
     prompt_redacted, response_redacted, prompt_bytes, response_bytes, response_truncated, redaction_version
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, FALSE, 1)
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 ON CONFLICT (task_id) WHERE task_id IS NOT NULL DO NOTHING`
-	prompt := task.Prompt
-	response := "模拟视频结果"
 	_, err = db.ExecContext(ctx, query,
 		requestID, apiKeyID, userID, groupID, task.ID, task.Model,
-		prompt, response, len(prompt), len(response),
+		promptRedacted, response, promptBytes, len(response), false, redactionVersion,
 	)
 	if err != nil {
 		return fmt.Errorf("capture simulation generation content: %w", err)

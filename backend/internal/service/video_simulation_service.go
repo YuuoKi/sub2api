@@ -54,6 +54,11 @@ func (s *VideoSimulationService) CreateTask(ctx context.Context, cmd VideoSimula
 		return nil, ErrVideoSimulationAPIKeyNotOwned
 	}
 
+	prompt := strings.TrimSpace(cmd.Prompt)
+	if len(prompt) > maxGenerationPromptMaxBytes {
+		return nil, ErrVideoSimulationPromptTooLarge
+	}
+
 	provider, err := s.repo.GetOrCreateMockProviderAccount(ctx)
 	if err != nil {
 		return nil, err
@@ -66,7 +71,7 @@ func (s *VideoSimulationService) CreateTask(ctx context.Context, cmd VideoSimula
 		Provider:          VideoProviderMock,
 		Model:             VideoModelMockVideoV1,
 		TaskType:          VideoSimulationTaskTypeTextToVideo,
-		Prompt:            strings.TrimSpace(cmd.Prompt),
+		Prompt:            prompt,
 		Status:            VideoStatusQueued,
 		DurationSeconds:   VideoSimulationDurationSeconds,
 		Resolution:        VideoSimulationResolution,
@@ -107,7 +112,20 @@ func (s *VideoSimulationService) ListTasks(ctx context.Context, userID int64) ([
 	if s == nil || s.repo == nil {
 		return nil, ErrVideoTaskNotFound
 	}
-	return s.repo.ListSimulationTasksForOwner(ctx, userID)
+	tasks, err := s.repo.ListSimulationTasksForOwner(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if len(tasks) > VideoSimulationListMaxItems {
+		tasks = tasks[:VideoSimulationListMaxItems]
+	}
+	for _, task := range tasks {
+		if task == nil {
+			continue
+		}
+		task.Prompt = truncateStringUTF8(task.Prompt, VideoSimulationListPromptMaxBytes)
+	}
+	return tasks, nil
 }
 
 func (s *VideoSimulationService) CancelTask(ctx context.Context, taskID, userID int64) (*VideoTask, error) {

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"time"
 )
 
@@ -81,7 +82,7 @@ func (w *VideoSimulationWorker) process(ctx context.Context, task *VideoTask) er
 	case VideoStatusQueued:
 		updated, err := w.repo.TransitionSimulationTask(ctx, current.ID, current.Version, VideoStatusQueued, VideoStatusRunning)
 		if err != nil {
-			if err == ErrVideoTaskTerminalConflict {
+			if errors.Is(err, ErrVideoTaskTerminalConflict) {
 				return nil
 			}
 			return err
@@ -106,7 +107,7 @@ func (w *VideoSimulationWorker) process(ctx context.Context, task *VideoTask) er
 
 	result, err := w.repo.FinalizeSimulationTask(ctx, current.ID, current.Version, status, errMsg)
 	if err != nil {
-		if err == ErrVideoTaskTerminalConflict {
+		if errors.Is(err, ErrVideoTaskTerminalConflict) {
 			return nil
 		}
 		return err

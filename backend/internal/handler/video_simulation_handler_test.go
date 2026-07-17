@@ -117,3 +117,101 @@ func TestSimulationResultMapsMissingWithoutPathLeak(t *testing.T) {
 	require.Equal(t, http.StatusInternalServerError, recorder.Code)
 	require.NotContains(t, recorder.Body.String(), `D:\secret`)
 }
+
+type simulationTaskServiceStub struct {
+	contract map[string]any
+	createErr error
+	listErr   error
+	getErr    error
+	cancelErr error
+	task      *service.VideoTask
+	tasks     []*service.VideoTask
+}
+
+func (s *simulationTaskServiceStub) SimulationContract() map[string]any {
+	if s.contract != nil {
+		return s.contract
+	}
+	return map[string]any{"provider": service.VideoProviderMock}
+}
+
+func (s *simulationTaskServiceStub) CreateTask(context.Context, service.VideoSimulationCreateCommand) (*service.VideoTask, error) {
+	return s.task, s.createErr
+}
+
+func (s *simulationTaskServiceStub) GetTask(context.Context, int64, int64) (*service.VideoTask, error) {
+	return s.task, s.getErr
+}
+
+func (s *simulationTaskServiceStub) ListTasks(context.Context, int64) ([]*service.VideoTask, error) {
+	return s.tasks, s.listErr
+}
+
+func (s *simulationTaskServiceStub) CancelTask(context.Context, int64, int64) (*service.VideoTask, error) {
+	return s.task, s.cancelErr
+}
+
+func (s *simulationTaskServiceStub) OpenSimulationResult(context.Context, int64, int64) (*service.VideoSimulationResult, error) {
+	return nil, service.ErrVideoSimulationResultNotReady
+}
+
+func TestSimulationContractNilServiceFailsClosed(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	h := NewVideoSimulationHandler(nil)
+	router := gin.New()
+	router.GET("/contract", h.Contract)
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/contract", nil))
+	require.Equal(t, http.StatusServiceUnavailable, recorder.Code)
+	require.NotContains(t, recorder.Body.String(), `"healthy"`)
+	require.NotContains(t, strings.ToLower(recorder.Body.String()), `"provider":"mock"`)
+}
+
+func TestSimulationCreateMapsAPIKeyErrorsHonestly(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cases := []struct {
+		name       string
+		err        error
+		wantStatus int
+		wantMsg    string
+		forbidMsg  string
+	}{
+		{
+			name: "missing_key", err: service.ErrAPIKeyNotFound,
+			wantStatus: http.StatusNotFound, wantMsg: "api key", forbidMsg: "video task not found",
+		},
+		{
+			name: "inactive_key", err: service.ErrVideoSimulationAPIKeyInactive,
+			wantStatus: http.StatusForbidden, wantMsg: "api key", forbidMsg: "outside employee scope",
+		},
+		{
+			name: "unowned_key", err: service.ErrVideoSimulationAPIKeyNotOwned,
+			wantStatus: http.StatusForbidden, wantMsg: "api key", forbidMsg: "outside employee scope",
+		},
+		{
+			name: "unknown_persistence", err: errors.New("db unavailable"),
+			wantStatus: http.StatusInternalServerError, wantMsg: "video simulation", forbidMsg: "",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := &simulationTaskServiceStub{createErr: tc.err}
+			h := NewVideoSimulationHandler(svc)
+			router := gin.New()
+			router.POST("/tasks", func(c *gin.Context) {
+				c.Set(string(servermiddleware.ContextKeyUser), servermiddleware.AuthSubject{UserID: 7})
+				c.Next()
+			}, h.Create)
+			req := httptest.NewRequest(http.MethodPost, "/tasks", strings.NewReader(`{"api_key_id":11,"prompt":"hi"}`))
+			req.Header.Set("Content-Type", "application/json")
+			recorder := httptest.NewRecorder()
+			router.ServeHTTP(recorder, req)
+			require.Equal(t, tc.wantStatus, recorder.Code)
+			body := strings.ToLower(recorder.Body.String())
+			require.Contains(t, body, strings.ToLower(tc.wantMsg))
+			if tc.forbidMsg != "" {
+				require.NotContains(t, body, strings.ToLower(tc.forbidMsg))
+			}
+		})
+	}
+}

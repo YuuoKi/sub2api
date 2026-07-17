@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -44,6 +45,8 @@ type simulationRepoStub struct {
 	events             []VideoTaskEvent
 	nextID             int64
 	billing            *simulationBillingProbe
+	createTouches      int
+	reserveTouches     int
 	transitionCalls    int
 	finalizeCalls      int
 	contentCaptures    int
@@ -72,9 +75,26 @@ func (r *simulationRepoStub) GetOrCreateMockProviderAccount(context.Context) (*V
 	return &cp, nil
 }
 
+func (r *simulationRepoStub) ReserveAndCreateTask(_ context.Context, _ *VideoTask, _ float64) error {
+	r.reserveTouches++
+	if r.billing != nil {
+		r.billing.reservations++
+		r.billing.balanceTouches++
+		r.billing.frozenTouches++
+	}
+	return errors.New("ReserveAndCreateTask must not be used for simulation")
+}
+
 func (r *simulationRepoStub) CreateSimulationTask(_ context.Context, task *VideoTask) (bool, error) {
+	r.createTouches++
 	if r.forceCreateErr != nil {
 		return false, r.forceCreateErr
+	}
+	if task != nil && (task.CostAmount != 0 || task.ReservedCostUSD != 0 || task.ReservationState == VideoReservationReserved) {
+		if r.billing != nil {
+			r.billing.reservations++
+			r.billing.balanceTouches++
+		}
 	}
 	if task.CreationKey != "" {
 		if existing, ok := r.byCreationKey[task.CreationKey]; ok {
@@ -365,12 +385,48 @@ func TestSimulationCreateDoesNotTouchBillingOrDispatch(t *testing.T) {
 		UserID: 7, APIKeyID: 11, Prompt: "zero cost", CreationKey: "sim-billing-1",
 	})
 	require.NoError(t, err)
+	require.Greater(t, repo.createTouches, 0, "create path must exercise CreateSimulationTask")
+	require.Zero(t, repo.reserveTouches, "create must not call ReserveAndCreateTask")
 	require.Zero(t, repo.billing.balanceTouches)
 	require.Zero(t, repo.billing.frozenTouches)
 	require.Zero(t, repo.billing.quotaTouches)
 	require.Zero(t, repo.billing.usageTouches)
 	require.Zero(t, repo.billing.reservations)
 	require.Zero(t, repo.billing.dispatches)
+}
+
+func TestSimulationCreateRejectsOversizedPrompt(t *testing.T) {
+	keys := &simulationAPIKeyRepoStub{keys: map[int64]*APIKey{11: ownedActiveKey(7, 11, 3)}}
+	repo := newSimulationRepoStub()
+	svc := NewVideoSimulationService(repo, keys, repo)
+
+	huge := strings.Repeat("x", maxGenerationPromptMaxBytes+1)
+	_, err := svc.CreateTask(context.Background(), VideoSimulationCreateCommand{
+		UserID: 7, APIKeyID: 11, Prompt: huge, CreationKey: "sim-huge",
+	})
+	require.ErrorIs(t, err, ErrVideoSimulationPromptTooLarge)
+	require.Empty(t, repo.tasks)
+	require.Zero(t, repo.createTouches)
+}
+
+func TestSimulationListCapsItemsAndTruncatesPrompt(t *testing.T) {
+	repo := newSimulationRepoStub()
+	svc := NewVideoSimulationService(repo, nil, repo)
+	huge := strings.Repeat("p", VideoSimulationListPromptMaxBytes+2048)
+	for i := 0; i < VideoSimulationListMaxItems+25; i++ {
+		id := int64(1000 + i)
+		repo.tasks[id] = &VideoTask{
+			ID: id, Provider: VideoProviderMock, CreatedBy: 7, Status: VideoStatusQueued, Prompt: huge,
+		}
+	}
+
+	listed, err := svc.ListTasks(context.Background(), 7)
+	require.NoError(t, err)
+	require.LessOrEqual(t, len(listed), VideoSimulationListMaxItems)
+	require.NotEmpty(t, listed)
+	for _, task := range listed {
+		require.LessOrEqual(t, len(task.Prompt), VideoSimulationListPromptMaxBytes)
+	}
 }
 
 func TestSimulationCancelOwnerNonterminalOKForeignAndTerminalReject(t *testing.T) {

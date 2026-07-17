@@ -65,12 +65,7 @@ type simulationCreateBody struct {
 
 func (h *VideoSimulationHandler) Contract(c *gin.Context) {
 	if h == nil || h.service == nil {
-		response.Success(c, map[string]any{
-			"provider":   service.VideoProviderMock,
-			"model":      service.VideoModelMockVideoV1,
-			"label":      "模拟视频结果",
-			"media_kind": "image",
-		})
+		response.Error(c, http.StatusServiceUnavailable, "video simulation unavailable")
 		return
 	}
 	response.Success(c, h.service.SimulationContract())
@@ -232,18 +227,24 @@ func writeSimulationResultError(c *gin.Context, err error) {
 
 func writeSimulationError(c *gin.Context, err error) {
 	switch {
-	case errors.Is(err, service.ErrVideoTaskNotFound), errors.Is(err, service.ErrAPIKeyNotFound):
+	case errors.Is(err, service.ErrAPIKeyNotFound):
+		response.Error(c, http.StatusNotFound, "api key not found")
+	case errors.Is(err, service.ErrVideoSimulationAPIKeyInactive):
+		response.Error(c, http.StatusForbidden, "api key is inactive")
+	case errors.Is(err, service.ErrVideoSimulationAPIKeyNotOwned):
+		response.Error(c, http.StatusForbidden, "api key is not owned by caller")
+	case errors.Is(err, service.ErrVideoTaskNotFound):
 		response.Error(c, http.StatusNotFound, "video task not found")
-	case errors.Is(err, service.ErrVideoTaskForbidden),
-		errors.Is(err, service.ErrVideoSimulationAPIKeyNotOwned),
-		errors.Is(err, service.ErrVideoSimulationAPIKeyInactive):
+	case errors.Is(err, service.ErrVideoTaskForbidden):
 		response.Error(c, http.StatusForbidden, "video task is outside employee scope")
+	case errors.Is(err, service.ErrVideoSimulationPromptTooLarge):
+		response.BadRequest(c, err.Error())
 	case errors.Is(err, service.ErrVideoCancelConflict),
 		errors.Is(err, service.ErrVideoSimulationCreationKeyConflict),
 		errors.Is(err, service.ErrVideoSimulationResultNotReady):
 		response.Error(c, http.StatusConflict, err.Error())
 	default:
-		response.BadRequest(c, "video simulation request failed")
+		response.InternalError(c, "video simulation request failed")
 	}
 }
 

@@ -3,11 +3,47 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 )
+
+type wrappedTerminalConflictRepo struct {
+	transitionErr error
+	finalizeErr   error
+	tasks         []*VideoTask
+}
+
+func (r *wrappedTerminalConflictRepo) ClaimMockRunnableTasks(context.Context, int, time.Duration) ([]*VideoTask, error) {
+	return r.tasks, nil
+}
+
+func (r *wrappedTerminalConflictRepo) TransitionSimulationTask(context.Context, int64, int64, string, string) (*VideoTask, error) {
+	return nil, r.transitionErr
+}
+
+func (r *wrappedTerminalConflictRepo) FinalizeSimulationTask(context.Context, int64, int64, string, string) (VideoTaskFinalizationResult, error) {
+	return VideoTaskFinalizationResult{}, r.finalizeErr
+}
+
+func TestSimulationWorkerUsesErrorsIsForTerminalConflict(t *testing.T) {
+	repo := &wrappedTerminalConflictRepo{
+		transitionErr: fmt.Errorf("claim race: %w", ErrVideoTaskTerminalConflict),
+		tasks: []*VideoTask{{
+			ID: 1, Provider: VideoProviderMock, Status: VideoStatusQueued, Version: 1,
+		}},
+	}
+	worker := NewVideoSimulationWorker(repo, nil)
+	require.NoError(t, worker.RunOnce(context.Background()))
+
+	repo.tasks = []*VideoTask{{
+		ID: 2, Provider: VideoProviderMock, Status: VideoStatusRunning, Version: 2,
+	}}
+	repo.finalizeErr = fmt.Errorf("finalize race: %w", ErrVideoTaskTerminalConflict)
+	require.NoError(t, worker.RunOnce(context.Background()))
+}
 
 type alwaysFailSimulationStrategy struct {
 	reason string

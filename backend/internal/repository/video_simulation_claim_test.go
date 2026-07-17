@@ -39,8 +39,8 @@ func TestClaimMockRunnableTasksSQLRequiresMockProvider(t *testing.T) {
 	repo := &videoGatewayRepository{db: db}
 	now := time.Now().UTC()
 
-	mock.ExpectQuery(`(?is)provider\s*=\s*'mock'`).
-		WithArgs(2, 90, mockSucceededContentReclaimSeconds).
+	mock.ExpectQuery(`(?is)provider\s*=\s*\$4`).
+		WithArgs(2, 90, mockSucceededContentReclaimSeconds, "mock").
 		WillReturnRows(videoTaskRows(now).AddRow(
 			int64(5), int64(21), int64(22), int64(2), "mock", "mock-video-v1", "text_to_video", "prompt", "queued",
 			"", "", "", 4, "720p", nil, 0, "USD", "internal_simulation", "simulation-v1", nil, nil, nil, 0, "", "", "", "claim-mock-5", int64(1), "pending", int64(13),
@@ -65,7 +65,7 @@ func TestClaimMockRunnableTasksSQLIncludesSucceededWithoutContent(t *testing.T) 
 	// Production restart reclaim: claim SQL must surface succeeded mock tasks that still
 	// lack ai_generation_content, within the reclaim window. Stub-forced claims are not enough.
 	mock.ExpectQuery(`(?is)status\s*=\s*'succeeded'[\s\S]*ai_generation_content|ai_generation_content[\s\S]*status\s*=\s*'succeeded'`).
-		WithArgs(1, 30, mockSucceededContentReclaimSeconds).
+		WithArgs(1, 30, mockSucceededContentReclaimSeconds, "mock").
 		WillReturnRows(videoTaskRows(now).AddRow(
 			int64(6), int64(21), int64(22), int64(2), "mock", "mock-video-v1", "text_to_video", "prompt", "succeeded",
 			"", "", "", 4, "720p", nil, 0, "USD", "internal_simulation", "simulation-v1", nil, nil, nil, 0, "", "", "", "claim-mock-6", int64(3), "pending", int64(13),

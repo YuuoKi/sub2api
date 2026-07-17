@@ -27,11 +27,12 @@ const (
 )
 
 var (
-	ErrVideoTaskNotFound         = errors.New("video task not found")
-	ErrVideoTaskTerminalConflict = errors.New("video task terminal status conflicts with requested status")
-	ErrVideoTaskForbidden        = errors.New("video task is outside employee scope")
-	ErrVideoProviderNotFound     = errors.New("video provider not found")
-	ErrVideoCancelConflict       = errors.New("video task cannot be cancelled after dispatch started")
+	ErrVideoTaskNotFound           = errors.New("video task not found")
+	ErrVideoTaskTerminalConflict   = errors.New("video task terminal status conflicts with requested status")
+	ErrVideoTaskForbidden          = errors.New("video task is outside employee scope")
+	ErrVideoProviderNotFound       = errors.New("video provider not found")
+	ErrVideoCancelConflict         = errors.New("video task cannot be cancelled after dispatch started")
+	ErrVideoPricingSnapshotInvalid = errors.New("video pricing snapshot is invalid")
 )
 
 type VideoTaskScope struct {

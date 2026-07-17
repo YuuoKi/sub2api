@@ -166,7 +166,10 @@ func (r *videoGatewayRepository) ReserveAndCreateTask(ctx context.Context, task 
 	if task == nil {
 		return fmt.Errorf("video task is required")
 	}
-	if maximumUSD <= 0 || task.CreatedBy <= 0 || task.APIKeyID <= 0 || task.GroupID <= 0 {
+	if err := validateVideoPricingSnapshot(task, maximumUSD); err != nil {
+		return err
+	}
+	if task.CreatedBy <= 0 || task.APIKeyID <= 0 || task.GroupID <= 0 {
 		return service.ErrVideoBudgetRejected
 	}
 	if task.DurationSeconds == 0 {
@@ -284,6 +287,45 @@ func (r *videoGatewayRepository) ReserveAndCreateTask(ctx context.Context, task 
 		return err
 	}
 	return tx.Commit()
+}
+
+func validateVideoPricingSnapshot(task *service.VideoTask, maximumUSD float64) error {
+	invalid := func(reason string) error {
+		return fmt.Errorf("%w: %s", service.ErrVideoPricingSnapshotInvalid, reason)
+	}
+	if task == nil {
+		return invalid("task is required")
+	}
+	if task.Currency != "USD" {
+		return invalid("currency must be USD")
+	}
+	if task.PricingSource != service.VideoPricingSourceConfig {
+		return invalid("source is unsupported")
+	}
+	if task.PricingVersion != service.VideoPricingVersionSeedanceCompletionTokensUSDV1 {
+		return invalid("version is unsupported")
+	}
+	if task.PricingCNYPerMillionCompletionTokens == nil || task.PricingUSDCNYExchangeRate == nil || task.PricingMaximumCNY == nil {
+		return invalid("required inputs are missing")
+	}
+	for name, value := range map[string]float64{
+		"cny per million completion tokens": *task.PricingCNYPerMillionCompletionTokens,
+		"usd cny exchange rate":             *task.PricingUSDCNYExchangeRate,
+		"maximum cny":                       *task.PricingMaximumCNY,
+		"maximum usd":                       maximumUSD,
+	} {
+		if math.IsNaN(value) || math.IsInf(value, 0) || value <= 0 {
+			return invalid(name + " must be finite and positive")
+		}
+	}
+	expectedMaximumUSD := math.Round((*task.PricingMaximumCNY / *task.PricingUSDCNYExchangeRate)*1e8) / 1e8
+	if math.IsNaN(expectedMaximumUSD) || math.IsInf(expectedMaximumUSD, 0) || expectedMaximumUSD <= 0 {
+		return invalid("derived maximum usd must be finite and positive")
+	}
+	if maximumUSD != expectedMaximumUSD {
+		return invalid("maximum usd does not match pricing snapshot")
+	}
+	return nil
 }
 
 func videoRateWindow(now time.Time, usage float64, start sql.NullTime, duration time.Duration, alignDay bool) (float64, sql.NullTime) {

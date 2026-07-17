@@ -29,6 +29,20 @@ func TestVideoGatewayFoundationSchemaSmoke(t *testing.T) {
 			SELECT 1 FROM information_schema.columns WHERE table_name='video_tasks' AND column_name=$1)`, column).Scan(&exists))
 		require.True(t, exists, "expected video_tasks.%s", column)
 	}
+	for column, expectedType := range map[string]string{
+		"pricing_source":  "text",
+		"pricing_version": "text",
+		"pricing_cny_per_million_completion_tokens": "numeric",
+		"pricing_usd_cny_exchange_rate":             "numeric",
+		"pricing_maximum_cny":                       "numeric",
+	} {
+		var dataType, nullable string
+		require.NoError(t, integrationDB.QueryRowContext(context.Background(), `SELECT data_type,is_nullable
+			FROM information_schema.columns WHERE table_schema='public' AND table_name='video_tasks' AND column_name=$1`, column).
+			Scan(&dataType, &nullable))
+		require.Equal(t, expectedType, dataType, "video_tasks.%s type", column)
+		require.Equal(t, "YES", nullable, "video_tasks.%s must preserve historical unknowns", column)
+	}
 }
 
 type videoIntegrationFixture struct {
@@ -63,10 +77,7 @@ func newVideoIntegrationFixture(t *testing.T, balance, quota, rate float64, grou
 		fmt.Sprintf("provider-%d", suffix), f.groupID, service.SeedanceModel, service.SeedanceBaseURL, f.userID).Scan(&f.providerID))
 	f.repo = NewVideoGatewayRuntimeRepository(integrationDB)
 	if reserve {
-		f.task = &service.VideoTask{APIKeyID: f.apiKeyID, GroupID: f.groupID, ProviderAccountID: f.providerID,
-			Provider: "seedance", Model: service.SeedanceModel, TaskType: "text_to_video", Prompt: "integration",
-			Status: service.VideoStatusQueued, CreationKey: fmt.Sprintf("video-create-%d", suffix), CreatedBy: f.userID,
-			DurationSeconds: 4, Resolution: "720p", Currency: "USD"}
+		f.task = newVideoIntegrationTask(&f, "integration", fmt.Sprintf("video-create-%d", suffix))
 		require.NoError(t, f.repo.ReserveAndCreateTask(ctx, f.task, 0.2))
 	}
 	t.Cleanup(func() {
@@ -79,6 +90,67 @@ func newVideoIntegrationFixture(t *testing.T, balance, quota, rate float64, grou
 		_, _ = integrationDB.Exec(`DELETE FROM users WHERE id=$1`, f.userID)
 	})
 	return &f
+}
+
+func newVideoIntegrationTask(f *videoIntegrationFixture, prompt, creationKey string) *service.VideoTask {
+	price, rate, maximum := 2.0, 7.0, 1.4
+	return &service.VideoTask{APIKeyID: f.apiKeyID, GroupID: f.groupID, ProviderAccountID: f.providerID,
+		Provider: "seedance", Model: service.SeedanceModel, TaskType: "text_to_video", Prompt: prompt,
+		Status: service.VideoStatusQueued, CreationKey: creationKey, CreatedBy: f.userID,
+		DurationSeconds: 4, Resolution: "720p", Currency: "USD",
+		PricingSource: service.VideoPricingSourceConfig, PricingVersion: service.VideoPricingVersionSeedanceCompletionTokensUSDV1,
+		PricingCNYPerMillionCompletionTokens: &price, PricingUSDCNYExchangeRate: &rate, PricingMaximumCNY: &maximum}
+}
+
+func TestVideoGatewayHistoricalPricingProvenanceRemainsNullable(t *testing.T) {
+	ctx := context.Background()
+	f := newVideoIntegrationFixture(t, 10, 1, 1, "standard", false)
+	var id int64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `INSERT INTO video_tasks
+		(provider_account_id,provider,model,task_type,prompt,status,created_by,api_key_id,group_id,duration_seconds,resolution)
+		VALUES ($1,'seedance',$2,'text_to_video','historical','queued',$3,$4,$5,4,'720p') RETURNING id`,
+		f.providerID, service.SeedanceModel, f.userID, f.apiKeyID, f.groupID).Scan(&id))
+
+	task, err := f.repo.GetTask(ctx, id)
+	require.NoError(t, err)
+	require.Equal(t, "USD", task.Currency)
+	require.Empty(t, task.PricingSource)
+	require.Empty(t, task.PricingVersion)
+	require.Nil(t, task.PricingCNYPerMillionCompletionTokens)
+	require.Nil(t, task.PricingUSDCNYExchangeRate)
+	require.Nil(t, task.PricingMaximumCNY)
+}
+
+func TestVideoGatewayInvalidPricingSnapshotFailsBeforeLedgerInsertAndCounters(t *testing.T) {
+	ctx := context.Background()
+	f := newVideoIntegrationFixture(t, 10, 1, 1, "standard", false)
+	task := newVideoIntegrationTask(f, "invalid pricing", fmt.Sprintf("invalid-pricing-%d", time.Now().UnixNano()))
+	task.PricingVersion = ""
+
+	var balanceBefore, frozenBefore, quotaBefore, usage5hBefore, usage1dBefore, usage7dBefore float64
+	var taskCountBefore, dispatchCountBefore int64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT balance,frozen_balance FROM users WHERE id=$1`, f.userID).Scan(&balanceBefore, &frozenBefore))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT quota_used,usage_5h,usage_1d,usage_7d FROM api_keys WHERE id=$1`, f.apiKeyID).
+		Scan(&quotaBefore, &usage5hBefore, &usage1dBefore, &usage7dBefore))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT COUNT(*) FROM video_tasks WHERE created_by=$1`, f.userID).Scan(&taskCountBefore))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT COUNT(*) FROM video_single_smoke_consumptions`).Scan(&dispatchCountBefore))
+
+	err := f.repo.ReserveAndCreateTask(ctx, task, 0.2)
+	require.ErrorIs(t, err, service.ErrVideoPricingSnapshotInvalid)
+
+	var balanceAfter, frozenAfter, quotaAfter, usage5hAfter, usage1dAfter, usage7dAfter float64
+	var taskCountAfter, dispatchCountAfter int64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT balance,frozen_balance FROM users WHERE id=$1`, f.userID).Scan(&balanceAfter, &frozenAfter))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT quota_used,usage_5h,usage_1d,usage_7d FROM api_keys WHERE id=$1`, f.apiKeyID).
+		Scan(&quotaAfter, &usage5hAfter, &usage1dAfter, &usage7dAfter))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT COUNT(*) FROM video_tasks WHERE created_by=$1`, f.userID).Scan(&taskCountAfter))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT COUNT(*) FROM video_single_smoke_consumptions`).Scan(&dispatchCountAfter))
+	require.Equal(t, []float64{balanceBefore, frozenBefore, quotaBefore, usage5hBefore, usage1dBefore, usage7dBefore},
+		[]float64{balanceAfter, frozenAfter, quotaAfter, usage5hAfter, usage1dAfter, usage7dAfter})
+	require.Equal(t, taskCountBefore, taskCountAfter)
+	require.Equal(t, dispatchCountBefore, dispatchCountAfter)
+	require.Zero(t, task.ID)
+	require.Zero(t, task.RealDispatchCount)
 }
 
 func TestVideoGatewayReservationChecksBalanceQuotaRateAndGroup(t *testing.T) {
@@ -95,9 +167,7 @@ func TestVideoGatewayReservationChecksBalanceQuotaRateAndGroup(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newVideoIntegrationFixture(t, tc.balance, tc.quota, tc.rate, tc.groupType, false)
-			task := &service.VideoTask{APIKeyID: f.apiKeyID, GroupID: f.groupID, ProviderAccountID: f.providerID,
-				Provider: "seedance", Model: service.SeedanceModel, TaskType: "text_to_video", Prompt: "x", Status: service.VideoStatusQueued,
-				CreationKey: fmt.Sprintf("reject-%s-%d", tc.name, time.Now().UnixNano()), CreatedBy: f.userID, DurationSeconds: 4, Resolution: "720p"}
+			task := newVideoIntegrationTask(f, "x", fmt.Sprintf("reject-%s-%d", tc.name, time.Now().UnixNano()))
 			err := f.repo.ReserveAndCreateTask(ctx, task, 0.2)
 			require.ErrorIs(t, err, service.ErrVideoBudgetRejected)
 			var count int
@@ -268,9 +338,7 @@ func TestVideoGatewayProviderGroupIsolationAndGlobalGate(t *testing.T) {
 	other := newVideoIntegrationFixture(t, 10, 1, 1, "standard", false)
 	_, err := f.repo.GetVideoProvider(ctx, other.providerID, f.groupID)
 	require.ErrorIs(t, err, service.ErrVideoProviderNotFound)
-	second := &service.VideoTask{APIKeyID: f.apiKeyID, GroupID: f.groupID, ProviderAccountID: f.providerID, Provider: "seedance",
-		Model: service.SeedanceModel, TaskType: "text_to_video", Prompt: "second", Status: service.VideoStatusQueued,
-		CreationKey: fmt.Sprintf("global-second-%d", time.Now().UnixNano()), CreatedBy: f.userID, DurationSeconds: 4, Resolution: "720p"}
+	second := newVideoIntegrationTask(f, "second", fmt.Sprintf("global-second-%d", time.Now().UnixNano()))
 	require.NoError(t, f.repo.ReserveAndCreateTask(ctx, second, 0.2))
 	ok, err := f.repo.BeginRealDispatch(ctx, f.task.ID, f.task.Version)
 	require.NoError(t, err)
@@ -304,7 +372,7 @@ func TestVideoGatewayDispatchRequiresProviderGrantWithoutMutation(t *testing.T) 
 func TestVideoGatewayConcurrentDispatchConsumesOneProviderGrant(t *testing.T) {
 	ctx := context.Background()
 	f := newVideoIntegrationFixture(t, 10, 1, 1, "standard", true)
-	second := &service.VideoTask{APIKeyID: f.apiKeyID, GroupID: f.groupID, ProviderAccountID: f.providerID, Provider: "seedance", Model: service.SeedanceModel, TaskType: "text_to_video", Prompt: "concurrent", Status: service.VideoStatusQueued, CreationKey: fmt.Sprintf("concurrent-%d", time.Now().UnixNano()), CreatedBy: f.userID, DurationSeconds: 4, Resolution: "720p"}
+	second := newVideoIntegrationTask(f, "concurrent", fmt.Sprintf("concurrent-%d", time.Now().UnixNano()))
 	require.NoError(t, f.repo.ReserveAndCreateTask(ctx, second, 0.2))
 	start := make(chan struct{})
 	results := make(chan bool, 2)

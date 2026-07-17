@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"math"
 	"regexp"
 	"testing"
 	"time"
@@ -11,6 +12,59 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/stretchr/testify/require"
 )
+
+func TestVideoGatewayRepositoryRejectsInvalidPricingSnapshotBeforeTransaction(t *testing.T) {
+	tests := []struct {
+		name       string
+		maximumUSD float64
+		mutate     func(*service.VideoTask)
+	}{
+		{name: "all provenance missing", maximumUSD: 0.2, mutate: func(task *service.VideoTask) {
+			task.Currency, task.PricingSource, task.PricingVersion = "", "", ""
+			task.PricingCNYPerMillionCompletionTokens = nil
+			task.PricingUSDCNYExchangeRate = nil
+			task.PricingMaximumCNY = nil
+		}},
+		{name: "partial snapshot", maximumUSD: 0.2, mutate: func(task *service.VideoTask) { task.PricingUSDCNYExchangeRate = nil }},
+		{name: "unsupported currency", maximumUSD: 0.2, mutate: func(task *service.VideoTask) { task.Currency = "CNY" }},
+		{name: "unsupported source", maximumUSD: 0.2, mutate: func(task *service.VideoTask) { task.PricingSource = "request.body" }},
+		{name: "unsupported version", maximumUSD: 0.2, mutate: func(task *service.VideoTask) { task.PricingVersion = "seedance_v2" }},
+		{name: "zero token price", maximumUSD: 0.2, mutate: func(task *service.VideoTask) { value := 0.0; task.PricingCNYPerMillionCompletionTokens = &value }},
+		{name: "nan token price", maximumUSD: 0.2, mutate: func(task *service.VideoTask) { value := math.NaN(); task.PricingCNYPerMillionCompletionTokens = &value }},
+		{name: "infinite exchange rate", maximumUSD: 0.2, mutate: func(task *service.VideoTask) { value := math.Inf(1); task.PricingUSDCNYExchangeRate = &value }},
+		{name: "nan maximum cny", maximumUSD: 0.2, mutate: func(task *service.VideoTask) { value := math.NaN(); task.PricingMaximumCNY = &value }},
+		{name: "non-finite maximum usd", maximumUSD: math.Inf(1), mutate: func(*service.VideoTask) {}},
+		{name: "maximum does not match snapshot", maximumUSD: 0.21, mutate: func(*service.VideoTask) {}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = db.Close() })
+			task := validVideoPricingTaskForRepository()
+			tc.mutate(task)
+
+			err = NewVideoGatewayRepository(db).ReserveAndCreateTask(context.Background(), task, tc.maximumUSD)
+			require.ErrorContains(t, err, "video pricing snapshot")
+			require.Zero(t, task.ID)
+			require.Zero(t, task.ReservedCostUSD)
+			require.Empty(t, task.ReservationState)
+			require.Zero(t, task.RealDispatchCount)
+			require.NoError(t, mock.ExpectationsWereMet(), "invalid snapshot must fail before transaction or ledger access")
+		})
+	}
+}
+
+func validVideoPricingTaskForRepository() *service.VideoTask {
+	price, rate, maximum := 2.0, 7.0, 1.4
+	return &service.VideoTask{
+		APIKeyID: 11, GroupID: 12, ProviderAccountID: 7, Provider: "seedance", Model: service.SeedanceModel,
+		TaskType: "text_to_video", Prompt: "test prompt", Status: service.VideoStatusQueued, CreatedBy: 9,
+		CreationKey: "creation-1", DurationSeconds: 4, Resolution: "720p", Currency: "USD",
+		PricingSource: service.VideoPricingSourceConfig, PricingVersion: service.VideoPricingVersionSeedanceCompletionTokensUSDV1,
+		PricingCNYPerMillionCompletionTokens: &price, PricingUSDCNYExchangeRate: &rate, PricingMaximumCNY: &maximum,
+	}
+}
 
 func TestVideoGatewayRepositoryReservesBudgetAndCreatesTaskInOneTransaction(t *testing.T) {
 	db, mock, err := sqlmock.New()

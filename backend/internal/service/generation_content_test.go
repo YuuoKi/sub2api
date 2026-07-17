@@ -252,6 +252,48 @@ func TestGenerationContentCollectorSuppressesLargeBase64AndOpaquePayloads(t *tes
 	}
 }
 
+func TestGenerationContentPromptRedactsShortValuesForCommonKeyAliases(t *testing.T) {
+	aliases := []string{
+		"api_key", "api-key", "apiKey", "apikey",
+		"x_api_key", "x-api-key", "xApiKey", "xapikey",
+		"client_secret", "client-secret", "clientSecret", "clientsecret",
+		"access_token", "access-token", "accessToken", "accesstoken",
+		"refresh_token", "refresh-token", "refreshToken", "refreshtoken",
+		"id_token", "id-token", "idToken", "idtoken",
+		"session_token", "session-token", "sessionToken", "sessiontoken",
+		"private_key", "private-key", "privateKey", "privatekey",
+		"secret_key", "secret-key", "secretKey", "secretkey",
+		"access_key", "access-key", "accessKey", "accesskey",
+		"token", "session", "cookie", "set_cookie", "set-cookie", "setCookie",
+		"authorization", "bearer", "password", "passwd", "pwd", "secret",
+	}
+	const shortSecret = "tiny123"
+	for _, alias := range aliases {
+		for _, mode := range []string{"valid", "truncated_invalid"} {
+			t.Run(alias+"/"+mode, func(t *testing.T) {
+				body := []byte(`{"prompt":"safe prompt","` + alias + `":"` + shortSecret + `"}`)
+				if mode == "truncated_invalid" {
+					full := []byte(`{"prompt":"safe prompt","` + alias + `":"` + shortSecret + `","large":"` + strings.Repeat("x", 512) + `"}`)
+					svc := &GatewayService{cfg: generationCaptureConfig(128, 32)}
+					snapshot := svc.SnapshotGenerationPrompt(full)
+					if !snapshot.Truncated {
+						t.Fatal("test fixture must truncate after the closed secret value")
+					}
+					body = snapshot.Body
+				}
+
+				out := redactGenerationPrompt(body)
+				if strings.Contains(out, shortSecret) {
+					t.Fatalf("alias %q leaked short value in %s JSON: %q", alias, mode, out)
+				}
+				if !strings.Contains(out, "safe prompt") {
+					t.Fatalf("alias %q lost safe preview in %s JSON: %q", alias, mode, out)
+				}
+			})
+		}
+	}
+}
+
 func TestGenerationContentCollectorIsFailOpen(t *testing.T) {
 	for _, repo := range []*generationContentMemoryRepo{
 		{err: errors.New("database unavailable")},

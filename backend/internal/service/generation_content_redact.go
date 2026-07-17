@@ -10,13 +10,21 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/util/logredact"
 )
 
-const generationRedactionVersion = 3
+const generationRedactionVersion = 4
 
 var generationSensitiveKeys = []string{
-	"api_key", "apikey", "x_api_key", "access_key", "secret_key",
-	"token", "session_token", "session", "cookie", "set_cookie",
+	"api_key", "api-key", "apikey",
+	"x_api_key", "x-api-key", "xapikey",
+	"client_secret", "client-secret", "clientsecret",
+	"access_token", "access-token", "accesstoken",
+	"refresh_token", "refresh-token", "refreshtoken",
+	"id_token", "id-token", "idtoken",
+	"session_token", "session-token", "sessiontoken",
+	"private_key", "private-key", "privatekey",
+	"secret_key", "secret-key", "secretkey",
+	"access_key", "access-key", "accesskey",
+	"token", "session", "cookie", "set_cookie", "set-cookie", "setcookie",
 	"authorization", "bearer", "password", "passwd", "pwd", "secret",
-	"client_secret", "private_key",
 }
 
 var (
@@ -25,8 +33,16 @@ var (
 	generationCNIDPattern               = regexp.MustCompile(`\b\d{17}[0-9Xx]\b`)
 	generationCardPattern               = regexp.MustCompile(`\b(?:\d[ -]?){12,18}\d\b`)
 	generationOpaqueTokenPattern        = regexp.MustCompile(`[A-Za-z0-9]{20,}`)
-	generationUnterminatedSecretPattern = regexp.MustCompile(`(?i)("(?:api[_-]?key|apikey|x[_-]?api[_-]?key|access[_-]?key|secret[_-]?key|token|session[_-]?token|session|cookie|set[_-]?cookie|authorization|bearer|password|passwd|pwd|secret|client[_-]?secret|private[_-]?key)"\s*:\s*")([^"]*)$`)
+	generationUnterminatedSecretPattern = compileGenerationUnterminatedSecretPattern(generationSensitiveKeys)
 )
+
+func compileGenerationUnterminatedSecretPattern(keys []string) *regexp.Regexp {
+	aliases := make([]string, 0, len(keys))
+	for _, key := range keys {
+		aliases = append(aliases, regexp.QuoteMeta(key))
+	}
+	return regexp.MustCompile(`(?i)("(?:` + strings.Join(aliases, "|") + `)"\s*:\s*")([^"]*)$`)
+}
 
 func redactGenerationPII(value string) string {
 	value = generationEmailPattern.ReplaceAllString(value, "[EMAIL]")

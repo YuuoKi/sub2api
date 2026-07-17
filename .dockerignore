@@ -36,6 +36,8 @@ frontend/node_modules/
 node_modules/
 
 # Go build cache (will be built in container)
+.cache/
+backend/.cache/
 backend/vendor/
 backend/bin/
 backend/server

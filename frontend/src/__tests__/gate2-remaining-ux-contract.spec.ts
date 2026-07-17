@@ -13,6 +13,12 @@ describe('Gate 2 remaining UX contract', () => {
     expect(login).toContain('const registrationEnabled = ref<boolean>(false)')
   })
 
+  it('sends password and 2FA admin logins to the unified console overview by default', () => {
+    const login = source('src/views/auth/LoginView.vue')
+    expect(login).toContain("import { resolvePostAuthRedirect } from '@/router/setupRedirect'")
+    expect(login.match(/resolvePostAuthRedirect\(/g)).toHaveLength(2)
+  })
+
   it('hard-cuts onboarding to four Wujie operator steps with an explicit skip path', () => {
     const steps = getAdminSteps((key) => key)
     expect(steps).toHaveLength(4)

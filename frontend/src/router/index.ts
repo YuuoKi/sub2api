@@ -11,7 +11,7 @@ import { useAdminComplianceStore } from '@/stores/adminCompliance'
 import { useNavigationLoadingState } from '@/composables/useNavigationLoading'
 import { useRoutePrefetch } from '@/composables/useRoutePrefetch'
 import { getSetupStatus } from '@/api/setup'
-import { resolveCompletedSetupRedirectPath } from './setupRedirect'
+import { resolveCompletedSetupRedirectPath, resolvePostAuthRedirect } from './setupRedirect'
 import { resolveRouteDocumentTitle } from './title'
 
 /**
@@ -914,8 +914,8 @@ router.beforeEach(async (to, _from, next) => {
         next()
         return
       }
-      // Admin users go to admin dashboard, regular users go to user dashboard
-      next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
+      // Send each role to the canonical landing page for the unified console.
+      next(resolvePostAuthRedirect(to.query.redirect, authStore.isAdmin))
       return
     }
     // Backend mode: block public pages for unauthenticated users (except login, key-usage, setup)

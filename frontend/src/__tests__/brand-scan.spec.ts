@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest'
 
 const frontendRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const srcRoot = resolve(frontendRoot, 'src')
+const contentRoot = resolve(srcRoot, 'content')
+const publicRoot = resolve(frontendRoot, 'public')
 
 /**
  * User-visible upstream brand markers.
@@ -80,6 +82,7 @@ const ALLOWLIST_LINE = [
 ] as const
 
 const SCANNED_EXTENSIONS = new Set(['.vue', '.ts', '.tsx', '.js', '.jsx', '.html'])
+const CONTENT_EXTENSIONS = new Set(['.md'])
 
 /** Must remain in the scanned set (brand fail-open surfaces). */
 const MUST_SCAN = [
@@ -98,19 +101,28 @@ function isAllowlistedPath(relPath: string): boolean {
   )
 }
 
-function walk(dir: string, out: string[] = []): string[] {
+function walk(dir: string, out: string[] = [], extensions = SCANNED_EXTENSIONS): string[] {
   for (const entry of readdirSync(dir)) {
     if (entry === 'node_modules' || entry === 'dist' || entry === '.git') continue
     const full = join(dir, entry)
     const st = statSync(full)
     if (st.isDirectory()) {
-      walk(full, out)
+      walk(full, out, extensions)
       continue
     }
     const ext = entry.includes('.') ? `.${entry.split('.').pop()}` : ''
-    if (SCANNED_EXTENSIONS.has(ext)) out.push(full)
+    if (extensions.has(ext)) out.push(full)
   }
   return out
+}
+
+function scannedFiles(): string[] {
+  return [
+    resolve(frontendRoot, 'index.html'),
+    ...walk(srcRoot),
+    ...walk(contentRoot, [], CONTENT_EXTENSIONS),
+    ...walk(publicRoot)
+  ]
 }
 
 function isAllowlistedLine(line: string): boolean {
@@ -125,8 +137,7 @@ describe('brand scan (source-level)', () => {
   })
 
   it('scans compliance store and dialog sources', () => {
-    const indexHtml = resolve(frontendRoot, 'index.html')
-    const files = [indexHtml, ...walk(srcRoot)].map(f =>
+    const files = scannedFiles().map(f =>
       relative(frontendRoot, f).replace(/\\/g, '/')
     )
     for (const required of MUST_SCAN) {
@@ -138,8 +149,7 @@ describe('brand scan (source-level)', () => {
   })
 
   it('rejects user-visible upstream brand hits outside allowlist', () => {
-    const indexHtml = resolve(frontendRoot, 'index.html')
-    const files = [indexHtml, ...walk(srcRoot)]
+    const files = scannedFiles()
     const violations: string[] = []
 
     for (const file of files) {

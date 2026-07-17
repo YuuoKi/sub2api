@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
-import { resolveCompletedSetupRedirectPath } from '@/router/setupRedirect'
+import {
+  resolveCompletedSetupRedirectPath,
+  resolvePostAuthRedirect,
+} from '@/router/setupRedirect'
 
 // Mock 导航加载状态
 vi.mock('@/composables/useNavigationLoading', () => {
@@ -89,7 +92,7 @@ function simulateGuard(
       if (authState.backendModeEnabled && !authState.isAdmin) {
         return null
       }
-      return authState.isAdmin ? '/admin/dashboard' : '/dashboard'
+      return resolvePostAuthRedirect(toMeta.redirect, authState.isAdmin)
     }
     if (authState.backendModeEnabled && !authState.isAuthenticated) {
       const allowed = ['/login', '/key-usage', '/setup', '/payment/result']
@@ -285,9 +288,29 @@ describe('路由守卫逻辑', () => {
       hasPendingAuthSession: false,
     }
 
-    it('访问 /login 重定向到 /admin/dashboard', () => {
+    it('访问 /login 重定向到统一控制台总览', () => {
       const redirect = simulateGuard('/login', { requiresAuth: false }, authState)
+      expect(redirect).toBe('/admin/console/overview')
+    })
+
+    it('访问 /login 时优先保留显式站内 redirect', () => {
+      const redirect = simulateGuard(
+        '/login',
+        { requiresAuth: false, redirect: '/admin/dashboard' },
+        authState,
+      )
       expect(redirect).toBe('/admin/dashboard')
+    })
+
+    it('访问 /login 时拒绝外部 redirect 并回落统一控制台总览', () => {
+      for (const unsafeRedirect of ['https://example.com', '//example.com']) {
+        const redirect = simulateGuard(
+          '/login',
+          { requiresAuth: false, redirect: unsafeRedirect },
+          authState,
+        )
+        expect(redirect).toBe('/admin/console/overview')
+      }
     })
 
     it('访问管理页面允许通过', () => {
@@ -457,7 +480,7 @@ describe('路由守卫逻辑', () => {
       expect(redirect).toBe('/login')
     })
 
-    it('admin: initialized /setup redirects to /admin/dashboard', () => {
+    it('admin: initialized /setup redirects to the unified console overview', () => {
       const authState: MockAuthState = {
         isAuthenticated: true,
         isAdmin: true,
@@ -467,7 +490,7 @@ describe('路由守卫逻辑', () => {
         setupNeedsSetup: false,
       }
       const redirect = simulateGuard('/setup', { requiresAuth: false }, authState)
-      expect(redirect).toBe('/admin/dashboard')
+      expect(redirect).toBe('/admin/console/overview')
     })
 
     it('admin: /admin/dashboard is allowed', () => {
@@ -482,7 +505,7 @@ describe('路由守卫逻辑', () => {
       expect(redirect).toBeNull()
     })
 
-    it('admin: /login redirects to /admin/dashboard', () => {
+    it('admin: /login redirects to the unified console overview', () => {
       const authState: MockAuthState = {
         isAuthenticated: true,
         isAdmin: true,
@@ -491,7 +514,7 @@ describe('路由守卫逻辑', () => {
         hasPendingAuthSession: false,
       }
       const redirect = simulateGuard('/login', { requiresAuth: false }, authState)
-      expect(redirect).toBe('/admin/dashboard')
+      expect(redirect).toBe('/admin/console/overview')
     })
 
     it('non-admin authenticated: /dashboard redirects to /login', () => {

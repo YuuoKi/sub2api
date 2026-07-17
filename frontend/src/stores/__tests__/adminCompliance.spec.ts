@@ -10,6 +10,7 @@ import {
 
 const getStatus = vi.fn()
 const accept = vi.fn()
+const localeState = vi.hoisted(() => ({ value: 'en' }))
 
 vi.mock('@/api/admin/compliance', () => ({
   default: {
@@ -19,7 +20,7 @@ vi.mock('@/api/admin/compliance', () => ({
 }))
 
 vi.mock('@/i18n', () => ({
-  getLocale: () => 'en'
+  getLocale: () => localeState.value
 }))
 
 const upstreamApiStatus = {
@@ -40,6 +41,7 @@ describe('adminCompliance store brand sanitization', () => {
     setActivePinia(createPinia())
     getStatus.mockReset()
     accept.mockReset()
+    localeState.value = 'en'
   })
 
   it('neutralizes Sub2API phrases and Wei-Shaw GitHub URLs from API status', async () => {
@@ -101,6 +103,24 @@ describe('adminCompliance store brand sanitization', () => {
     expect(accept.mock.calls[0][0].phrase).toBe(
       'I have read, understood, and agree to the Sub2API Deployment and Operation Compliance Commitment'
     )
+  })
+
+  it('accept remaps the neutral Chinese phrase to the retained backend phrase', async () => {
+    localeState.value = 'zh'
+    getStatus.mockResolvedValueOnce({ ...upstreamApiStatus })
+    accept.mockResolvedValueOnce({ ...upstreamApiStatus, required: false })
+
+    const { useAdminComplianceStore } = await import('../adminCompliance')
+    const store = useAdminComplianceStore()
+    await store.fetchStatus()
+
+    expect(store.expectedPhrase).toBe(NEUTRAL_ACK_PHRASE_ZH)
+    await store.accept(NEUTRAL_ACK_PHRASE_ZH)
+
+    expect(accept).toHaveBeenCalledWith({
+      phrase: UPSTREAM_ACK_PHRASE_ZH,
+      language: 'zh'
+    })
   })
 
   it('accept does not submit when typed text does not match displayed phrase', async () => {

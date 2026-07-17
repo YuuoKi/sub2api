@@ -8,12 +8,14 @@ describe('canonical video admin surface', () => {
   it('keeps admin-only routes visible without demo hiding', () => {
     const router = source('src/router/index.ts')
     const sidebar = source('src/components/layout/AppSidebar.vue')
+    const roleNav = source('src/components/layout/roleAwareNavigation.ts')
     for (const path of ['/admin/video/providers', '/admin/video/tasks', '/admin/video/system-check']) {
       expect(router).toContain(path)
-      expect(sidebar).toContain(path)
+      expect(roleNav).toContain(path)
     }
     expect(router).not.toContain('video_gateway_demo')
     expect(sidebar).not.toContain('video_gateway_demo')
+    expect(roleNav).not.toContain('video_gateway_demo')
     expect(router.match(/requiresAdmin:\s*true/g)?.length).toBeGreaterThanOrEqual(3)
   })
 

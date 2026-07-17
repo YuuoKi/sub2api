@@ -57,13 +57,21 @@ interface MockAuthState {
   setupNeedsSetup?: boolean
 }
 
+interface SimulateGuardHooks {
+  /** Mirrors router/index.ts adminComplianceStore.fetchStatus when requiresAdmin passes. */
+  onAdminComplianceFetch?: () => void
+  /** Stand-in for BossOverviewView adminAPI.dashboard.getStats after a successful guard. */
+  onAdminOverviewFetch?: () => void
+}
+
 /**
  * 将 router/index.ts 中 beforeEach 守卫的核心逻辑提取为可测试的函数
  */
 function simulateGuard(
   toPath: string,
   toMeta: Record<string, any>,
-  authState: MockAuthState
+  authState: MockAuthState,
+  hooks?: SimulateGuardHooks,
 ): string | null {
   const requiresAuth = toMeta.requiresAuth !== false
   const requiresAdmin = toMeta.requiresAdmin === true
@@ -109,9 +117,14 @@ function simulateGuard(
     return '/login'
   }
 
-  // 需要管理员但不是管理员
+  // 需要管理员但不是管理员 — early return before adminCompliance / overview fetches
   if (requiresAdmin && !authState.isAdmin) {
     return '/dashboard'
+  }
+
+  // Mirrors router/index.ts: adminCompliance fetch only after requiresAdmin passes
+  if (requiresAdmin && authState.isAdmin) {
+    hooks?.onAdminComplianceFetch?.()
   }
 
   // 简易模式限制
@@ -131,6 +144,9 @@ function simulateGuard(
   // Backend mode: admin gets full access, non-admin blocked
   if (authState.backendModeEnabled) {
     if (authState.isAuthenticated && authState.isAdmin) {
+      if (toPath === '/admin/console/overview') {
+        hooks?.onAdminOverviewFetch?.()
+      }
       return null
     }
     const allowed = ['/login', '/key-usage', '/setup', '/payment/result']
@@ -149,6 +165,10 @@ function simulateGuard(
     if (!isAllowed) {
       return '/login'
     }
+  }
+
+  if (toPath === '/admin/console/overview' && authState.isAdmin) {
+    hooks?.onAdminOverviewFetch?.()
   }
 
   return null // 允许通过
@@ -226,6 +246,32 @@ describe('路由守卫逻辑', () => {
       const redirect = simulateGuard('/admin/users', { requiresAdmin: true }, authState)
       expect(redirect).toBe('/dashboard')
     })
+
+    it('普通用户直接访问 /admin/console/* 被拒绝并重定向到 /dashboard', () => {
+      for (const path of [
+        '/admin/console/overview',
+        '/admin/console/key-vault',
+        '/admin/console/staff',
+        '/admin/console/ai-records',
+      ]) {
+        const redirect = simulateGuard(path, { requiresAdmin: true }, authState)
+        expect(redirect, path).toBe('/dashboard')
+      }
+    })
+
+    it('simulateGuard: non-admin /admin/console/overview redirects to /dashboard and does not invoke adminCompliance fetch or overview getStats', () => {
+      const onAdminComplianceFetch = vi.fn()
+      const onAdminOverviewFetch = vi.fn()
+      const redirect = simulateGuard(
+        '/admin/console/overview',
+        { requiresAdmin: true },
+        authState,
+        { onAdminComplianceFetch, onAdminOverviewFetch },
+      )
+      expect(redirect).toBe('/dashboard')
+      expect(onAdminComplianceFetch).not.toHaveBeenCalled()
+      expect(onAdminOverviewFetch).not.toHaveBeenCalled()
+    })
   })
 
   // --- 已认证管理员 ---
@@ -252,6 +298,20 @@ describe('路由守卫逻辑', () => {
     it('访问用户页面允许通过', () => {
       const redirect = simulateGuard('/dashboard', {}, authState)
       expect(redirect).toBeNull()
+    })
+
+    it('admin simulateGuard for /admin/console/overview allows pass and runs adminCompliance + overview fetch hooks', () => {
+      const onAdminComplianceFetch = vi.fn()
+      const onAdminOverviewFetch = vi.fn()
+      const redirect = simulateGuard(
+        '/admin/console/overview',
+        { requiresAdmin: true },
+        authState,
+        { onAdminComplianceFetch, onAdminOverviewFetch },
+      )
+      expect(redirect).toBeNull()
+      expect(onAdminComplianceFetch).toHaveBeenCalledTimes(1)
+      expect(onAdminOverviewFetch).toHaveBeenCalledTimes(1)
     })
   })
 

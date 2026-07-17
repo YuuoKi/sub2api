@@ -4,59 +4,53 @@ import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
+import {
+  EMPLOYEE_TOP_LEVEL_PATHS,
+  buildEmployeeRoleNav,
+  collectTopLevelPaths,
+} from '../roleAwareNavigation'
+
 const componentPath = resolve(dirname(fileURLToPath(import.meta.url)), '../AppSidebar.vue')
 const componentSource = readFileSync(componentPath, 'utf8')
 const stylePath = resolve(dirname(fileURLToPath(import.meta.url)), '../../../style.css')
 const styleSource = readFileSync(stylePath, 'utf8')
+const navModulePath = resolve(dirname(fileURLToPath(import.meta.url)), '../roleAwareNavigation.ts')
+const navModuleSource = readFileSync(navModulePath, 'utf8')
 
-function sourceBetween(startMarker: string, endMarker: string): string {
-  const start = componentSource.indexOf(startMarker)
-  const end = componentSource.indexOf(endMarker, start)
-
-  expect(start).toBeGreaterThanOrEqual(0)
-  expect(end).toBeGreaterThan(start)
-
-  return componentSource.slice(start, end)
-}
-
-const selfNavigationSource = sourceBetween('function buildSelfNavItems', 'function finalizeNav')
-const adminNavigationSource = sourceBetween('// Admin navigation items', 'function toggleSidebar')
-const actualNavigationSource = `${selfNavigationSource}\n${adminNavigationSource}`
-
-describe('AppSidebar navigation contract', () => {
-  it('does not expose consumer sales entries in the actual sidebar definitions', () => {
-    const removedSalesPaths = [
-      '/subscriptions',
-      '/purchase',
-      '/orders',
-      '/payment',
-      '/affiliate',
-      '/admin/subscriptions',
-      '/admin/promo-codes',
-      '/admin/affiliates',
-      '/admin/orders',
-      '/admin/payment'
-    ]
-
-    for (const path of removedSalesPaths) {
-      expect(actualNavigationSource).not.toContain(`path: '${path}'`)
-    }
+describe('AppSidebar role-aware IA wiring', () => {
+  it('uses roleAwareNavigation builders and admin overview homePath', () => {
+    expect(componentSource).toContain("from './roleAwareNavigation'")
+    expect(componentSource).toContain('buildAdminRoleNav')
+    expect(componentSource).toContain('buildEmployeeRoleNav')
+    expect(componentSource).toContain("isAdmin.value ? '/admin/console/overview' : '/dashboard'")
   })
 
-  it('keeps the complete management surface visible in the sidebar definitions', () => {
-    const requiredManagementPaths = [
-      '/keys',
-      '/usage',
-      '/admin/users',
-      '/admin/accounts',
-      '/admin/groups',
-      '/admin/redeem',
-      '/admin/settings'
-    ]
+  it('wires employee production nav to exactly EMPLOYEE_TOP_LEVEL_PATHS (no 更多)', () => {
+    expect(componentSource).toContain('buildEmployeeRoleNav({')
+    expect(componentSource).not.toContain('includeMoreGroup: true')
+    expect(componentSource).not.toMatch(/includeMoreGroup\s*:/)
 
-    for (const path of requiredManagementPaths) {
-      expect(actualNavigationSource).toContain(`path: '${path}'`)
-    }
+    const productionEmployeeNav = buildEmployeeRoleNav({ isSimpleMode: false })
+    const topPaths = collectTopLevelPaths(productionEmployeeNav)
+    expect(topPaths).toEqual([...EMPLOYEE_TOP_LEVEL_PATHS])
+    expect(topPaths).toHaveLength(5)
+    expect(topPaths).not.toContain('/more')
+    expect(productionEmployeeNav.map((item) => item.label)).not.toContain('更多')
+  })
+
+  it('does not keep flat management paths at admin top level definitions', () => {
+    expect(navModuleSource).toContain("ADMIN_SYSTEM_PATH = '/admin/system'")
+    expect(navModuleSource).toContain('path: ADMIN_SYSTEM_PATH')
+    expect(navModuleSource).toContain('运行与配置')
+    expect(navModuleSource).toContain('高级与历史')
+    expect(navModuleSource).toMatch(/label:\s*'总览'/)
+    expect(navModuleSource).toMatch(/label:\s*'我的工作台'/)
+  })
+
+  it('keeps nested System rendering helpers for expandOnly groups', () => {
+    expect(componentSource).toContain('expandOnly')
+    expect(componentSource).toContain('isGroupExpanded')
+    expect(componentSource).toContain('handleGroupClick')
   })
 })
 

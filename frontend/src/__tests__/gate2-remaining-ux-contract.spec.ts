@@ -43,7 +43,7 @@ describe('Gate 2 remaining UX contract', () => {
     const enUsage = source('src/i18n/locales/en/dashboard.ts')
     const zhAdmin = source('src/i18n/locales/zh/admin/resources.ts')
     const enAdmin = source('src/i18n/locales/en/admin/resources.ts')
-    const sidebar = source('src/components/layout/AppSidebar.vue')
+    const roleNav = source('src/components/layout/roleAwareNavigation.ts')
 
     expect(zhCommon).toContain("myUsage: '我的用量'")
     expect(zhCommon).toContain("globalUsage: '全局用量'")
@@ -53,8 +53,9 @@ describe('Gate 2 remaining UX contract', () => {
     expect(enUsage).toContain("title: 'My usage'")
     expect(zhAdmin).toContain("title: '全局用量'")
     expect(enAdmin).toContain("title: 'Global usage'")
-    expect(sidebar).toContain("t('nav.myUsage')")
-    expect(sidebar).toContain("t('nav.globalUsage')")
+    // Role-aware IA uses brand Chinese labels; employee spend + admin global usage stay reachable.
+    expect(roleNav).toContain("label: '我的花费'")
+    expect(roleNav).toContain("label: '全局用量'")
   })
 
   it('adds prerequisite-aware chained empty states without creating data automatically', () => {

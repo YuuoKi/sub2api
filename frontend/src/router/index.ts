@@ -250,6 +250,42 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/video/create',
+    name: 'UserVideoCreate',
+    component: () => import('@/views/user/VideoCreateView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: '创建任务',
+      titleKey: 'nav.videoCreate',
+      descriptionKey: 'nav.videoCreateDesc'
+    }
+  },
+  {
+    path: '/video/tasks',
+    name: 'UserVideoTasks',
+    component: () => import('@/views/user/VideoTasksView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: '任务记录',
+      titleKey: 'nav.videoTasks',
+      descriptionKey: 'nav.videoTasksDesc'
+    }
+  },
+  {
+    path: '/video/tasks/:id',
+    name: 'UserVideoTaskDetail',
+    component: () => import('@/views/user/VideoTaskDetailView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: '任务详情',
+      titleKey: 'nav.videoTaskDetail',
+      descriptionKey: 'nav.videoTaskDetailDesc'
+    }
+  },
+  {
     path: '/redeem',
     name: 'Redeem',
     component: () => import('@/views/user/RedeemView.vue'),

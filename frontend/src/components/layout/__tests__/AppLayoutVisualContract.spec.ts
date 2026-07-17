@@ -28,13 +28,15 @@ describe('shared app shell visual contract', () => {
     expect(read('AppHeader.vue')).toContain('app-header-control')
   })
 
-  it('preserves Task 3 console navigation entries', () => {
+  it('preserves Task 3 console navigation entries under role-aware IA', () => {
     const sidebar = read('AppSidebar.vue')
-    expect(sidebar).toContain("path: '/admin/console/overview'")
-    expect(sidebar).toContain("path: '/admin/console/key-vault'")
-    expect(sidebar).toContain("path: '/admin/console/staff'")
-    expect(sidebar).toContain("path: '/admin/console/ai-records'")
-    expect(sidebar).toContain("path: '/admin/generation-content'")
-    expect(sidebar).toContain('filterAdminNavigationForMode')
+    const roleNav = read('roleAwareNavigation.ts')
+    expect(sidebar).toContain('buildAdminRoleNav')
+    expect(sidebar).toContain("'/admin/console/overview'")
+    expect(roleNav).toContain("path: '/admin/console/overview'")
+    expect(roleNav).toContain("path: '/admin/console/key-vault'")
+    expect(roleNav).toContain("path: '/admin/console/staff'")
+    expect(roleNav).toContain("path: '/admin/console/ai-records'")
+    expect(roleNav).toContain("path: '/admin/generation-content'")
   })
 })

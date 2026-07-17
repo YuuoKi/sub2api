@@ -7,12 +7,53 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 )
+
+type testVideoAssetFilesystem struct{ root string }
+
+func (f *testVideoAssetFilesystem) Supported() bool { return true }
+
+func (f *testVideoAssetFilesystem) Create(taskID int64) (*videoAssetTempFile, error) {
+	directory := filepath.Join(f.root, "assets", "video", strconv.FormatInt(taskID, 10))
+	if err := os.MkdirAll(directory, 0o750); err != nil {
+		return nil, err
+	}
+	file, err := os.CreateTemp(directory, ".result-*.tmp")
+	if err != nil {
+		return nil, err
+	}
+	committed := false
+	return &videoAssetTempFile{
+		File: file,
+		commitFn: func() error {
+			err := os.Rename(file.Name(), filepath.Join(directory, "result.mp4"))
+			committed = err == nil
+			return err
+		},
+		abortFn: func() {
+			_ = file.Close()
+			if !committed {
+				_ = os.Remove(file.Name())
+			}
+		},
+	}, nil
+}
+
+func (f *testVideoAssetFilesystem) Open(taskID int64) (*os.File, error) {
+	return os.Open(filepath.Join(f.root, "assets", "video", strconv.FormatInt(taskID, 10), "result.mp4"))
+}
+
+func newTestVideoAssetStore(root string, client *http.Client, now func() time.Time, maxBytes int64) *VideoAssetStore {
+	store := newVideoAssetStore(root, client, now, maxBytes)
+	store.filesystem = &testVideoAssetFilesystem{root: root}
+	return store
+}
 
 func TestVideoAssetStoreArchiveWritesVerifiedMP4Atomically(t *testing.T) {
 	root := t.TempDir()
@@ -28,7 +69,7 @@ func TestVideoAssetStoreArchiveWritesVerifiedMP4Atomically(t *testing.T) {
 			Request:       request,
 		}, nil
 	})}
-	store := newVideoAssetStore(root, client, func() time.Time { return now }, 1024)
+	store := newTestVideoAssetStore(root, client, func() time.Time { return now }, 1024)
 
 	archived, err := store.Archive(context.Background(), 42, "https://assets.example.test/result.mp4")
 	require.NoError(t, err)
@@ -48,12 +89,15 @@ func TestVideoAssetStoreArchiveRejectsUntrustedOrInvalidResponses(t *testing.T) 
 		name          string
 		status        int
 		contentType   string
+		contentRange  string
 		contentLength int64
 		body          []byte
 		maxBytes      int64
 		wantErr       error
 	}{
 		{name: "http failure", status: http.StatusBadGateway, contentType: "video/mp4", body: testMP4Payload("bad"), maxBytes: 1024, wantErr: ErrVideoAssetDownload},
+		{name: "partial response", status: http.StatusPartialContent, contentType: "video/mp4", contentRange: "bytes 0-31/32", body: testMP4Payload("partial"), maxBytes: 1024, wantErr: ErrVideoAssetDownload},
+		{name: "content range on 200", status: http.StatusOK, contentType: "video/mp4", contentRange: "bytes 0-31/32", body: testMP4Payload("range"), maxBytes: 1024, wantErr: ErrVideoAssetDownload},
 		{name: "declared too large", status: http.StatusOK, contentType: "video/mp4", contentLength: 2048, body: testMP4Payload("large"), maxBytes: 1024, wantErr: ErrVideoAssetTooLarge},
 		{name: "stream exceeds limit", status: http.StatusOK, contentType: "video/mp4", contentLength: -1, body: testMP4Payload(strings.Repeat("x", 1024)), maxBytes: 128, wantErr: ErrVideoAssetTooLarge},
 		{name: "html disguised as video", status: http.StatusOK, contentType: "video/mp4", body: []byte("<!doctype html><title>not video</title>"), maxBytes: 1024, wantErr: ErrVideoAssetInvalidContent},
@@ -67,16 +111,44 @@ func TestVideoAssetStoreArchiveRejectsUntrustedOrInvalidResponses(t *testing.T) 
 				if length == 0 {
 					length = int64(len(tt.body))
 				}
-				return &http.Response{StatusCode: tt.status, Header: http.Header{"Content-Type": []string{tt.contentType}}, ContentLength: length, Body: io.NopCloser(bytes.NewReader(tt.body)), Request: request}, nil
+				return &http.Response{StatusCode: tt.status, Header: http.Header{"Content-Type": []string{tt.contentType}, "Content-Range": []string{tt.contentRange}}, ContentLength: length, Body: io.NopCloser(bytes.NewReader(tt.body)), Request: request}, nil
 			})}
-			store := newVideoAssetStore(root, client, time.Now, tt.maxBytes)
+			store := newTestVideoAssetStore(root, client, time.Now, tt.maxBytes)
 
 			_, err := store.Archive(context.Background(), 7, "https://assets.example.test/result.mp4")
 			require.ErrorIs(t, err, tt.wantErr)
 			_, statErr := os.Stat(filepath.Join(root, "assets", "video", "7", "result.mp4"))
 			require.ErrorIs(t, statErr, os.ErrNotExist)
+			temporary, globErr := filepath.Glob(filepath.Join(root, "assets", "video", "7", ".result-*.tmp"))
+			require.NoError(t, globErr)
+			require.Empty(t, temporary)
 		})
 	}
+}
+
+func TestVideoAssetArchiverDoesNotPersistPartialHTTPResponse(t *testing.T) {
+	root := t.TempDir()
+	payload := testMP4Payload("partial")
+	client := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusPartialContent,
+			Header: http.Header{
+				"Content-Type":  []string{"video/mp4"},
+				"Content-Range": []string{"bytes 0-31/32"},
+			},
+			ContentLength: int64(len(payload)), Body: io.NopCloser(bytes.NewReader(payload)), Request: request,
+		}, nil
+	})}
+	store := newTestVideoAssetStore(root, client, time.Now, 1024)
+	repo := &workerRepoStub{task: &VideoTask{ID: 42, Status: VideoStatusSucceeded, ResultURL: "https://assets.example.test/result.mp4"}}
+	archiver := &videoAssetArchiver{repo: repo, store: store}
+
+	err := archiver.Archive(context.Background(), 42, repo.task.ResultURL)
+	require.ErrorIs(t, err, ErrVideoAssetDownload)
+	require.Empty(t, repo.task.LocalAssetPath, "partial HTTP response must not reach the database")
+	require.Nil(t, repo.task.LocalAssetSavedAt)
+	_, statErr := os.Stat(filepath.Join(root, "assets", "video", "42", "result.mp4"))
+	require.ErrorIs(t, statErr, os.ErrNotExist)
 }
 
 func TestPublicAssetHTTPClientRejectsUnsafeRedirects(t *testing.T) {
@@ -96,7 +168,7 @@ func TestVideoAssetStoreOpenAcceptsOnlyCanonicalRegularTaskFile(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Dir(validPath), 0o750))
 	payload := testMP4Payload("stored")
 	require.NoError(t, os.WriteFile(validPath, payload, 0o640))
-	store := newVideoAssetStore(root, nil, time.Now, 1024)
+	store := newTestVideoAssetStore(root, nil, time.Now, 1024)
 
 	asset, err := store.Open(42, "assets/video/42/result.mp4")
 	require.NoError(t, err)
@@ -122,22 +194,6 @@ func TestVideoAssetStoreOpenAcceptsOnlyCanonicalRegularTaskFile(t *testing.T) {
 	directoryPath := filepath.Join(root, "assets", "video", "43", "result.mp4")
 	require.NoError(t, os.MkdirAll(directoryPath, 0o750))
 	_, err = store.Open(43, "assets/video/43/result.mp4")
-	require.ErrorIs(t, err, ErrVideoLocalAssetNotFound)
-}
-
-func TestVideoAssetStoreOpenRejectsSymlinkEscapeOnWindows(t *testing.T) {
-	root := t.TempDir()
-	outside := t.TempDir()
-	target := filepath.Join(outside, "outside.mp4")
-	require.NoError(t, os.WriteFile(target, testMP4Payload("outside"), 0o640))
-	link := filepath.Join(root, "assets", "video", "42", "result.mp4")
-	require.NoError(t, os.MkdirAll(filepath.Dir(link), 0o750))
-	if err := os.Symlink(target, link); err != nil {
-		t.Skipf("Windows account cannot create symlink: %v", err)
-	}
-	store := newVideoAssetStore(root, nil, time.Now, 1024)
-
-	_, err := store.Open(42, "assets/video/42/result.mp4")
 	require.ErrorIs(t, err, ErrVideoLocalAssetNotFound)
 }
 

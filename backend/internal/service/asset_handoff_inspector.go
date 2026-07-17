@@ -6,6 +6,7 @@ import (
 	"mime"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strconv"
 	"strings"
@@ -21,10 +22,18 @@ func NewHTTPAssetInspector() AssetInspector {
 }
 
 func newPublicAssetHTTPClient(timeout time.Duration) *http.Client {
+	dialer := &net.Dialer{Timeout: 4 * time.Second, KeepAlive: 30 * time.Second}
+	return newPublicAssetHTTPClientWithNetwork(timeout, net.DefaultResolver.LookupIPAddr, dialer.DialContext)
+}
+
+func newPublicAssetHTTPClientWithNetwork(
+	timeout time.Duration,
+	lookup func(context.Context, string) ([]net.IPAddr, error),
+	dial func(context.Context, string, string) (net.Conn, error),
+) *http.Client {
 	if timeout <= 0 {
 		timeout = 5 * time.Second
 	}
-	dialer := &net.Dialer{Timeout: 4 * time.Second, KeepAlive: 30 * time.Second}
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.Proxy = nil
 	transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
@@ -32,16 +41,17 @@ func newPublicAssetHTTPClient(timeout time.Duration) *http.Client {
 		if err != nil {
 			return nil, fmt.Errorf("invalid asset address: %w", err)
 		}
-		addresses, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+		addresses, err := lookup(ctx, host)
 		if err != nil || len(addresses) == 0 {
 			return nil, fmt.Errorf("resolve asset host: %w", err)
 		}
 		for _, address := range addresses {
-			if !isPublicAssetIP(address.IP) {
+			addr, valid := netip.AddrFromSlice(address.IP)
+			if !valid || address.Zone != "" || !isPublicAssetAddr(addr) {
 				return nil, fmt.Errorf("asset host resolves to a non-public address")
 			}
 		}
-		return dialer.DialContext(ctx, network, net.JoinHostPort(addresses[0].IP.String(), port))
+		return dial(ctx, network, net.JoinHostPort(addresses[0].IP.String(), port))
 	}
 	client := &http.Client{
 		Transport: transport,
@@ -103,13 +113,10 @@ func validateAssetSourceURL(parsed *url.URL) error {
 	if parsed.User != nil {
 		return fmt.Errorf("asset URL user information is not allowed")
 	}
-	if ip := net.ParseIP(parsed.Hostname()); ip != nil && !isPublicAssetIP(ip) {
-		return fmt.Errorf("asset URL cannot target a non-public address")
+	if addr, err := netip.ParseAddr(parsed.Hostname()); err == nil {
+		if !isPublicAssetAddr(addr) {
+			return fmt.Errorf("asset URL cannot target a non-public address")
+		}
 	}
 	return nil
-}
-
-func isPublicAssetIP(ip net.IP) bool {
-	return ip != nil && !ip.IsLoopback() && !ip.IsPrivate() && !ip.IsUnspecified() &&
-		!ip.IsLinkLocalUnicast() && !ip.IsLinkLocalMulticast() && !ip.IsMulticast()
 }

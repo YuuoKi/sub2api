@@ -19,7 +19,7 @@ func TestVideoGatewayServiceOpensReadyAssetOnlyForPersistedOwner(t *testing.T) {
 	require.NoError(t, os.WriteFile(target, payload, 0o640))
 	savedAt := time.Now().UTC()
 	repo := &workerRepoStub{task: &VideoTask{ID: 42, CreatedBy: 9, Status: VideoStatusSucceeded, ResultURL: "https://assets.example.test/result.mp4", LocalAssetPath: "assets/video/42/result.mp4", LocalAssetSavedAt: &savedAt}}
-	store := newVideoAssetStore(root, nil, time.Now, 1024)
+	store := newTestVideoAssetStore(root, nil, time.Now, 1024)
 	svc := NewVideoGatewayService(repo, nil, nil, nil, nil, store)
 
 	asset, err := svc.OpenOwnedLocalAsset(context.Background(), 42, 9)
@@ -45,7 +45,7 @@ func TestVideoAdminServiceOpensReadyLocalAssetAndRejectsMissing(t *testing.T) {
 	require.NoError(t, os.WriteFile(target, payload, 0o640))
 	savedAt := time.Now().UTC()
 	repo := &fakeVideoAdminRepo{task: &VideoTask{ID: 51, Status: VideoStatusSucceeded, ResultURL: "https://assets.example.test/result.mp4", LocalAssetPath: "assets/video/51/result.mp4", LocalAssetSavedAt: &savedAt}}
-	store := newVideoAssetStore(root, nil, time.Now, 1024)
+	store := newTestVideoAssetStore(root, nil, time.Now, 1024)
 	svc := NewVideoAdminService(repo, nil, store)
 
 	asset, err := svc.OpenLocalAsset(context.Background(), 51)

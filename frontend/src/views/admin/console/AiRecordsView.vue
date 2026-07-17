@@ -3,8 +3,8 @@
     <div class="space-y-6">
       <div class="flex flex-col gap-3 border-b border-gray-200 pb-4 dark:border-dark-700 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">AI 调用记录</h1>
-          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">谁调了什么模型、提示词是什么、花了多少钱。</p>
+          <h1 class="ui-heading">AI 调用记录</h1>
+          <p class="ui-subheading mt-1">谁调了什么模型、提示词是什么、花了多少钱。</p>
         </div>
         <button class="btn btn-outline" type="button" data-test="reload" :disabled="loading" @click="reload">
           <Icon name="refresh" size="sm" :class="{ 'animate-spin': loading }" />
@@ -13,7 +13,7 @@
       </div>
 
       <!-- 筛选 -->
-      <section class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-800">
+      <section class="ui-panel p-4">
         <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <div>
             <label class="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">成员</label>
@@ -146,7 +146,7 @@
 
         <div
           v-if="weeklyReport"
-          class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-800"
+          class="ui-panel p-4"
         >
           <div class="flex flex-wrap items-end justify-between gap-3">
             <div>

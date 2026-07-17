@@ -4,10 +4,10 @@
       <!-- 标题 + is_live 二态徽标 -->
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 class="text-xl font-bold text-gray-900 dark:text-white">
+          <h1 class="ui-heading text-xl">
             {{ t('admin.generationContent.title') }}
           </h1>
-          <p class="mt-0.5 text-sm text-gray-500 dark:text-dark-400">
+          <p class="ui-subheading mt-0.5">
             {{ t('admin.generationContent.description') }}
           </p>
         </div>

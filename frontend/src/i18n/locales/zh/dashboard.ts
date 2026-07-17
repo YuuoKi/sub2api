@@ -792,6 +792,11 @@ export default {
   errors: {
     somethingWentWrong: '出错了',
     pageNotFound: '页面未找到',
+    pageNotFoundDesc: '您要找的页面不存在，或已被移动。',
+    goBack: '返回上一页',
+    goToDashboard: '返回控制台',
+    needHelp: '需要帮助？',
+    contactSupport: '联系支持',
     unauthorized: '未授权',
     forbidden: '禁止访问',
     serverError: '服务器错误',

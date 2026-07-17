@@ -9,9 +9,8 @@ import './style.css'
 
 function initThemeClass() {
   const savedTheme = localStorage.getItem('theme')
-  const shouldUseDark =
-    savedTheme === 'dark' ||
-    (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)
+  // DEFAULT THEME = DARK (teal/green). Only honor an explicit light preference.
+  const shouldUseDark = savedTheme !== 'light'
   document.documentElement.classList.toggle('dark', shouldUseDark)
 }
 

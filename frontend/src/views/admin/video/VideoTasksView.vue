@@ -2,11 +2,11 @@
   <AppLayout>
     <div class="video-tasks-view min-w-0 space-y-5 overflow-x-clip">
       <header class="video-tasks-header">
-        <h2 class="video-tasks-title text-2xl font-semibold text-gray-900 dark:text-white">视频任务证据</h2>
-        <p class="video-tasks-description mt-1 text-sm text-gray-500">按真实任务记录核对请求人、模型、终态、上下游 ID、资产、费用和调度结果。</p>
+        <h2 class="video-tasks-title ui-heading">视频任务证据</h2>
+        <p class="video-tasks-description ui-subheading mt-1">按真实任务记录核对请求人、模型、终态、上下游 ID、资产、费用和调度结果。</p>
       </header>
 
-      <div class="video-task-filters flex flex-col gap-3 sm:flex-row sm:items-end">
+      <div class="video-task-filters ui-toolbar flex flex-col gap-3 sm:flex-row sm:items-end">
         <div class="video-task-status-field w-full sm:max-w-52">
           <label for="video-task-status" class="mb-1 block text-sm font-medium">任务状态</label>
           <select id="video-task-status" v-model="status" class="input w-full" @change="load">
@@ -21,7 +21,7 @@
         窄屏时可在下方表格区域横向滚动；本地任务与状态列会保持可见。
       </p>
       <div
-        class="video-task-table-shell card max-w-full overflow-x-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+        class="video-task-table-shell ui-panel max-w-full overflow-x-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
         tabindex="0"
         role="region"
         aria-label="视频任务证据表"
@@ -46,7 +46,7 @@
                 <RouterLink class="font-medium text-primary-600" :to="`/admin/video/tasks/${task.id}`" :aria-label="`查看本地任务 ${task.id} 的完整证据`">#{{ task.id }}</RouterLink>
                 <div class="max-w-48 truncate text-xs text-gray-500" :title="task.prompt">{{ task.prompt }}</div>
               </td>
-              <td class="video-task-sticky-status bg-white p-3 dark:bg-dark-900"><span class="whitespace-nowrap">{{ task.status }}</span></td>
+              <td class="video-task-sticky-status bg-white p-3 dark:bg-dark-900"><TaskProgressRing :phase="taskPhaseLabel(task.status)" :size="26" side-label /></td>
               <td class="p-3">员工 #{{ task.created_by }}</td>
               <td class="max-w-48 break-all p-3">{{ task.model || '后端未提供' }}</td>
               <td class="max-w-56 break-all p-3 font-mono text-xs">{{ task.upstream_task_id || '未返回' }}</td>
@@ -59,7 +59,13 @@
             </tr>
           </tbody>
         </table>
-        <p v-if="!tasks.length" class="p-6 text-center text-sm text-gray-500">暂无任务证据。</p>
+        <div v-if="!tasks.length" class="p-2">
+          <AnimatedEmptyState
+            variant="video-tasks"
+            title="暂无任务证据"
+            description="有任务落库后，这里会展示终态、上下游 ID 与资产证据。"
+          />
+        </div>
       </div>
     </div>
   </AppLayout>
@@ -68,6 +74,8 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import AnimatedEmptyState from '@/components/common/AnimatedEmptyState.vue'
+import TaskProgressRing from '@/components/common/TaskProgressRing.vue'
 import { adminAPI } from '@/api/admin'
 import type { VideoTaskAdmin } from '@/api/admin/video'
 import { useAppStore } from '@/stores'
@@ -76,6 +84,25 @@ import { extractApiErrorMessage } from '@/utils/apiError'
 const app = useAppStore()
 const tasks = ref<VideoTaskAdmin[]>([])
 const status = ref('')
+function taskPhaseLabel(status: string): string {
+  switch (status) {
+    case 'queued':
+      return '排队中'
+    case 'submitted':
+      return '已提交'
+    case 'running':
+      return '生成中'
+    case 'succeeded':
+      return '已完成'
+    case 'failed':
+      return '失败'
+    case 'cancelled':
+      return '已取消'
+    default:
+      return status || '未知'
+  }
+}
+
 const states = ['queued', 'submitted', 'running', 'succeeded', 'failed', 'cancelled']
 
 async function load() {

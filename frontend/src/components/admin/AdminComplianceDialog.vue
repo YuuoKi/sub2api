@@ -34,15 +34,14 @@
               {{ complianceStore.status?.version || 'v2026.06.10' }}
             </p>
           </div>
-          <a
-            :href="documentUrl"
-            target="_blank"
-            rel="noopener noreferrer"
+          <RouterLink
+            :to="documentUrl"
             class="inline-flex items-center gap-2 text-primary-600 underline underline-offset-4 hover:text-primary-700 dark:text-primary-300 dark:hover:text-primary-200"
+            data-testid="admin-compliance-document-link"
           >
-            <Icon name="externalLink" size="sm" />
+            <Icon name="document" size="sm" />
             {{ t('adminCompliance.openDocument') }}
-          </a>
+          </RouterLink>
           <p class="leading-6 text-gray-600 dark:text-dark-300">
             {{ t('adminCompliance.documentSource') }}
           </p>
@@ -98,6 +97,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { RouterLink } from 'vue-router'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { useI18n } from 'vue-i18n'
@@ -106,8 +106,9 @@ import Input from '@/components/common/Input.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { useAdminComplianceStore, useAppStore, useAuthStore } from '@/stores'
 import { getLocale } from '@/i18n'
-import zhDocument from '../../../../docs/legal/admin-compliance.zh.md?raw'
-import enDocument from '../../../../docs/legal/admin-compliance.en.md?raw'
+import { IN_APP_ADMIN_COMPLIANCE_PATH } from '@/utils/complianceBrand'
+import zhDocument from '@/content/admin-compliance.zh.md?raw'
+import enDocument from '@/content/admin-compliance.en.md?raw'
 
 const { t } = useI18n()
 const complianceStore = useAdminComplianceStore()
@@ -124,13 +125,10 @@ marked.setOptions({
 const visible = computed(() => authStore.isAuthenticated && authStore.isAdmin && complianceStore.shouldShow)
 const expectedPhrase = computed(() => complianceStore.expectedPhrase)
 const canSubmit = computed(() => typedPhrase.value.trim() === expectedPhrase.value)
-const currentDocument = computed(() => getLocale() === 'zh' ? zhDocument : enDocument)
-const documentUrl = computed(() => {
-  if (getLocale() === 'zh') {
-    return complianceStore.status?.document_url_zh || 'https://github.com/Wei-Shaw/sub2api/blob/main/docs/legal/admin-compliance.zh.md'
-  }
-  return complianceStore.status?.document_url_en || 'https://github.com/Wei-Shaw/sub2api/blob/main/docs/legal/admin-compliance.en.md'
-})
+const currentDocument = computed(() => (getLocale() === 'zh' ? zhDocument : enDocument))
+const documentUrl = computed(
+  () => complianceStore.documentUrl || IN_APP_ADMIN_COMPLIANCE_PATH
+)
 const inputError = computed(() => {
   if (!attemptedSubmit.value || canSubmit.value) {
     return ''

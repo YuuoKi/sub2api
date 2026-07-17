@@ -466,25 +466,45 @@ const routes: RouteRecordRaw[] = [
     path: '/admin/video/providers',
     name: 'AdminVideoProviders',
     component: () => import('@/views/admin/video/VideoProvidersView.vue'),
-    meta: { requiresAuth: true, requiresAdmin: true, title: 'Seedance \u89c6\u9891\u901a\u9053' }
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      titleKey: 'nav.videoProviders',
+      descriptionKey: 'nav.videoProvidersDesc'
+    }
   },
   {
     path: '/admin/video/tasks',
     name: 'AdminVideoTasks',
     component: () => import('@/views/admin/video/VideoTasksView.vue'),
-    meta: { requiresAuth: true, requiresAdmin: true, title: '\u89c6\u9891\u4efb\u52a1\u8bc1\u636e' }
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      titleKey: 'nav.videoTasks',
+      descriptionKey: 'nav.videoTasksDesc'
+    }
   },
   {
     path: '/admin/video/tasks/:id',
     name: 'AdminVideoTaskDetail',
     component: () => import('@/views/admin/video/VideoTaskDetailView.vue'),
-    meta: { requiresAuth: true, requiresAdmin: true, title: '\u89c6\u9891\u4efb\u52a1\u8be6\u60c5' }
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      titleKey: 'nav.videoTaskDetail',
+      descriptionKey: 'nav.videoTaskDetailDesc'
+    }
   },
   {
     path: '/admin/video/system-check',
     name: 'AdminVideoSystemCheck',
     component: () => import('@/views/admin/video/VideoSystemCheckView.vue'),
-    meta: { requiresAuth: true, requiresAdmin: true, title: '\u89c6\u9891\u7cfb\u7edf\u68c0\u67e5' }
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      titleKey: 'nav.videoSystemCheck',
+      descriptionKey: 'nav.videoSystemCheckDesc'
+    }
   },
 
   // ==================== Console v2 Business Routes ====================

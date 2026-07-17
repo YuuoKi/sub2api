@@ -2,11 +2,11 @@
   <AppLayout>
     <div class="video-providers-view min-w-0 space-y-5 overflow-x-clip">
       <header class="video-providers-header">
-        <h2 class="video-providers-title text-2xl font-semibold text-gray-900 dark:text-white">视频生成通道</h2>
-        <p class="video-providers-description mt-1 text-sm text-gray-500">仅绑定受控标准员工组；模型、时长、分辨率与上游地址由系统固定。</p>
+        <h2 class="video-providers-title ui-heading">视频生成通道</h2>
+        <p class="video-providers-description ui-subheading mt-1">仅绑定受控标准员工组；模型、时长、分辨率与上游地址由系统固定。</p>
       </header>
 
-      <section v-if="contract" class="video-contract card p-5" aria-labelledby="video-contract-title">
+      <section v-if="contract" class="video-contract ui-panel p-5" aria-labelledby="video-contract-title">
         <h2 id="video-contract-title" class="video-contract-title text-base font-semibold">当前固定契约</h2>
         <dl class="video-contract-grid mt-3 grid gap-3 text-sm sm:grid-cols-2">
           <div class="video-contract-field"><dt class="text-gray-500">模型</dt><dd class="break-all">{{ contract.default_model }}</dd></div>
@@ -15,7 +15,7 @@
         </dl>
       </section>
 
-      <section class="video-provider-form card p-5" aria-labelledby="video-provider-form-title">
+      <section class="video-provider-form ui-panel p-5" aria-labelledby="video-provider-form-title">
         <h2 id="video-provider-form-title" class="video-provider-form-title text-base font-semibold">{{ editingId ? '编辑通道' : '新增通道' }}</h2>
         <form class="video-provider-form-grid mt-4 grid gap-4 md:grid-cols-2" @submit.prevent="save">
           <div class="video-provider-form-field">
@@ -47,7 +47,7 @@
       </section>
 
       <section class="video-provider-list grid gap-4 xl:grid-cols-2" aria-label="已保存通道">
-        <article v-for="provider in providers" :key="provider.id" class="video-provider-card card min-w-0 p-5">
+        <article v-for="provider in providers" :key="provider.id" class="video-provider-card ui-panel min-w-0 p-5">
           <div class="video-provider-summary flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div class="video-provider-identity min-w-0">
               <h2 class="break-words font-semibold text-gray-900 dark:text-white">{{ provider.display_name }}</h2>
@@ -80,7 +80,13 @@
             {{ authorizationDisabledReason(provider) || '授权前会再次展示模型、规格、预算门禁与影响范围。' }}
           </p>
         </article>
-        <p v-if="!providers.length" class="video-provider-empty text-sm text-gray-500">尚未配置通道。</p>
+        <div v-if="!providers.length" class="video-provider-empty ui-panel md:col-span-2">
+          <AnimatedEmptyState
+            variant="generic"
+            title="尚未配置通道"
+            description="新增一条受控 Seedance 通道后即可开始授权与调度。"
+          />
+        </div>
       </section>
 
       <SeedanceAuthorizationDialog
@@ -99,6 +105,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import AnimatedEmptyState from '@/components/common/AnimatedEmptyState.vue'
 import { adminAPI } from '@/api/admin'
 import type { VideoProviderAccount, VideoProviderContract } from '@/api/admin/video'
 import { useAppStore } from '@/stores'

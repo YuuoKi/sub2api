@@ -16,8 +16,8 @@ const composeSource = readFileSync(resolve(frontendRoot, '../deploy/docker-compo
 const forbiddenDemoMode = ['video', 'gateway', 'demo'].join('_')
 
 describe('无界品牌入口', () => {
-  it('使用无界企业 AI 管理中台作为静态页面标题', () => {
-    expect(indexSource).toContain('<title>无界 · 企业 AI 管理中台</title>')
+  it('使用无界企业 AI 中台作为静态页面标题', () => {
+    expect(indexSource).toContain('<title>无界 · 企业 AI 中台</title>')
     expect(indexSource).not.toContain('<title>Sub2API - AI API Gateway</title>')
   })
 

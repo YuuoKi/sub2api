@@ -2,16 +2,19 @@
   <AppLayout>
     <div class="video-task-detail min-w-0 space-y-5 overflow-x-clip">
       <RouterLink to="/admin/video/tasks" class="video-task-back inline-flex text-sm text-primary-600">返回任务证据</RouterLink>
-      <header class="video-task-header">
-        <h2 class="video-task-title break-words text-2xl font-semibold text-gray-900 dark:text-white">视频任务证据 #{{ task?.id }}</h2>
-        <p class="video-task-description mt-1 text-sm text-gray-500">只展示管理员接口返回的事实；缺少的审计字段明确标记，不用当前配置推测历史请求。</p>
+      <header class="video-task-header flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 class="video-task-title ui-heading break-words">视频任务证据 #{{ task?.id }}</h2>
+          <p class="video-task-description ui-subheading mt-1">只展示管理员接口返回的事实；缺少的审计字段明确标记，不用当前配置推测历史请求。</p>
+        </div>
+        <TaskProgressRing v-if="task" :phase="taskPhaseLabel(task.status)" :size="40" side-label />
       </header>
 
       <p v-if="loading" class="video-task-loading text-sm text-gray-500" role="status">正在加载任务证据…</p>
       <p v-else-if="errorMessage" class="video-task-error text-sm text-red-600" role="alert">{{ errorMessage }}</p>
 
       <template v-else-if="task">
-        <section class="video-task-overview card p-5" aria-labelledby="video-task-overview-title">
+        <section class="video-task-overview ui-panel p-5" aria-labelledby="video-task-overview-title">
           <h2 id="video-task-overview-title" class="text-base font-semibold">单任务事实</h2>
           <dl class="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <div v-for="item in overview" :key="item.label" class="video-task-field min-w-0">
@@ -21,7 +24,7 @@
           </dl>
         </section>
 
-        <section class="video-task-specs card p-5" aria-labelledby="video-task-specs-title">
+        <section class="video-task-specs ui-panel p-5" aria-labelledby="video-task-specs-title">
           <div class="video-task-specs-heading flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div class="video-task-specs-copy">
               <h2 id="video-task-specs-title" class="text-base font-semibold">三方规格核对</h2>
@@ -42,7 +45,7 @@
           </div>
         </section>
 
-        <section class="video-task-assets card p-5" aria-labelledby="video-task-assets-title">
+        <section class="video-task-assets ui-panel p-5" aria-labelledby="video-task-assets-title">
           <h2 id="video-task-assets-title" class="text-base font-semibold">资产预览</h2>
           <div class="mt-4 max-w-xl">
             <label for="qcanvas-base-url" class="mb-1 block text-sm font-medium">QCanvas 本机地址</label>
@@ -101,6 +104,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import TaskProgressRing from '@/components/common/TaskProgressRing.vue'
 import { adminAPI } from '@/api/admin'
 import { buildQCanvasAssetHandoffTargetURL, startQCanvasAssetHandoffTransfer } from '@/api/admin/video'
 import type { AssetHandoffKind, VideoTaskAdmin } from '@/api/admin/video'
@@ -119,6 +123,25 @@ type SpecDimension = 'model' | 'duration' | 'resolution'
 const unavailable = '不可用（后端未提供）'
 const route = useRoute()
 const task = ref<VideoTaskAdmin>()
+function taskPhaseLabel(status: string): string {
+  switch (status) {
+    case 'queued':
+      return '排队中'
+    case 'submitted':
+      return '已提交'
+    case 'running':
+      return '生成中'
+    case 'succeeded':
+      return '已完成'
+    case 'failed':
+      return '失败'
+    case 'cancelled':
+      return '已取消'
+    default:
+      return status || '未知'
+  }
+}
+
 const loading = ref(true)
 const errorMessage = ref('')
 const handoffError = ref('')

@@ -2,9 +2,25 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import adminComplianceAPI, { type AdminComplianceStatus } from '@/api/admin/compliance'
 import { getLocale } from '@/i18n'
+import {
+  IN_APP_ADMIN_COMPLIANCE_PATH,
+  NEUTRAL_ACK_PHRASE_EN,
+  NEUTRAL_ACK_PHRASE_ZH,
+  UPSTREAM_ACK_PHRASE_EN,
+  UPSTREAM_ACK_PHRASE_ZH,
+  sanitizeComplianceAckPhrase,
+  sanitizeComplianceDocumentUrl
+} from '@/utils/complianceBrand'
 
-const FALLBACK_ZH_PHRASE = '我已阅读、理解并同意 Sub2API 部署与运营合规承诺'
-const FALLBACK_EN_PHRASE = 'I have read, understood, and agree to the Sub2API Deployment and Operation Compliance Commitment'
+function sanitizeStatus(status: AdminComplianceStatus): AdminComplianceStatus {
+  return {
+    ...status,
+    ack_phrase_zh: sanitizeComplianceAckPhrase(status.ack_phrase_zh, 'zh'),
+    ack_phrase_en: sanitizeComplianceAckPhrase(status.ack_phrase_en, 'en'),
+    document_url_zh: sanitizeComplianceDocumentUrl(status.document_url_zh),
+    document_url_en: sanitizeComplianceDocumentUrl(status.document_url_en)
+  }
+}
 
 export const useAdminComplianceStore = defineStore('adminCompliance', () => {
   const status = ref<AdminComplianceStatus | null>(null)
@@ -13,20 +29,61 @@ export const useAdminComplianceStore = defineStore('adminCompliance', () => {
   const initialized = ref(false)
   const forceVisible = ref(false)
 
+  /** Raw backend ack phrases for POST remap — never exposed to UI. */
+  let submitPhraseZh: string | null = null
+  let submitPhraseEn: string | null = null
+
   const required = computed(() => status.value?.required === true)
   const shouldShow = computed(() => required.value || forceVisible.value)
   const currentLocale = computed(() => getLocale())
   const expectedPhrase = computed(() => {
     if (currentLocale.value === 'zh') {
-      return status.value?.ack_phrase_zh || FALLBACK_ZH_PHRASE
+      return status.value?.ack_phrase_zh || NEUTRAL_ACK_PHRASE_ZH
     }
-    return status.value?.ack_phrase_en || FALLBACK_EN_PHRASE
+    return status.value?.ack_phrase_en || NEUTRAL_ACK_PHRASE_EN
   })
+  const documentUrl = computed(() => {
+    if (currentLocale.value === 'zh') {
+      return status.value?.document_url_zh || IN_APP_ADMIN_COMPLIANCE_PATH
+    }
+    return status.value?.document_url_en || IN_APP_ADMIN_COMPLIANCE_PATH
+  })
+
+  function retainSubmitPhrases(raw: {
+    ack_phrase_zh?: string | null
+    ack_phrase_en?: string | null
+  }): void {
+    const zh = raw.ack_phrase_zh?.trim()
+    const en = raw.ack_phrase_en?.trim()
+    if (zh) {
+      submitPhraseZh = zh
+    } else if (!submitPhraseZh) {
+      submitPhraseZh = UPSTREAM_ACK_PHRASE_ZH
+    }
+    if (en) {
+      submitPhraseEn = en
+    } else if (!submitPhraseEn) {
+      submitPhraseEn = UPSTREAM_ACK_PHRASE_EN
+    }
+  }
+
+  function resolveSubmitPhrase(typedPhrase: string): string | null {
+    const trimmed = typedPhrase.trim()
+    if (trimmed !== expectedPhrase.value) {
+      return null
+    }
+    if (currentLocale.value === 'zh') {
+      return submitPhraseZh || UPSTREAM_ACK_PHRASE_ZH
+    }
+    return submitPhraseEn || UPSTREAM_ACK_PHRASE_EN
+  }
 
   async function fetchStatus(): Promise<AdminComplianceStatus> {
     loading.value = true
     try {
-      const nextStatus = await adminComplianceAPI.getStatus()
+      const raw = await adminComplianceAPI.getStatus()
+      retainSubmitPhrases(raw)
+      const nextStatus = sanitizeStatus(raw)
       status.value = nextStatus
       initialized.value = true
       forceVisible.value = nextStatus.required
@@ -37,12 +94,19 @@ export const useAdminComplianceStore = defineStore('adminCompliance', () => {
   }
 
   async function accept(phrase: string): Promise<AdminComplianceStatus> {
+    const submitPhrase = resolveSubmitPhrase(phrase)
+    if (!submitPhrase) {
+      throw new Error('confirmation phrase does not match')
+    }
+
     submitting.value = true
     try {
-      const nextStatus = await adminComplianceAPI.accept({
-        phrase,
+      const raw = await adminComplianceAPI.accept({
+        phrase: submitPhrase,
         language: currentLocale.value
       })
+      retainSubmitPhrases(raw)
+      const nextStatus = sanitizeStatus(raw)
       status.value = nextStatus
       forceVisible.value = nextStatus.required
       return nextStatus
@@ -52,17 +116,35 @@ export const useAdminComplianceStore = defineStore('adminCompliance', () => {
   }
 
   function requireAcknowledgement(partialStatus?: Partial<AdminComplianceStatus>): void {
-    status.value = {
+    retainSubmitPhrases({
+      ack_phrase_zh: partialStatus?.ack_phrase_zh,
+      ack_phrase_en: partialStatus?.ack_phrase_en
+    })
+    status.value = sanitizeStatus({
       required: true,
       version: partialStatus?.version || status.value?.version || 'v2026.06.10',
-      document_path_zh: partialStatus?.document_path_zh || status.value?.document_path_zh || 'docs/legal/admin-compliance.zh.md',
-      document_path_en: partialStatus?.document_path_en || status.value?.document_path_en || 'docs/legal/admin-compliance.en.md',
-      document_url_zh: partialStatus?.document_url_zh || status.value?.document_url_zh || 'https://github.com/Wei-Shaw/sub2api/blob/main/docs/legal/admin-compliance.zh.md',
-      document_url_en: partialStatus?.document_url_en || status.value?.document_url_en || 'https://github.com/Wei-Shaw/sub2api/blob/main/docs/legal/admin-compliance.en.md',
-      ack_phrase_zh: partialStatus?.ack_phrase_zh || status.value?.ack_phrase_zh || FALLBACK_ZH_PHRASE,
-      ack_phrase_en: partialStatus?.ack_phrase_en || status.value?.ack_phrase_en || FALLBACK_EN_PHRASE,
+      document_path_zh:
+        partialStatus?.document_path_zh ||
+        status.value?.document_path_zh ||
+        'docs/legal/admin-compliance.zh.md',
+      document_path_en:
+        partialStatus?.document_path_en ||
+        status.value?.document_path_en ||
+        'docs/legal/admin-compliance.en.md',
+      document_url_zh:
+        partialStatus?.document_url_zh ||
+        status.value?.document_url_zh ||
+        IN_APP_ADMIN_COMPLIANCE_PATH,
+      document_url_en:
+        partialStatus?.document_url_en ||
+        status.value?.document_url_en ||
+        IN_APP_ADMIN_COMPLIANCE_PATH,
+      ack_phrase_zh:
+        partialStatus?.ack_phrase_zh || status.value?.ack_phrase_zh || NEUTRAL_ACK_PHRASE_ZH,
+      ack_phrase_en:
+        partialStatus?.ack_phrase_en || status.value?.ack_phrase_en || NEUTRAL_ACK_PHRASE_EN,
       acknowledgement: status.value?.acknowledgement
-    }
+    })
     initialized.value = true
     forceVisible.value = true
   }
@@ -73,6 +155,8 @@ export const useAdminComplianceStore = defineStore('adminCompliance', () => {
     submitting.value = false
     initialized.value = false
     forceVisible.value = false
+    submitPhraseZh = null
+    submitPhraseEn = null
   }
 
   return {
@@ -83,6 +167,7 @@ export const useAdminComplianceStore = defineStore('adminCompliance', () => {
     required,
     shouldShow,
     expectedPhrase,
+    documentUrl,
     fetchStatus,
     accept,
     requireAcknowledgement,

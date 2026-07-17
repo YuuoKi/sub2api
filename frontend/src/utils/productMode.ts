@@ -1,4 +1,4 @@
-export const DEFAULT_PRODUCT_NAME = '无界 · 企业 AI 管理中台'
+export const DEFAULT_PRODUCT_NAME = '无界 · 企业 AI 中台'
 export const UPSTREAM_DEFAULT_PRODUCT_NAME = 'Sub2API'
 
 /**

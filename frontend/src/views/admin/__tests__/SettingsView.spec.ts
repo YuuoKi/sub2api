@@ -158,6 +158,10 @@ vi.mock("vue-i18n", async () => {
     "admin.settings.paymentVisibleMethods.sourceHint": "启用后必须明确选择一个来源；未配置状态不会对外展示该支付方式。",
     "admin.settings.paymentVisibleMethods.sourceRequiredError": "{title} 已启用，请先选择支付来源。",
     "admin.settings.payment.configGuide": "查看支付配置说明",
+    "admin.settings.payment.configGuideInline":
+      "在下方启用支付并添加服务商实例；各服务商对话框内提供开通与调用说明。",
+    "admin.settings.payment.findProviderInline":
+      "可在服务商类型中选择易支付、支付宝、微信或 Stripe。",
     "admin.settings.payment.findProvider": "查看支持的支付方式",
     "admin.settings.openaiExperimentalScheduler.title": "OpenAI 实验调度策略",
     "admin.settings.openaiExperimentalScheduler.description": "默认关闭。开启后仅影响本网关在 OpenAI 账号间的实验性调度选择逻辑，不代表上游 OpenAI 官方能力。",
@@ -606,28 +610,24 @@ describe("admin SettingsView payment visible method controls", () => {
     expect(wrapper.text()).not.toContain("支付来源");
   });
 
-  it("links payment guidance to README sections instead of removed payment docs", async () => {
+  it("shows inline payment guidance instead of unserved /docs payment links", async () => {
     const wrapper = mountView();
 
     await flushPromises();
     await openPaymentTab(wrapper);
 
-    const paymentLinks = wrapper
+    const paymentDocHrefs = wrapper
       .findAll("a")
-      .filter((node) =>
-        ["查看支付配置说明", "查看支持的支付方式"].includes(node.text()),
-      );
+      .map((node) => node.attributes("href") || "")
+      .filter((href) => href.includes("/docs/PAYMENT") || href.includes("docs/PAYMENT"));
 
-    expect(paymentLinks).toHaveLength(2);
-    expect(paymentLinks[0]?.attributes("href")).toBe(
-      "https://github.com/Wei-Shaw/sub2api/blob/main/docs/PAYMENT_CN.md",
+    expect(paymentDocHrefs).toEqual([]);
+    expect(wrapper.text()).toContain(
+      "在下方启用支付并添加服务商实例；各服务商对话框内提供开通与调用说明。",
     );
-    expect(paymentLinks[1]?.attributes("href")).toBe(
-      "https://github.com/Wei-Shaw/sub2api/blob/main/docs/PAYMENT_CN.md#支持的支付方式",
+    expect(wrapper.text()).toContain(
+      "可在服务商类型中选择易支付、支付宝、微信或 Stripe。",
     );
-    for (const link of paymentLinks) {
-      expect(link.attributes("href")).toContain("docs/PAYMENT");
-    }
   });
 
   it("does not submit legacy visible payment method settings", async () => {

@@ -68,7 +68,7 @@ export const buildQCanvasAssetHandoffTargetURL = (qcanvasBaseURL: string): strin
 }
 
 export const buildQCanvasAssetHandoffWindowName = (sourceOrigin: string, nonce: string): string => {
-  const origin = requireLoopbackOrigin(sourceOrigin, 'Sub2API 来源').origin
+  const origin = requireLoopbackOrigin(sourceOrigin, '上游来源').origin
   if (!/^[A-Za-z0-9_-]{16,128}$/.test(nonce)) throw new Error('资产交接 nonce 无效')
   return `qcanvas-asset-handoff:${encodeURIComponent(origin)}:${nonce}`
 }

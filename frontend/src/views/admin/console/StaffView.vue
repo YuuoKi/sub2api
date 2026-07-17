@@ -3,8 +3,8 @@
     <div class="space-y-6">
       <div class="flex flex-col gap-3 border-b border-gray-200 pb-4 dark:border-dark-700 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">成员与开卡</h1>
-          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          <h1 class="ui-heading">成员与开卡</h1>
+          <p class="ui-subheading mt-1">
             员工和外部工具（n8n、脚本、批量出图器）都在这里建账号、开卡。卡强绑定到成员：谁调了什么、花了多少钱，互不污染。
           </p>
         </div>

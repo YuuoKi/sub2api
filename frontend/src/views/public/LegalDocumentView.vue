@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen bg-gray-50 text-gray-900 dark:bg-dark-950 dark:text-white">
+  <div class="ui-page">
     <header class="border-b border-gray-200 bg-white/95 dark:border-dark-800 dark:bg-dark-900/95">
       <div class="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
         <RouterLink to="/home" class="flex min-w-0 items-center gap-3">
@@ -93,9 +93,10 @@ import Icon from '@/components/icons/Icon.vue'
 import { getPublicSettings } from '@/api/auth'
 import { getLocale } from '@/i18n'
 import { sanitizeUrl } from '@/utils/url'
+import { resolveProductName } from '@/utils/productMode'
 import type { LoginAgreementDocument, PublicSettings } from '@/types'
-import zhAdminCompliance from '../../../../docs/legal/admin-compliance.zh.md?raw'
-import enAdminCompliance from '../../../../docs/legal/admin-compliance.en.md?raw'
+import zhAdminCompliance from '@/content/admin-compliance.zh.md?raw'
+import enAdminCompliance from '@/content/admin-compliance.en.md?raw'
 
 type LegalDocumentIcon = 'document' | 'shield' | 'globe' | 'cog'
 
@@ -113,7 +114,7 @@ marked.setOptions({
 const documentId = computed(() => String(route.params.documentId || ''))
 const isAdminComplianceDocument = computed(() => documentId.value === 'admin-compliance')
 const documents = computed(() => settings.value?.login_agreement_documents ?? [])
-const siteName = computed(() => settings.value?.site_name || 'Sub2API')
+const siteName = computed(() => resolveProductName(settings.value?.site_name))
 const siteLogo = computed(() => sanitizeUrl(settings.value?.site_logo || '', {
   allowRelative: true,
   allowDataUrl: true,

@@ -3,8 +3,8 @@
     <div class="space-y-6">
       <div class="flex flex-col gap-3 border-b border-gray-200 pb-4 dark:border-dark-700 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">总览</h1>
-          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">花了多少钱、做了多少调用、谁在用什么 AI，一眼看完。</p>
+          <h1 class="ui-heading">总览</h1>
+          <p class="ui-subheading mt-1">花了多少钱、做了多少调用、谁在用什么 AI，一眼看完。</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <div class="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5 dark:border-dark-700 dark:bg-dark-800">
@@ -31,7 +31,7 @@
       <!-- 公司月度总预算进度 -->
       <section
         v-if="monthlyBudgetCNY > 0"
-        class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-800"
+        class="ui-panel p-4"
       >
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div class="min-w-0">

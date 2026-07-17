@@ -1,18 +1,22 @@
 <template>
   <div
-    class="relative flex min-h-screen items-center justify-center overflow-hidden bg-gray-50 px-4 dark:bg-dark-950"
+    class="ui-page relative flex min-h-screen items-center justify-center overflow-hidden px-4"
   >
-    <!-- Background Decoration -->
+    <!-- Background Decorations -->
     <div class="pointer-events-none absolute inset-0 overflow-hidden">
       <div
-        class="absolute -right-40 -top-40 h-80 w-80 rounded-full bg-primary-400/10 blur-3xl"
+        class="absolute -right-40 -top-40 h-80 w-80 rounded-full bg-ui-accent/10 blur-3xl"
       ></div>
       <div
-        class="absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-primary-500/10 blur-3xl"
+        class="absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-ui-accent/10 blur-3xl"
       ></div>
     </div>
 
     <div class="relative z-10 w-full max-w-md text-center">
+      <p class="mb-4 text-sm font-semibold tracking-wide text-ui-accent" data-testid="not-found-brand">
+        {{ productName }}
+      </p>
+
       <!-- 404 Display -->
       <div class="mb-8">
         <div class="relative inline-block">
@@ -21,7 +25,7 @@
           >
           <div class="absolute inset-0 flex items-center justify-center">
             <div
-              class="flex h-24 w-24 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 to-primary-600 shadow-lg shadow-primary-500/30"
+              class="flex h-24 w-24 items-center justify-center rounded-2xl bg-gradient-to-br from-ui-accent to-teal-600 shadow-lg shadow-teal-500/30"
             >
               <svg
                 class="h-12 w-12 text-white"
@@ -43,11 +47,11 @@
 
       <!-- Text Content -->
       <div class="mb-8">
-        <h1 class="mb-3 text-2xl font-bold text-gray-900 dark:text-white">
+        <h1 class="mb-3 text-2xl font-bold text-ui-text">
           {{ t('errors.pageNotFound') }}
         </h1>
-        <p class="text-gray-500 dark:text-dark-400">
-          The page you are looking for doesn't exist or has been moved.
+        <p class="text-ui-text-muted">
+          {{ t('errors.pageNotFoundDesc') }}
         </p>
       </div>
 
@@ -55,22 +59,22 @@
       <div class="flex flex-col justify-center gap-3 sm:flex-row">
         <button @click="goBack" class="btn btn-secondary">
           <Icon name="arrowLeft" size="md" class="mr-2" />
-          Go Back
+          {{ t('errors.goBack') }}
         </button>
         <router-link to="/dashboard" class="btn btn-primary">
           <Icon name="home" size="md" class="mr-2" />
-          Go to Dashboard
+          {{ t('errors.goToDashboard') }}
         </router-link>
       </div>
 
       <!-- Help Link -->
-      <p class="mt-8 text-sm text-gray-400 dark:text-dark-500">
-        Need help?
+      <p class="mt-8 text-sm text-ui-text-muted">
+        {{ t('errors.needHelp') }}
         <a
           href="#"
-          class="text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+          class="text-ui-accent transition-colors hover:opacity-80"
         >
-          Contact support
+          {{ t('errors.contactSupport') }}
         </a>
       </p>
     </div>
@@ -78,12 +82,17 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import Icon from '@/components/icons/Icon.vue'
+import { useAppStore } from '@/stores'
+import { resolveProductName } from '@/utils/productMode'
 
 const { t } = useI18n()
 const router = useRouter()
+const appStore = useAppStore()
+const productName = computed(() => resolveProductName(appStore.siteName))
 
 function goBack(): void {
   router.back()

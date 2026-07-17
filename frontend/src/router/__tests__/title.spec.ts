@@ -11,13 +11,13 @@ describe('resolveDocumentTitle', () => {
   })
 
   it('站点名为空时，回退默认站点名', () => {
-    expect(resolveDocumentTitle('Dashboard', '')).toBe('Dashboard - 无界 · 企业 AI 管理中台')
-    expect(resolveDocumentTitle(undefined, '   ')).toBe('无界 · 企业 AI 管理中台')
+    expect(resolveDocumentTitle('Dashboard', '')).toBe('Dashboard - 无界 · 企业 AI 中台')
+    expect(resolveDocumentTitle(undefined, '   ')).toBe('无界 · 企业 AI 中台')
   })
 
   it('站点名仍是上游默认值时，使用无界品牌', () => {
-    expect(resolveDocumentTitle('Login', 'Sub2API')).toBe('Login - 无界 · 企业 AI 管理中台')
-    expect(resolveDocumentTitle(undefined, 'Sub2API')).toBe('无界 · 企业 AI 管理中台')
+    expect(resolveDocumentTitle('Login', 'Sub2API')).toBe('Login - 无界 · 企业 AI 中台')
+    expect(resolveDocumentTitle(undefined, 'Sub2API')).toBe('无界 · 企业 AI 中台')
   })
 
   it('站点名变更时仅影响后续路由标题计算', () => {

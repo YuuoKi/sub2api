@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>无界 · 企业 AI 中台 — 三套前端合一审查包（Task 7）</title>
+<style>
+  :root {
+    --bg: #0f1419;
+    --panel: #1a222c;
+    --border: #2d3a47;
+    --text: #e7eef5;
+    --muted: #9aafc0;
+    --accent: #3db89a;
+    --warn: #e0a14a;
+    --danger: #e05a5a;
+    --ok: #5ec48a;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    --sans: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.55;
+    padding: 2rem 1.25rem 4rem;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  h1 { font-size: 1.55rem; margin: 0 0 0.35rem; letter-spacing: 0.02em; }
+  h2 {
+    font-size: 1.15rem;
+    margin: 2.1rem 0 0.75rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--accent);
+  }
+  h3 { font-size: 1rem; margin: 1.25rem 0 0.5rem; color: #c5d6e4; }
+  p, li { color: var(--text); }
+  .muted { color: var(--muted); }
+  .status {
+    display: inline-block;
+    margin: 0.75rem 0 1.25rem;
+    padding: 0.55rem 0.9rem;
+    border: 1px solid var(--warn);
+    background: rgba(224, 161, 74, 0.12);
+    color: var(--warn);
+    font-weight: 650;
+    border-radius: 6px;
+  }
+  .banner {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.1rem;
+    margin: 1rem 0;
+  }
+  .banner.danger {
+    border-color: var(--danger);
+    background: rgba(224, 90, 90, 0.08);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+    margin: 0.6rem 0 1rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 0.45rem 0.55rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: #24303b; color: #d7e6f2; font-weight: 600; }
+  tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+  code, .sha {
+    font-family: var(--mono);
+    font-size: 0.86em;
+    background: #24303b;
+    padding: 0.08em 0.35em;
+    border-radius: 3px;
+  }
+  pre {
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    background: #121820;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.9rem 1rem;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .ok { color: var(--ok); }
+  .skip { color: var(--warn); }
+  .fail { color: var(--danger); }
+  ul.compact li { margin: 0.25rem 0; }
+  .toc a { color: #8ecbb8; text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .footer { margin-top: 2.5rem; color: var(--muted); font-size: 0.85rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>无界 · 企业 AI 中台 — 三套前端合一审查包</h1>
+<p class="muted">Task 7 · 自包含审查包 · 工作树 <code>D:\sub2api-trunk\.worktrees\console-unification</code> · 分支 <code>codex/wujie-console-unification-20260717</code></p>
+<p class="muted">打包 HEAD：<code class="sha">7f4c15ca1be3eed730cec91188edb2ccdc77ccac</code>（短 <code>7f4c15ca1</code>）· 日期 2026-07-18 Asia/Shanghai</p>
+
+<div class="status">当前状态：待复核 / 部分门禁通过</div>
+
+<div class="banner danger">
+  <strong>禁止宣称「生产 READY」。</strong>
+  Docker 8080 HTTP 200 已验证；三角色浏览器 SKIPPED；真实 PostgreSQL migrations 182–186 NOT VERIFIED；Linux dirfd NOT VERIFIED；真实 Seedance NOT VERIFIED。
+</div>
+
+<nav class="toc banner">
+  <strong>目录</strong>
+  <ol>
+    <li><a href="#goal">目标与三套前端来源</a></li>
+    <li><a href="#chain">分支与提交链</a></li>
+    <li><a href="#matrix">页面–API–权限矩阵</a></li>
+    <li><a href="#changes">变更列表（Tasks 2A–5）</a></li>
+    <li><a href="#tests">测试命令与退出码（Task 6）</a></li>
+    <li><a href="#brand">品牌扫描结果</a></li>
+    <li><a href="#risks">风险与回滚</a></li>
+    <li><a href="#index">文件索引</a></li>
+    <li><a href="#status">当前状态与未验证项</a></li>
+    <li><a href="#next">下一步可复制提示词</a></li>
+  </ol>
+</nav>
+
+<!-- ========== 1 ========== -->
+<h2 id="goal">1. 目标与三套前端来源</h2>
+<div class="banner">
+  <p><strong>目标：</strong>以当前 main 后端为底座，吸收 Console v2 业务骨架与 K3 设计系统，交付<strong>一个</strong> Vue SPA、<strong>一个</strong> Go 内嵌 dist、<strong>一个</strong> loopback <code>:8080</code> 入口；用户可见品牌为「无界 · 企业 AI 中台」。</p>
+  <p class="muted" style="margin-bottom:0">边界：无真实 Provider、无 secrets 入库、无公网部署、无 push/reset/clean/rebase；Kling 真实分发保持关闭。</p>
+</div>
+
+<table>
+  <thead>
+    <tr><th>来源</th><th>角色</th><th>冻结时引用</th><th>本轮如何使用</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>main</strong></td>
+      <td>运行底座（后端 / 迁移 / 8080）</td>
+      <td><code>ab96e5228</code></td>
+      <td>后端契约 Tasks 2A–2E / 2A2；部署与门禁底座</td>
+    </tr>
+    <tr>
+      <td><strong>Console v2 / Kling Real</strong></td>
+      <td>业务骨架</td>
+      <td><code>feature/kling-real-integration@b918b91e6</code></td>
+      <td>Task 3 选择性移植 BossOverview / KeyVault / Staff / AiRecords 等；不合并旧后端/旧迁移</td>
+    </tr>
+    <tr>
+      <td><strong>Kimi K3</strong></td>
+      <td>视觉与壳层</td>
+      <td><code>codex/k3-apple-ui-experiment-20260717@16351e1a3</code></td>
+      <td>Task 4 移植 <code>--ui-*</code> tokens、壳层、动效与品牌；脏文件只读不纳入</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ========== 2 ========== -->
+<h2 id="chain">2. 分支与提交链</h2>
+<p>分支：<code>codex/wujie-console-unification-20260717</code></p>
+<p>范围：<code>ab96e5228</code> → <code>7f4c15ca1</code>（含 20 个产品提交；Task 1 基线 <code>ea39a52df</code>）</p>
+
+<table>
+  <thead>
+    <tr><th>Task</th><th>Commits</th><th>摘要</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>1</td><td><code>ea39a52df</code></td><td>freeze frontend baselines（docs）</td></tr>
+    <tr><td>2A</td><td><code>086f83785</code> … <code>463122a40</code></td><td>generation content capture + redaction harden</td></tr>
+    <tr><td>2B</td><td><code>e5bd39108</code> <code>d5843e8e5</code></td><td>monthly budget + admin key lifecycle</td></tr>
+    <tr><td>2C1</td><td><code>e90e56a86</code> <code>9da440743</code></td><td>video pricing provenance snapshots</td></tr>
+    <tr><td>2C2</td><td><code>2218b93e7</code> <code>f54384171</code> <code>1f46444fc</code></td><td>local result assets + path harden</td></tr>
+    <tr><td>2D</td><td><code>23e0b04bd</code> <code>6be355573</code></td><td>human/tool member types</td></tr>
+    <tr><td>2E</td><td><code>240705454</code> <code>07ffeff05</code></td><td>internal mock video simulation + JWT routes</td></tr>
+    <tr><td>2A2</td><td><code>907cfcfc4</code></td><td>OpenAI generation-content capture</td></tr>
+    <tr><td>3</td><td><code>51efaf8ca</code></td><td>port console v2 business surfaces</td></tr>
+    <tr><td>4</td><td><code>51be3d32f</code></td><td>K3 design system + 无界 branding</td></tr>
+    <tr><td>5</td><td><code>7f4c15ca1</code></td><td>role-aware navigation + employee simulation UI</td></tr>
+    <tr><td>6</td><td>—</td><td>verification only（无产品提交；见 task-6-report）</td></tr>
+  </tbody>
+</table>
+
+<pre>7f4c15ca1 feat(navigation): simplify role-based console
+51be3d32f feat(ui): apply k3 design system and wujie branding
+51efaf8ca feat(console): port console v2 business surfaces
+907cfcfc4 feat(gateway): capture openai generation content
+07ffeff05 fix(video): harden internal simulation boundaries
+240705454 feat(video): add internal simulation flow
+6be355573 fix(console): validate member type before lookup
+23e0b04bd feat(console): classify human and tool members
+1f46444fc fix(video): preserve public IPv4 literals
+f54384171 fix(video): harden local asset boundaries
+2218b93e7 feat(video): retain owned local result assets
+9da440743 fix(video): enforce pricing snapshots
+e90e56a86 feat(video): snapshot pricing provenance
+d5843e8e5 fix(console): secure admin key lifecycle
+e5bd39108 feat(console): add budget and admin key lifecycle
+463122a40 fix(console): redact generation key aliases
+c7459efe9 fix(console): preserve bounded prompt previews
+6671a3d96 fix(console): bound generation prompt capture
+086f83785 feat(console): add generation content capture
+ea39a52df chore(integration): freeze frontend baselines</pre>
+
+<!-- ========== 3 ========== -->
+<h2 id="matrix">3. 页面–API–权限矩阵</h2>
+<p class="muted">角色仅 <code>admin</code> / <code>user</code>（员工）。所有 <code>/admin/**</code> 需 AdminAuth + compliance；员工误入管理员路由 → <code>/dashboard</code>。</p>
+
+<h3>3.1 管理员顶层五入口</h3>
+<table>
+  <thead>
+    <tr><th>页面</th><th>路径</th><th>主要 API（/api/v1）</th><th>权限</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>总览</td>
+      <td><code>/admin/console/overview</code></td>
+      <td><code>GET /admin/dashboard/stats</code>；<code>PUT /admin/dashboard/monthly-budget</code></td>
+      <td>admin</td>
+    </tr>
+    <tr>
+      <td>密钥库</td>
+      <td><code>/admin/console/key-vault</code></td>
+      <td><code>GET/POST /admin/users/:id/api-keys</code>；<code>PUT/DELETE /admin/api-keys/:id</code></td>
+      <td>admin；完整 key 仅首次创建响应</td>
+    </tr>
+    <tr>
+      <td>成员与开卡</td>
+      <td><code>/admin/console/staff</code></td>
+      <td><code>GET/POST/PUT /admin/users</code>；member_type human/tool；开卡 idempotency</td>
+      <td>admin</td>
+    </tr>
+    <tr>
+      <td>任务记录</td>
+      <td><code>/admin/video/tasks</code>（详情 <code>/admin/video/tasks/:id</code>）</td>
+      <td><code>GET /admin/video/tasks</code>、<code>.../:id</code>、<code>.../local-asset</code>；pricing/currency 字段</td>
+      <td>admin；员工 403</td>
+    </tr>
+    <tr>
+      <td>系统</td>
+      <td><code>/admin/system</code>（expand-only，默认折叠）</td>
+      <td>见下方分组；无独立 leaf API</td>
+      <td>admin only</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>3.2 系统分组（嵌套）</h3>
+<table>
+  <thead>
+    <tr><th>分组</th><th>代表页面路径</th><th>代表 API / 说明</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>运行与配置</strong><br/><code>/admin/system/ops-config</code></td>
+      <td>运维监控、分组、生成通道、系统检查、渠道定价/监控、账号、公告、IP、风控、全局用量、系统设置、AI 记录、生成内容、技术仪表盘、用户管理、自定义菜单</td>
+      <td>
+        <code>/admin/video/providers</code>、<code>.../tiny-real-authorization</code>、<code>/admin/video/system-check</code>、<code>/admin/video/contract</code>；
+        <code>/admin/generation-content/{stats,samples,weekly-report,:task_id/adoption}</code>；
+        <code>/admin/groups</code>、<code>/admin/accounts</code>、<code>/admin/settings</code>、<code>/admin/usage</code> 等
+      </td>
+    </tr>
+    <tr>
+      <td><strong>高级与历史</strong><br/><code>/admin/system/advanced</code></td>
+      <td>订阅、兑换码、优惠码、支付概览、订单、套餐、邀请返利及相关记录</td>
+      <td>既有 2C/订阅/订单/affiliates 管理 API；侧栏收纳，路由未删除</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>3.3 员工顶层五入口</h3>
+<table>
+  <thead>
+    <tr><th>页面</th><th>路径</th><th>主要 API</th><th>权限</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>我的工作台</td><td><code>/dashboard</code></td><td>既有用户 dashboard / 用量摘要</td><td>user JWT</td></tr>
+    <tr><td>创建任务</td><td><code>/video/create</code></td><td>见 3.4 simulation</td><td>user JWT；owned active api_key</td></tr>
+    <tr><td>任务记录</td><td><code>/video/tasks</code>、<code>/video/tasks/:id</code></td><td>见 3.4 simulation</td><td>user JWT；仅本人 mock 任务</td></tr>
+    <tr><td>我的密钥</td><td><code>/keys</code></td><td>既有用户 API key 列表（掩码）</td><td>user JWT</td></tr>
+    <tr><td>我的花费</td><td><code>/usage</code></td><td>既有用户 usage</td><td>user JWT</td></tr>
+  </tbody>
+</table>
+<p class="muted">生产侧栏<strong>不</strong>展示「更多」；batch-image / available-channels / monitor / redeem / custom 仅 URL 直达（legacy）。</p>
+
+<h3>3.4 JWT 员工仿真视频路由（Task 2E + Task 5 UI）</h3>
+<table>
+  <thead>
+    <tr><th>方法</th><th>API</th><th>前端页面</th><th>说明</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>GET</td><td><code>/api/v1/user/video/simulation/contract</code></td><td>Create</td><td>provider=mock / mock-video-v1；零计费合同</td></tr>
+    <tr><td>POST</td><td><code>/api/v1/user/video/simulation/tasks</code></td><td>Create</td><td>body: api_key_id + prompt + creation_key</td></tr>
+    <tr><td>GET</td><td><code>/api/v1/user/video/simulation/tasks</code></td><td>Tasks list</td><td>LIMIT 100；本人 mock only</td></tr>
+    <tr><td>GET</td><td><code>/api/v1/user/video/simulation/tasks/:id</code></td><td>Detail</td><td>本人</td></tr>
+    <tr><td>POST</td><td><code>/api/v1/user/video/simulation/tasks/:id/cancel</code></td><td>List/Detail</td><td>非终态可取消</td></tr>
+    <tr><td>GET</td><td><code>/api/v1/user/video/simulation/tasks/:id/result</code></td><td>List/Detail</td><td>成功后 SVG；media_kind=image → <code>&lt;img&gt;</code></td></tr>
+    <tr><td>GET</td><td><code>/api/v1/admin/video/simulation/tasks/:id/result</code></td><td>（admin）</td><td>管理员可读仿真结果</td></tr>
+  </tbody>
+</table>
+<p>隔离：前端仅调用 <code>/user/video/simulation/*</code>，禁止 import admin video API。真实 Seedance 双授权门控未改；无外网、无扣费。</p>
+
+<!-- ========== 4 ========== -->
+<h2 id="changes">4. 变更列表（聚焦本分支工作）</h2>
+<ul class="compact">
+  <li><strong>2A</strong> — migrations 182/183；Anthropic gateway 内容采集；管理员 generation-content API；脱敏 v2→v4 + 有界预览 + key 别名。</li>
+  <li><strong>2B</strong> — 公司月度预算设置与 dashboard 字段；管理员开卡/更新/删除密钥生命周期与幂等脱敏。</li>
+  <li><strong>2C1</strong> — 视频任务 pricing_source / pricing_version / currency 快照与强制。</li>
+  <li><strong>2C2</strong> — 本地结果资产保留、边界 harden、公网 IPv4 字面量保留。</li>
+  <li><strong>2D</strong> — human/tool 成员分类与查找校验。</li>
+  <li><strong>2E</strong> — migration 186 mock provider；JWT simulation 全链路 + worker；对抗 harden（redaction/list DoS/errors.Is/HTTP）。</li>
+  <li><strong>2A2</strong> — OpenAI HTTP（responses / chat / messages）generation-content 采集；WS/embeddings/images 明确排除。</li>
+  <li><strong>3</strong> — Console v2 老板面：overview / key-vault / staff / ai-records 等业务表面移植。</li>
+  <li><strong>4</strong> — K3 tokens/壳层/动效；品牌「无界 · 企业 AI 中台」；合规短语 remap；用户可见上游品牌清零（源码门禁）。</li>
+  <li><strong>5</strong> — 管理员顶五 + System 嵌套；员工精确五入口；simulation UI；AbortSignal / creation_key / media_kind 门控。</li>
+  <li><strong>6</strong> — 全量门禁 + Docker <code>wujie-console-unification:task6</code> loopback 8080 冒烟；浏览器三角色跳过。</li>
+</ul>
+
+<!-- ========== 5 ========== -->
+<h2 id="tests">5. 测试命令与退出码（来自 task-6-report）</h2>
+<p class="muted">证据源：<code>.superpowers/sdd/task-6-report.md</code>（未纳入产品提交）。环境：Windows + Docker Engine linux/amd64；Go 1.26.3；Node 24.15；pnpm 9.15.9。</p>
+
+<table>
+  <thead>
+    <tr><th>门禁</th><th>命令</th><th>Exit</th><th>结果</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Backend test</td><td><code>cd backend; go test ./... -count=1</code>（TMP/TEMP/GOCACHE→worktree .cache）</td><td><span class="ok">0</span></td><td class="ok">PASSED</td></tr>
+    <tr><td>Backend vet</td><td><code>go vet ./...</code></td><td><span class="ok">0</span></td><td class="ok">PASSED</td></tr>
+    <tr><td>FE install</td><td><code>corepack pnpm@9.15.9 install --frozen-lockfile</code></td><td><span class="ok">0</span></td><td class="ok">PASSED</td></tr>
+    <tr><td>FE lint</td><td><code>corepack pnpm@9.15.9 lint:check</code></td><td><span class="ok">0</span></td><td class="ok">PASSED</td></tr>
+    <tr><td>FE typecheck</td><td><code>corepack pnpm@9.15.9 typecheck</code></td><td><span class="ok">0</span></td><td class="ok">PASSED</td></tr>
+    <tr><td>FE test</td><td><code>corepack pnpm@9.15.9 test:run</code></td><td><span class="ok">0</span></td><td class="ok">190 files / 1124 tests</td></tr>
+    <tr><td>FE build</td><td><code>corepack pnpm@9.15.9 build</code></td><td><span class="ok">0</span></td><td class="ok">dist→backend/internal/web/dist</td></tr>
+    <tr><td>Git whitespace</td><td><code>git diff --check</code></td><td><span class="ok">0</span></td><td class="ok">PASSED</td></tr>
+    <tr><td>Docker version</td><td><code>docker version</code></td><td><span class="ok">0</span></td><td class="ok">Engine available</td></tr>
+    <tr><td>Docker build</td><td><code>docker build -t wujie-console-unification:task6 .</code></td><td><span class="ok">0</span></td><td class="ok">124MB（需先移出 .cache）</td></tr>
+    <tr><td>Docker smoke</td><td>loopback <code>127.0.0.1:8080</code></td><td><span class="ok">PASS</span></td><td class="ok">GET / → 200；/health → 200；:3000 无监听</td></tr>
+    <tr><td>Browser triangular</td><td>老板/设计师/技术管理员 · 1440/390</td><td><span class="skip">SKIPPED</span></td><td>无安全 fixture 凭据</td></tr>
+    <tr><td>Real PG 182–186</td><td>controlled migrate</td><td><span class="fail">NOT VERIFIED</span></td><td>—</td></tr>
+    <tr><td>Linux dirfd</td><td>kernel race tests</td><td><span class="fail">NOT VERIFIED</span></td><td>Windows host</td></tr>
+    <tr><td>Real Seedance</td><td>paid provider</td><td><span class="fail">NOT VERIFIED</span></td><td>禁止 / 未尝试</td></tr>
+  </tbody>
+</table>
+
+<!-- ========== 6 ========== -->
+<h2 id="brand">6. 品牌扫描结果</h2>
+<p>扫描根：Task 6 构建产物 <code>backend/internal/web/dist</code>（Task 4 源码门禁 + Task 6 dist 复核）。</p>
+<table>
+  <thead>
+    <tr><th>模式</th><th>Count</th><th>分类</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>Sub2API</code></td><td>3</td><td>Internal / wire：UPSTREAM_DEFAULT_PRODUCT_NAME + ACK_PHRASE_ZH/EN（UI remap 后不展示）</td></tr>
+    <tr><td><code>Wei-Shaw</code> / <code>weishaw</code> / <code>github.com/Wei-Shaw</code></td><td>0</td><td>—</td></tr>
+    <tr><td>word-boundary <code>sub2api</code></td><td>17</td><td>Allowlisted internal ids（locale/storage/WS/export 等）</td></tr>
+  </tbody>
+</table>
+<p>HTML shell（Task 6 :8080/）：文档中无 <code>Sub2API</code>；title 为无界品牌。用户可见 FAIL：无（就 HTML shell 与源码品牌门禁而言）。</p>
+
+<!-- ========== 7 ========== -->
+<h2 id="risks">7. 风险与回滚</h2>
+<div class="banner">
+  <ul class="compact">
+    <li>禁止 <code>git reset --hard</code> / <code>clean</code> / <code>rebase</code> / force-push。</li>
+    <li>回滚用 <code>git revert &lt;sha&gt;</code>（必要时按依赖从新到旧逐个 revert）。</li>
+    <li>Migrations 182–186 为向前迁移；代码 revert 后已 migrate 的 DB 行可能残留（mock provider INSERT 幂等、无害）；禁止对生产库盲跑。</li>
+    <li>Docker 构建注意：worktree <code>.cache</code> 会污染 build context（Task 6 已踩坑）；建议后续加入 <code>.dockerignore</code>。</li>
+    <li>登录后仍可能落在 <code>/admin/dashboard</code>；品牌 homePath 为 <code>/admin/console/overview</code>（Task 5 有意跳过统一 redirect）。</li>
+  </ul>
+</div>
+
+<h3>按提交 revert 提示（新→旧，按需）</h3>
+<pre># 前端 IA / UI（通常先撤这些）
+git revert 7f4c15ca1   # Task 5 navigation
+git revert 51be3d32f   # Task 4 K3 + brand
+git revert 51efaf8ca   # Task 3 console surfaces
+
+# 网关 / 仿真后端
+git revert 907cfcfc4   # Task 2A2 OpenAI capture
+git revert 07ffeff05   # Task 2E harden
+git revert 240705454   # Task 2E simulation feature
+
+# 其余后端切片（按依赖继续）
+git revert 6be355573 23e0b04bd          # 2D
+git revert 1f46444fc f54384171 2218b93e7 # 2C2
+git revert 9da440743 e90e56a86          # 2C1
+git revert d5843e8e5 e5bd39108          # 2B
+git revert 463122a40 c7459efe9 6671a3d96 086f83785  # 2A
+
+# 仅文档基线
+git revert ea39a52df</pre>
+<p class="muted">一次 revert 多个 SHA 时请拆开执行并解决冲突；勿使用交互式 rebase。</p>
+
+<!-- ========== 8 ========== -->
+<h2 id="index">8. 文件索引</h2>
+<table>
+  <thead>
+    <tr><th>类别</th><th>路径</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>真相源</td><td><code>docs/00_START_HERE.md</code>、<code>docs/goals/03_CURRENT_GOAL.md</code>、本文件</td></tr>
+    <tr><td>计划 / 基线</td><td><code>docs/superpowers/plans/2026-07-17-wujie-console-unification.md</code>、<code>docs/reviews/WUJIE_CONSOLE_UNIFICATION_20260717/BASELINE.md</code></td></tr>
+    <tr><td>导航契约</td><td><code>frontend/src/components/layout/roleAwareNavigation.ts</code>、<code>AppSidebar.vue</code></td></tr>
+    <tr><td>仿真客户端/页</td><td><code>frontend/src/api/user/video_simulation.ts</code>、<code>views/user/Video{Create,Tasks,TaskDetail}View.vue</code></td></tr>
+    <tr><td>仿真后端</td><td><code>backend/internal/service/video_simulation_*.go</code>、<code>handler/video_simulation_handler.go</code>、<code>migrations/186_mock_video_provider.sql</code></td></tr>
+    <tr><td>品牌</td><td><code>frontend/src/utils/productMode.ts</code>、<code>complianceBrand.ts</code>、<code>__tests__/brand-scan.spec.ts</code></td></tr>
+    <tr><td>SDD 报告（未跟踪）</td><td><code>.superpowers/sdd/task-*-report.md</code>、<code>progress.md</code></td></tr>
+  </tbody>
+</table>
+
+<!-- ========== 9 ========== -->
+<h2 id="status">9. 当前状态</h2>
+<div class="status">待复核 / 部分门禁通过</div>
+<ul class="compact">
+  <li class="ok">已验证：Go test/vet、pnpm lint/typecheck/test/build、git diff --check、Docker image build、loopback <code>:8080</code> HTTP 200 / health 200</li>
+  <li class="skip">SKIPPED：三角色浏览器冒烟（老板 / 设计师 / 技术管理员）、1440/390 实机截图</li>
+  <li class="fail">NOT VERIFIED：真实 PostgreSQL migrations 182–186</li>
+  <li class="fail">NOT VERIFIED：Linux dirfd 竞态</li>
+  <li class="fail">NOT VERIFIED：真实 Seedance</li>
+</ul>
+<p><strong>NEVER：生产 READY。</strong> mock 与单元测试成功 ≠ 生产可用。</p>
+
+<!-- ========== 10 ========== -->
+<h2 id="next">10. 下一步可复制提示词</h2>
+<p class="muted">在具备受控 admin/employee 凭据与 PostgreSQL 时，粘贴给执行代理：</p>
+<pre>Worktree ONLY: D:\sub2api-trunk\.worktrees\console-unification
+Branch: codex/wujie-console-unification-20260717
+Base HEAD: 7f4c15ca1 (or current HEAD after Task 7 docs commit)
+No push/reset/clean/rebase; no secrets in commits; no real Seedance/provider.
+
+Complete remaining verification gates:
+
+1) Controlled PostgreSQL
+   - Point a disposable/local PG at this worktree backend config (operator-supplied; do not invent production passwords).
+   - Run migrations including 182–186; record versions applied and exit codes.
+   - Smoke: create JWT employee + owned active API key; POST /api/v1/user/video/simulation/tasks → worker → GET result (SVG, media_kind=image); confirm zero charge / no outbound network.
+
+2) Triangular browser smoke on canonical http://127.0.0.1:8080 (Docker image rebuilt from THIS HEAD if needed)
+   - Roles: 老板(admin) / 设计师(employee) / 技术管理员(admin ops path)
+   - Viewports: 1440 and 390; dark/light if time permits
+   - Admin: top-five nav + expand System → 运行与配置 / 高级与历史; open 总览、密钥库、成员与开卡、任务记录、生成内容
+   - Employee: exactly five top-level items; /video/create → create mock task with creation_key; list/detail/cancel; img preview only
+   - Assert non-admin cannot open /admin/** (redirect /dashboard)
+   - Screenshots without secrets/tokens/cookies; host :3000 must be unused
+
+3) Update docs/00_START_HERE.md + docs/reviews/LATEST_REVIEW_PACKAGE.html with ONLY fresh evidence.
+   Status may rise at most to「内部可用 / 真实供应商待复核」if browser+PG pass; NEVER write 生产 READY while Seedance/dirfd still unverified unless separately authorized.
+
+4) Write .superpowers/sdd/task-browser-pg-report.md; product commit only if docs/ evidence files change.
+   Message suggestion: docs(review): record browser and pg smoke evidence</pre>
+
+<div class="footer">
+  自包含审查包 · 证据截止 Task 6 · 状态字符串锁定为「待复核 / 部分门禁通过」· 禁止外推为生产 READY
+</div>
+
+</div>
+</body>
+</html>

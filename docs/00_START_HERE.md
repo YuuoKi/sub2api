@@ -1,33 +1,34 @@
 # 无界 AI 管理中台 · START HERE
 
-更新时间：2026-07-16 Asia/Shanghai
+更新时间：2026-07-18 Asia/Shanghai
 
 ## 一句话状态
 
-canonical `http://127.0.0.1:8080`、无界 embedded 品牌、本地镜像与完整管理后台五段路径已有同实例运行证据；Gemini 图片与 Seedance 2.0 视频各一次真实 tiny_real 也已成功且无重试。`realCallExecuted=2`、`open_p0_count=0`、`blocked=[]`，整体为**待复核**；不得外推为商业交付完成、生产上线或已 push。
+三套前端合一分支 `codex/wujie-console-unification-20260717` 产品代码停在 **`7f4c15ca1`**（`feat(navigation): simplify role-based console`）。自动化门禁与 Docker loopback `:8080` HTTP 200 已有 Task 6 证据；三角色浏览器、真实 PostgreSQL migrations 182–186、Linux dirfd、真实 Seedance **均未在本轮验证**。整体为**待复核 / 部分门禁通过**。**禁止**写成生产 READY、商业交付完成或已 push。
 
-2026-07-17 本轮 Gate 1-3 代码已由 Sub2API 功能实现提交 `7cf7404f` 与 QCanvas 功能实现提交 `e7c8af3` 承载；仓库 HEAD 通过 `git rev-parse HEAD` 实时读取。范围包括临时凭据与首次强制改密、用户危险操作确认、运维显式失败、Gemini/Seedance UX、请求/上游/计费/余额/授权证据，以及给 QCanvas 的 loopback 一次性既有资产接力。前端完整 Vitest、类型检查和 production build 通过，后端 `go test ./...` 通过。代码完成不等于 W4.2 fake pilot 或最终老板受保护路径已经走通。
+审查包：[`docs/reviews/LATEST_REVIEW_PACKAGE.html`](reviews/LATEST_REVIEW_PACKAGE.html)。
 
 ## 唯一前端定义
 
-- 唯一前端是“完整管理后台 + 无界品牌”。页面 title 为 `无界 · 企业 AI 管理中台`。
+- 唯一前端是“完整管理后台 + 无界品牌”。用户可见产品名为 **`无界 · 企业 AI 中台`**（Task 4 起；勿再写回「管理中台」旧 title 口径）。
 - 禁止启用 `video_gateway_demo`、simple/demo 或 video-only 全隐藏模式。
-- 禁止藏管理页。管理员必须保留用户、账号、分组、兑换码、设置等管理入口；员工保留个人 API Key 与 usage 入口。
-- 2C 销售导航只隐藏订阅购买、订单支付、分销返利、促销等消费商业入口，不删除后台路由，也不等于把完整管理后台裁成 demo。
-- 当前后端角色仅 `admin` / `user`，其中 `user` 对应员工；`admin` 兼任管理者开卡，不扩第三角色。
+- 管理员顶层五入口：总览、密钥库、成员与开卡、任务记录、系统（嵌套「运行与配置」「高级与历史」）。
+- 员工顶层精确五入口：我的工作台、创建任务、任务记录、我的密钥、我的花费；生产侧栏无「更多」。
+- 员工仿真视频走 JWT `/api/v1/user/video/simulation/*` + 页面 `/video/*`；不走真实 Seedance。
+- 当前后端角色仅 `admin` / `user`（员工）；`admin` 兼任管理者开卡，不扩第三角色。
 
 源码证据：
 
-- `frontend/src/router/index.ts` 保留完整管理路由。
-- `frontend/src/components/layout/AppSidebar.vue` 保留核心管理入口，并只从实际侧栏移除 2C 销售导航。
-- `frontend/src/__tests__/integration/brand-admin-surface.spec.ts` 锁定无界品牌、管理路由与禁止 demo 全隐藏。
-- `frontend/src/components/layout/__tests__/AppSidebar.spec.ts` 锁定完整管理面可见、2C 销售导航隐藏。
+- `frontend/src/components/layout/roleAwareNavigation.ts` 锁定顶层路径契约。
+- `frontend/src/components/layout/AppSidebar.vue` 生产接线不含 `includeMoreGroup`。
+- `frontend/src/__tests__/brand-scan.spec.ts` / Task 6 dist 扫描：用户可见 Wei-Shaw/GitHub 为零；`Sub2API` 仅内部 upstream 常量。
 
 ## 唯一本机入口
 
 只使用：
 
-- 镜像：`wujie-sub2api:local`
+- 构建验收镜像（Task 6）：`wujie-console-unification:task6`（loopback 冒烟用）
+- 日常 SOP 镜像名仍可按 [`../deploy/WUJIE_SINGLE_ENTRY_SOP.md`](../deploy/WUJIE_SINGLE_ENTRY_SOP.md) 的 `wujie-sub2api:local`
 - 地址：`http://127.0.0.1:8080`
 - host 映射：`127.0.0.1:8080:8080`
 - 容器端口：`SERVER_PORT=8080`
@@ -37,60 +38,69 @@ canonical `http://127.0.0.1:8080`、无界 embedded 品牌、本地镜像与完�
 
 - 用 Vite `http://127.0.0.1:3000` 验收；
 - 用 `weishaw/sub2api:latest` 冒充无界构建；
-- 用公网绑定、其他 host 端口、one-off 诊断容器或历史审查容器冒充唯一入口；
-- 打印本地环境文件、展开后的 compose 配置、密钥、token、cookie 或连接串。
+- 用公网绑定、其他 host 端口、one-off 诊断容器冒充唯一入口；
+- 打印本地环境文件、密钥、token、cookie 或连接串。
 
-实际操作只遵循 [`../deploy/WUJIE_SINGLE_ENTRY_SOP.md`](../deploy/WUJIE_SINGLE_ENTRY_SOP.md)。仓内 compose 已将 host 入口、容器端口与 `RUN_MODE` 硬定；环境文件不能改写 host 端口或切换隐藏模式。
+## 本轮合一证据（Tasks 2E–6，2026-07-18）
 
-## 当前证据
+| 项 | 证据 | 状态 |
+|---|---|---|
+| HEAD | `7f4c15ca1be3eed730cec91188edb2ccdc77ccac` | 已记录 |
+| 后端全量测试 | `go test ./... -count=1`（TMP/TEMP/GOCACHE→worktree `.cache`） | exit **0** |
+| 后端 vet | `go vet ./...` | exit **0** |
+| 前端门禁 | pnpm 9.15.9 lint / typecheck / test:run（190/1124）/ build | 全部 exit **0** |
+| git whitespace | `git diff --check` | exit **0** |
+| Docker build | `wujie-console-unification:task6`（移出 `.cache` 后） | exit **0**；~124MB |
+| Docker smoke | `GET /` → **200**；`GET /health` → **200**；host `:3000` 监听数 **0** | **已验证** |
+| 品牌 dist | `Sub2API`×3 internal；Wei-Shaw/weishaw/GitHub×0；lowercase allowlisted | **PASSED with notes** |
+| 三角色浏览器 / 1440 / 390 | 无安全 fixture 凭据 | **SKIPPED** |
+| 真实 PG migrations 182–186 | 未对受控库执行 | **NOT VERIFIED** |
+| Linux dirfd | Windows host，无内核证据 | **NOT VERIFIED** |
+| 真实 Seedance | 禁止 / 未尝试 | **NOT VERIFIED** |
 
-- 品牌实现：`4dc96e38`。缺失、空白和精确上游站点名统一到无界品牌，自定义站点名保留；embedded raw HTML title 与服务端站点名同源。
-- 部署契约：`00f98a95`。唯一 host 发布为 `127.0.0.1:8080:8080`，独立终审 Critical=0、Important=0。
-- 当前本地镜像：由功能实现提交 `7cf7404f` 对应工作树重建，`sha256:72b91368ff03b620e430a8cfe6ae4bdaff49716414cf7d8a7bd1dcdf8fb40380`。
-- 隔离开卡/usage smoke：只显示掩码 key，`usage_delta=1`、`balance_delta=0.00045000`；临时 PostgreSQL/Redis 已终止，无真实 provider 或生产数据。
-- canonical runtime：`http://127.0.0.1:8080` HTTP 200、title 为 `无界 · 企业 AI 管理中台`、镜像为 `wujie-sub2api:local`、host `:3000` 无监听；完整管理面、管理员开卡、员工 Key 与 usage 五段路径已留证。
-- 本轮重新执行 `deploy/wujie-local-entry.ps1 Stop/Start/Status`：Stop 证明 `volumes=untouched`，Start/Status 通过不可变 image ID、8080/title/3000 门禁；Start 使用 `--no-deps`，端口检查无需提升权限。canonical Docker-NAT 的无效票据请求返回 404，证明已进入票据校验层。隔离 DEV 恢复演练通过，未触碰生产或删除已有备份。
-- 功能实现提交：`7cf7404f`；仓库 HEAD 通过 `git rev-parse HEAD` 实时读取。运行证据基线：`d6687e89`（视频能力落点祖先含 `15880e23`）；`/v1/video/tasks`、管理员视频控制面、原子一次授权/dispatch claim、usage/settlement 与 process-only gate 均已验证。
-- Gemini 图片真实证据：request `client:995b4b75-be49-4ecd-a8ff-c7bc283fda69`，终态成功，本地 PNG 1336210 bytes，实扣 `$0.0585`；实账 `billedImageSize=2K`（勿再写成已验证 512）。
-- Seedance 2.0 真实证据：local task `1`、upstream task `cgt-20260716174852-8p5hj`、终态 `succeeded`、87300 tokens，本地 MP4/尾帧齐全，实扣 `$0.3395`。
-- 两次合计 `$0.3980` / 约 `¥2.8656`，员工余额 `$3.0000 → $2.6020`，低于授权上限 `¥15`；process-only 单次门已恢复关闭。
+Task 2E 交付（代码层）：内部 mock 视频仿真（migration 186、JWT 员工路由、隔离 worker、SVG 结果、零计费）；对抗 harden 提交 `07ffeff05`。单测通过 ≠ 生产可用。
+
+## 三套来源（冻结口径）
+
+| 来源 | 用途 | 冻结引用 |
+|---|---|---|
+| main | 后端 / 迁移 / 8080 底座 | `ab96e5228` |
+| Console v2 / Kling Real | 业务骨架（Task 3） | `feature/kling-real-integration@b918b91e6` |
+| Kimi K3 | 视觉壳层（Task 4） | `codex/k3-apple-ui-experiment-20260717@16351e1a3` |
+
+详细基线见 [`reviews/WUJIE_CONSOLE_UNIFICATION_20260717/BASELINE.md`](reviews/WUJIE_CONSOLE_UNIFICATION_20260717/BASELINE.md)。
+
+## 历史 canonical 证据（2026-07-16 及更早，勿与本轮 Task 6 混写）
+
+以下为**更早**主线/本机入口证据，**不是** Task 6 合一镜像的三角色浏览器证明：
+
+- 品牌实现与部署契约、完整管理面五段路径、隔离开卡/usage smoke 等见当时运行记录。
+- Gemini 图片 / Seedance 2.0 各一次 tiny_real（`realCallExecuted=2`）属历史授权封口；**本轮合一未再触发真实付费**，且不得自动重试。
+- 功能实现祖先含 `7cf7404f` 等；仓库当前合一 HEAD 以 `git rev-parse HEAD` 为准（现为 `7f4c15ca1`）。
 
 ## 验收纪律
 
 必须同时看到以下事实才可把 canonical 本机入口升级为可演示：
 
 1. `http://127.0.0.1:8080` HTTP 200；
-2. raw title 命中无界品牌；
-3. 运行镜像为 `wujie-sub2api:local`；
+2. raw title / 产品名命中无界品牌；
+3. 运行镜像为约定的无界本地构建（非上游 latest）；
 4. host `:3000` 无监听；
-5. 完整管理面、管理员开卡、员工 Key 调用与 usage 可见；
+5. 完整管理面、管理员开卡、员工 Key / usage / 仿真任务路径可见；
 6. 截图和日志来自同一真实运行实例。
 
-G1 已满足以上口径。不得用源码字符串、单元测试、隔离 smoke、one-off 容器或空 UI 截图冒充后续真实付费验收。
+**当前：**(1)(4) 在 Task 6 镜像上已满足；(2) HTML shell 无 Sub2API；(5)(6) 浏览器三角色仍 **SKIPPED**。不得用源码字符串或单元测试冒充浏览器验收。
 
 ## 安全与回滚
 
 - 禁止 push、生产库 migration 和删除备份目录。
-- 本 CYCLE 已消费完明确授权的两次真实 tiny_real，`realCallExecuted=2`；禁止再次真实调用、自动重试或模型降级。隔离 loopback mock usage 仍不等于真实 provider 调用。
-- `.env` 与上游密钥保持未跟踪、未提交；文档只记录脱敏标识、task id、资产 hash 与费用差分。
-
-## Canonical video control plane (G2.R1)
-
-- Administrator UI: `/admin/video/providers` -> `/admin/video/tasks` -> `/admin/video/system-check`.
-- Provider creation is Seedance-only and requires an active standard employee group. Backend contract fixes model `doubao-seedance-2-0-260128` and endpoint `https://ark.cn-beijing.volces.com/api/v3`; the UI does not ask the operator to guess them. Stored secrets are encrypted; API responses return only `api_key_configured` and `masked_key`.
-- Enabling a provider does not authorize a paid call. `POST /api/v1/admin/video/providers/:id/tiny-real-authorization` records one explicit `tiny_real` authorization and does not dispatch a task.
-- Task evidence exposes local/upstream task ids, terminal status, provider error, asset URLs, settled cost and `real_dispatch_count`. Failed tasks are not replaced by mock output.
-- These pages remain in the complete standard-mode administrator surface. Ordinary employees have no administrator video route; their runtime entry remains the API-key protected `/v1/video/*` gateway.
-- 如需回滚，只按 SOP 停止本轮应用容器并恢复旧应用容器；不删除 volume、数据库或备份。
+- 本轮未授权真实 Provider；隔离 mock usage ≠ 真实调用。
+- `.env` 与上游密钥保持未跟踪、未提交。
+- 回滚：对产品提交使用 `git revert <sha>`（见审查包）；禁止 reset/clean/rebase。
 
 ## 下一步
 
-G3 文档同步与独立冷审**已完成**；交叉验证 IV 文档消毒后，等老板确认再 commit（本仓仅允许既有 `docs/legal/admin-compliance.zh.md` dirty 不纳入提交，除非老板另批）。
-
-当前真实下一步：
-
-1. 真相源对齐：以本文件、QCanvas 总规划 `#qcanvas-state`（整体**待复核**）、`20260716_FINAL_FINDINGS.md` 顶部权威段为准；不得再把 `GROK45_COMMERCIAL_DELIVERY_LOOP_STATE_20260715.json` 当当前口径。
-2. 不得再次触发真实付费；`realCallExecuted=2` 已封口。
-3. 必补证：老板登录 QCanvas 并明确选择 `projectId/flowId/nodeId` 后，仅通过 `tapcanvas-api` 复用本地 PNG/MP4 做一次非付费画布回填；不得默认第一个目标。
-4. 必补证：登录本机 canonical 后执行 W4.2 fake-gateway pilot、首次改密和最终老板受保护路径走查。
-5. 历史 provider key 轮换保持人工 Gate，只验证后台“已配置/脱敏”，不得新增真实调用；禁止 push。
+1. 在具备受控凭据与 PostgreSQL 时，完成浏览器三角色冒烟 + migrations 182–186（提示词见审查包第 10 节）。
+2. 状态至多升到「内部可用 / 真实供应商待复核」——仍不得写生产 READY，除非另授真实 Seedance / dirfd 证据。
+3. 禁止再次触发真实付费；历史 `realCallExecuted=2` 封口仍有效。
+4. 禁止 push。

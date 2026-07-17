@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"go.uber.org/zap"
 )
 
 type VideoGatewayWorker struct {
@@ -17,10 +19,15 @@ type VideoGatewayWorker struct {
 	billingCache  VideoBillingCacheInvalidator
 	cfg           *config.Config
 	gate          *SingleSmokeAuthorization
+	archiver      VideoAssetArchiver
 }
 
-func NewVideoGatewayWorker(repo VideoGatewayRuntimeRepository, encryptor VideoKeyEncryptor, factory func(string, string) *SeedanceAdapter, authCache VideoAuthCacheInvalidator, billingCache VideoBillingCacheInvalidator, cfg *config.Config, gate *SingleSmokeAuthorization) *VideoGatewayWorker {
-	return &VideoGatewayWorker{repo: repo, encryptor: encryptor, clientFactory: factory, authCache: authCache, billingCache: billingCache, cfg: cfg, gate: gate}
+func NewVideoGatewayWorker(repo VideoGatewayRuntimeRepository, encryptor VideoKeyEncryptor, factory func(string, string) *SeedanceAdapter, authCache VideoAuthCacheInvalidator, billingCache VideoBillingCacheInvalidator, cfg *config.Config, gate *SingleSmokeAuthorization, archivers ...VideoAssetArchiver) *VideoGatewayWorker {
+	var archiver VideoAssetArchiver
+	if len(archivers) > 0 {
+		archiver = archivers[0]
+	}
+	return &VideoGatewayWorker{repo: repo, encryptor: encryptor, clientFactory: factory, authCache: authCache, billingCache: billingCache, cfg: cfg, gate: gate, archiver: archiver}
 }
 
 func (w *VideoGatewayWorker) RunOnce(ctx context.Context) error {
@@ -151,11 +158,21 @@ func videoFinalizationWithUpstreamEvidence(input VideoTaskFinalization, task *Vi
 }
 
 func (w *VideoGatewayWorker) finalize(ctx context.Context, task *VideoTask, input VideoTaskFinalization) error {
-	_, err := w.repo.FinalizeTask(ctx, input)
-	if err == nil {
-		err = invalidateVideoCaches(ctx, w.authCache, w.billingCache, task.CreatedBy, task.APIKeyID)
+	result, err := w.repo.FinalizeTask(ctx, input)
+	if err != nil {
+		return err
 	}
-	return err
+	cacheErr := invalidateVideoCaches(ctx, w.authCache, w.billingCache, task.CreatedBy, task.APIKeyID)
+	if result.Applied && input.Status == VideoStatusSucceeded && input.ResultURL != "" && w.archiver != nil {
+		if archiveErr := w.archiver.Archive(ctx, task.ID, input.ResultURL); archiveErr != nil {
+			logger.L().Error("video_gateway.local_asset_archive_failed",
+				zap.String("component", "service.video_gateway_worker"),
+				zap.String("error_code", "local_asset_archive_failed"),
+				zap.Int64("video_task_id", task.ID),
+				zap.Error(archiveErr))
+		}
+	}
+	return cacheErr
 }
 
 func videoActualUSD(completionTokens int64, cfg *config.Config) (float64, error) {

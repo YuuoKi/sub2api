@@ -10,6 +10,7 @@ import (
 type fakeVideoAdminRepo struct {
 	created VideoProviderAccount
 	updated VideoProviderAdminUpdate
+	task    *VideoTask
 }
 
 func (f *fakeVideoAdminRepo) ListVideoProviders(context.Context) ([]VideoProviderAccount, error) {
@@ -30,7 +31,10 @@ func (f *fakeVideoAdminRepo) ListVideoTasks(context.Context, VideoAdminTaskFilte
 	return nil, 0, nil
 }
 func (f *fakeVideoAdminRepo) GetVideoTaskAdmin(context.Context, int64) (*VideoTask, error) {
-	return nil, nil
+	if f.task == nil {
+		return nil, ErrVideoTaskNotFound
+	}
+	return f.task, nil
 }
 func (f *fakeVideoAdminRepo) VideoSystemCheck(context.Context) (VideoSystemCheck, error) {
 	return VideoSystemCheck{}, nil

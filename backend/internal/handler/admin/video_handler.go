@@ -1,7 +1,9 @@
 package admin
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -17,13 +19,19 @@ import (
 type VideoHandler struct {
 	service                   *service.VideoAdminService
 	handoff                   service.AssetHandoffManager
+	localAssets               adminVideoLocalAssetOpener
 	trustDockerLoopbackBridge bool
+}
+
+type adminVideoLocalAssetOpener interface {
+	OpenLocalAsset(context.Context, int64) (*service.VideoLocalAsset, error)
 }
 
 func NewVideoHandler(s *service.VideoAdminService) *VideoHandler {
 	return &VideoHandler{
 		service:                   s,
 		handoff:                   s,
+		localAssets:               s,
 		trustDockerLoopbackBridge: strings.EqualFold(strings.TrimSpace(os.Getenv("ASSET_HANDOFF_TRUST_DOCKER_LOOPBACK_BRIDGE")), "true"),
 	}
 }
@@ -129,6 +137,33 @@ func (h *VideoHandler) GetTask(c *gin.Context) {
 		return
 	}
 	response.Success(c, videoTaskAdminResponse(item))
+}
+func (h *VideoHandler) LocalAsset(c *gin.Context) {
+	id, ok := videoID(c)
+	if !ok {
+		return
+	}
+	if h == nil || h.localAssets == nil {
+		response.Error(c, http.StatusNotFound, "video local asset not found")
+		return
+	}
+	asset, err := h.localAssets.OpenLocalAsset(c.Request.Context(), id)
+	if err != nil {
+		if errors.Is(err, service.ErrVideoTaskNotFound) || errors.Is(err, service.ErrVideoLocalAssetNotFound) {
+			response.Error(c, http.StatusNotFound, "video local asset not found")
+		} else {
+			response.InternalError(c, "failed to read local video asset")
+		}
+		return
+	}
+	defer asset.File.Close()
+	filename := fmt.Sprintf("video-task-%d.mp4", id)
+	c.Header("Content-Type", "video/mp4")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+	c.Header("X-Content-Type-Options", "nosniff")
+	c.Header("Cache-Control", "private, no-store")
+	c.Header("Accept-Ranges", "bytes")
+	http.ServeContent(c.Writer, c.Request, filename, asset.ModTime, asset.File)
 }
 func (h *VideoHandler) CreateAssetHandoff(c *gin.Context) {
 	id, ok := videoID(c)
@@ -273,6 +308,11 @@ func videoTaskAdminResponse(t *service.VideoTask) gin.H {
 	if t == nil {
 		return gin.H{}
 	}
+	localAssetAvailable := t.Status == service.VideoStatusSucceeded && t.ResultURL != "" && t.LocalAssetPath != "" && t.LocalAssetSavedAt != nil
+	var localAssetURL any
+	if localAssetAvailable {
+		localAssetURL = fmt.Sprintf("/api/v1/admin/video/tasks/%d/local-asset", t.ID)
+	}
 	return gin.H{
 		"id": t.ID, "api_key_id": t.APIKeyID, "group_id": t.GroupID, "provider_account_id": t.ProviderAccountID,
 		"provider": t.Provider, "model": t.Model, "task_type": t.TaskType, "prompt": t.Prompt, "status": t.Status,
@@ -295,6 +335,8 @@ func videoTaskAdminResponse(t *service.VideoTask) gin.H {
 		"authorization_consumed_by": t.AuthorizationConsumedBy,
 		"real_dispatch_count":       t.RealDispatchCount, "dispatch_state": t.DispatchState, "created_by": t.CreatedBy,
 		"created_at": t.CreatedAt, "updated_at": t.UpdatedAt, "completed_at": t.CompletedAt,
+		"local_asset_available": localAssetAvailable, "local_asset_download_url": localAssetURL,
+		"local_asset_saved_at": t.LocalAssetSavedAt,
 	}
 }
 

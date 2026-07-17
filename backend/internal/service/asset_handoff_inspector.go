@@ -17,6 +17,13 @@ type httpAssetInspector struct {
 }
 
 func NewHTTPAssetInspector() AssetInspector {
+	return newHTTPAssetInspector(newPublicAssetHTTPClient(5 * time.Second))
+}
+
+func newPublicAssetHTTPClient(timeout time.Duration) *http.Client {
+	if timeout <= 0 {
+		timeout = 5 * time.Second
+	}
 	dialer := &net.Dialer{Timeout: 4 * time.Second, KeepAlive: 30 * time.Second}
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.Proxy = nil
@@ -38,12 +45,15 @@ func NewHTTPAssetInspector() AssetInspector {
 	}
 	client := &http.Client{
 		Transport: transport,
-		Timeout:   5 * time.Second,
-		CheckRedirect: func(request *http.Request, _ []*http.Request) error {
+		Timeout:   timeout,
+		CheckRedirect: func(request *http.Request, via []*http.Request) error {
+			if len(via) >= 5 {
+				return fmt.Errorf("too many asset redirects")
+			}
 			return validateAssetSourceURL(request.URL)
 		},
 	}
-	return newHTTPAssetInspector(client)
+	return client
 }
 
 func newHTTPAssetInspector(client *http.Client) AssetInspector {

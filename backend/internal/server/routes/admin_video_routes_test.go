@@ -28,6 +28,7 @@ func TestAdminVideoRoutesAreRegistered(t *testing.T) {
 		http.MethodPost + " /api/v1/admin/video/providers/:id/tiny-real-authorization": false,
 		http.MethodGet + " /api/v1/admin/video/tasks":                                  false,
 		http.MethodGet + " /api/v1/admin/video/tasks/:id":                              false,
+		http.MethodGet + " /api/v1/admin/video/tasks/:id/local-asset":                  false,
 		http.MethodPost + " /api/v1/admin/video/tasks/:id/asset-handoffs":              false,
 		http.MethodGet + " /api/v1/admin/video/system-check":                           false,
 	}
@@ -39,6 +40,23 @@ func TestAdminVideoRoutesAreRegistered(t *testing.T) {
 	for route, found := range want {
 		require.True(t, found, route)
 	}
+}
+
+func TestAdminVideoLocalAssetRouteRejectsEmployeeBeforeHandler(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	admin := router.Group("/api/v1/admin")
+	admin.Use(func(c *gin.Context) {
+		c.Set(string(middleware.ContextKeyUserRole), c.GetHeader("X-Test-Role"))
+		c.Next()
+	}, middleware.AdminOnly())
+	h := &handler.Handlers{Admin: &handler.AdminHandlers{Video: &adminhandler.VideoHandler{}}}
+	registerAdminVideoRoutes(admin, h)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/video/tasks/501/local-asset", nil)
+	req.Header.Set("X-Test-Role", service.RoleUser)
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, req)
+	require.Equal(t, http.StatusForbidden, recorder.Code)
 }
 
 func TestPublicAssetHandoffConsumeRouteIsRegisteredWithoutTrustingForwardedIdentity(t *testing.T) {

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
@@ -34,6 +35,18 @@ func TestVideoTaskResponseKeepsUnknownHistoricalPricingNullable(t *testing.T) {
 	payload := videoTaskResponse(&service.VideoTask{Currency: "USD"})
 	require.Nil(t, payload["pricing_source"])
 	require.Nil(t, payload["pricing_version"])
+}
+
+func TestVideoTaskResponseExposesOwnedLocalAssetContractWithoutPathLeak(t *testing.T) {
+	savedAt := time.Now().UTC()
+	payload := videoTaskResponse(&service.VideoTask{ID: 42, Status: service.VideoStatusSucceeded, ResultURL: "https://assets.example.test/result.mp4", LocalAssetPath: "assets/video/42/result.mp4", LocalAssetSavedAt: &savedAt})
+	require.Equal(t, true, payload["local_asset_available"])
+	require.Equal(t, "/api/v1/video/tasks/42/local-asset", payload["local_asset_download_url"])
+	require.Equal(t, &savedAt, payload["local_asset_saved_at"])
+	encoded, err := json.Marshal(payload)
+	require.NoError(t, err)
+	require.NotContains(t, string(encoded), "assets/video")
+	require.NotContains(t, string(encoded), "local_asset_path")
 }
 
 func TestVideoGatewayHandlerRequiresEmployeeAPIKeyContext(t *testing.T) {

@@ -56,17 +56,27 @@ type VideoAdminRepository interface {
 }
 
 type VideoAdminService struct {
-	repo      VideoAdminRepository
-	encryptor VideoKeyEncryptor
-	handoff   *AssetHandoffService
+	repo       VideoAdminRepository
+	encryptor  VideoKeyEncryptor
+	handoff    *AssetHandoffService
+	assetStore *VideoAssetStore
 }
 
-func NewVideoAdminService(repo VideoAdminRepository, encryptor VideoKeyEncryptor) *VideoAdminService {
-	return &VideoAdminService{
-		repo:      repo,
-		encryptor: encryptor,
-		handoff:   NewAssetHandoffService(repo, NewHTTPAssetInspector(), time.Now, nil),
+func NewVideoAdminService(repo VideoAdminRepository, encryptor VideoKeyEncryptor, stores ...*VideoAssetStore) *VideoAdminService {
+	var assetStore *VideoAssetStore
+	if len(stores) > 0 {
+		assetStore = stores[0]
 	}
+	return &VideoAdminService{
+		repo:       repo,
+		encryptor:  encryptor,
+		handoff:    NewAssetHandoffService(repo, NewHTTPAssetInspector(), time.Now, nil),
+		assetStore: assetStore,
+	}
+}
+
+func ProvideVideoAdminService(repo VideoAdminRepository, encryptor VideoKeyEncryptor, store *VideoAssetStore) *VideoAdminService {
+	return NewVideoAdminService(repo, encryptor, store)
 }
 
 func (s *VideoAdminService) Issue(ctx context.Context, issuerID, taskID int64, kind AssetHandoffKind) (*IssuedAssetHandoff, error) {
@@ -141,6 +151,19 @@ func (s *VideoAdminService) ListTasks(ctx context.Context, filter VideoAdminTask
 }
 func (s *VideoAdminService) GetTask(ctx context.Context, id int64) (*VideoTask, error) {
 	return s.repo.GetVideoTaskAdmin(ctx, id)
+}
+func (s *VideoAdminService) OpenLocalAsset(ctx context.Context, id int64) (*VideoLocalAsset, error) {
+	if s == nil || s.repo == nil || s.assetStore == nil {
+		return nil, ErrVideoLocalAssetNotFound
+	}
+	task, err := s.repo.GetVideoTaskAdmin(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if !videoTaskHasReadyLocalAsset(task) {
+		return nil, ErrVideoLocalAssetNotFound
+	}
+	return s.assetStore.Open(task.ID, task.LocalAssetPath)
 }
 func (s *VideoAdminService) SystemCheck(ctx context.Context) (VideoSystemCheck, error) {
 	return s.repo.VideoSystemCheck(ctx)

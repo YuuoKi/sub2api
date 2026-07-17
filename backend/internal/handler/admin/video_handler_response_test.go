@@ -108,3 +108,12 @@ func TestVideoTaskAdminResponseIncludesPersistedSpecificationEvidence(t *testing
 	require.Nil(t, response["balance_after_usd"])
 	require.Nil(t, response["authorization_consumed_at"])
 }
+
+func TestVideoTaskAdminResponseExposesLocalAssetContractWithoutPathLeak(t *testing.T) {
+	savedAt := time.Now().UTC()
+	response := videoTaskAdminResponse(&service.VideoTask{ID: 51, Status: service.VideoStatusSucceeded, ResultURL: "https://assets.example.test/result.mp4", LocalAssetPath: "assets/video/51/result.mp4", LocalAssetSavedAt: &savedAt})
+	require.Equal(t, true, response["local_asset_available"])
+	require.Equal(t, "/api/v1/admin/video/tasks/51/local-asset", response["local_asset_download_url"])
+	require.Equal(t, &savedAt, response["local_asset_saved_at"])
+	require.NotContains(t, response, "local_asset_path")
+}

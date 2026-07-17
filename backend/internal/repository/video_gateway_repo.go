@@ -351,7 +351,8 @@ const videoTaskColumns = `id, COALESCE(api_key_id, 0), COALESCE(group_id, 0), pr
 	upstream_model, upstream_duration_seconds, upstream_resolution,
 	billing_model, billing_duration_seconds, billing_resolution,
 	balance_before_usd, balance_after_usd, balance_delta_usd,
-	authorization_consumed_at, authorization_consumed_by`
+	authorization_consumed_at, authorization_consumed_by,
+	local_asset_path, local_asset_saved_at`
 
 func (r *videoGatewayRepository) GetTask(ctx context.Context, id int64) (*service.VideoTask, error) {
 	db, err := r.requireDB()
@@ -376,6 +377,47 @@ func (r *videoGatewayRepository) GetTaskForScope(ctx context.Context, id int64, 
 		return nil, service.ErrVideoTaskNotFound
 	}
 	return task, err
+}
+
+func (r *videoGatewayRepository) GetTaskForOwner(ctx context.Context, id, userID int64) (*service.VideoTask, error) {
+	db, err := r.requireDB()
+	if err != nil {
+		return nil, err
+	}
+	task, err := scanVideoTask(db.QueryRowContext(ctx, `SELECT `+videoTaskColumns+` FROM video_tasks WHERE id = $1`, id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, service.ErrVideoTaskNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if userID <= 0 || task.CreatedBy != userID {
+		return nil, service.ErrVideoTaskForbidden
+	}
+	return task, nil
+}
+
+func (r *videoGatewayRepository) SetTaskLocalAsset(ctx context.Context, id int64, relativePath string, savedAt time.Time) error {
+	db, err := r.requireDB()
+	if err != nil {
+		return err
+	}
+	if id <= 0 || strings.TrimSpace(relativePath) == "" || savedAt.IsZero() {
+		return service.ErrVideoTaskTerminalConflict
+	}
+	result, err := db.ExecContext(ctx, `UPDATE video_tasks SET local_asset_path=$2, local_asset_saved_at=$3, updated_at=NOW()
+		WHERE id=$1 AND status='succeeded' AND result_url<>'' AND local_asset_path IS NULL`, id, relativePath, savedAt)
+	if err != nil {
+		return err
+	}
+	updated, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if updated != 1 {
+		return service.ErrVideoTaskTerminalConflict
+	}
+	return nil
 }
 
 func (r *videoGatewayRepository) CancelTaskForScope(ctx context.Context, id int64, scope service.VideoTaskScope) (*service.VideoTask, error) {
@@ -668,9 +710,9 @@ func (r *videoGatewayRepository) requireDB() (*sql.DB, error) {
 
 func scanVideoTask(scanner videoRowScanner) (*service.VideoTask, error) {
 	task := &service.VideoTask{}
-	var completed, reservedAt, reservation5h, reservation1d, reservation7d, authorizationConsumedAt sql.NullTime
+	var completed, reservedAt, reservation5h, reservation1d, reservation7d, authorizationConsumedAt, localAssetSavedAt sql.NullTime
 	var usage, upstreamDuration, billingDuration, authorizationConsumedBy sql.NullInt64
-	var pricingSource, pricingVersion, upstreamModel, upstreamResolution, billingModel, billingResolution sql.NullString
+	var pricingSource, pricingVersion, upstreamModel, upstreamResolution, billingModel, billingResolution, localAssetPath sql.NullString
 	var pricingCNYPerMillionCompletionTokens, pricingUSDCNYExchangeRate, pricingMaximumCNY sql.NullFloat64
 	var balanceBefore, balanceAfter, balanceDelta sql.NullFloat64
 	if err := scanner.Scan(&task.ID, &task.APIKeyID, &task.GroupID, &task.ProviderAccountID,
@@ -683,7 +725,8 @@ func scanVideoTask(scanner videoRowScanner) (*service.VideoTask, error) {
 		&task.CreatedAt, &task.UpdatedAt, &completed, &task.ReservedCostUSD, &task.ReservationState,
 		&reservedAt, &reservation5h, &reservation1d, &reservation7d, &task.ProviderActualCostUSD,
 		&upstreamModel, &upstreamDuration, &upstreamResolution, &billingModel, &billingDuration, &billingResolution,
-		&balanceBefore, &balanceAfter, &balanceDelta, &authorizationConsumedAt, &authorizationConsumedBy); err != nil {
+		&balanceBefore, &balanceAfter, &balanceDelta, &authorizationConsumedAt, &authorizationConsumedBy,
+		&localAssetPath, &localAssetSavedAt); err != nil {
 		return nil, err
 	}
 	if usage.Valid {
@@ -753,6 +796,12 @@ func scanVideoTask(scanner videoRowScanner) (*service.VideoTask, error) {
 	}
 	if authorizationConsumedBy.Valid {
 		task.AuthorizationConsumedBy = &authorizationConsumedBy.Int64
+	}
+	if localAssetPath.Valid {
+		task.LocalAssetPath = localAssetPath.String
+	}
+	if localAssetSavedAt.Valid {
+		task.LocalAssetSavedAt = &localAssetSavedAt.Time
 	}
 	return task, nil
 }

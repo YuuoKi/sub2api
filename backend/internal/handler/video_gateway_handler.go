@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -11,10 +13,17 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type VideoGatewayHandler struct{ service *service.VideoGatewayService }
+type ownedVideoLocalAssetOpener interface {
+	OpenOwnedLocalAsset(context.Context, int64, int64) (*service.VideoLocalAsset, error)
+}
+
+type VideoGatewayHandler struct {
+	service     *service.VideoGatewayService
+	localAssets ownedVideoLocalAssetOpener
+}
 
 func NewVideoGatewayHandler(s *service.VideoGatewayService) *VideoGatewayHandler {
-	return &VideoGatewayHandler{service: s}
+	return &VideoGatewayHandler{service: s, localAssets: s}
 }
 
 type videoCreateBody struct {
@@ -70,6 +79,47 @@ func (h *VideoGatewayHandler) Create(c *gin.Context) {
 func (h *VideoGatewayHandler) Get(c *gin.Context)    { h.withTask(c, false) }
 func (h *VideoGatewayHandler) Cancel(c *gin.Context) { h.withTask(c, true) }
 
+func (h *VideoGatewayHandler) LocalAsset(c *gin.Context) {
+	subject, ok := middleware.GetAuthSubjectFromContext(c)
+	if !ok || subject.UserID <= 0 {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		response.BadRequest(c, "invalid video task id")
+		return
+	}
+	if h == nil || h.localAssets == nil {
+		response.Error(c, http.StatusNotFound, "video local asset not found")
+		return
+	}
+	asset, err := h.localAssets.OpenOwnedLocalAsset(c.Request.Context(), id, subject.UserID)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrVideoTaskForbidden):
+			response.Error(c, http.StatusForbidden, "video task is outside employee scope")
+		case errors.Is(err, service.ErrVideoTaskNotFound), errors.Is(err, service.ErrVideoLocalAssetNotFound):
+			response.Error(c, http.StatusNotFound, "video local asset not found")
+		default:
+			response.InternalError(c, "failed to read local video asset")
+		}
+		return
+	}
+	defer asset.File.Close()
+	serveVideoLocalAsset(c, id, asset)
+}
+
+func serveVideoLocalAsset(c *gin.Context, taskID int64, asset *service.VideoLocalAsset) {
+	filename := fmt.Sprintf("video-task-%d.mp4", taskID)
+	c.Header("Content-Type", "video/mp4")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+	c.Header("X-Content-Type-Options", "nosniff")
+	c.Header("Cache-Control", "private, no-store")
+	c.Header("Accept-Ranges", "bytes")
+	http.ServeContent(c.Writer, c.Request, filename, asset.ModTime, asset.File)
+}
+
 func (h *VideoGatewayHandler) withTask(c *gin.Context, cancel bool) {
 	scope, ok := videoScope(c)
 	if !ok {
@@ -113,13 +163,19 @@ func writeVideoError(c *gin.Context, err error) {
 }
 
 func videoTaskResponse(t *service.VideoTask) gin.H {
+	localAssetAvailable := t.Status == service.VideoStatusSucceeded && t.ResultURL != "" && t.LocalAssetPath != "" && t.LocalAssetSavedAt != nil
+	var localAssetURL any
+	if localAssetAvailable {
+		localAssetURL = fmt.Sprintf("/api/v1/video/tasks/%d/local-asset", t.ID)
+	}
 	return gin.H{"id": t.ID, "provider": t.Provider, "model": t.Model, "status": t.Status, "upstream_task_id": t.UpstreamTaskID,
 		"result_url": t.ResultURL, "last_frame_url": t.LastFrameURL, "duration": t.DurationSeconds, "resolution": t.Resolution,
 		"usage_total_tokens": t.UsageTotalTokens, "cost": t.CostAmount, "currency": t.Currency, "real_dispatch_count": t.RealDispatchCount,
 		"pricing_source": nullableVideoPricingText(t.PricingSource), "pricing_version": nullableVideoPricingText(t.PricingVersion),
 		"pricing_cny_per_million_completion_tokens": t.PricingCNYPerMillionCompletionTokens,
 		"pricing_usd_cny_exchange_rate":             t.PricingUSDCNYExchangeRate, "pricing_maximum_cny": t.PricingMaximumCNY,
-		"provider_error_code": t.ProviderErrorCode, "provider_error_message": t.ProviderErrorMessage, "error": t.ErrorMessage}
+		"provider_error_code": t.ProviderErrorCode, "provider_error_message": t.ProviderErrorMessage, "error": t.ErrorMessage,
+		"local_asset_available": localAssetAvailable, "local_asset_download_url": localAssetURL, "local_asset_saved_at": t.LocalAssetSavedAt}
 }
 
 func nullableVideoPricingText(value string) any {

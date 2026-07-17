@@ -24,6 +24,22 @@ type workerRepoStub struct {
 	beginCalls   int
 }
 
+type videoAssetArchiverStub struct {
+	repo               *workerRepoStub
+	calls              int
+	taskID             int64
+	resultURL          string
+	sawFinalizedBefore bool
+	err                error
+}
+
+func (s *videoAssetArchiverStub) Archive(_ context.Context, taskID int64, resultURL string) error {
+	s.calls++
+	s.taskID, s.resultURL = taskID, resultURL
+	s.sawFinalizedBefore = s.repo != nil && len(s.repo.finalized) == 1 && s.repo.finalized[0].Status == VideoStatusSucceeded
+	return s.err
+}
+
 type videoAuthInvalidatorStub struct {
 	users []int64
 	err   error
@@ -80,6 +96,23 @@ func (r *workerRepoStub) ReserveAndCreateTask(_ context.Context, task *VideoTask
 func (r *workerRepoStub) GetTask(context.Context, int64) (*VideoTask, error) { return r.task, nil }
 func (r *workerRepoStub) GetTaskForScope(context.Context, int64, VideoTaskScope) (*VideoTask, error) {
 	return r.task, nil
+}
+func (r *workerRepoStub) GetTaskForOwner(_ context.Context, _ int64, userID int64) (*VideoTask, error) {
+	if r.task == nil {
+		return nil, ErrVideoTaskNotFound
+	}
+	if r.task.CreatedBy != userID {
+		return nil, ErrVideoTaskForbidden
+	}
+	return r.task, nil
+}
+func (r *workerRepoStub) SetTaskLocalAsset(_ context.Context, _ int64, relativePath string, savedAt time.Time) error {
+	if r.task == nil {
+		return ErrVideoTaskNotFound
+	}
+	r.task.LocalAssetPath = relativePath
+	r.task.LocalAssetSavedAt = &savedAt
+	return nil
 }
 func (r *workerRepoStub) CancelTaskForScope(context.Context, int64, VideoTaskScope) (*VideoTask, error) {
 	return r.task, nil
@@ -233,7 +266,8 @@ func TestVideoWorkerDelegatesSuccessfulAtomicCapture(t *testing.T) {
 	cfg := &config.Config{VideoGateway: config.VideoGatewayConfig{SeedanceCNYPerMillionTokens: 99, USDCNYExchangeRate: 3, TinyRealMaximumCNY: 0.1}}
 	authCache := &videoAuthInvalidatorStub{}
 	billingCache := &videoBillingInvalidatorStub{}
-	w := NewVideoGatewayWorker(repo, keyDecryptStub{}, factory, authCache, billingCache, cfg, NewSingleSmokeAuthorization(true))
+	archiver := &videoAssetArchiverStub{repo: repo, err: errors.New("synthetic archive failure")}
+	w := NewVideoGatewayWorker(repo, keyDecryptStub{}, factory, authCache, billingCache, cfg, NewSingleSmokeAuthorization(true), archiver)
 	if err := w.RunOnce(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -251,6 +285,10 @@ func TestVideoWorkerDelegatesSuccessfulAtomicCapture(t *testing.T) {
 	if len(authCache.users) != 1 || len(billingCache.users) != 1 || len(billingCache.keys) != 1 {
 		t.Fatalf("caches were not invalidated")
 	}
+	require.Equal(t, 1, archiver.calls)
+	require.EqualValues(t, 7, archiver.taskID)
+	require.Equal(t, "https://cdn.example.test/v.mp4", archiver.resultURL)
+	require.True(t, archiver.sawFinalizedBefore, "archive must run only after successful finalization")
 }
 
 func TestVideoWorkerPreservesAssetsAndFailsWithoutCompletionTokens(t *testing.T) {

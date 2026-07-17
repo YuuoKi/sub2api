@@ -35,6 +35,7 @@ type VideoGatewayService struct {
 	cfg          *config.Config
 	authCache    VideoAuthCacheInvalidator
 	billingCache VideoBillingCacheInvalidator
+	assetStore   *VideoAssetStore
 }
 
 func videoMaximumUSD(cfg *config.Config) (float64, error) {
@@ -51,8 +52,12 @@ func videoMaximumUSD(cfg *config.Config) (float64, error) {
 	return math.Round((pricing.TinyRealMaximumCNY/pricing.USDCNYExchangeRate)*1e8) / 1e8, nil
 }
 
-func NewVideoGatewayService(repo VideoGatewayRuntimeRepository, gate *SingleSmokeAuthorization, cfg *config.Config, authCache VideoAuthCacheInvalidator, billingCache VideoBillingCacheInvalidator) *VideoGatewayService {
-	return &VideoGatewayService{repo: repo, gate: gate, cfg: cfg, authCache: authCache, billingCache: billingCache}
+func NewVideoGatewayService(repo VideoGatewayRuntimeRepository, gate *SingleSmokeAuthorization, cfg *config.Config, authCache VideoAuthCacheInvalidator, billingCache VideoBillingCacheInvalidator, stores ...*VideoAssetStore) *VideoGatewayService {
+	var assetStore *VideoAssetStore
+	if len(stores) > 0 {
+		assetStore = stores[0]
+	}
+	return &VideoGatewayService{repo: repo, gate: gate, cfg: cfg, authCache: authCache, billingCache: billingCache, assetStore: assetStore}
 }
 
 func (s *VideoGatewayService) ListProviders(ctx context.Context, scope VideoTaskScope) ([]VideoProviderAccount, error) {
@@ -116,4 +121,23 @@ func (s *VideoGatewayService) CancelTask(ctx context.Context, id int64, scope Vi
 		err = invalidateVideoCaches(ctx, s.authCache, s.billingCache, scope.UserID, scope.APIKeyID)
 	}
 	return task, err
+}
+
+func (s *VideoGatewayService) OpenOwnedLocalAsset(ctx context.Context, id, userID int64) (*VideoLocalAsset, error) {
+	if s == nil || s.repo == nil || s.assetStore == nil {
+		return nil, ErrVideoLocalAssetNotFound
+	}
+	task, err := s.repo.GetTaskForOwner(ctx, id, userID)
+	if err != nil {
+		return nil, err
+	}
+	if !videoTaskHasReadyLocalAsset(task) {
+		return nil, ErrVideoLocalAssetNotFound
+	}
+	return s.assetStore.Open(task.ID, task.LocalAssetPath)
+}
+
+func videoTaskHasReadyLocalAsset(task *VideoTask) bool {
+	return task != nil && task.Status == VideoStatusSucceeded && strings.TrimSpace(task.ResultURL) != "" &&
+		strings.TrimSpace(task.LocalAssetPath) != "" && task.LocalAssetSavedAt != nil
 }

@@ -502,8 +502,8 @@ func ProvideVideoSingleSmokeAuthorization() *SingleSmokeAuthorization {
 	return NewSingleSmokeAuthorization(strings.EqualFold(strings.TrimSpace(os.Getenv("VIDEO_SINGLE_SMOKE_AUTHORIZED")), "true"))
 }
 
-func ProvideVideoGatewayService(repo VideoGatewayRuntimeRepository, gate *SingleSmokeAuthorization, cfg *config.Config, authCache *APIKeyService, billingCache *BillingCacheService) *VideoGatewayService {
-	return NewVideoGatewayService(repo, gate, cfg, authCache, billingCache)
+func ProvideVideoGatewayService(repo VideoGatewayRuntimeRepository, gate *SingleSmokeAuthorization, cfg *config.Config, authCache *APIKeyService, billingCache *BillingCacheService, store *VideoAssetStore) *VideoGatewayService {
+	return NewVideoGatewayService(repo, gate, cfg, authCache, billingCache, store)
 }
 
 func ProvideVideoAuthCacheInvalidator(apiKeyService *APIKeyService) VideoAuthCacheInvalidator {
@@ -625,6 +625,8 @@ var ProviderSet = wire.NewSet(
 	ProvideAPIKeyService,
 	ProvideAPIKeyAuthCacheInvalidator,
 	ProvideVideoSingleSmokeAuthorization,
+	ProvideVideoAssetStore,
+	ProvideVideoAssetArchiver,
 	ProvideVideoGatewayService,
 	ProvideVideoAuthCacheInvalidator,
 	ProvideVideoBillingCacheInvalidator,
@@ -721,7 +723,7 @@ var ProviderSet = wire.NewSet(
 	NewModelPricingResolver,
 	NewContentModerationService,
 	NewAffiliateService,
-	NewVideoAdminService,
+	ProvideVideoAdminService,
 	ProvidePaymentConfigService,
 	ProvidePaymentService,
 	ProvidePaymentOrderExpiryService,

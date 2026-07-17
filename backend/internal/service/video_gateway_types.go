@@ -115,6 +115,8 @@ type VideoTask struct {
 	BalanceDeltaUSD                      *float64
 	AuthorizationConsumedAt              *time.Time
 	AuthorizationConsumedBy              *int64
+	LocalAssetPath                       string
+	LocalAssetSavedAt                    *time.Time
 }
 
 type VideoTaskFinalization struct {
@@ -158,6 +160,8 @@ type VideoGatewayRepository interface {
 
 type VideoGatewayRuntimeRepository interface {
 	VideoGatewayRepository
+	GetTaskForOwner(context.Context, int64, int64) (*VideoTask, error)
+	SetTaskLocalAsset(context.Context, int64, string, time.Time) error
 	ListEnabledVideoProviders(context.Context, int64) ([]VideoProviderAccount, error)
 	GetVideoProvider(context.Context, int64, int64) (*VideoProviderAccount, error)
 	BeginRealDispatch(context.Context, int64, int64) (bool, error)

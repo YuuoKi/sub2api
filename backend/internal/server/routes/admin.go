@@ -128,6 +128,7 @@ func registerAdminVideoRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	video.POST("/providers/:id/tiny-real-authorization", h.Admin.Video.AuthorizeTinyReal)
 	video.GET("/tasks", h.Admin.Video.ListTasks)
 	video.GET("/tasks/:id", h.Admin.Video.GetTask)
+	video.GET("/tasks/:id/local-asset", h.Admin.Video.LocalAsset)
 	video.POST("/tasks/:id/asset-handoffs", h.Admin.Video.CreateAssetHandoff)
 	video.GET("/system-check", h.Admin.Video.SystemCheck)
 }

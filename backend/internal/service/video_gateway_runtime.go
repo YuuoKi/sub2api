@@ -21,13 +21,13 @@ type VideoGatewayRuntime struct {
 	done   chan struct{}
 }
 
-func ProvideVideoGatewayWorker(repo VideoGatewayRuntimeRepository, encryptor VideoKeyEncryptor, authCache VideoAuthCacheInvalidator, billingCache VideoBillingCacheInvalidator, cfg *config.Config, gate *SingleSmokeAuthorization) *VideoGatewayWorker {
+func ProvideVideoGatewayWorker(repo VideoGatewayRuntimeRepository, encryptor VideoKeyEncryptor, authCache VideoAuthCacheInvalidator, billingCache VideoBillingCacheInvalidator, cfg *config.Config, gate *SingleSmokeAuthorization, archiver VideoAssetArchiver) *VideoGatewayWorker {
 	timeout := time.Duration(cfg.VideoGateway.HTTPTimeoutSeconds) * time.Second
 	if timeout <= 0 {
 		timeout = 30 * time.Second
 	}
 	client := &http.Client{Timeout: timeout}
-	return NewVideoGatewayWorker(repo, encryptor, func(baseURL, key string) *SeedanceAdapter { return NewSeedanceAdapter(client, baseURL, key) }, authCache, billingCache, cfg, gate)
+	return NewVideoGatewayWorker(repo, encryptor, func(baseURL, key string) *SeedanceAdapter { return NewSeedanceAdapter(client, baseURL, key) }, authCache, billingCache, cfg, gate, archiver)
 }
 
 func ProvideVideoGatewayRuntime(worker *VideoGatewayWorker, cfg *config.Config, gate *SingleSmokeAuthorization) *VideoGatewayRuntime {

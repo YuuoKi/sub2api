@@ -20,6 +20,9 @@ func RegisterUserRoutes(
 	authenticated.Use(middleware.BackendModeUserGuard(settingService))
 	{
 		// 用户接口
+		video := authenticated.Group("/video")
+		video.GET("/tasks/:id/local-asset", h.VideoGateway.LocalAsset)
+
 		user := authenticated.Group("/user")
 		{
 			user.GET("/profile", h.User.GetProfile)

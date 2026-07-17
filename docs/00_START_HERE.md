@@ -4,7 +4,7 @@
 
 ## 一句话状态
 
-三套前端合一分支 `codex/wujie-console-unification-20260717` 产品代码停在 **`7f4c15ca1`**（`feat(navigation): simplify role-based console`）。自动化门禁与 Docker loopback `:8080` HTTP 200 已有 Task 6 证据；三角色浏览器、真实 PostgreSQL migrations 182–186、Linux dirfd、真实 Seedance **均未在本轮验证**。整体为**待复核 / 部分门禁通过**。**禁止**写成生产 READY、商业交付完成或已 push。
+三套前端合一分支 `codex/wujie-console-unification-20260717` 当前产品 HEAD 为 **`4c6111502`**（查缺补漏）；导航功能基线为 `7f4c15ca1`，文档收口为 `2898b8419`。当前 HEAD 的前端全量门禁已通过；Docker loopback `:8080` HTTP 200 仅有 Task 6 对旧 HEAD 的历史证据，`4c6111502` fresh Docker build 因 WSL `CreateVm/E_INVALIDARG` **NOT VERIFIED**。三角色浏览器、真实 PostgreSQL migrations 182–186、Linux dirfd、真实 Seedance也均未验证。整体为**待复核 / 部分门禁通过**。**禁止**写成生产 READY、商业交付完成或已 push。
 
 审查包：[`docs/reviews/LATEST_REVIEW_PACKAGE.html`](reviews/LATEST_REVIEW_PACKAGE.html)。
 
@@ -46,12 +46,14 @@
 | 项 | 证据 | 状态 |
 |---|---|---|
 | HEAD | `7f4c15ca1be3eed730cec91188edb2ccdc77ccac` | 已记录 |
+| Gap-fill HEAD | `4c6111502eb59e83e2c5d750a2a724aaf1f70b55` | `.dockerignore`、管理员登录落地、合规回归；前端 lint/typecheck/test/build exit 0 |
 | 后端全量测试 | `go test ./... -count=1`（TMP/TEMP/GOCACHE→worktree `.cache`） | exit **0** |
 | 后端 vet | `go vet ./...` | exit **0** |
 | 前端门禁 | pnpm 9.15.9 lint / typecheck / test:run（190/1124）/ build | 全部 exit **0** |
 | git whitespace | `git diff --check` | exit **0** |
-| Docker build | `wujie-console-unification:task6`（移出 `.cache` 后） | exit **0**；~124MB |
-| Docker smoke | `GET /` → **200**；`GET /health` → **200**；host `:3000` 监听数 **0** | **已验证** |
+| Docker build（历史 Task 6 / `7f4c15ca1`） | `wujie-console-unification:task6`（移出 `.cache` 后） | exit **0**；~124MB |
+| Docker smoke（历史 Task 6 / `7f4c15ca1`） | `GET /` → **200**；`GET /health` → **200**；host `:3000` 监听数 **0** | **历史已验证** |
+| Fresh Docker（当前 `4c6111502`） | WSL `CreateVm/E_INVALIDARG`，未进入 build context | **NOT VERIFIED** |
 | 品牌 dist | `Sub2API`×3 internal；Wei-Shaw/weishaw/GitHub×0；lowercase allowlisted | **PASSED with notes** |
 | 三角色浏览器 / 1440 / 390 | 无安全 fixture 凭据 | **SKIPPED** |
 | 真实 PG migrations 182–186 | 未对受控库执行 | **NOT VERIFIED** |
@@ -76,7 +78,7 @@ Task 2E 交付（代码层）：内部 mock 视频仿真（migration 186、JWT �
 
 - 品牌实现与部署契约、完整管理面五段路径、隔离开卡/usage smoke 等见当时运行记录。
 - Gemini 图片 / Seedance 2.0 各一次 tiny_real（`realCallExecuted=2`）属历史授权封口；**本轮合一未再触发真实付费**，且不得自动重试。
-- 功能实现祖先含 `7cf7404f` 等；仓库当前合一 HEAD 以 `git rev-parse HEAD` 为准（现为 `7f4c15ca1`）。
+- 功能实现祖先含 `7cf7404f` 等；仓库当前合一 HEAD 以 `git rev-parse HEAD` 为准（现为 `4c6111502`）。
 
 ## 验收纪律
 

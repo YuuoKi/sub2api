@@ -106,13 +106,13 @@
 
 <h1>无界 · 企业 AI 中台 — 三套前端合一审查包</h1>
 <p class="muted">Task 7 · 自包含审查包 · 工作树 <code>D:\sub2api-trunk\.worktrees\console-unification</code> · 分支 <code>codex/wujie-console-unification-20260717</code></p>
-<p class="muted">打包 HEAD：<code class="sha">7f4c15ca1be3eed730cec91188edb2ccdc77ccac</code>（短 <code>7f4c15ca1</code>）· 日期 2026-07-18 Asia/Shanghai</p>
+<p class="muted">打包 HEAD：<code class="sha">4c6111502eb59e83e2c5d750a2a724aaf1f70b55</code>（短 <code>4c6111502</code>）· 日期 2026-07-18 Asia/Shanghai</p>
 
 <div class="status">当前状态：待复核 / 部分门禁通过</div>
 
 <div class="banner danger">
   <strong>禁止宣称「生产 READY」。</strong>
-  Docker 8080 HTTP 200 已验证；三角色浏览器 SKIPPED；真实 PostgreSQL migrations 182–186 NOT VERIFIED；Linux dirfd NOT VERIFIED；真实 Seedance NOT VERIFIED。
+  Task 6 在旧 HEAD <code>7f4c15ca1</code> 的 Docker 8080 HTTP 200 为历史证据；当前 HEAD <code>4c6111502</code> fresh Docker build 因 WSL <code>CreateVm/E_INVALIDARG</code> NOT VERIFIED。三角色浏览器 SKIPPED；真实 PostgreSQL migrations 182–186、Linux dirfd、真实 Seedance均 NOT VERIFIED。
 </div>
 
 <nav class="toc banner">
@@ -167,7 +167,7 @@
 <!-- ========== 2 ========== -->
 <h2 id="chain">2. 分支与提交链</h2>
 <p>分支：<code>codex/wujie-console-unification-20260717</code></p>
-<p>范围：<code>ab96e5228</code> → <code>7f4c15ca1</code>（含 20 个产品提交；Task 1 基线 <code>ea39a52df</code>）</p>
+<p>范围：<code>ab96e5228</code> → <code>4c6111502</code>（Task 1–7 + gap-fill；Task 1 基线 <code>ea39a52df</code>）</p>
 
 <table>
   <thead>
@@ -186,10 +186,14 @@
     <tr><td>4</td><td><code>51be3d32f</code></td><td>K3 design system + 无界 branding</td></tr>
     <tr><td>5</td><td><code>7f4c15ca1</code></td><td>role-aware navigation + employee simulation UI</td></tr>
     <tr><td>6</td><td>—</td><td>verification only（无产品提交；见 task-6-report）</td></tr>
+    <tr><td>7</td><td><code>2898b8419</code></td><td>truth sources + self-contained review package</td></tr>
+    <tr><td>Gap-fill</td><td><code>4c6111502</code></td><td>Docker cache ignore + admin overview landing + compliance/brand regressions</td></tr>
   </tbody>
 </table>
 
-<pre>7f4c15ca1 feat(navigation): simplify role-based console
+<pre>4c6111502 fix(console): close unification acceptance gaps
+2898b8419 docs(review): package unified console signoff
+7f4c15ca1 feat(navigation): simplify role-based console
 51be3d32f feat(ui): apply k3 design system and wujie branding
 51efaf8ca feat(console): port console v2 business surfaces
 907cfcfc4 feat(gateway): capture openai generation content
@@ -322,11 +326,12 @@ ea39a52df chore(integration): freeze frontend baselines</pre>
   <li><strong>4</strong> — K3 tokens/壳层/动效；品牌「无界 · 企业 AI 中台」；合规短语 remap；用户可见上游品牌清零（源码门禁）。</li>
   <li><strong>5</strong> — 管理员顶五 + System 嵌套；员工精确五入口；simulation UI；AbortSignal / creation_key / media_kind 门控。</li>
   <li><strong>6</strong> — 全量门禁 + Docker <code>wujie-console-unification:task6</code> loopback 8080 冒烟；浏览器三角色跳过。</li>
+  <li><strong>Gap-fill</strong> — 根 <code>.dockerignore</code> 排除缓存；管理员密码/2FA 默认落地 overview；安全站内 redirect；品牌扫描覆盖合规 Markdown/public；中英文合规 remap 回归。</li>
 </ul>
 
 <!-- ========== 5 ========== -->
 <h2 id="tests">5. 测试命令与退出码（来自 task-6-report）</h2>
-<p class="muted">证据源：<code>.superpowers/sdd/task-6-report.md</code>（未纳入产品提交）。环境：Windows + Docker Engine linux/amd64；Go 1.26.3；Node 24.15；pnpm 9.15.9。</p>
+<p class="muted">历史证据源：<code>.superpowers/sdd/task-6-report.md</code>（旧 HEAD <code>7f4c15ca1</code>，未纳入产品提交）。Gap-fill 证据源：<code>.superpowers/sdd/task-gapfill-report.md</code>（当前 HEAD，未跟踪）。环境：Windows；Go 1.26.3；Node 24.15；pnpm 9.15.9。</p>
 
 <table>
   <thead>
@@ -348,6 +353,18 @@ ea39a52df chore(integration): freeze frontend baselines</pre>
     <tr><td>Real PG 182–186</td><td>controlled migrate</td><td><span class="fail">NOT VERIFIED</span></td><td>—</td></tr>
     <tr><td>Linux dirfd</td><td>kernel race tests</td><td><span class="fail">NOT VERIFIED</span></td><td>Windows host</td></tr>
     <tr><td>Real Seedance</td><td>paid provider</td><td><span class="fail">NOT VERIFIED</span></td><td>禁止 / 未尝试</td></tr>
+  </tbody>
+</table>
+
+<h3>5.1 当前 gap-fill HEAD 新鲜证据</h3>
+<table>
+  <thead><tr><th>项目</th><th>结果</th><th>边界</th></tr></thead>
+  <tbody>
+    <tr><td>前端 lint / typecheck / full Vitest / build</td><td class="ok">全部 exit 0；build 965 modules</td><td>当前 <code>4c6111502</code></td></tr>
+    <tr><td>登录/导航/JWT/品牌/合规 focused tests</td><td class="ok">PASS</td><td>mock/unit，不是浏览器</td></tr>
+    <tr><td>Go admin compliance focused test</td><td class="ok">exit 0</td><td>Go unit test，不是 PostgreSQL</td></tr>
+    <tr><td>Fresh Docker build</td><td class="fail">NOT VERIFIED</td><td>WSL <code>CreateVm/E_INVALIDARG</code>，未进入 build context</td></tr>
+    <tr><td>Current HEAD 8080 / browser / mock task</td><td class="fail">NOT VERIFIED</td><td>无运行实例与安全 fixture</td></tr>
   </tbody>
 </table>
 
@@ -373,7 +390,7 @@ ea39a52df chore(integration): freeze frontend baselines</pre>
     <li>禁止 <code>git reset --hard</code> / <code>clean</code> / <code>rebase</code> / force-push。</li>
     <li>回滚用 <code>git revert &lt;sha&gt;</code>（必要时按依赖从新到旧逐个 revert）。</li>
     <li>Migrations 182–186 为向前迁移；代码 revert 后已 migrate 的 DB 行可能残留（mock provider INSERT 幂等、无害）；禁止对生产库盲跑。</li>
-    <li>Docker 构建注意：worktree <code>.cache</code> 会污染 build context（Task 6 已踩坑）；建议后续加入 <code>.dockerignore</code>。</li>
+    <li>根 <code>.dockerignore</code> 已在 <code>4c6111502</code> 排除 <code>.cache/</code> 与 <code>backend/.cache/</code>；仍需在健康 Docker 引擎上 fresh build 验证。</li>
     <li>登录后仍可能落在 <code>/admin/dashboard</code>；品牌 homePath 为 <code>/admin/console/overview</code>（Task 5 有意跳过统一 redirect）。</li>
   </ul>
 </div>
@@ -421,7 +438,9 @@ git revert ea39a52df</pre>
 <h2 id="status">9. 当前状态</h2>
 <div class="status">待复核 / 部分门禁通过</div>
 <ul class="compact">
-  <li class="ok">已验证：Go test/vet、pnpm lint/typecheck/test/build、git diff --check、Docker image build、loopback <code>:8080</code> HTTP 200 / health 200</li>
+  <li class="ok">当前 HEAD 已验证：pnpm lint/typecheck/test/build、focused Go compliance test、git diff --check</li>
+  <li class="skip">历史证据：旧 HEAD <code>7f4c15ca1</code> Docker image build、loopback <code>:8080</code> HTTP 200 / health 200；不得外推到当前 HEAD</li>
+  <li class="fail">NOT VERIFIED：当前 HEAD fresh Docker build 与 8080 运行实例</li>
   <li class="skip">SKIPPED：三角色浏览器冒烟（老板 / 设计师 / 技术管理员）、1440/390 实机截图</li>
   <li class="fail">NOT VERIFIED：真实 PostgreSQL migrations 182–186</li>
   <li class="fail">NOT VERIFIED：Linux dirfd 竞态</li>
@@ -434,7 +453,7 @@ git revert ea39a52df</pre>
 <p class="muted">在具备受控 admin/employee 凭据与 PostgreSQL 时，粘贴给执行代理：</p>
 <pre>Worktree ONLY: D:\sub2api-trunk\.worktrees\console-unification
 Branch: codex/wujie-console-unification-20260717
-Base HEAD: 7f4c15ca1 (or current HEAD after Task 7 docs commit)
+Base HEAD: 4c6111502 (or current HEAD after the review-package refresh commit)
 No push/reset/clean/rebase; no secrets in commits; no real Seedance/provider.
 
 Complete remaining verification gates:
@@ -459,7 +478,7 @@ Complete remaining verification gates:
    Message suggestion: docs(review): record browser and pg smoke evidence</pre>
 
 <div class="footer">
-  自包含审查包 · 证据截止 Task 6 · 状态字符串锁定为「待复核 / 部分门禁通过」· 禁止外推为生产 READY
+  自包含审查包 · 证据截止 gap-fill HEAD 4c6111502 · 状态字符串锁定为「待复核 / 部分门禁通过」· 禁止外推为生产 READY
 </div>
 
 </div>

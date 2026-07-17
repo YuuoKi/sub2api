@@ -327,6 +327,7 @@ ea39a52df chore(integration): freeze frontend baselines</pre>
   <li><strong>5</strong> — 管理员顶五 + System 嵌套；员工精确五入口；simulation UI；AbortSignal / creation_key / media_kind 门控。</li>
   <li><strong>6</strong> — 全量门禁 + Docker <code>wujie-console-unification:task6</code> loopback 8080 冒烟；浏览器三角色跳过。</li>
   <li><strong>Gap-fill</strong> — 根 <code>.dockerignore</code> 排除缓存；管理员密码/2FA 默认落地 overview；安全站内 redirect；品牌扫描覆盖合规 Markdown/public；中英文合规 remap 回归。</li>
+  <li><strong>Delivery preflight</strong> — <code>deploy/wujie-delivery-preflight.ps1</code> 固定工作树/分支/产品提交、tracked 干净状态、缓存排除、审查包、端口和 Docker 引擎；<code>Build</code> 只构建镜像，不启动服务。</li>
 </ul>
 
 <!-- ========== 5 ========== -->
@@ -425,6 +426,7 @@ git revert ea39a52df</pre>
   </thead>
   <tbody>
     <tr><td>真相源</td><td><code>docs/00_START_HERE.md</code>、<code>docs/goals/03_CURRENT_GOAL.md</code>、本文件</td></tr>
+    <tr><td>交付预检</td><td><code>deploy/wujie-delivery-preflight.ps1</code>、<code>deploy/wujie-delivery-preflight.contract.test.ps1</code>、<code>deploy/DOCKER.md</code></td></tr>
     <tr><td>计划 / 基线</td><td><code>docs/superpowers/plans/2026-07-17-wujie-console-unification.md</code>、<code>docs/reviews/WUJIE_CONSOLE_UNIFICATION_20260717/BASELINE.md</code></td></tr>
     <tr><td>导航契约</td><td><code>frontend/src/components/layout/roleAwareNavigation.ts</code>、<code>AppSidebar.vue</code></td></tr>
     <tr><td>仿真客户端/页</td><td><code>frontend/src/api/user/video_simulation.ts</code>、<code>views/user/Video{Create,Tasks,TaskDetail}View.vue</code></td></tr>
@@ -457,6 +459,11 @@ Base HEAD: 4c6111502 (or current HEAD after the review-package refresh commit)
 No push/reset/clean/rebase; no secrets in commits; no real Seedance/provider.
 
 Complete remaining verification gates:
+
+0) Safe delivery preflight after WSL/Docker recovery
+   - Run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\deploy\wujie-delivery-preflight.ps1 Check
+   - Then: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\deploy\wujie-delivery-preflight.ps1 Build
+   - Stop on any failure; do not reuse an old image as current-HEAD evidence.
 
 1) Controlled PostgreSQL
    - Point a disposable/local PG at this worktree backend config (operator-supplied; do not invent production passwords).

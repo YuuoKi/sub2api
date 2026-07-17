@@ -102,7 +102,8 @@ Task 2E 交付（代码层）：内部 mock 视频仿真（migration 186、JWT �
 
 ## 下一步
 
-1. 在具备受控凭据与 PostgreSQL 时，完成浏览器三角色冒烟 + migrations 182–186（提示词见审查包第 10 节）。
-2. 状态至多升到「内部可用 / 真实供应商待复核」——仍不得写生产 READY，除非另授真实 Seedance / dirfd 证据。
-3. 禁止再次触发真实付费；历史 `realCallExecuted=2` 封口仍有效。
-4. 禁止 push。
+1. 重启/修复 WSL 后先运行 `deploy/wujie-delivery-preflight.ps1 Check`，再运行 `Build`；任一步失败都不得启动旧镜像冒充当前 HEAD。
+2. 在具备受控凭据与 PostgreSQL 时，完成浏览器三角色冒烟 + migrations 182–186（提示词见审查包第 10 节）。
+3. 状态至多升到「内部可用 / 真实供应商待复核」——仍不得写生产 READY，除非另授真实 Seedance / dirfd 证据。
+4. 禁止再次触发真实付费；历史 `realCallExecuted=2` 封口仍有效。
+5. 禁止 push。

@@ -509,7 +509,7 @@ func (h *GroupHandler) GetGroupAPIKeys(c *gin.Context) {
 
 	outKeys := make([]dto.APIKey, 0, len(keys))
 	for i := range keys {
-		outKeys = append(outKeys, *dto.APIKeyFromService(&keys[i]))
+		outKeys = append(outKeys, *apiKeyDTOWithoutSecret(&keys[i]))
 	}
 	response.Paginated(c, outKeys, total, page, pageSize)
 }

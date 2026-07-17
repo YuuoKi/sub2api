@@ -3,6 +3,8 @@ package admin
 import (
 	"encoding/json"
 	"errors"
+	"io"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -19,14 +21,20 @@ import (
 type DashboardHandler struct {
 	dashboardService   *service.DashboardService
 	aggregationService *service.DashboardAggregationService
+	settingService     *service.SettingService
 	startTime          time.Time // Server start time for uptime calculation
 }
 
 // NewDashboardHandler creates a new admin dashboard handler
-func NewDashboardHandler(dashboardService *service.DashboardService, aggregationService *service.DashboardAggregationService) *DashboardHandler {
+func NewDashboardHandler(
+	dashboardService *service.DashboardService,
+	aggregationService *service.DashboardAggregationService,
+	settingService *service.SettingService,
+) *DashboardHandler {
 	return &DashboardHandler{
 		dashboardService:   dashboardService,
 		aggregationService: aggregationService,
+		settingService:     settingService,
 		startTime:          time.Now(),
 	}
 }
@@ -76,7 +84,7 @@ func (h *DashboardHandler) GetStats(c *gin.Context) {
 	// Calculate uptime in seconds
 	uptime := int64(time.Since(h.startTime).Seconds())
 
-	response.Success(c, gin.H{
+	payload := gin.H{
 		// 用户统计
 		"total_users":     stats.TotalUsers,
 		"today_new_users": stats.TodayNewUsers,
@@ -125,7 +133,84 @@ func (h *DashboardHandler) GetStats(c *gin.Context) {
 		"hourly_active_users": stats.HourlyActiveUsers,
 		"stats_updated_at":    stats.StatsUpdatedAt,
 		"stats_stale":         stats.StatsStale,
+	}
+
+	budgetCNY, spendCNY, usagePercent := h.monthlyBudgetSnapshot(c)
+	payload["monthly_budget_cny"] = budgetCNY
+	payload["monthly_spend_cny"] = spendCNY
+	payload["monthly_budget_usage_percent"] = usagePercent
+	response.Success(c, payload)
+}
+
+type updateMonthlyBudgetRequest struct {
+	MonthlyBudgetCNY *float64 `json:"monthly_budget_cny"`
+}
+
+// UpdateMonthlyBudget handles PUT /api/v1/admin/dashboard/monthly-budget.
+func (h *DashboardHandler) UpdateMonthlyBudget(c *gin.Context) {
+	if h.settingService == nil {
+		response.InternalError(c, "Setting service not available")
+		return
+	}
+
+	var req updateMonthlyBudgetRequest
+	decoder := json.NewDecoder(c.Request.Body)
+	if err := decoder.Decode(&req); err != nil {
+		response.BadRequest(c, "Invalid request body")
+		return
+	}
+	if err := ensureJSONEOF(decoder); err != nil {
+		response.BadRequest(c, "Invalid request body")
+		return
+	}
+	if req.MonthlyBudgetCNY == nil || *req.MonthlyBudgetCNY < 0 || math.IsNaN(*req.MonthlyBudgetCNY) || math.IsInf(*req.MonthlyBudgetCNY, 0) {
+		response.BadRequest(c, "monthly_budget_cny must be a finite non-negative number")
+		return
+	}
+	if err := h.settingService.SetCompanyMonthlyBudgetCNY(c.Request.Context(), *req.MonthlyBudgetCNY); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	budgetCNY, spendCNY, usagePercent := h.monthlyBudgetSnapshot(c)
+	response.Success(c, gin.H{
+		"monthly_budget_cny":           budgetCNY,
+		"monthly_spend_cny":            spendCNY,
+		"monthly_budget_usage_percent": usagePercent,
 	})
+}
+
+func ensureJSONEOF(decoder *json.Decoder) error {
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return errors.New("trailing JSON value")
+		}
+		return err
+	}
+	return nil
+}
+
+func (h *DashboardHandler) monthlyBudgetSnapshot(c *gin.Context) (budgetCNY, spendCNY, usagePercent float64) {
+	ctx := c.Request.Context()
+	if h.settingService != nil {
+		budgetCNY = h.settingService.GetCompanyMonthlyBudgetCNY(ctx)
+	}
+
+	userTZ := c.Query("timezone")
+	now := timezone.NowInUserLocation(userTZ)
+	start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	end := start.AddDate(0, 1, 0)
+	if h.dashboardService != nil {
+		if ranking, err := h.dashboardService.GetUserSpendingRanking(ctx, start, end, 1); err == nil && ranking != nil {
+			rate := service.DefaultUSDCNYRate
+			if h.settingService != nil {
+				rate = h.settingService.GetUSDCNYRate(ctx)
+			}
+			spendCNY = ranking.TotalActualCost * rate
+		}
+	}
+	return budgetCNY, spendCNY, service.MonthlyBudgetUsagePercent(spendCNY, budgetCNY)
 }
 
 type DashboardAggregationBackfillRequest struct {

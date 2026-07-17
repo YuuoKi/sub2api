@@ -440,7 +440,7 @@ func (h *UserHandler) GetUserAPIKeys(c *gin.Context) {
 
 	out := make([]dto.APIKey, 0, len(keys))
 	for i := range keys {
-		out = append(out, *dto.APIKeyFromService(&keys[i]))
+		out = append(out, *apiKeyDTOWithoutSecret(&keys[i]))
 	}
 	response.Paginated(c, out, total, page, pageSize)
 }

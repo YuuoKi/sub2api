@@ -1,0 +1,248 @@
+package admin
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/require"
+)
+
+type lifecycleAPIKeyManagerStub struct {
+	keys             map[int64]*service.APIKey
+	nextID           int64
+	createErr        error
+	updateErr        error
+	deleteErr        error
+	lastCreateUserID int64
+	lastCreateReq    service.CreateAPIKeyRequest
+	lastUpdateReq    service.UpdateAPIKeyRequest
+	deletedID        int64
+	deletedOwnerID   int64
+}
+
+func newLifecycleAPIKeyManager(keys ...*service.APIKey) *lifecycleAPIKeyManagerStub {
+	manager := &lifecycleAPIKeyManagerStub{keys: make(map[int64]*service.APIKey), nextID: 100}
+	for _, key := range keys {
+		clone := *key
+		manager.keys[key.ID] = &clone
+	}
+	return manager
+}
+
+func (m *lifecycleAPIKeyManagerStub) Create(_ context.Context, userID int64, req service.CreateAPIKeyRequest) (*service.APIKey, error) {
+	if m.createErr != nil {
+		return nil, m.createErr
+	}
+	m.lastCreateUserID, m.lastCreateReq = userID, req
+	m.nextID++
+	key := &service.APIKey{ID: m.nextID, UserID: userID, Key: "sk-new-one-time-secret", Name: req.Name, Status: service.StatusActive}
+	m.keys[key.ID] = key
+	return key, nil
+}
+
+func (m *lifecycleAPIKeyManagerStub) GetByID(_ context.Context, id int64) (*service.APIKey, error) {
+	key, ok := m.keys[id]
+	if !ok {
+		return nil, service.ErrAPIKeyNotFound
+	}
+	clone := *key
+	clone.IPWhitelist = append([]string(nil), key.IPWhitelist...)
+	clone.IPBlacklist = append([]string(nil), key.IPBlacklist...)
+	return &clone, nil
+}
+
+func (m *lifecycleAPIKeyManagerStub) Update(_ context.Context, id, userID int64, req service.UpdateAPIKeyRequest) (*service.APIKey, error) {
+	if m.updateErr != nil {
+		return nil, m.updateErr
+	}
+	key, ok := m.keys[id]
+	if !ok {
+		return nil, service.ErrAPIKeyNotFound
+	}
+	if key.UserID != userID {
+		return nil, service.ErrInsufficientPerms
+	}
+	m.lastUpdateReq = req
+	if req.Name != nil {
+		key.Name = *req.Name
+	}
+	if req.Status != nil {
+		key.Status = *req.Status
+	}
+	if req.Quota != nil {
+		key.Quota = *req.Quota
+	}
+	if req.ResetQuota != nil && *req.ResetQuota {
+		key.QuotaUsed = 0
+	}
+	if req.ClearExpiration {
+		key.ExpiresAt = nil
+	} else if req.ExpiresAt != nil {
+		key.ExpiresAt = req.ExpiresAt
+	}
+	if req.RateLimit5h != nil {
+		key.RateLimit5h = *req.RateLimit5h
+	}
+	if req.RateLimit1d != nil {
+		key.RateLimit1d = *req.RateLimit1d
+	}
+	if req.RateLimit7d != nil {
+		key.RateLimit7d = *req.RateLimit7d
+	}
+	key.IPWhitelist = append([]string(nil), req.IPWhitelist...)
+	key.IPBlacklist = append([]string(nil), req.IPBlacklist...)
+	clone := *key
+	return &clone, nil
+}
+
+func (m *lifecycleAPIKeyManagerStub) Delete(_ context.Context, id, userID int64) error {
+	if m.deleteErr != nil {
+		return m.deleteErr
+	}
+	key, ok := m.keys[id]
+	if !ok {
+		return service.ErrAPIKeyNotFound
+	}
+	if key.UserID != userID {
+		return service.ErrInsufficientPerms
+	}
+	m.deletedID, m.deletedOwnerID = id, userID
+	delete(m.keys, id)
+	return nil
+}
+
+func newLifecycleAPIKeyRouter(manager apiKeyManager) *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	h := &AdminAPIKeyHandler{adminService: newStubAdminService(), apiKeys: manager}
+	router := gin.New()
+	router.POST("/api/v1/admin/users/:id/api-keys", h.CreateForUser)
+	router.PUT("/api/v1/admin/api-keys/:id", h.UpdateGroup)
+	router.DELETE("/api/v1/admin/api-keys/:id", h.Delete)
+	return router
+}
+
+func performAPIKeyLifecycleRequest(router *gin.Engine, method, path, body string) *httptest.ResponseRecorder {
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(method, path, bytes.NewBufferString(body))
+	if body != "" {
+		request.Header.Set("Content-Type", "application/json")
+	}
+	router.ServeHTTP(recorder, request)
+	return recorder
+}
+
+func TestAdminAPIKeyCreateReturnsOnlyNewSecret(t *testing.T) {
+	manager := newLifecycleAPIKeyManager(&service.APIKey{ID: 7, UserID: 42, Key: "sk-existing-must-not-leak", Status: service.StatusActive})
+	router := newLifecycleAPIKeyRouter(manager)
+	recorder := performAPIKeyLifecycleRequest(router, http.MethodPost, "/api/v1/admin/users/42/api-keys", `{"name":"员工卡","quota":10,"rate_limit_5h":2}`)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, int64(42), manager.lastCreateUserID)
+	require.Equal(t, "员工卡", manager.lastCreateReq.Name)
+	require.Equal(t, 10.0, manager.lastCreateReq.Quota)
+	require.Equal(t, 2.0, manager.lastCreateReq.RateLimit5h)
+	require.Contains(t, recorder.Body.String(), "sk-new-one-time-secret")
+	require.NotContains(t, recorder.Body.String(), "sk-existing-must-not-leak")
+}
+
+func TestAdminAPIKeyListDoesNotExposeExistingSecret(t *testing.T) {
+	router, _ := setupAdminRouter()
+	for _, path := range []string{"/api/v1/admin/users/1/api-keys", "/api/v1/admin/groups/2/api-keys"} {
+		recorder := performAPIKeyLifecycleRequest(router, http.MethodGet, path, "")
+		require.Equal(t, http.StatusOK, recorder.Code, path)
+		require.NotContains(t, recorder.Body.String(), "sk-test", path)
+	}
+}
+
+func TestAdminAPIKeyCreateValidationAndNotFound(t *testing.T) {
+	invalidBodies := []string{
+		`{}`,
+		`{"name":"   "}`,
+		`{"name":"k","quota":-1}`,
+		`{"name":"k","rate_limit_1d":1e309}`,
+		`{"name":"k","expires_in_days":0}`,
+		`{"name":"k"} {}`,
+	}
+	for _, body := range invalidBodies {
+		manager := newLifecycleAPIKeyManager()
+		recorder := performAPIKeyLifecycleRequest(newLifecycleAPIKeyRouter(manager), http.MethodPost, "/api/v1/admin/users/42/api-keys", body)
+		require.Equal(t, http.StatusBadRequest, recorder.Code, body)
+		require.Zero(t, manager.lastCreateUserID, body)
+	}
+
+	recorder := performAPIKeyLifecycleRequest(newLifecycleAPIKeyRouter(newLifecycleAPIKeyManager()), http.MethodPost, "/api/v1/admin/users/0/api-keys", `{"name":"k"}`)
+	require.Equal(t, http.StatusBadRequest, recorder.Code)
+
+	manager := newLifecycleAPIKeyManager()
+	manager.createErr = infraerrors.NotFound("USER_NOT_FOUND", "user not found")
+	recorder = performAPIKeyLifecycleRequest(newLifecycleAPIKeyRouter(manager), http.MethodPost, "/api/v1/admin/users/999/api-keys", `{"name":"k"}`)
+	require.Equal(t, http.StatusNotFound, recorder.Code)
+	require.NotContains(t, recorder.Body.String(), "sk-")
+}
+
+func TestAdminAPIKeyUpdateLifecyclePreservesListsAndRedactsSecret(t *testing.T) {
+	manager := newLifecycleAPIKeyManager(&service.APIKey{
+		ID: 10, UserID: 42, Key: "sk-existing-secret", Name: "old", Status: service.StatusActive,
+		IPWhitelist: []string{"10.0.0.1"}, IPBlacklist: []string{"192.0.2.0/24"}, QuotaUsed: 4,
+	})
+	router := newLifecycleAPIKeyRouter(manager)
+	recorder := performAPIKeyLifecycleRequest(router, http.MethodPut, "/api/v1/admin/api-keys/10", `{"name":"new","status":"disabled","quota":20,"reset_quota":true,"rate_limit_7d":5}`)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, "new", manager.keys[10].Name)
+	require.Equal(t, service.StatusAPIKeyDisabled, manager.keys[10].Status)
+	require.Equal(t, []string{"10.0.0.1"}, manager.keys[10].IPWhitelist)
+	require.Equal(t, []string{"192.0.2.0/24"}, manager.keys[10].IPBlacklist)
+	require.Zero(t, manager.keys[10].QuotaUsed)
+	require.NotContains(t, recorder.Body.String(), "sk-existing-secret")
+
+	var body struct {
+		Data struct {
+			APIKey struct {
+				Key string `json:"key"`
+			} `json:"api_key"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &body))
+	require.Empty(t, body.Data.APIKey.Key)
+}
+
+func TestAdminAPIKeyUpdateValidationAndNotFound(t *testing.T) {
+	invalidBodies := []string{
+		`{"status":"bogus"}`,
+		`{"quota":-1}`,
+		`{"rate_limit_5h":-1}`,
+		`{"expires_at":"tomorrow"}`,
+		`{"name":"x"} {}`,
+	}
+	for _, body := range invalidBodies {
+		manager := newLifecycleAPIKeyManager(&service.APIKey{ID: 10, UserID: 42, Key: "sk-secret", Status: service.StatusActive})
+		recorder := performAPIKeyLifecycleRequest(newLifecycleAPIKeyRouter(manager), http.MethodPut, "/api/v1/admin/api-keys/10", body)
+		require.Equal(t, http.StatusBadRequest, recorder.Code, body)
+		require.NotContains(t, recorder.Body.String(), "sk-secret", body)
+	}
+
+	recorder := performAPIKeyLifecycleRequest(newLifecycleAPIKeyRouter(newLifecycleAPIKeyManager()), http.MethodPut, "/api/v1/admin/api-keys/999", `{"name":"x"}`)
+	require.Equal(t, http.StatusNotFound, recorder.Code)
+}
+
+func TestAdminAPIKeyDeleteResolvesOwnerAndHandlesNotFound(t *testing.T) {
+	manager := newLifecycleAPIKeyManager(&service.APIKey{ID: 10, UserID: 42, Key: "sk-delete-secret", Status: service.StatusActive})
+	router := newLifecycleAPIKeyRouter(manager)
+	recorder := performAPIKeyLifecycleRequest(router, http.MethodDelete, "/api/v1/admin/api-keys/10", "")
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, int64(10), manager.deletedID)
+	require.Equal(t, int64(42), manager.deletedOwnerID)
+	require.NotContains(t, recorder.Body.String(), "sk-delete-secret")
+
+	recorder = performAPIKeyLifecycleRequest(router, http.MethodDelete, "/api/v1/admin/api-keys/10", "")
+	require.Equal(t, http.StatusNotFound, recorder.Code)
+	require.NotContains(t, recorder.Body.String(), "sk-delete-secret")
+}

@@ -131,6 +131,7 @@ func registerAdminVideoRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	video.GET("/tasks/:id/local-asset", h.Admin.Video.LocalAsset)
 	video.POST("/tasks/:id/asset-handoffs", h.Admin.Video.CreateAssetHandoff)
 	video.GET("/system-check", h.Admin.Video.SystemCheck)
+	video.GET("/simulation/tasks/:id/result", h.VideoSimulationAdmin.Result)
 }
 
 // RegisterAssetHandoffRoutes exposes only the one-time loopback consumer.

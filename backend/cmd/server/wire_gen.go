@@ -282,9 +282,13 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	singleSmokeAuthorization := service.ProvideVideoSingleSmokeAuthorization()
 	videoGatewayService := service.ProvideVideoGatewayService(videoGatewayRuntimeRepository, singleSmokeAuthorization, configConfig, apiKeyService, billingCacheService, videoAssetStore)
 	videoGatewayHandler := handler.NewVideoGatewayHandler(videoGatewayService)
+	videoSimulationRepository := repository.ProvideVideoSimulationRepository(videoGatewayRuntimeRepository)
+	videoSimulationService := service.ProvideVideoSimulationService(videoSimulationRepository, apiKeyService)
+	videoSimulationHandler := handler.ProvideVideoSimulationHandler(videoSimulationService)
+	videoSimulationAdminHandler := handler.ProvideVideoSimulationAdminHandler(videoSimulationService)
 	idempotencyCoordinator := service.ProvideIdempotencyCoordinator(idempotencyRepository, configConfig)
 	idempotencyCleanupService := service.ProvideIdempotencyCleanupService(idempotencyRepository, configConfig)
-	handlers := handler.ProvideHandlers(authHandler, userHandler, apiKeyHandler, usageHandler, redeemHandler, subscriptionHandler, announcementHandler, channelMonitorUserHandler, adminHandlers, gatewayHandler, openAIGatewayHandler, handlerSettingHandler, totpHandler, handlerPaymentHandler, paymentWebhookHandler, availableChannelHandler, batchImageHandler, videoGatewayHandler, idempotencyCoordinator, idempotencyCleanupService)
+	handlers := handler.ProvideHandlers(authHandler, userHandler, apiKeyHandler, usageHandler, redeemHandler, subscriptionHandler, announcementHandler, channelMonitorUserHandler, adminHandlers, gatewayHandler, openAIGatewayHandler, handlerSettingHandler, totpHandler, handlerPaymentHandler, paymentWebhookHandler, availableChannelHandler, batchImageHandler, videoGatewayHandler, videoSimulationHandler, videoSimulationAdminHandler, idempotencyCoordinator, idempotencyCleanupService)
 	jwtAuthMiddleware := middleware.NewJWTAuthMiddleware(authService, userService)
 	adminAuthMiddleware := middleware.NewAdminAuthMiddleware(authService, userService, settingService)
 	apiKeyAuthMiddleware := middleware.NewAPIKeyAuthMiddleware(apiKeyService, subscriptionService, configConfig)
@@ -305,11 +309,13 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	videoAssetArchiver := service.ProvideVideoAssetArchiver(videoGatewayRuntimeRepository, videoAssetStore)
 	videoGatewayWorker := service.ProvideVideoGatewayWorker(videoGatewayRuntimeRepository, videoKeyEncryptor, videoAuthCacheInvalidator, videoBillingCacheInvalidator, configConfig, singleSmokeAuthorization, videoAssetArchiver)
 	videoGatewayRuntime := service.ProvideVideoGatewayRuntime(videoGatewayWorker, configConfig, singleSmokeAuthorization)
+	videoSimulationWorker := service.ProvideVideoSimulationWorker(videoSimulationRepository)
+	videoSimulationRuntime := service.ProvideVideoSimulationRuntime(videoSimulationWorker, configConfig)
 	scheduledTestRunnerService := service.ProvideScheduledTestRunnerService(scheduledTestPlanRepository, scheduledTestService, accountTestService, rateLimitService, configConfig)
 	paymentOrderExpiryService := service.ProvidePaymentOrderExpiryService(paymentService, leaderLockCache, db)
 	channelMonitorRunner := service.ProvideChannelMonitorRunner(channelMonitorService, settingService)
 	userPlatformQuotaUsageFlusher := service.ProvideUserPlatformQuotaUsageFlusher(configConfig, billingCache, serviceUserPlatformQuotaRepository, timingWheelService)
-	v := provideCleanup(client, redisClient, opsMetricsCollector, opsAggregationService, opsAlertEvaluatorService, opsCleanupService, opsScheduledReportService, opsSystemLogSink, schedulerSnapshotService, tokenRefreshService, accountExpiryService, proxyExpiryService, subscriptionExpiryService, usageCleanupService, idempotencyCleanupService, batchImageCleanupService, batchImageWorkerRuntime, videoGatewayRuntime, pricingService, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, grokOAuthService, openAIGatewayService, scheduledTestRunnerService, backupService, paymentOrderExpiryService, channelMonitorRunner, userPlatformQuotaUsageFlusher)
+	v := provideCleanup(client, redisClient, opsMetricsCollector, opsAggregationService, opsAlertEvaluatorService, opsCleanupService, opsScheduledReportService, opsSystemLogSink, schedulerSnapshotService, tokenRefreshService, accountExpiryService, proxyExpiryService, subscriptionExpiryService, usageCleanupService, idempotencyCleanupService, batchImageCleanupService, batchImageWorkerRuntime, videoGatewayRuntime, videoSimulationRuntime, pricingService, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, grokOAuthService, openAIGatewayService, scheduledTestRunnerService, backupService, paymentOrderExpiryService, channelMonitorRunner, userPlatformQuotaUsageFlusher)
 	application := &Application{
 		Server:  httpServer,
 		Cleanup: v,
@@ -354,6 +360,7 @@ func provideCleanup(
 	batchImageCleanup *service.BatchImageCleanupService,
 	batchImageWorker *service.BatchImageWorkerRuntime,
 	videoGatewayRuntime *service.VideoGatewayRuntime,
+	videoSimulationRuntime *service.VideoSimulationRuntime,
 	pricing *service.PricingService,
 	emailQueue *service.EmailQueueService,
 	billingCache *service.BillingCacheService,
@@ -450,6 +457,12 @@ func provideCleanup(
 			{"VideoGatewayRuntime", func() error {
 				if videoGatewayRuntime != nil {
 					videoGatewayRuntime.Stop()
+				}
+				return nil
+			}},
+			{"VideoSimulationRuntime", func() error {
+				if videoSimulationRuntime != nil {
+					videoSimulationRuntime.Stop()
 				}
 				return nil
 			}},

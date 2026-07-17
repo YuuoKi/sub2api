@@ -62,6 +62,8 @@ type Handlers struct {
 	AvailableChannel *AvailableChannelHandler
 	BatchImage       *BatchImageHandler
 	VideoGateway     *VideoGatewayHandler
+	VideoSimulation  *VideoSimulationHandler
+	VideoSimulationAdmin *VideoSimulationAdminHandler
 }
 
 // BuildInfo contains build-time information

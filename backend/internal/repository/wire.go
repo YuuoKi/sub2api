@@ -32,6 +32,15 @@ func ProvideVideoKeyEncryptor(cfg *config.Config) (service.VideoKeyEncryptor, er
 	return NewVideoKeyEncryptor(cfg.VideoGateway.EncryptionKey)
 }
 
+// ProvideVideoSimulationRepository exposes mock-task persistence from the shared video gateway repo.
+func ProvideVideoSimulationRepository(runtime service.VideoGatewayRuntimeRepository) service.VideoSimulationRepository {
+	sim, ok := runtime.(service.VideoSimulationRepository)
+	if !ok {
+		panic("video gateway runtime repository must implement VideoSimulationRepository")
+	}
+	return sim
+}
+
 // ProvideGitHubReleaseClient 创建 GitHub Release 客户端
 // 从配置中读取代理设置，支持国内服务器通过代理访问 GitHub
 func ProvideGitHubReleaseClient(cfg *config.Config) service.GitHubReleaseClient {
@@ -86,6 +95,7 @@ var ProviderSet = wire.NewSet(
 	NewUsageBillingRepository,
 	NewBatchImageRepository,
 	NewVideoGatewayRuntimeRepository,
+	ProvideVideoSimulationRepository,
 	NewVideoAdminRepository,
 	NewGenerationContentRepository,
 	ProvideVideoKeyEncryptor,

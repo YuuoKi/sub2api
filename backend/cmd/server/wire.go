@@ -88,6 +88,7 @@ func provideCleanup(
 	batchImageCleanup *service.BatchImageCleanupService,
 	batchImageWorker *service.BatchImageWorkerRuntime,
 	videoGatewayRuntime *service.VideoGatewayRuntime,
+	videoSimulationRuntime *service.VideoSimulationRuntime,
 	pricing *service.PricingService,
 	emailQueue *service.EmailQueueService,
 	billingCache *service.BillingCacheService,
@@ -185,6 +186,12 @@ func provideCleanup(
 			{"VideoGatewayRuntime", func() error {
 				if videoGatewayRuntime != nil {
 					videoGatewayRuntime.Stop()
+				}
+				return nil
+			}},
+			{"VideoSimulationRuntime", func() error {
+				if videoSimulationRuntime != nil {
+					videoSimulationRuntime.Stop()
 				}
 				return nil
 			}},

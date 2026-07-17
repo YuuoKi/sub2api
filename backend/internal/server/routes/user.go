@@ -37,6 +37,16 @@ func RegisterUserRoutes(
 			user.GET("/api-keys/:id/usage/daily", h.Usage.GetMyAPIKeyDailyUsage)
 			user.GET("/platform-quotas", h.User.GetMyPlatformQuotas)
 
+			simulation := user.Group("/video/simulation")
+			{
+				simulation.GET("/contract", h.VideoSimulation.Contract)
+				simulation.POST("/tasks", h.VideoSimulation.Create)
+				simulation.GET("/tasks", h.VideoSimulation.List)
+				simulation.GET("/tasks/:id", h.VideoSimulation.Get)
+				simulation.POST("/tasks/:id/cancel", h.VideoSimulation.Cancel)
+				simulation.GET("/tasks/:id/result", h.VideoSimulation.Result)
+			}
+
 			// 通知邮箱管理
 			notifyEmail := user.Group("/notify-email")
 			{

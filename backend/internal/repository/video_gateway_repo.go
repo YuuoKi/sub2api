@@ -477,6 +477,7 @@ func (r *videoGatewayRepository) ClaimRunnableTasks(ctx context.Context, limit i
 	rows, err := db.QueryContext(ctx, `WITH candidates AS (
 		SELECT id FROM video_tasks
 		WHERE status IN ('queued','submitted','running')
+		  AND provider <> 'mock'
 		  AND (worker_claimed_until IS NULL OR worker_claimed_until <= NOW())
 		ORDER BY updated_at, id LIMIT $1 FOR UPDATE SKIP LOCKED
 	), claimed AS (

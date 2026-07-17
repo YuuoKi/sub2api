@@ -101,6 +101,14 @@ func ProvideAdminSettingHandler(settingService *service.SettingService, emailSer
 	return h
 }
 
+func ProvideVideoSimulationHandler(svc *service.VideoSimulationService) *VideoSimulationHandler {
+	return NewVideoSimulationHandler(svc)
+}
+
+func ProvideVideoSimulationAdminHandler(svc *service.VideoSimulationService) *VideoSimulationAdminHandler {
+	return NewVideoSimulationAdminHandler(svc)
+}
+
 // ProvideHandlers creates the Handlers struct
 func ProvideHandlers(
 	authHandler *AuthHandler,
@@ -121,28 +129,32 @@ func ProvideHandlers(
 	availableChannelHandler *AvailableChannelHandler,
 	batchImageHandler *BatchImageHandler,
 	videoGatewayHandler *VideoGatewayHandler,
+	videoSimulationHandler *VideoSimulationHandler,
+	videoSimulationAdminHandler *VideoSimulationAdminHandler,
 	_ *service.IdempotencyCoordinator,
 	_ *service.IdempotencyCleanupService,
 ) *Handlers {
 	return &Handlers{
-		Auth:             authHandler,
-		User:             userHandler,
-		APIKey:           apiKeyHandler,
-		Usage:            usageHandler,
-		Redeem:           redeemHandler,
-		Subscription:     subscriptionHandler,
-		Announcement:     announcementHandler,
-		ChannelMonitor:   channelMonitorUserHandler,
-		Admin:            adminHandlers,
-		Gateway:          gatewayHandler,
-		OpenAIGateway:    openaiGatewayHandler,
-		Setting:          settingHandler,
-		Totp:             totpHandler,
-		Payment:          paymentHandler,
-		PaymentWebhook:   paymentWebhookHandler,
-		AvailableChannel: availableChannelHandler,
-		BatchImage:       batchImageHandler,
-		VideoGateway:     videoGatewayHandler,
+		Auth:                 authHandler,
+		User:                 userHandler,
+		APIKey:               apiKeyHandler,
+		Usage:                usageHandler,
+		Redeem:               redeemHandler,
+		Subscription:         subscriptionHandler,
+		Announcement:         announcementHandler,
+		ChannelMonitor:       channelMonitorUserHandler,
+		Admin:                adminHandlers,
+		Gateway:              gatewayHandler,
+		OpenAIGateway:        openaiGatewayHandler,
+		Setting:              settingHandler,
+		Totp:                 totpHandler,
+		Payment:              paymentHandler,
+		PaymentWebhook:       paymentWebhookHandler,
+		AvailableChannel:     availableChannelHandler,
+		BatchImage:           batchImageHandler,
+		VideoGateway:         videoGatewayHandler,
+		VideoSimulation:      videoSimulationHandler,
+		VideoSimulationAdmin: videoSimulationAdminHandler,
 	}
 }
 
@@ -166,6 +178,8 @@ var ProviderSet = wire.NewSet(
 	NewAvailableChannelHandler,
 	NewBatchImageHandler,
 	NewVideoGatewayHandler,
+	ProvideVideoSimulationHandler,
+	ProvideVideoSimulationAdminHandler,
 
 	// Admin handlers
 	admin.NewDashboardHandler,

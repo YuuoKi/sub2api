@@ -44,7 +44,7 @@ func TestPublicAssetHTTPClientRejectsAnyUnsafeDNSAnswerBeforeDial(t *testing.T) 
 	}{
 		{name: "mixed public and cgnat", addresses: []net.IPAddr{{IP: net.IP{8, 8, 8, 8}}, {IP: net.IP{100, 64, 0, 1}}}},
 		{name: "benchmark", addresses: []net.IPAddr{{IP: net.IP{198, 18, 0, 1}}}},
-		{name: "ipv4 mapped ipv6", addresses: []net.IPAddr{{IP: net.IP(netip.MustParseAddr("::ffff:8.8.8.8").AsSlice())}}},
+		{name: "default resolver IPv4 representation is mapped", addresses: []net.IPAddr{{IP: net.IPv4(8, 8, 8, 8)}}},
 		{name: "ipv6 documentation", addresses: []net.IPAddr{{IP: net.IP(netip.MustParseAddr("2001:db8::1").AsSlice())}}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -80,6 +80,47 @@ func TestPublicAssetHTTPClientPinsDialToValidatedDNSAnswer(t *testing.T) {
 	_, err := transport.DialContext(context.Background(), "tcp", "assets.example.test:443")
 	require.ErrorIs(t, err, dialErr)
 	require.Equal(t, "8.8.8.8:443", dialAddress)
+}
+
+func TestPublicAssetHTTPClientPinsPublicIPv4LiteralWithoutDNSLookup(t *testing.T) {
+	dialErr := errors.New("synthetic dial stop")
+	lookupCalls := 0
+	dialAddress := ""
+	client := newPublicAssetHTTPClientWithNetwork(5*time.Second,
+		func(context.Context, string) ([]net.IPAddr, error) {
+			lookupCalls++
+			return nil, errors.New("literal address must not use DNS")
+		},
+		func(_ context.Context, _ string, address string) (net.Conn, error) {
+			dialAddress = address
+			return nil, dialErr
+		})
+	transport := client.Transport.(*http.Transport)
+
+	_, err := transport.DialContext(context.Background(), "tcp", "8.8.8.8:8443")
+	require.Zero(t, lookupCalls, "validated IP literals must bypass resolver representation changes")
+	require.ErrorIs(t, err, dialErr)
+	require.Equal(t, "8.8.8.8:8443", dialAddress)
+}
+
+func TestPublicAssetHTTPClientRejectsSpecialPurposeLiteralWithoutDNSLookup(t *testing.T) {
+	lookupCalls := 0
+	dialCalls := 0
+	client := newPublicAssetHTTPClientWithNetwork(5*time.Second,
+		func(context.Context, string) ([]net.IPAddr, error) {
+			lookupCalls++
+			return []net.IPAddr{{IP: net.IP{8, 8, 8, 8}}}, nil
+		},
+		func(context.Context, string, string) (net.Conn, error) {
+			dialCalls++
+			return nil, errors.New("unexpected dial")
+		})
+	transport := client.Transport.(*http.Transport)
+
+	_, err := transport.DialContext(context.Background(), "tcp", "100.64.0.1:443")
+	require.Error(t, err)
+	require.Zero(t, lookupCalls, "special-purpose literals must be rejected before DNS")
+	require.Zero(t, dialCalls)
 }
 
 func TestPublicAssetIPPolicyRejectsIANASpecialPurposeSpace(t *testing.T) {

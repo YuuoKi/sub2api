@@ -41,6 +41,12 @@ func newPublicAssetHTTPClientWithNetwork(
 		if err != nil {
 			return nil, fmt.Errorf("invalid asset address: %w", err)
 		}
+		if addr, parseErr := netip.ParseAddr(host); parseErr == nil {
+			if !isPublicAssetAddr(addr) {
+				return nil, fmt.Errorf("asset host is a non-public address")
+			}
+			return dial(ctx, network, net.JoinHostPort(addr.String(), port))
+		}
 		addresses, err := lookup(ctx, host)
 		if err != nil || len(addresses) == 0 {
 			return nil, fmt.Errorf("resolve asset host: %w", err)

@@ -116,5 +116,15 @@ func videoTaskResponse(t *service.VideoTask) gin.H {
 	return gin.H{"id": t.ID, "provider": t.Provider, "model": t.Model, "status": t.Status, "upstream_task_id": t.UpstreamTaskID,
 		"result_url": t.ResultURL, "last_frame_url": t.LastFrameURL, "duration": t.DurationSeconds, "resolution": t.Resolution,
 		"usage_total_tokens": t.UsageTotalTokens, "cost": t.CostAmount, "currency": t.Currency, "real_dispatch_count": t.RealDispatchCount,
+		"pricing_source": nullableVideoPricingText(t.PricingSource), "pricing_version": nullableVideoPricingText(t.PricingVersion),
+		"pricing_cny_per_million_completion_tokens": t.PricingCNYPerMillionCompletionTokens,
+		"pricing_usd_cny_exchange_rate":             t.PricingUSDCNYExchangeRate, "pricing_maximum_cny": t.PricingMaximumCNY,
 		"provider_error_code": t.ProviderErrorCode, "provider_error_message": t.ProviderErrorMessage, "error": t.ErrorMessage}
+}
+
+func nullableVideoPricingText(value string) any {
+	if value == "" {
+		return nil
+	}
+	return value
 }

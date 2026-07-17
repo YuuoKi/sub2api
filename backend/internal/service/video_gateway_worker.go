@@ -61,7 +61,7 @@ func (w *VideoGatewayWorker) RunOnce(ctx context.Context) error {
 					ProviderErrorMessage: "provider success omitted billable completion tokens", ErrorMessage: "provider success omitted billable completion tokens", Currency: "USD", Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()}, polled))
 				return err
 			}
-			actualUSD, costErr := videoActualUSD(*polled.CompletionTokens, w.cfg)
+			actualUSD, costErr := videoActualUSDForTask(*polled.CompletionTokens, task, w.cfg)
 			if costErr != nil {
 				err = w.finalize(ctx, task, videoFinalizationWithUpstreamEvidence(VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version, Status: VideoStatusFailed,
 					ResultURL: polled.ResultURL, LastFrameURL: polled.LastFrameURL, UsageTotalTokens: polled.CompletionTokens,
@@ -171,4 +171,29 @@ func videoActualUSD(completionTokens int64, cfg *config.Config) (float64, error)
 		return 0, errors.New("video actual cost rounds to zero")
 	}
 	return actual, nil
+}
+
+func videoActualUSDForTask(completionTokens int64, task *VideoTask, legacyConfig *config.Config) (float64, error) {
+	if task == nil {
+		return 0, errors.New("video pricing task is required")
+	}
+	hasSnapshot := task.PricingSource != "" || task.PricingVersion != "" ||
+		task.PricingCNYPerMillionCompletionTokens != nil || task.PricingUSDCNYExchangeRate != nil || task.PricingMaximumCNY != nil
+	if !hasSnapshot {
+		// Explicit compatibility path for tasks created before pricing provenance
+		// existed. The record remains unknown; current config is not backfilled.
+		return videoActualUSD(completionTokens, legacyConfig)
+	}
+	if task.Currency != "USD" || task.PricingSource != VideoPricingSourceConfig ||
+		task.PricingVersion != VideoPricingVersionSeedanceCompletionTokensUSDV1 ||
+		task.PricingCNYPerMillionCompletionTokens == nil || *task.PricingCNYPerMillionCompletionTokens <= 0 ||
+		task.PricingUSDCNYExchangeRate == nil || *task.PricingUSDCNYExchangeRate <= 0 ||
+		task.PricingMaximumCNY == nil || *task.PricingMaximumCNY <= 0 {
+		return 0, errors.New("video pricing snapshot is incomplete or unsupported")
+	}
+	snapshotConfig := &config.Config{VideoGateway: config.VideoGatewayConfig{
+		SeedanceCNYPerMillionTokens: *task.PricingCNYPerMillionCompletionTokens,
+		USDCNYExchangeRate:          *task.PricingUSDCNYExchangeRate,
+	}}
+	return videoActualUSD(completionTokens, snapshotConfig)
 }

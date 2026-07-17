@@ -21,6 +21,9 @@ const (
 	VideoSettlementRelease         = "release"
 	VideoSettlementCaptureActual   = "capture_actual"
 	VideoSettlementCaptureReserved = "capture_reserved"
+
+	VideoPricingSourceConfig                         = "config.video_gateway"
+	VideoPricingVersionSeedanceCompletionTokensUSDV1 = "seedance_completion_tokens_usd_v1"
 )
 
 var (
@@ -60,52 +63,57 @@ type VideoProviderAccount struct {
 }
 
 type VideoTask struct {
-	ID                      int64
-	APIKeyID                int64
-	GroupID                 int64
-	ProviderAccountID       int64
-	Provider                string
-	Model                   string
-	TaskType                string
-	Prompt                  string
-	Status                  string
-	UpstreamTaskID          string
-	ResultURL               string
-	LastFrameURL            string
-	DurationSeconds         int
-	Resolution              string
-	UsageTotalTokens        *int64
-	CostAmount              float64
-	Currency                string
-	RealDispatchCount       int
-	ProviderErrorCode       string
-	ProviderErrorMessage    string
-	ErrorMessage            string
-	CreationKey             string
-	Version                 int64
-	DispatchState           string
-	CreatedBy               int64
-	CreatedAt               time.Time
-	UpdatedAt               time.Time
-	CompletedAt             *time.Time
-	ReservedCostUSD         float64
-	ReservationState        string
-	ReservedAt              *time.Time
-	ReservationWindow5h     *time.Time
-	ReservationWindow1d     *time.Time
-	ReservationWindow7d     *time.Time
-	ProviderActualCostUSD   float64
-	UpstreamModel           *string
-	UpstreamDurationSeconds *int
-	UpstreamResolution      *string
-	BillingModel            *string
-	BillingDurationSeconds  *int
-	BillingResolution       *string
-	BalanceBeforeUSD        *float64
-	BalanceAfterUSD         *float64
-	BalanceDeltaUSD         *float64
-	AuthorizationConsumedAt *time.Time
-	AuthorizationConsumedBy *int64
+	ID                                   int64
+	APIKeyID                             int64
+	GroupID                              int64
+	ProviderAccountID                    int64
+	Provider                             string
+	Model                                string
+	TaskType                             string
+	Prompt                               string
+	Status                               string
+	UpstreamTaskID                       string
+	ResultURL                            string
+	LastFrameURL                         string
+	DurationSeconds                      int
+	Resolution                           string
+	UsageTotalTokens                     *int64
+	CostAmount                           float64
+	Currency                             string
+	PricingSource                        string
+	PricingVersion                       string
+	PricingCNYPerMillionCompletionTokens *float64
+	PricingUSDCNYExchangeRate            *float64
+	PricingMaximumCNY                    *float64
+	RealDispatchCount                    int
+	ProviderErrorCode                    string
+	ProviderErrorMessage                 string
+	ErrorMessage                         string
+	CreationKey                          string
+	Version                              int64
+	DispatchState                        string
+	CreatedBy                            int64
+	CreatedAt                            time.Time
+	UpdatedAt                            time.Time
+	CompletedAt                          *time.Time
+	ReservedCostUSD                      float64
+	ReservationState                     string
+	ReservedAt                           *time.Time
+	ReservationWindow5h                  *time.Time
+	ReservationWindow1d                  *time.Time
+	ReservationWindow7d                  *time.Time
+	ProviderActualCostUSD                float64
+	UpstreamModel                        *string
+	UpstreamDurationSeconds              *int
+	UpstreamResolution                   *string
+	BillingModel                         *string
+	BillingDurationSeconds               *int
+	BillingResolution                    *string
+	BalanceBeforeUSD                     *float64
+	BalanceAfterUSD                      *float64
+	BalanceDeltaUSD                      *float64
+	AuthorizationConsumedAt              *time.Time
+	AuthorizationConsumedBy              *int64
 }
 
 type VideoTaskFinalization struct {

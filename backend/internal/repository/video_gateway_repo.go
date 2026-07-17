@@ -269,13 +269,16 @@ func (r *videoGatewayRepository) ReserveAndCreateTask(ctx context.Context, task 
 		(provider_account_id, provider, model, task_type, prompt, status, creation_key, created_by,
 		 api_key_id, group_id, duration_seconds, resolution, reserved_cost_usd, reservation_state,
 		 reserved_at, reservation_window_5h_start, reservation_window_1d_start, reservation_window_7d_start,
-		 balance_before_usd)
-		VALUES ($1,$2,$3,$4,$5,$6,NULLIF($7,''),$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+		 balance_before_usd, currency, pricing_source, pricing_version,
+		 pricing_cny_per_million_completion_tokens, pricing_usd_cny_exchange_rate, pricing_maximum_cny)
+		VALUES ($1,$2,$3,$4,$5,$6,NULLIF($7,''),$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
+		 NULLIF($21,''),NULLIF($22,''),$23,$24,$25)
 		RETURNING id, version, created_at, updated_at`,
 		task.ProviderAccountID, task.Provider, task.Model, task.TaskType, task.Prompt,
 		task.Status, task.CreationKey, task.CreatedBy, task.APIKeyID, task.GroupID,
 		task.DurationSeconds, task.Resolution, maximumUSD, service.VideoReservationReserved, now,
-		start5h.Time, start1d.Time, start7d.Time, balance,
+		start5h.Time, start1d.Time, start7d.Time, balance, task.Currency, task.PricingSource, task.PricingVersion,
+		task.PricingCNYPerMillionCompletionTokens, task.PricingUSDCNYExchangeRate, task.PricingMaximumCNY,
 	).Scan(&task.ID, &task.Version, &task.CreatedAt, &task.UpdatedAt)
 	if err != nil {
 		return err
@@ -297,7 +300,8 @@ func videoRateWindow(now time.Time, usage float64, start sql.NullTime, duration 
 
 const videoTaskColumns = `id, COALESCE(api_key_id, 0), COALESCE(group_id, 0), provider_account_id,
 	provider, model, task_type, prompt, status, upstream_task_id, result_url, last_frame_url, duration_seconds,
-	resolution, usage_total_tokens, cost_amount, currency, real_dispatch_count,
+	resolution, usage_total_tokens, cost_amount, currency, pricing_source, pricing_version,
+	pricing_cny_per_million_completion_tokens, pricing_usd_cny_exchange_rate, pricing_maximum_cny, real_dispatch_count,
 	provider_error_code, provider_error_message, error_message, COALESCE(creation_key, ''),
 	version, dispatch_state, created_by, created_at, updated_at, completed_at,
 	reserved_cost_usd, reservation_state, reserved_at, reservation_window_5h_start,
@@ -624,12 +628,14 @@ func scanVideoTask(scanner videoRowScanner) (*service.VideoTask, error) {
 	task := &service.VideoTask{}
 	var completed, reservedAt, reservation5h, reservation1d, reservation7d, authorizationConsumedAt sql.NullTime
 	var usage, upstreamDuration, billingDuration, authorizationConsumedBy sql.NullInt64
-	var upstreamModel, upstreamResolution, billingModel, billingResolution sql.NullString
+	var pricingSource, pricingVersion, upstreamModel, upstreamResolution, billingModel, billingResolution sql.NullString
+	var pricingCNYPerMillionCompletionTokens, pricingUSDCNYExchangeRate, pricingMaximumCNY sql.NullFloat64
 	var balanceBefore, balanceAfter, balanceDelta sql.NullFloat64
 	if err := scanner.Scan(&task.ID, &task.APIKeyID, &task.GroupID, &task.ProviderAccountID,
 		&task.Provider, &task.Model, &task.TaskType, &task.Prompt, &task.Status, &task.UpstreamTaskID, &task.ResultURL,
 		&task.LastFrameURL, &task.DurationSeconds, &task.Resolution, &usage, &task.CostAmount,
-		&task.Currency, &task.RealDispatchCount, &task.ProviderErrorCode, &task.ProviderErrorMessage,
+		&task.Currency, &pricingSource, &pricingVersion, &pricingCNYPerMillionCompletionTokens,
+		&pricingUSDCNYExchangeRate, &pricingMaximumCNY, &task.RealDispatchCount, &task.ProviderErrorCode, &task.ProviderErrorMessage,
 		&task.ErrorMessage,
 		&task.CreationKey, &task.Version, &task.DispatchState, &task.CreatedBy,
 		&task.CreatedAt, &task.UpdatedAt, &completed, &task.ReservedCostUSD, &task.ReservationState,
@@ -640,6 +646,21 @@ func scanVideoTask(scanner videoRowScanner) (*service.VideoTask, error) {
 	}
 	if usage.Valid {
 		task.UsageTotalTokens = &usage.Int64
+	}
+	if pricingSource.Valid {
+		task.PricingSource = pricingSource.String
+	}
+	if pricingVersion.Valid {
+		task.PricingVersion = pricingVersion.String
+	}
+	if pricingCNYPerMillionCompletionTokens.Valid {
+		task.PricingCNYPerMillionCompletionTokens = &pricingCNYPerMillionCompletionTokens.Float64
+	}
+	if pricingUSDCNYExchangeRate.Valid {
+		task.PricingUSDCNYExchangeRate = &pricingUSDCNYExchangeRate.Float64
+	}
+	if pricingMaximumCNY.Valid {
+		task.PricingMaximumCNY = &pricingMaximumCNY.Float64
 	}
 	if completed.Valid {
 		task.CompletedAt = &completed.Time

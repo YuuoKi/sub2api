@@ -287,10 +287,20 @@ func videoTaskAdminResponse(t *service.VideoTask) gin.H {
 		"reservation_window_5h_start": t.ReservationWindow5h, "reservation_window_1d_start": t.ReservationWindow1d,
 		"reservation_window_7d_start": t.ReservationWindow7d, "cost_amount": t.CostAmount,
 		"provider_actual_cost_usd": t.ProviderActualCostUSD, "currency": t.Currency,
+		"pricing_source": nullableVideoPricingText(t.PricingSource), "pricing_version": nullableVideoPricingText(t.PricingVersion),
+		"pricing_cny_per_million_completion_tokens": t.PricingCNYPerMillionCompletionTokens,
+		"pricing_usd_cny_exchange_rate":             t.PricingUSDCNYExchangeRate, "pricing_maximum_cny": t.PricingMaximumCNY,
 		"balance_before_usd": t.BalanceBeforeUSD, "balance_after_usd": t.BalanceAfterUSD,
 		"balance_delta_usd": t.BalanceDeltaUSD, "authorization_consumed_at": t.AuthorizationConsumedAt,
 		"authorization_consumed_by": t.AuthorizationConsumedBy,
 		"real_dispatch_count":       t.RealDispatchCount, "dispatch_state": t.DispatchState, "created_by": t.CreatedBy,
 		"created_at": t.CreatedAt, "updated_at": t.UpdatedAt, "completed_at": t.CompletedAt,
 	}
+}
+
+func nullableVideoPricingText(value string) any {
+	if value == "" {
+		return nil
+	}
+	return value
 }

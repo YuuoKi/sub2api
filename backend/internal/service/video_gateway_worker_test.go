@@ -14,13 +14,14 @@ import (
 )
 
 type workerRepoStub struct {
-	task       *VideoTask
-	provider   VideoProviderAccount
-	begin      bool
-	finalized  []VideoTaskFinalization
-	progress   []string
-	reserved   float64
-	beginCalls int
+	task         *VideoTask
+	reservedTask *VideoTask
+	provider     VideoProviderAccount
+	begin        bool
+	finalized    []VideoTaskFinalization
+	progress     []string
+	reserved     float64
+	beginCalls   int
 }
 
 type videoAuthInvalidatorStub struct {
@@ -71,7 +72,8 @@ func TestVideoActualUSDRejectsCostRoundedToZero(t *testing.T) {
 }
 
 func (r *workerRepoStub) CreateTask(context.Context, *VideoTask) error { return nil }
-func (r *workerRepoStub) ReserveAndCreateTask(_ context.Context, _ *VideoTask, maximumUSD float64) error {
+func (r *workerRepoStub) ReserveAndCreateTask(_ context.Context, task *VideoTask, maximumUSD float64) error {
+	r.reservedTask = task
 	r.reserved = maximumUSD
 	return nil
 }
@@ -121,9 +123,50 @@ func TestVideoGatewayCreateRequiresWorkerAndReservesServerMaximum(t *testing.T) 
 	if repo.reserved != 0.2 || task.ReservedCostUSD != 0.2 || task.ReservationState != VideoReservationReserved {
 		t.Fatalf("reserved=%v task=%#v", repo.reserved, task)
 	}
+	require.Equal(t, "USD", task.Currency)
+	require.Equal(t, VideoPricingSourceConfig, task.PricingSource)
+	require.Equal(t, VideoPricingVersionSeedanceCompletionTokensUSDV1, task.PricingVersion)
+	require.NotNil(t, task.PricingCNYPerMillionCompletionTokens)
+	require.Equal(t, 2.0, *task.PricingCNYPerMillionCompletionTokens)
+	require.NotNil(t, task.PricingUSDCNYExchangeRate)
+	require.Equal(t, 7.0, *task.PricingUSDCNYExchangeRate)
+	require.NotNil(t, task.PricingMaximumCNY)
+	require.Equal(t, 1.4, *task.PricingMaximumCNY)
+	require.Same(t, task, repo.reservedTask)
 	if len(authCache.users) != 1 || len(billingCache.users) != 1 || len(billingCache.keys) != 1 {
 		t.Fatalf("auth=%v billing_users=%v billing_keys=%v", authCache.users, billingCache.users, billingCache.keys)
 	}
+}
+
+func TestVideoActualUSDForTaskUsesImmutableSnapshot(t *testing.T) {
+	price, rate, maximum := 2.0, 8.0, 1.4
+	task := &VideoTask{
+		Currency: "USD", PricingSource: VideoPricingSourceConfig,
+		PricingVersion:                       VideoPricingVersionSeedanceCompletionTokensUSDV1,
+		PricingCNYPerMillionCompletionTokens: &price, PricingUSDCNYExchangeRate: &rate,
+		PricingMaximumCNY: &maximum,
+	}
+	changed := &config.Config{VideoGateway: config.VideoGatewayConfig{SeedanceCNYPerMillionTokens: 99, USDCNYExchangeRate: 3}}
+	actual, err := videoActualUSDForTask(1_000_000, task, changed)
+	require.NoError(t, err)
+	require.Equal(t, 0.25, actual)
+}
+
+func TestVideoActualUSDForTaskRejectsPartialSnapshot(t *testing.T) {
+	price := 2.0
+	task := &VideoTask{
+		Currency: "USD", PricingSource: VideoPricingSourceConfig,
+		PricingVersion:                       VideoPricingVersionSeedanceCompletionTokensUSDV1,
+		PricingCNYPerMillionCompletionTokens: &price,
+	}
+	_, err := videoActualUSDForTask(1_000_000, task, &config.Config{VideoGateway: config.VideoGatewayConfig{SeedanceCNYPerMillionTokens: 2, USDCNYExchangeRate: 7}})
+	require.ErrorContains(t, err, "snapshot is incomplete")
+}
+
+func TestVideoActualUSDForTaskUsesExplicitLegacyConfigFallback(t *testing.T) {
+	actual, err := videoActualUSDForTask(1_000_000, &VideoTask{}, &config.Config{VideoGateway: config.VideoGatewayConfig{SeedanceCNYPerMillionTokens: 2, USDCNYExchangeRate: 8}})
+	require.NoError(t, err)
+	require.Equal(t, 0.25, actual)
 }
 
 func TestVideoGatewayRuntimeStartsOnlyWithExplicitWorkerAndRealGate(t *testing.T) {
@@ -177,14 +220,17 @@ func TestVideoWorkerConsumesProcessGateAfterAtomicDBClaim(t *testing.T) {
 
 func TestVideoWorkerDelegatesSuccessfulAtomicCapture(t *testing.T) {
 	tokens := int64(245025)
-	repo := &workerRepoStub{task: &VideoTask{ID: 7, APIKeyID: 8, GroupID: 9, ProviderAccountID: 10, CreatedBy: 11, Model: SeedanceModel, Status: VideoStatusSubmitted, UpstreamTaskID: "up-7", Version: 2, DurationSeconds: 4, Resolution: "720p", ReservedCostUSD: 0.2, ReservationState: VideoReservationReserved}, provider: VideoProviderAccount{ID: 10, GroupID: 9, Enabled: true, BaseURL: "https://ark.cn-beijing.volces.com", EncryptedAPIKey: "cipher"}}
+	price, rate, maximum := 2.0, 7.0, 1.4
+	repo := &workerRepoStub{task: &VideoTask{ID: 7, APIKeyID: 8, GroupID: 9, ProviderAccountID: 10, CreatedBy: 11, Model: SeedanceModel, Status: VideoStatusSubmitted, UpstreamTaskID: "up-7", Version: 2, DurationSeconds: 4, Resolution: "720p", ReservedCostUSD: 0.2, ReservationState: VideoReservationReserved,
+		Currency: "USD", PricingSource: VideoPricingSourceConfig, PricingVersion: VideoPricingVersionSeedanceCompletionTokensUSDV1,
+		PricingCNYPerMillionCompletionTokens: &price, PricingUSDCNYExchangeRate: &rate, PricingMaximumCNY: &maximum}, provider: VideoProviderAccount{ID: 10, GroupID: 9, Enabled: true, BaseURL: "https://ark.cn-beijing.volces.com", EncryptedAPIKey: "cipher"}}
 	responseBody := `{"id":"up-7","status":"succeeded","model":"doubao-seedance-2-0-260128","duration":"4","resolution":"720p","content":{"video_url":"https://cdn.example.test/v.mp4"},"usage":{"completion_tokens":245025}}`
 	factory := func(base, key string) *SeedanceAdapter {
 		return NewSeedanceAdapter(&http.Client{Transport: videoRoundTripperFunc(func(*http.Request) (*http.Response, error) {
 			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(responseBody)), Header: make(http.Header)}, nil
 		})}, base, key)
 	}
-	cfg := &config.Config{VideoGateway: config.VideoGatewayConfig{SeedanceCNYPerMillionTokens: 2, USDCNYExchangeRate: 7, TinyRealMaximumCNY: 0.1}}
+	cfg := &config.Config{VideoGateway: config.VideoGatewayConfig{SeedanceCNYPerMillionTokens: 99, USDCNYExchangeRate: 3, TinyRealMaximumCNY: 0.1}}
 	authCache := &videoAuthInvalidatorStub{}
 	billingCache := &videoBillingInvalidatorStub{}
 	w := NewVideoGatewayWorker(repo, keyDecryptStub{}, factory, authCache, billingCache, cfg, NewSingleSmokeAuthorization(true))
@@ -195,6 +241,7 @@ func TestVideoWorkerDelegatesSuccessfulAtomicCapture(t *testing.T) {
 		t.Fatalf("finalized=%#v", repo.finalized)
 	}
 	finalized := repo.finalized[0]
+	require.Equal(t, 0.07000714, finalized.CostAmount, "worker must settle from the immutable task snapshot, not changed runtime config")
 	if finalized.UpstreamModel == nil || *finalized.UpstreamModel != SeedanceModel ||
 		finalized.UpstreamDurationSeconds == nil || *finalized.UpstreamDurationSeconds != 4 ||
 		finalized.UpstreamResolution == nil || *finalized.UpstreamResolution != "720p" ||

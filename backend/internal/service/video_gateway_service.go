@@ -87,10 +87,16 @@ func (s *VideoGatewayService) CreateTask(ctx context.Context, cmd VideoTaskCreat
 	if err != nil {
 		return nil, err
 	}
+	priceCNYPerMillionCompletionTokens := s.cfg.VideoGateway.SeedanceCNYPerMillionTokens
+	usdCNYExchangeRate := s.cfg.VideoGateway.USDCNYExchangeRate
+	maximumCNY := s.cfg.VideoGateway.TinyRealMaximumCNY
 	task := &VideoTask{APIKeyID: cmd.Scope.APIKeyID, GroupID: cmd.Scope.GroupID, ProviderAccountID: provider.ID,
 		Provider: provider.Provider, Model: SeedanceModel, TaskType: "text_to_video", Prompt: strings.TrimSpace(cmd.Prompt),
 		Status: VideoStatusQueued, CreationKey: strings.TrimSpace(cmd.CreationKey), CreatedBy: cmd.Scope.UserID,
-		DurationSeconds: 4, Resolution: "720p", Currency: "USD", ReservedCostUSD: maximumUSD, ReservationState: VideoReservationReserved}
+		DurationSeconds: 4, Resolution: "720p", Currency: "USD", ReservedCostUSD: maximumUSD, ReservationState: VideoReservationReserved,
+		PricingSource: VideoPricingSourceConfig, PricingVersion: VideoPricingVersionSeedanceCompletionTokensUSDV1,
+		PricingCNYPerMillionCompletionTokens: &priceCNYPerMillionCompletionTokens,
+		PricingUSDCNYExchangeRate:            &usdCNYExchangeRate, PricingMaximumCNY: &maximumCNY}
 	if err := s.repo.ReserveAndCreateTask(ctx, task, maximumUSD); err != nil {
 		return nil, err
 	}

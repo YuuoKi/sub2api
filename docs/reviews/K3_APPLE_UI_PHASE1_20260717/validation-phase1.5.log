@@ -1,0 +1,86 @@
+=== K3 Phase 1.5 validation log ===
+captured_at: 2026-07-17 03:23:33 +0800
+branch: codex/k3-apple-ui-experiment-20260717
+HEAD: a2bad5ce
+node: v24.15.0
+
+--- GATE 1: eslint ---
+cmd: npx.cmd eslint . --ext .ts,.vue --max-warnings=0
+started: 03:23:34
+exit_code: 0
+finished: 03:24:34
+
+--- GATE 2: vue-tsc ---
+cmd: npx.cmd vue-tsc --noEmit
+started: 03:24:43
+exit_code: 0
+finished: 03:25:05
+
+--- GATE 3: vitest full ---
+cmd: npx.cmd vitest run --reporter=basic
+started: 03:25:14
+(tail of output)
+ ✓ src/i18n/__tests__/usageServiceTierLocales.spec.ts (2 tests) 4ms
+ ✓ src/composables/__tests__/usePersistedPageSize.spec.ts (1 test) 4ms
+
+ Test Files  156 passed (156)
+      Tests  988 passed (988)
+   Start at  03:25:18
+   Duration  45.70s (transform 62.71s, setup 54.04s, collect 142.80s, tests 24.53s, environment 282.50s, prepare 45.27s)
+
+exit_code: 0 (verified: Test Files 156 passed (156), Tests 988 passed (988), no failed/skipped lines)
+finished: 03:26:18
+
+--- GATE 4: build ---
+cmd: "$HOME/AppData/Roaming/npm/pnpm.cmd" run build
+started: 03:26:28
+../backend/internal/web/dist/assets/UsageView-DS8l3OBj.js                                                        47.34 kB │ gzip:  13.85 kB
+../backend/internal/web/dist/assets/ProxiesView-BS0zKztm.js                                                      51.19 kB │ gzip:  13.58 kB
+../backend/internal/web/dist/assets/ChannelMonitorView-7i4r4biy.js                                               51.29 kB │ gzip:  13.33 kB
+../backend/internal/web/dist/assets/PaymentView-BUHbMZnD.js                                                      51.59 kB │ gzip:  15.56 kB
+../backend/internal/web/dist/assets/ChannelsView-Bu6UrZvR.js                                                     53.62 kB │ gzip:  12.99 kB
+../backend/internal/web/dist/assets/ProfileView-Bc_qdiB_.js                                                      60.10 kB │ gzip:  15.40 kB
+../backend/internal/web/dist/assets/ModelWhitelistSelector.vue_vue_type_script_setup_true_lang-evRvkB6K.js       62.76 kB │ gzip:  21.67 kB
+../backend/internal/web/dist/assets/vendor-i18n-Df04eBaw.js                                                      63.32 kB │ gzip:  20.34 kB
+../backend/internal/web/dist/assets/KeysView-CcwacpmS.js                                                         74.48 kB │ gzip:  19.07 kB
+../backend/internal/web/dist/assets/BatchImageGuideView-Ca4OWggG.js                                              74.53 kB │ gzip:  26.67 kB
+../backend/internal/web/dist/assets/RiskControlView-D7kAxGRn.js                                                  82.41 kB │ gzip:  17.97 kB
+../backend/internal/web/dist/assets/AppLayout.vue_vue_type_script_setup_true_lang-B1qduWnl.js                    94.75 kB │ gzip:  25.34 kB
+../backend/internal/web/dist/assets/UsersView-DGQjyRKS.js                                                       103.31 kB │ gzip:  26.08 kB
+../backend/internal/web/dist/assets/vendor-vue-BvzVNeKJ.js                                                      109.93 kB │ gzip:  42.76 kB
+../backend/internal/web/dist/assets/GroupsView-D_PXhAIc.js                                                      151.03 kB │ gzip:  26.98 kB
+../backend/internal/web/dist/assets/index-CGWFIU3Y.js                                                           162.58 kB │ gzip:  49.75 kB
+../backend/internal/web/dist/assets/vendor-chart-BcPdbVTY.js                                                    178.34 kB │ gzip:  61.36 kB
+../backend/internal/web/dist/assets/OpsDashboard-D4LGGiaw.js                                                    204.11 kB │ gzip:  43.93 kB
+../backend/internal/web/dist/assets/index-B3Lwp6BO.js                                                           205.19 kB │ gzip: 101.68 kB
+../backend/internal/web/dist/assets/vendor-misc-CEBhs7mN.js                                                     265.95 kB │ gzip:  91.00 kB
+../backend/internal/web/dist/assets/index-BdmRouTe.js                                                           320.89 kB │ gzip:  94.88 kB
+../backend/internal/web/dist/assets/SettingsView-D3rL0mkM.js                                                    329.59 kB │ gzip:  66.94 kB
+../backend/internal/web/dist/assets/vendor-ui-DachSeNe.js                                                       430.32 kB │ gzip: 143.79 kB
+../backend/internal/web/dist/assets/AccountsView-SChZQLpj.js                                                    621.88 kB │ gzip: 127.12 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 23.73s
+exit_code: 0
+finished: 03:27:15
+
+--- HYGIENE ---
+cmd: git diff --check
+exit_code: 0
+
+cmd: git status --short
+(empty = clean; validation-phase1.5.log is the only expected new file, untracked)
+
+cmd: git diff --stat wujie/video-capture-moat-20260702...HEAD
+ .../admin/video/__tests__/VideoTasksView.spec.ts   |   15 +
+ .../views/admin/video/__tests__/videoUtils.spec.ts |   18 +-
+ frontend/src/views/admin/video/videoUtils.ts       |   12 +
+ frontend/tailwind.config.js                        |   12 +
+ 65 files changed, 5157 insertions(+), 856 deletions(-)
+
+non-frontend product-code check (files outside frontend/** and docs/**):
+(none — all changes confined to frontend/** and docs/**)
+finished: 03:27:27

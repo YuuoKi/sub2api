@@ -1,0 +1,578 @@
+{
+  "baseURL": "http://127.0.0.1:5199",
+  "capturedAt": "2026-07-16T19:39:01.130Z",
+  "mode": "fully-mocked (vite preview + route interception); no backend, no credentials, no real provider, no create submission",
+  "captures": [
+    {
+      "name": "phase1.5-video-tasks-progress-ring-light-1440",
+      "role": "employee",
+      "route": "/admin/video/tasks",
+      "viewport": "1440x1000",
+      "theme": "light",
+      "mock": true,
+      "injectedDemoNodes": false,
+      "emptyFixture": false,
+      "secretsUsed": false,
+      "finalUrl": "http://127.0.0.1:5199/admin/video/tasks",
+      "screenshot": "screenshots/phase1.5-video-tasks-progress-ring-light-1440.png"
+    },
+    {
+      "name": "phase1.5-video-tasks-progress-ring-light-390",
+      "role": "employee",
+      "route": "/admin/video/tasks",
+      "viewport": "390x844",
+      "theme": "light",
+      "mock": true,
+      "injectedDemoNodes": false,
+      "emptyFixture": false,
+      "secretsUsed": false,
+      "finalUrl": "http://127.0.0.1:5199/admin/video/tasks",
+      "screenshot": "screenshots/phase1.5-video-tasks-progress-ring-light-390.png"
+    },
+    {
+      "name": "phase1.5-video-tasks-empty-light-1440",
+      "role": "employee",
+      "route": "/admin/video/tasks",
+      "viewport": "1440x1000",
+      "theme": "light",
+      "mock": true,
+      "injectedDemoNodes": false,
+      "emptyFixture": true,
+      "secretsUsed": false,
+      "finalUrl": "http://127.0.0.1:5199/admin/video/tasks",
+      "screenshot": "screenshots/phase1.5-video-tasks-empty-light-1440.png"
+    },
+    {
+      "name": "phase1.5-skeleton-shimmer-light-1440",
+      "role": "admin",
+      "route": "/admin/video",
+      "viewport": "1440x1000",
+      "theme": "light",
+      "mock": true,
+      "injectedDemoNodes": true,
+      "emptyFixture": false,
+      "secretsUsed": false,
+      "finalUrl": "http://127.0.0.1:5199/admin/video",
+      "screenshot": "screenshots/phase1.5-skeleton-shimmer-light-1440.png"
+    },
+    {
+      "name": "phase1.5-notfound-zh-light-1440",
+      "role": "admin",
+      "route": "/k3-review-definitely-not-a-page",
+      "viewport": "1440x1000",
+      "theme": "light",
+      "mock": true,
+      "injectedDemoNodes": false,
+      "emptyFixture": false,
+      "secretsUsed": false,
+      "finalUrl": "http://127.0.0.1:5199/k3-review-definitely-not-a-page",
+      "screenshot": "screenshots/phase1.5-notfound-zh-light-1440.png"
+    },
+    {
+      "name": "phase1.5-provider-billing-zh-light-1440",
+      "role": "admin",
+      "route": "/admin/provider-billing",
+      "viewport": "1440x1000",
+      "theme": "light",
+      "mock": true,
+      "injectedDemoNodes": false,
+      "emptyFixture": false,
+      "secretsUsed": false,
+      "finalUrl": "http://127.0.0.1:5199/admin/provider-billing",
+      "screenshot": "screenshots/phase1.5-provider-billing-zh-light-1440.png"
+    },
+    {
+      "name": "phase1.5-boss-dashboard-empty-light-1440",
+      "role": "admin",
+      "route": "/admin/dashboard",
+      "viewport": "1440x1000",
+      "theme": "light",
+      "mock": true,
+      "injectedDemoNodes": false,
+      "emptyFixture": false,
+      "secretsUsed": false,
+      "finalUrl": "http://127.0.0.1:5199/admin/dashboard",
+      "screenshot": "screenshots/phase1.5-boss-dashboard-empty-light-1440.png"
+    },
+    {
+      "name": "phase1.5-video-dashboard-empty-light-1440",
+      "role": "admin",
+      "route": "/admin/video",
+      "viewport": "1440x1000",
+      "theme": "light",
+      "mock": true,
+      "injectedDemoNodes": false,
+      "emptyFixture": true,
+      "secretsUsed": false,
+      "finalUrl": "http://127.0.0.1:5199/admin/video",
+      "screenshot": "screenshots/phase1.5-video-dashboard-empty-light-1440.png"
+    }
+  ],
+  "apiCalls": [
+    {
+      "capture": "phase1.5-video-tasks-progress-ring-light-1440",
+      "role": "employee",
+      "key": "GET /auth/me"
+    },
+    {
+      "capture": "phase1.5-video-tasks-progress-ring-light-1440",
+      "role": "employee",
+      "key": "GET /subscriptions/active"
+    },
+    {
+      "capture": "phase1.5-video-tasks-progress-ring-light-1440",
+      "role": "employee",
+      "key": "GET /announcements"
+    },
+    {
+      "capture": "phase1.5-video-tasks-progress-ring-light-1440",
+      "role": "employee",
+      "key": "GET /keys"
+    },
+    {
+      "capture": "phase1.5-video-tasks-progress-ring-light-1440",
+      "role": "employee",
+      "key": "GET /video/tasks"
+    },
+    {
+      "capture": "phase1.5-video-tasks-progress-ring-light-1440",
+      "role": "employee",
+      "key": "GET /settings/public"
+    },
+    {
+      "capture": "phase1.5-video-tasks-progress-ring-light-1440",
+      "role": "employee",
+      "key": "GET /video/tasks"
+    },
+    {
+      "capture": "phase1.5-video-tasks-progress-ring-light-1440",
+      "role": "employee",
+      "key": "GET /video/tasks"
+    },
+    {
+      "capture": "phase1.5-video-tasks-progress-ring-light-1440",
+      "role": "employee",
+      "key": "GET /video/tasks"
+    },
+    {
+      "capture": "phase1.5-video-tasks-progress-ring-light-390",
+      "role": "employee",
+      "key": "GET /auth/me"
+    },
+    {
+      "capture": "phase1.5-video-tasks-progress-ring-light-390",
+      "role": "employee",
+      "key": "GET /subscriptions/active"
+    },
+    {
+      "capture": "phase1.5-video-tasks-progress-ring-light-390",
+      "role": "employee",
+      "key": "GET /announcements"
+    },
+    {
+      "capture": "phase1.5-video-tasks-progress-ring-light-390",
+      "role": "employee",
+      "key": "GET /keys"
+    },
+    {
+      "capture": "phase1.5-video-tasks-progress-ring-light-390",
+      "role": "employee",
+      "key": "GET /video/tasks"
+    },
+    {
+      "capture": "phase1.5-video-tasks-progress-ring-light-390",
+      "role": "employee",
+      "key": "GET /settings/public"
+    },
+    {
+      "capture": "phase1.5-video-tasks-progress-ring-light-390",
+      "role": "employee",
+      "key": "GET /video/tasks"
+    },
+    {
+      "capture": "phase1.5-video-tasks-empty-light-1440",
+      "role": "employee",
+      "key": "GET /auth/me"
+    },
+    {
+      "capture": "phase1.5-video-tasks-empty-light-1440",
+      "role": "employee",
+      "key": "GET /subscriptions/active"
+    },
+    {
+      "capture": "phase1.5-video-tasks-empty-light-1440",
+      "role": "employee",
+      "key": "GET /announcements"
+    },
+    {
+      "capture": "phase1.5-video-tasks-empty-light-1440",
+      "role": "employee",
+      "key": "GET /keys"
+    },
+    {
+      "capture": "phase1.5-video-tasks-empty-light-1440",
+      "role": "employee",
+      "key": "GET /video/tasks"
+    },
+    {
+      "capture": "phase1.5-video-tasks-empty-light-1440",
+      "role": "employee",
+      "key": "GET /settings/public"
+    },
+    {
+      "capture": "phase1.5-video-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /auth/me"
+    },
+    {
+      "capture": "phase1.5-video-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /admin/compliance"
+    },
+    {
+      "capture": "phase1.5-video-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /admin/compliance"
+    },
+    {
+      "capture": "phase1.5-video-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /subscriptions/active"
+    },
+    {
+      "capture": "phase1.5-video-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /announcements"
+    },
+    {
+      "capture": "phase1.5-video-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /admin/settings"
+    },
+    {
+      "capture": "phase1.5-video-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /admin/payment/config"
+    },
+    {
+      "capture": "phase1.5-video-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /admin/system/check-updates"
+    },
+    {
+      "capture": "phase1.5-video-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /keys"
+    },
+    {
+      "capture": "phase1.5-video-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /admin/video/dashboard"
+    },
+    {
+      "capture": "phase1.5-video-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /settings/public"
+    },
+    {
+      "capture": "phase1.5-skeleton-shimmer-light-1440",
+      "role": "admin",
+      "key": "GET /auth/me"
+    },
+    {
+      "capture": "phase1.5-skeleton-shimmer-light-1440",
+      "role": "admin",
+      "key": "GET /admin/compliance"
+    },
+    {
+      "capture": "phase1.5-skeleton-shimmer-light-1440",
+      "role": "admin",
+      "key": "GET /admin/compliance"
+    },
+    {
+      "capture": "phase1.5-skeleton-shimmer-light-1440",
+      "role": "admin",
+      "key": "GET /subscriptions/active"
+    },
+    {
+      "capture": "phase1.5-skeleton-shimmer-light-1440",
+      "role": "admin",
+      "key": "GET /announcements"
+    },
+    {
+      "capture": "phase1.5-skeleton-shimmer-light-1440",
+      "role": "admin",
+      "key": "GET /admin/settings"
+    },
+    {
+      "capture": "phase1.5-skeleton-shimmer-light-1440",
+      "role": "admin",
+      "key": "GET /admin/payment/config"
+    },
+    {
+      "capture": "phase1.5-skeleton-shimmer-light-1440",
+      "role": "admin",
+      "key": "GET /admin/system/check-updates"
+    },
+    {
+      "capture": "phase1.5-skeleton-shimmer-light-1440",
+      "role": "admin",
+      "key": "GET /keys"
+    },
+    {
+      "capture": "phase1.5-skeleton-shimmer-light-1440",
+      "role": "admin",
+      "key": "GET /admin/video/dashboard"
+    },
+    {
+      "capture": "phase1.5-skeleton-shimmer-light-1440",
+      "role": "admin",
+      "key": "GET /settings/public"
+    },
+    {
+      "capture": "phase1.5-notfound-zh-light-1440",
+      "role": "admin",
+      "key": "GET /auth/me"
+    },
+    {
+      "capture": "phase1.5-notfound-zh-light-1440",
+      "role": "admin",
+      "key": "GET /admin/compliance"
+    },
+    {
+      "capture": "phase1.5-notfound-zh-light-1440",
+      "role": "admin",
+      "key": "GET /subscriptions/active"
+    },
+    {
+      "capture": "phase1.5-notfound-zh-light-1440",
+      "role": "admin",
+      "key": "GET /announcements"
+    },
+    {
+      "capture": "phase1.5-notfound-zh-light-1440",
+      "role": "admin",
+      "key": "GET /settings/public"
+    },
+    {
+      "capture": "phase1.5-provider-billing-zh-light-1440",
+      "role": "admin",
+      "key": "GET /auth/me"
+    },
+    {
+      "capture": "phase1.5-provider-billing-zh-light-1440",
+      "role": "admin",
+      "key": "GET /admin/compliance"
+    },
+    {
+      "capture": "phase1.5-provider-billing-zh-light-1440",
+      "role": "admin",
+      "key": "GET /admin/compliance"
+    },
+    {
+      "capture": "phase1.5-provider-billing-zh-light-1440",
+      "role": "admin",
+      "key": "GET /subscriptions/active"
+    },
+    {
+      "capture": "phase1.5-provider-billing-zh-light-1440",
+      "role": "admin",
+      "key": "GET /announcements"
+    },
+    {
+      "capture": "phase1.5-provider-billing-zh-light-1440",
+      "role": "admin",
+      "key": "GET /admin/settings"
+    },
+    {
+      "capture": "phase1.5-provider-billing-zh-light-1440",
+      "role": "admin",
+      "key": "GET /admin/payment/config"
+    },
+    {
+      "capture": "phase1.5-provider-billing-zh-light-1440",
+      "role": "admin",
+      "key": "GET /admin/system/check-updates"
+    },
+    {
+      "capture": "phase1.5-provider-billing-zh-light-1440",
+      "role": "admin",
+      "key": "GET /keys"
+    },
+    {
+      "capture": "phase1.5-provider-billing-zh-light-1440",
+      "role": "admin",
+      "key": "GET /admin/provider-billing/imports"
+    },
+    {
+      "capture": "phase1.5-provider-billing-zh-light-1440",
+      "role": "admin",
+      "key": "GET /admin/provider-billing/period-summary"
+    },
+    {
+      "capture": "phase1.5-provider-billing-zh-light-1440",
+      "role": "admin",
+      "key": "GET /settings/public"
+    },
+    {
+      "capture": "phase1.5-boss-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /auth/me"
+    },
+    {
+      "capture": "phase1.5-boss-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /admin/compliance"
+    },
+    {
+      "capture": "phase1.5-boss-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /admin/compliance"
+    },
+    {
+      "capture": "phase1.5-boss-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /subscriptions/active"
+    },
+    {
+      "capture": "phase1.5-boss-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /announcements"
+    },
+    {
+      "capture": "phase1.5-boss-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /admin/settings"
+    },
+    {
+      "capture": "phase1.5-boss-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /admin/payment/config"
+    },
+    {
+      "capture": "phase1.5-boss-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /admin/system/check-updates"
+    },
+    {
+      "capture": "phase1.5-boss-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /keys"
+    },
+    {
+      "capture": "phase1.5-boss-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /admin/dashboard/snapshot-v2"
+    },
+    {
+      "capture": "phase1.5-boss-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /admin/dashboard/users-trend"
+    },
+    {
+      "capture": "phase1.5-boss-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /admin/dashboard/users-ranking"
+    },
+    {
+      "capture": "phase1.5-boss-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /admin/provider-billing/boss-conclusions"
+    },
+    {
+      "capture": "phase1.5-boss-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /settings/public"
+    },
+    {
+      "capture": "phase1.5-video-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /auth/me"
+    },
+    {
+      "capture": "phase1.5-video-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /admin/compliance"
+    },
+    {
+      "capture": "phase1.5-video-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /admin/compliance"
+    },
+    {
+      "capture": "phase1.5-video-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /subscriptions/active"
+    },
+    {
+      "capture": "phase1.5-video-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /announcements"
+    },
+    {
+      "capture": "phase1.5-video-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /admin/settings"
+    },
+    {
+      "capture": "phase1.5-video-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /admin/payment/config"
+    },
+    {
+      "capture": "phase1.5-video-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /admin/system/check-updates"
+    },
+    {
+      "capture": "phase1.5-video-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /keys"
+    },
+    {
+      "capture": "phase1.5-video-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /admin/video/dashboard"
+    },
+    {
+      "capture": "phase1.5-video-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /settings/public"
+    }
+  ],
+  "unknownEndpoints": [
+    {
+      "capture": "phase1.5-video-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /keys"
+    },
+    {
+      "capture": "phase1.5-video-dashboard-empty-light-1440",
+      "role": "admin",
+      "key": "GET /admin/system/check-updates"
+    }
+  ],
+  "consoleErrors": [
+    {
+      "capture": "phase1.5-boss-dashboard-empty-light-1440",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+    },
+    {
+      "capture": "phase1.5-boss-dashboard-empty-light-1440",
+      "text": "Error loading dashboard snapshot: {status: 500, code: 500, reason: undefined, error: undefined, message: mock stats failure}"
+    }
+  ],
+  "secretHits": 0,
+  "notes": [
+    "phase1.5-skeleton-shimmer: ui-skeleton demo nodes were INJECTED into the page DOM (CSS verification only). The common Skeleton.vue component has no runtime consumer in the app; recorded as a Phase 1.5 risk."
+  ],
+  "summary": {
+    "captures": 8,
+    "apiCalls": 86,
+    "unknownEndpoints": 2,
+    "consoleErrors": 2,
+    "secretHits": 0,
+    "runs": 3
+  },
+  "runs": 3
+}

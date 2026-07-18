@@ -5,7 +5,6 @@
       <div class="flex flex-col gap-3 border-b border-ui-border pb-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 class="ui-heading">总览</h1>
-          <p class="ui-subheading mt-1">现在能做什么、从哪开始、系统是否正常。</p>
         </div>
         <button class="btn btn-outline" type="button" :disabled="loading" @click="loadDashboard">
           <Icon name="refresh" size="sm" :class="{ 'animate-spin': loading }" />
@@ -13,11 +12,9 @@
         </button>
       </div>
 
-      <!-- 1. 系统状态 -->
       <section class="ui-panel p-5" aria-label="系统状态">
         <div class="mb-4">
           <h2 class="text-base font-semibold text-ui-text">系统状态</h2>
-          <p class="ui-subheading mt-1">先看系统是否正常，再决定下一步。</p>
         </div>
         <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <div
@@ -32,7 +29,6 @@
         </div>
       </section>
 
-      <!-- 2. 一个推荐下一步动作 -->
       <section class="ui-panel border-l-4 border-l-teal-500 p-5" aria-label="推荐下一步">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -41,7 +37,7 @@
               先试跑一条任务，确认系统能接收、处理并留下记录。
             </h2>
             <p class="ui-subheading mt-2 max-w-2xl leading-6">
-              这不是演示 PPT，也不会调用真实生成服务。老板看总览，员工从试跑任务开始，结果回到任务记录和任务详情。
+              不会调用真实生成服务，结果可在任务记录查看。
             </p>
           </div>
           <RouterLink class="btn btn-primary shrink-0" to="/admin/video/create" data-testid="video-primary-action">
@@ -51,7 +47,6 @@
         </div>
       </section>
 
-      <!-- 3. 辅助入口链接 -->
       <section aria-label="辅助入口">
         <div class="mb-3">
           <h2 class="text-base font-semibold text-ui-text">从哪开始</h2>
@@ -65,7 +60,7 @@
           >
             <Icon :name="entry.icon" size="md" class="text-teal-600 dark:text-teal-300" />
             <h3 class="mt-4 text-base font-semibold text-ui-text">{{ entry.title }}</h3>
-            <p class="ui-subheading mt-2 leading-6">{{ entry.description }}</p>
+            <p v-if="entry.description" class="ui-subheading mt-2 leading-6">{{ entry.description }}</p>
             <span class="mt-4 inline-flex text-sm font-semibold text-teal-700 dark:text-teal-300">{{ entry.action }}</span>
           </RouterLink>
         </div>
@@ -91,14 +86,10 @@
         </div>
       </div>
 
-      <!-- 1. 系统状态结论 + 一个推荐下一步动作 -->
       <section class="ui-panel border-l-4 border-l-teal-500 p-5" aria-label="今日运行结论">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p class="text-sm font-medium text-ui-text-muted">今日运行结论</p>
-            <h2 class="mt-2 text-xl font-semibold text-ui-text">
-              今日已处理 {{ dashboard?.today_tasks ?? 0 }} 个视频任务，成功率 {{ Math.round(dashboard?.success_rate ?? 0) }}%，失败 {{ dashboard?.failed_tasks ?? 0 }} 个。
-            </h2>
           </div>
           <div class="flex flex-wrap gap-2">
             <RouterLink class="btn btn-primary" to="/admin/video/create" data-testid="video-primary-action">
@@ -113,7 +104,6 @@
         </div>
       </section>
 
-      <!-- 2. 辅助计数 -->
       <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <div v-for="item in statItems" :key="item.label" class="ui-panel p-4">
           <div class="text-xs font-medium uppercase text-ui-text-muted">{{ item.label }}</div>
@@ -122,7 +112,6 @@
         </div>
       </div>
 
-      <!-- 3. 推荐路径链接 -->
       <section class="ui-panel p-5" aria-label="推荐路径">
         <div class="grid gap-4 md:grid-cols-3">
           <div v-for="step in workflowSteps" :key="step.title" class="rounded-xl border border-ui-border p-4">
@@ -213,7 +202,7 @@
             <AnimatedEmptyState
               v-if="!loading && !(dashboard?.usage_overview || []).length"
               variant="video-dashboard"
-              title="暂无用量记录。"
+              title="暂无用量记录"
               action-label="创建一个演示任务"
               @action="goCreate"
             />
@@ -290,10 +279,9 @@ type StatItem = {
   hint?: string
 }
 
-const bossEntryCards: Array<{ title: string; description: string; action: string; to: string; icon: 'play' | 'document' | 'key' | 'shield' }> = [
+const bossEntryCards: Array<{ title: string; description?: string; action: string; to: string; icon: 'play' | 'document' | 'key' | 'shield' }> = [
   {
     title: '试跑任务',
-    description: '用一条演示任务检查系统是否能正常接收、处理和记录。',
     action: '试跑一条任务',
     to: '/admin/video/create',
     icon: 'play',

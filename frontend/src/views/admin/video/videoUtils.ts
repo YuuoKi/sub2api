@@ -172,7 +172,7 @@ export function providerDescription(provider: string): string {
 }
 
 export function providerKeyLabel(configured: boolean, maskedKey?: string, keyStatus?: string, provider?: string): string {
-  if (isVideoGatewayDemoMode && provider === 'mock') return '试跑任务，不需要真实凭证'
+  if (isVideoGatewayDemoMode && provider === 'mock') return '无需真实凭证'
   if (keyStatus === 'normal') return isVideoGatewayDemoMode ? '接入密钥已配置' : '已配置密钥'
   if (keyStatus === 'missing') return isVideoGatewayDemoMode ? '未配置真实凭证' : '未配置密钥'
   if (keyStatus === 'disabled') return isVideoGatewayDemoMode ? '当前未启用' : '停用'
@@ -185,7 +185,7 @@ export function providerKeyLabel(configured: boolean, maskedKey?: string, keySta
 }
 
 export function providerEnabledLabel(enabled: boolean): string {
-  return enabled ? '当前已启用' : '当前未启用'
+  return enabled ? '已启用' : '未启用'
 }
 
 export function providerRuntimeStatus(provider: Pick<VideoProviderAccount, 'provider' | 'enabled' | 'api_key_configured'> & Partial<VideoProviderAccount>): string {
@@ -513,11 +513,12 @@ export function providerBadgeClass(provider: string): string {
   }
 }
 
-export function formatDate(value?: string | null): string {
+export function formatDate(value?: string | null, precision: 'minute' | 'second' = 'minute'): string {
   if (!value) return '-'
   const d = new Date(value)
   if (Number.isNaN(d.getTime())) return value
-  return d.toLocaleString()
+  if (precision === 'second') return d.toLocaleString()
+  return d.toLocaleString(undefined, { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' })
 }
 
 export function shortText(value: string, max = 96): string {

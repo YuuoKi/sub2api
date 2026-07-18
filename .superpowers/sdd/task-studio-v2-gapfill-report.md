@@ -1,10 +1,14 @@
 # Studio V2 最小入口查缺补漏报告
 
-**工作树：** `D:\sub2api-trunk\.worktrees\console-unification`  
-**分支：** `codex/wujie-console-unification-20260717`  
-**实现提交：** `323aa74f0`（新增入口）  
-**审查修复提交：** `3773e59fc`（原生链接与 origin 校验）  
-**日期：** 2026-07-18  
+**工作树：** `D:\sub2api-trunk\.worktrees\console-unification`
+
+**分支：** `codex/wujie-console-unification-20260717`
+
+**实现提交：** `323aa74f0`（新增入口）
+
+**审查修复提交：** `3773e59fc`（原生链接与 origin 校验）
+
+**日期：** 2026-07-18
 **状态：** **待复核 / 部分门禁通过**
 
 ## 结论

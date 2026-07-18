@@ -58,7 +58,7 @@ func TestResolvePageImagePath(t *testing.T) {
 	if !ok {
 		t.Fatal("expected direct image path to be accepted")
 	}
-	want := mustEvalSymlinks(t, filepath.Join(base, "logo.png"))
+	want := filepath.Clean(filepath.Join(base, "logo.png"))
 	if got != want {
 		t.Fatalf("path = %q, want %q", got, want)
 	}
@@ -67,13 +67,24 @@ func TestResolvePageImagePath(t *testing.T) {
 	if !ok {
 		t.Fatal("expected nested image path to be accepted")
 	}
-	want = mustEvalSymlinks(t, filepath.Join(base, "images", "logo.png"))
+	want = filepath.Clean(filepath.Join(base, "images", "logo.png"))
 	if got != want {
 		t.Fatalf("path = %q, want %q", got, want)
 	}
 
 	if got, ok := resolvePageImagePath(pagesDir, base, "../guide.md"); ok {
 		t.Fatalf("expected traversal to be rejected, got %q", got)
+	}
+
+	outside := filepath.Join(root, "outside")
+	if err := os.MkdirAll(outside, 0755); err != nil {
+		t.Fatalf("create outside dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(outside, "escape.png"), []byte("fake"), 0644); err != nil {
+		t.Fatalf("create outside image: %v", err)
+	}
+	if got, ok := resolvePageImagePath(pagesDir, outside, "escape.png"); ok {
+		t.Fatalf("expected images directory outside pages to be rejected, got %q", got)
 	}
 }
 
@@ -99,14 +110,4 @@ func TestResolvePageImagePathRejectsSymlinkEscape(t *testing.T) {
 	if got, ok := resolvePageImagePath(pagesDir, base, "images/secret.png"); ok {
 		t.Fatalf("expected symlink escape to be rejected, got %q", got)
 	}
-}
-
-func mustEvalSymlinks(t *testing.T, path string) string {
-	t.Helper()
-
-	realPath, err := filepath.EvalSymlinks(path)
-	if err != nil {
-		t.Fatalf("eval symlinks for %q: %v", path, err)
-	}
-	return realPath
 }

@@ -136,9 +136,19 @@ func resolvePageImagePath(pagesDir, imagesDir, filename string) (string, bool) {
 
 	cleanedPagesDir := filepath.Clean(pagesDir)
 	cleanedImagesDir := filepath.Clean(imagesDir)
+	if !isPathWithinBase(cleanedImagesDir, cleanedPagesDir) {
+		return "", false
+	}
 	cleanedTarget := filepath.Clean(filepath.Join(cleanedImagesDir, relPath))
 	if !isPathWithinBase(cleanedTarget, cleanedImagesDir) {
 		return "", false
+	}
+	containsSymlink, err := pageImagePathContainsSymlink(cleanedTarget, cleanedPagesDir)
+	if err != nil {
+		return "", false
+	}
+	if !containsSymlink {
+		return cleanedTarget, true
 	}
 
 	realPagesDir, err := filepath.EvalSymlinks(cleanedPagesDir)
@@ -154,6 +164,29 @@ func resolvePageImagePath(pagesDir, imagesDir, filename string) (string, bool) {
 		return "", false
 	}
 	return realTarget, true
+}
+
+func pageImagePathContainsSymlink(path, base string) (bool, error) {
+	cleanedPath := filepath.Clean(path)
+	cleanedBase := filepath.Clean(base)
+	for {
+		info, err := os.Lstat(cleanedPath)
+		if err != nil {
+			return false, err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return true, nil
+		}
+		if cleanedPath == cleanedBase {
+			return false, nil
+		}
+
+		parent := filepath.Dir(cleanedPath)
+		if parent == cleanedPath {
+			return false, nil
+		}
+		cleanedPath = parent
+	}
 }
 
 func cleanPageImageRelativePath(filename string) (string, bool) {

@@ -18,9 +18,10 @@
 | Task 5 角色导航闭合 | 完成（`7f4c15ca1`） |
 | Task 6 全量验证（旧 HEAD `7f4c15ca1`） | 代码门禁 + Docker `:8080` HTTP 200 **历史通过**；浏览器三角色 **SKIPPED**；PG 182–186 / Linux dirfd / Seedance **NOT VERIFIED** |
 | Task 7 审查包 | 本文件 + `docs/00_START_HERE.md` + `docs/reviews/LATEST_REVIEW_PACKAGE.html` |
-| Gap-fill 验收补丁 | 完成（`4c6111502`）：缓存排除、管理员登录落地 overview、合规/品牌回归；当前 HEAD fresh Docker/浏览器/PG 仍待复核 |
+| Gap-fill 验收补丁 | 完成（`4c6111502`）：缓存排除、管理员登录落地 overview、合规/品牌回归；当时的 WSL 阻塞已由后续 fresh evidence 取代 |
+| 开卡与本地闭环补漏 | 完成（`7ef02f628`）：员工卡绑定可用组；fresh image、8080、disposable PG 182–186、admin/employee 浏览器与 mock 结果下载通过 |
 
-产品 HEAD：`4c6111502eb59e83e2c5d750a2a724aaf1f70b55`
+产品代码 HEAD：`7ef02f628b3a6d6e35b43d81d523ed56e24d7615`
 工作树：`D:\sub2api-trunk\.worktrees\console-unification`
 分支：`codex/wujie-console-unification-20260717`
 
@@ -33,4 +34,4 @@
 
 ## 当前验收口径
 
-当前 HEAD 自动化门禁已有证据；Docker loopback 冒烟仅有旧 HEAD 历史证据，**不足以**宣称内部可用或生产 READY。后续必须补：当前 HEAD fresh Docker/8080、受控 PostgreSQL migrations 182–186、三角色浏览器路径（老板/设计师/技术管理员），以及（若另授）真实供应商证据。状态字符串保持 **待复核 / 部分门禁通过**，直至上述缺口关闭。
+产品代码 `7ef02f628` 已有 fresh Docker/8080、受控 disposable PostgreSQL migrations 182–186、管理员与员工浏览器、员工零费用 mock 任务预览/下载证据。三角色整体仍只算部分通过：技术管理员没有独立账号证据，1440/390 双视口、Linux dirfd 与真实 Seedance仍 **NOT VERIFIED**。状态字符串保持 **待复核 / 部分门禁通过**，不得外推为生产 READY。

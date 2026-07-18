@@ -226,6 +226,10 @@ const mountView = async () => {
         EndpointPopover: true,
         GroupBadge: true,
         GroupOptionItem: true,
+        RouterLink: {
+          props: ['to'],
+          template: '<a :href="to"><slot /></a>',
+        },
         Teleport: true,
       },
     },
@@ -295,6 +299,13 @@ describe('user KeysView column settings', () => {
     expect(visibleColumnKeys(wrapper)).not.toContain('rate_limit')
     expect(visibleColumnKeys(wrapper)).not.toContain('last_used_at')
     expect(visibleColumnKeys(wrapper)).not.toContain('last_used_ip')
+  })
+
+  it('routes users without an available group to available channels instead of opening key creation', async () => {
+    const wrapper = await mountView()
+
+    expect(wrapper.find('[data-tour="keys-create-btn"]').exists()).toBe(false)
+    expect(wrapper.get('a[href="/available-channels"]').exists()).toBe(true)
   })
 
   it('shows a hidden column when toggled and persists the preference', async () => {

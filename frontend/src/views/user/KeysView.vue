@@ -73,7 +73,15 @@
               </button>
             </div>
           </div>
-          <button @click="showCreateModal = true" class="btn btn-primary" data-tour="keys-create-btn">
+          <RouterLink
+            v-if="groups.length === 0"
+            to="/available-channels"
+            class="btn btn-primary"
+          >
+            <Icon name="grid" size="md" class="mr-2" />
+            {{ t('keys.viewAvailableGroups') }}
+          </RouterLink>
+          <button v-else @click="showCreateModal = true" class="btn btn-primary" data-tour="keys-create-btn">
             <Icon name="plus" size="md" class="mr-2" />
             {{ t('keys.createKey') }}
           </button>

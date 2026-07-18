@@ -51,7 +51,7 @@ func ProvideVideoSimulationRuntime(worker *VideoSimulationWorker, cfg *config.Co
 }
 
 func (r *VideoSimulationRuntime) Start() {
-	if r == nil || r.worker == nil || r.cfg == nil || !r.cfg.VideoGateway.WorkerEnabled {
+	if r == nil || r.worker == nil || r.cfg == nil {
 		return
 	}
 	r.mu.Lock()

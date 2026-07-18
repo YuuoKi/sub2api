@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   createApiKeyForUser: vi.fn(),
   getUserApiKeys: vi.fn(),
   getBatchApiKeysUsage: vi.fn(),
+  groupsGetAll: vi.fn(),
 }))
 
 vi.mock('@/api/admin', () => ({
@@ -24,6 +25,9 @@ vi.mock('@/api/admin', () => ({
     },
     apiKeys: {
       createApiKeyForUser: mocks.createApiKeyForUser,
+    },
+    groups: {
+      getAll: mocks.groupsGetAll,
     },
   },
 }))
@@ -42,7 +46,7 @@ describe('StaffView key-once issuance', () => {
     vi.clearAllMocks()
     window.localStorage.clear()
     mocks.usersList.mockResolvedValue({
-      items: [{ id: 1, username: '张三', email: 'zhangsan@example.com', member_type: 'human', status: 'active', notes: '' }],
+      items: [{ id: 1, username: '张三', email: 'zhangsan@example.com', member_type: 'human', status: 'active', notes: '', allowed_groups: null, subscriptions: [] }],
       total: 1,
     })
     mocks.getBatchUsersUsage.mockResolvedValue({ stats: {} })
@@ -50,6 +54,9 @@ describe('StaffView key-once issuance', () => {
     // Real backend truth: admin list-keys endpoints always return an empty `key` (apiKeyDTOWithoutSecret).
     mocks.getUserApiKeys.mockResolvedValue({ items: [{ id: 10, name: 'card', key: '', status: 'active', quota: 0, quota_used: 0, last_used_at: null }] })
     mocks.getBatchApiKeysUsage.mockResolvedValue({ stats: {} })
+    mocks.groupsGetAll.mockResolvedValue([
+      { id: 7, name: '默认组', status: 'active', platform: 'openai', is_exclusive: false, subscription_type: 'standard' },
+    ])
     mocks.createApiKeyForUser.mockResolvedValue({ id: 11, name: 'zhangsan-生产卡', key: FULL_KEY, status: 'active', quota: 0, quota_used: 0 })
   })
 
@@ -70,6 +77,74 @@ describe('StaffView key-once issuance', () => {
     for (const call of setItemSpy.mock.calls) {
       expect(String(call[1])).not.toContain(FULL_KEY)
     }
+  })
+
+  it('binds a newly issued employee card to an active group', async () => {
+    const wrapper = mount(StaffView, {
+      global: { stubs: { AppLayout: AppLayoutStub, Icon: IconStub } },
+    })
+    await flushPromises()
+
+    await wrapper.find('[data-test="issue-card"]').trigger('click')
+    await wrapper.find('form[data-test="issue-card-form"]').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(mocks.createApiKeyForUser).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({ group_id: 7 }),
+      expect.any(String),
+    )
+  })
+
+  it('selects the first eligible group instead of an ineligible exclusive group', async () => {
+    mocks.groupsGetAll.mockResolvedValue([
+      { id: 6, name: '未授权专属组', status: 'active', platform: 'openai', is_exclusive: true, subscription_type: 'standard' },
+      { id: 7, name: '默认组', status: 'active', platform: 'openai', is_exclusive: false, subscription_type: 'standard' },
+    ])
+
+    const wrapper = mount(StaffView, {
+      global: { stubs: { AppLayout: AppLayoutStub, Icon: IconStub } },
+    })
+    await flushPromises()
+
+    await wrapper.find('[data-test="issue-card"]').trigger('click')
+    const options = wrapper.find('[data-test="issue-card-group"]').findAll('option')
+    expect(options.map((option) => option.text())).not.toContain('未授权专属组')
+    await wrapper.find('form[data-test="issue-card-form"]').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(mocks.createApiKeyForUser).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({ group_id: 7 }),
+      expect.any(String),
+    )
+  })
+
+  it('fills an eligible default when groups finish loading after the dialog opens', async () => {
+    let resolveGroups!: (groups: Array<Record<string, unknown>>) => void
+    mocks.groupsGetAll.mockReturnValue(new Promise((resolve) => { resolveGroups = resolve }))
+
+    const wrapper = mount(StaffView, {
+      global: { stubs: { AppLayout: AppLayoutStub, Icon: IconStub } },
+    })
+    await flushPromises()
+
+    await wrapper.find('[data-test="issue-card"]').trigger('click')
+    expect(wrapper.text()).toContain('正在加载可用组')
+    expect(wrapper.text()).not.toContain('当前没有可绑定的启用组')
+
+    resolveGroups([
+      { id: 7, name: '默认组', status: 'active', platform: 'openai', is_exclusive: false, subscription_type: 'standard' },
+    ])
+    await flushPromises()
+    await wrapper.find('form[data-test="issue-card-form"]').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(mocks.createApiKeyForUser).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({ group_id: 7 }),
+      expect.any(String),
+    )
   })
 
   it('masks the key again once the issuance dialog is closed and reopened', async () => {

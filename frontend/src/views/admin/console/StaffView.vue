@@ -270,9 +270,29 @@
                   <input v-model.number="issueForm.expiresInDays" class="input" type="number" min="0" step="1" placeholder="0 = 长期有效" />
                 </div>
               </div>
+              <div>
+                <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">计费与路由组</label>
+                <select
+                  v-model.number="issueForm.groupId"
+                  class="input"
+                  data-test="issue-card-group"
+                  required
+                >
+                  <option :value="0" disabled>选择启用中的组</option>
+                  <option v-for="group in eligibleGroups" :key="group.id" :value="group.id">
+                    {{ group.name }}
+                  </option>
+                </select>
+                <p v-if="groupsLoading" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  正在加载可用组…
+                </p>
+                <p v-else-if="eligibleGroups.length === 0" class="mt-1 text-xs text-red-600">
+                  当前没有可绑定的启用组，暂时不能开卡。
+                </p>
+              </div>
               <div class="flex justify-end gap-2 pt-2">
                 <button class="btn btn-outline" type="button" @click="closeIssueModal">取消</button>
-                <button class="btn btn-primary" type="submit" :disabled="issuing">
+                <button class="btn btn-primary" type="submit" :disabled="issuing || groupsLoading || issueForm.groupId <= 0">
                   <Icon name="key" size="sm" />
                   开卡
                 </button>
@@ -311,7 +331,7 @@ import Icon from '@/components/icons/Icon.vue'
 import InitialCredentialDialog from '@/components/admin/user/InitialCredentialDialog.vue'
 import { adminAPI } from '@/api/admin'
 import type { InitialCredential } from '@/api/admin/users'
-import type { AdminUser, ApiKey } from '@/types'
+import type { AdminGroup, AdminUser, ApiKey } from '@/types'
 import type { BatchApiKeyUsageStats, BatchUserUsageStats } from '@/api/admin/dashboard'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
@@ -359,6 +379,7 @@ async function loadStaff() {
   try {
     const res = await adminAPI.users.list(1, 100, {
       search: search.value.trim() || undefined,
+      include_subscriptions: true,
       sort_by: 'created_at',
       sort_order: 'asc',
     })
@@ -541,7 +562,43 @@ const issueTarget = ref<AdminUser | null>(null)
 const issuing = ref(false)
 const issuedKey = ref<ApiKey | null>(null)
 const copied = ref(false)
-const issueForm = reactive({ name: '', quota: 0, expiresInDays: 0 })
+const activeGroups = ref<AdminGroup[]>([])
+const groupsLoading = ref(true)
+const issueForm = reactive({ name: '', quota: 0, expiresInDays: 0, groupId: 0 })
+
+function canUserBindGroup(user: AdminUser, group: AdminGroup): boolean {
+  if (group.status !== 'active') return false
+  if (group.subscription_type === 'subscription') {
+    return (user.subscriptions ?? []).some(
+      (subscription) => subscription.group_id === group.id && subscription.status === 'active',
+    )
+  }
+  return !group.is_exclusive || (user.allowed_groups ?? []).includes(group.id)
+}
+
+const eligibleGroups = computed(() => {
+  if (!issueTarget.value) return []
+  return activeGroups.value.filter((group) => canUserBindGroup(issueTarget.value!, group))
+})
+
+function selectEligibleDefault() {
+  if (!eligibleGroups.value.some((group) => group.id === issueForm.groupId)) {
+    issueForm.groupId = eligibleGroups.value[0]?.id ?? 0
+  }
+}
+
+async function loadActiveGroups() {
+  groupsLoading.value = true
+  try {
+    activeGroups.value = await adminAPI.groups.getAll()
+  } catch (err) {
+    activeGroups.value = []
+    appStore.showError(extractApiErrorMessage(err, '加载启用组失败'))
+  } finally {
+    groupsLoading.value = false
+    if (issueModalOpen.value) selectEligibleDefault()
+  }
+}
 
 function openIssueCard(user: AdminUser) {
   issueTarget.value = user
@@ -551,6 +608,7 @@ function openIssueCard(user: AdminUser) {
   issueForm.quota = 0
   issueForm.expiresInDays = 0
   issueModalOpen.value = true
+  selectEligibleDefault()
 }
 
 function closeIssueModal() {
@@ -561,6 +619,10 @@ function closeIssueModal() {
 
 async function issueCard() {
   if (!issueTarget.value) return
+  if (!eligibleGroups.value.some((group) => group.id === issueForm.groupId)) {
+    appStore.showError('请先选择计费与路由组')
+    return
+  }
   issuing.value = true
   try {
     // 每次开卡提交都生成新的 Idempotency-Key，避免网络重试意外重发出两张卡；
@@ -569,6 +631,7 @@ async function issueCard() {
       issueTarget.value.id,
       {
         name: issueForm.name.trim(),
+        group_id: issueForm.groupId,
         quota: issueForm.quota > 0 ? issueForm.quota : 0,
         ...(issueForm.expiresInDays > 0 ? { expires_in_days: issueForm.expiresInDays } : {}),
       },
@@ -602,7 +665,10 @@ async function copyIssuedKey() {
   }
 }
 
-onMounted(loadStaff)
+onMounted(() => {
+  void loadStaff()
+  void loadActiveGroups()
+})
 onUnmounted(() => {
   if (copyResetTimeoutId) clearTimeout(copyResetTimeoutId)
 })

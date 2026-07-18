@@ -53,6 +53,8 @@ export default {
     generateNewKey: 'Generate a new API key',
     batchImageAgent: 'Batch Image Assistant',
     batchImageAgentDesc: 'Copy instructions for an agent',
+    studioV2: 'Studio V2 Canvas',
+    studioV2Desc: 'Create with only a project name and enter the canvas',
     viewUsage: 'View Usage',
     checkDetailedLogs: 'Check detailed usage logs',
     redeemCode: 'Redeem Code',

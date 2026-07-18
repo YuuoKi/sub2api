@@ -53,6 +53,8 @@ export default {
     generateNewKey: '生成新的 API 密钥',
     batchImageAgent: '批量生图助手',
     batchImageAgentDesc: '复制给 Agent 的任务说明',
+    studioV2: 'Studio V2 创作画布',
+    studioV2Desc: '只需项目名称，创建后直接进入画布',
     viewUsage: '查看使用记录',
     checkDetailedLogs: '查看详细的使用日志',
     redeemCode: '兑换码',

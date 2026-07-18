@@ -10,6 +10,9 @@ export const buildQCanvasProjectsURL = (configuredBaseURL?: string): string => {
   if (url.username || url.password) {
     throw new Error('QCanvas 地址不得包含用户名或密码')
   }
+  if (url.pathname !== '/' || url.search || url.hash) {
+    throw new Error('QCanvas 地址必须是纯 origin，不得包含路径、查询或片段')
+  }
 
   return new URL('/projects', url.origin).toString()
 }

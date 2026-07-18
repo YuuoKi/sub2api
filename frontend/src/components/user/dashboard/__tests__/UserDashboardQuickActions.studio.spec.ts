@@ -36,21 +36,23 @@ describe('UserDashboardQuickActions Studio V2 entry', () => {
     )
   })
 
-  it('shows the entry without batch-image access and opens the project creator directly', async () => {
-    const open = vi.spyOn(window, 'open').mockImplementation(() => null)
+  it('rejects unsafe or ambiguous configured base URLs', () => {
+    expect(() => buildQCanvasProjectsURL('file:///tmp/qcanvas')).toThrow('HTTP 或 HTTPS')
+    expect(() => buildQCanvasProjectsURL('https://user:pass@studio.example')).toThrow('用户名或密码')
+    expect(() => buildQCanvasProjectsURL('https://studio.example/qcanvas')).toThrow('纯 origin')
+    expect(() => buildQCanvasProjectsURL('https://studio.example?tenant=1')).toThrow('纯 origin')
+  })
+
+  it('shows a native project link without batch-image access', () => {
     const wrapper = mount(UserDashboardQuickActions, {
       global: { stubs: { Icon: true } }
     })
 
     const entry = wrapper.find('[data-testid="studio-v2-entry"]')
     expect(entry.exists()).toBe(true)
-    await entry.trigger('click')
-
-    expect(open).toHaveBeenCalledWith(
-      'http://127.0.0.1:5174/projects',
-      '_blank',
-      'noopener,noreferrer'
-    )
+    expect(entry.attributes('href')).toBe('http://127.0.0.1:5174/projects')
+    expect(entry.attributes('target')).toBe('_blank')
+    expect(entry.attributes('rel')).toBe('noopener noreferrer')
     expect(routerPush).not.toHaveBeenCalled()
   })
 })

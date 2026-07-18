@@ -49,7 +49,13 @@
         />
       </button>
 
-      <button data-testid="studio-v2-entry" @click="openStudioV2" class="group flex w-full items-center gap-4 rounded-xl bg-gray-50 p-4 text-left transition-all duration-200 hover:bg-gray-100 dark:bg-dark-800/50 dark:hover:bg-dark-800">
+      <a
+        data-testid="studio-v2-entry"
+        :href="studioV2URL"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="group flex w-full items-center gap-4 rounded-xl bg-gray-50 p-4 text-left transition-all duration-200 hover:bg-gray-100 dark:bg-dark-800/50 dark:hover:bg-dark-800"
+      >
         <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-violet-100 transition-transform group-hover:scale-105 dark:bg-violet-900/30">
           <Icon name="sparkles" size="lg" class="text-violet-600 dark:text-violet-400" />
         </div>
@@ -62,7 +68,7 @@
           size="md"
           class="text-gray-400 transition-colors group-hover:text-violet-500 dark:text-dark-500"
         />
-      </button>
+      </a>
 
       <button @click="router.push('/redeem')" class="group flex w-full items-center gap-4 rounded-xl bg-gray-50 p-4 text-left transition-all duration-200 hover:bg-gray-100 dark:bg-dark-800/50 dark:hover:bg-dark-800">
         <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-amber-100 transition-transform group-hover:scale-105 dark:bg-amber-900/30">
@@ -93,10 +99,7 @@ const router = useRouter()
 const { t } = useI18n()
 const { canUseBatchImage, refreshBatchImageAccess } = useBatchImageAccess()
 
-const openStudioV2 = (): void => {
-  const targetURL = buildQCanvasProjectsURL(import.meta.env.VITE_QCANVAS_BASE_URL)
-  window.open(targetURL, '_blank', 'noopener,noreferrer')
-}
+const studioV2URL = buildQCanvasProjectsURL(import.meta.env.VITE_QCANVAS_BASE_URL)
 
 onMounted(() => {
   void refreshBatchImageAccess()

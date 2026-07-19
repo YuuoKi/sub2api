@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   getBatchUsersUsage: vi.fn(),
   getStats: vi.fn(),
   createApiKeyForUser: vi.fn(),
+  createQCanvasKeyPairForUser: vi.fn(),
   getUserApiKeys: vi.fn(),
   getBatchApiKeysUsage: vi.fn(),
   groupsGetAll: vi.fn(),
@@ -25,6 +26,7 @@ vi.mock('@/api/admin', () => ({
     },
     apiKeys: {
       createApiKeyForUser: mocks.createApiKeyForUser,
+      createQCanvasKeyPairForUser: mocks.createQCanvasKeyPairForUser,
     },
     groups: {
       getAll: mocks.groupsGetAll,
@@ -56,8 +58,13 @@ describe('StaffView key-once issuance', () => {
     mocks.getBatchApiKeysUsage.mockResolvedValue({ stats: {} })
     mocks.groupsGetAll.mockResolvedValue([
       { id: 7, name: '默认组', status: 'active', platform: 'openai', is_exclusive: false, subscription_type: 'standard' },
+      { id: 8, name: '视频组', status: 'active', platform: 'openai', is_exclusive: false, subscription_type: 'standard' },
     ])
     mocks.createApiKeyForUser.mockResolvedValue({ id: 11, name: 'zhangsan-生产卡', key: FULL_KEY, status: 'active', quota: 0, quota_used: 0 })
+    mocks.createQCanvasKeyPairForUser.mockResolvedValue({
+      video: { id: 12, name: 'QCanvas · video', key: 'sk-video-one-time', status: 'active', quota: 0, quota_used: 0 },
+      media: { id: 13, name: 'QCanvas · media', key: 'sk-media-one-time', status: 'active', quota: 0, quota_used: 0 },
+    })
   })
 
   it('shows the full key exactly once right after creation, and never persists it to localStorage', async () => {
@@ -77,6 +84,57 @@ describe('StaffView key-once issuance', () => {
     for (const call of setItemSpy.mock.calls) {
       expect(String(call[1])).not.toContain(FULL_KEY)
     }
+  })
+
+  it('issues QCanvas video and media keys atomically with two distinct group selections', async () => {
+    const wrapper = mount(StaffView, {
+      global: { stubs: { AppLayout: AppLayoutStub, Icon: IconStub } },
+    })
+    await flushPromises()
+
+    await wrapper.find('[data-test="qcanvas-key-pair"]').trigger('click')
+    await wrapper.find('[data-test="qcanvas-video-group"]').setValue('8')
+    await wrapper.find('[data-test="qcanvas-media-group"]').setValue('7')
+    await wrapper.find('form[data-test="qcanvas-key-pair-form"]').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(mocks.createQCanvasKeyPairForUser).toHaveBeenCalledWith(
+      1,
+      { video_group_id: 8, media_group_id: 7 },
+      expect.any(String),
+    )
+    expect(wrapper.text()).toContain('sk-video-one-time')
+    expect(wrapper.text()).toContain('sk-media-one-time')
+  })
+
+  it('forgets both QCanvas secrets after the result dialog closes', async () => {
+    const wrapper = mount(StaffView, {
+      global: { stubs: { AppLayout: AppLayoutStub, Icon: IconStub } },
+    })
+    await flushPromises()
+
+    await wrapper.find('[data-test="qcanvas-key-pair"]').trigger('click')
+    await wrapper.find('form[data-test="qcanvas-key-pair-form"]').trigger('submit.prevent')
+    await flushPromises()
+    expect(wrapper.text()).toContain('sk-video-one-time')
+    expect(wrapper.text()).toContain('sk-media-one-time')
+
+    await wrapper.find('[data-test="qcanvas-key-pair-done"]').trigger('click')
+    await wrapper.find('[data-test="qcanvas-key-pair"]').trigger('click')
+    expect(wrapper.text()).not.toContain('sk-video-one-time')
+    expect(wrapper.text()).not.toContain('sk-media-one-time')
+  })
+
+  it('renders the employee total from the user aggregate instead of treating two keys as two balances', async () => {
+    mocks.getBatchUsersUsage.mockResolvedValue({
+      stats: { 1: { user_id: 1, total_actual_cost: 1.2, today_actual_cost: 0.7, by_platform: [] } },
+    })
+    const wrapper = mount(StaffView, {
+      global: { stubs: { AppLayout: AppLayoutStub, Icon: IconStub } },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('8.64')
   })
 
   it('binds a newly issued employee card to an active group', async () => {

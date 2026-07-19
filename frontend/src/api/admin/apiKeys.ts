@@ -39,6 +39,16 @@ export interface AdminCreateApiKeyPayload {
   rate_limit_7d?: number
 }
 
+export interface AdminCreateQCanvasKeyPairPayload {
+  video_group_id: number
+  media_group_id: number
+}
+
+export interface QCanvasKeyPairResponse {
+  video: ApiKey
+  media: ApiKey
+}
+
 /**
  * Issue a new API key bound to the specified member (member 开卡).
  * Requires a per-call Idempotency-Key so retried submissions never mint a second card;
@@ -54,6 +64,22 @@ export async function createApiKeyForUser(
   idempotencyKey: string = crypto.randomUUID()
 ): Promise<ApiKey> {
   const { data } = await apiClient.post<ApiKey>(`/admin/users/${userId}/api-keys`, payload, {
+    headers: { 'Idempotency-Key': idempotencyKey }
+  })
+  return data
+}
+
+/**
+ * Atomically issue the two logical QCanvas credentials for one existing user.
+ * A replay uses the same Idempotency-Key and deliberately returns blank key
+ * values, so the two full secrets are only visible in the first response.
+ */
+export async function createQCanvasKeyPairForUser(
+  userId: number,
+  payload: AdminCreateQCanvasKeyPairPayload,
+  idempotencyKey: string = crypto.randomUUID()
+): Promise<QCanvasKeyPairResponse> {
+  const { data } = await apiClient.post<QCanvasKeyPairResponse>(`/admin/users/${userId}/qcanvas-key-pair`, payload, {
     headers: { 'Idempotency-Key': idempotencyKey }
   })
   return data
@@ -110,6 +136,7 @@ export async function deleteApiKey(id: number): Promise<{ message: string }> {
 export const apiKeysAPI = {
   updateApiKeyGroup,
   createApiKeyForUser,
+	createQCanvasKeyPairForUser,
   updateApiKeyFields,
   resetApiKeyRateLimitUsage,
   deleteApiKey

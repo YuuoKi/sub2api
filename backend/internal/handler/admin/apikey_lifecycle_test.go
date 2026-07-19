@@ -26,6 +26,7 @@ type lifecycleAPIKeyManagerStub struct {
 	deletedID        int64
 	deletedOwnerID   int64
 	createCalls      int
+	createPairCalls  int
 	updateCalls      int
 }
 
@@ -48,6 +49,17 @@ func (m *lifecycleAPIKeyManagerStub) Create(_ context.Context, userID int64, req
 	key := &service.APIKey{ID: m.nextID, UserID: userID, Key: "sk-new-one-time-secret", Name: req.Name, Status: service.StatusActive}
 	m.keys[key.ID] = key
 	return key, nil
+}
+
+func (m *lifecycleAPIKeyManagerStub) CreateQCanvasKeyPair(_ context.Context, userID int64, req service.CreateQCanvasKeyPairRequest) (*service.QCanvasKeyPair, error) {
+	m.createPairCalls++
+	videoGroupID, mediaGroupID := req.VideoGroupID, req.MediaGroupID
+	m.nextID++
+	video := &service.APIKey{ID: m.nextID, UserID: userID, Key: "sk-video-one-time-secret", Name: "QCanvas · video", GroupID: &videoGroupID, Status: service.StatusActive}
+	m.nextID++
+	media := &service.APIKey{ID: m.nextID, UserID: userID, Key: "sk-media-one-time-secret", Name: "QCanvas · media", GroupID: &mediaGroupID, Status: service.StatusActive}
+	m.keys[video.ID], m.keys[media.ID] = video, media
+	return &service.QCanvasKeyPair{Video: video, Media: media}, nil
 }
 
 func (m *lifecycleAPIKeyManagerStub) GetByID(_ context.Context, id int64) (*service.APIKey, error) {
@@ -225,6 +237,72 @@ func TestAdminAPIKeyCreateIdempotencyStoresAndReplaysSanitizedResponse(t *testin
 	require.NoError(t, json.Unmarshal(replay.Body.Bytes(), &replayBody))
 	require.Empty(t, replayBody.Data.Key)
 	require.Equal(t, 1, manager.createCalls)
+}
+
+func TestAdminQCanvasKeyPairCreateIdempotencyReturnsTwoSecretsOnlyOnce(t *testing.T) {
+	repo := newMemoryIdempotencyRepoStub()
+	service.SetDefaultIdempotencyCoordinator(service.NewIdempotencyCoordinator(repo, service.DefaultIdempotencyConfig()))
+	t.Cleanup(func() { service.SetDefaultIdempotencyCoordinator(nil) })
+
+	manager := newLifecycleAPIKeyManager()
+	h := &AdminAPIKeyHandler{adminService: newStubAdminService(), apiKeys: manager}
+	router := gin.New()
+	router.POST("/api/v1/admin/users/:id/qcanvas-key-pair", h.CreateQCanvasKeyPair)
+
+	call := func() *httptest.ResponseRecorder {
+		recorder := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodPost, "/api/v1/admin/users/42/qcanvas-key-pair", bytes.NewBufferString(`{"video_group_id":11,"media_group_id":22}`))
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Idempotency-Key", "qcanvas-pair-once")
+		router.ServeHTTP(recorder, request)
+		return recorder
+	}
+
+	first := call()
+	require.Equal(t, http.StatusOK, first.Code)
+	var firstBody struct {
+		Data struct {
+			Video struct {
+				Key string `json:"key"`
+			} `json:"video"`
+			Media struct {
+				Key string `json:"key"`
+			} `json:"media"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(first.Body.Bytes(), &firstBody))
+	require.NotEmpty(t, firstBody.Data.Video.Key)
+	require.NotEmpty(t, firstBody.Data.Media.Key)
+	require.NotEqual(t, firstBody.Data.Video.Key, firstBody.Data.Media.Key)
+
+	replay := call()
+	require.Equal(t, http.StatusOK, replay.Code)
+	require.Equal(t, "true", replay.Header().Get("X-Idempotency-Replayed"))
+	var replayBody struct {
+		Data struct {
+			Video struct {
+				Key string `json:"key"`
+			} `json:"video"`
+			Media struct {
+				Key string `json:"key"`
+			} `json:"media"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(replay.Body.Bytes(), &replayBody))
+	require.Empty(t, replayBody.Data.Video.Key)
+	require.Empty(t, replayBody.Data.Media.Key)
+}
+
+func TestAdminQCanvasKeyPairRejectsEqualGroupsBeforeIssuing(t *testing.T) {
+	manager := newLifecycleAPIKeyManager()
+	h := &AdminAPIKeyHandler{adminService: newStubAdminService(), apiKeys: manager}
+	router := gin.New()
+	router.POST("/api/v1/admin/users/:id/qcanvas-key-pair", h.CreateQCanvasKeyPair)
+
+	recorder := performAPIKeyLifecycleRequest(router, http.MethodPost, "/api/v1/admin/users/42/qcanvas-key-pair", `{"video_group_id":11,"media_group_id":11}`)
+	require.Equal(t, http.StatusBadRequest, recorder.Code)
+	require.Zero(t, manager.createPairCalls)
+	require.NotContains(t, recorder.Body.String(), "sk-")
 }
 
 func TestAdminAPIKeyListDoesNotExposeExistingSecret(t *testing.T) {

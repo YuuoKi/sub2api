@@ -174,6 +174,25 @@ type CreateAPIKeyRequest struct {
 	RateLimit7d float64 `json:"rate_limit_7d"`
 }
 
+// CreateQCanvasKeyPairRequest expresses the two logical credentials QCanvas
+// needs. The group IDs are administrator-selected routing/billing groups; the
+// video/media meanings are deliberately not inferred from group names.
+type CreateQCanvasKeyPairRequest struct {
+	VideoGroupID int64 `json:"video_group_id"`
+	MediaGroupID int64 `json:"media_group_id"`
+}
+
+// QCanvasKeyPair is returned only by the initial dual-key issuance response.
+// Both keys always belong to the same user and are persisted atomically.
+type QCanvasKeyPair struct {
+	Video *APIKey
+	Media *APIKey
+}
+
+type apiKeyPairCreator interface {
+	CreatePair(ctx context.Context, video, media *APIKey) error
+}
+
 // UpdateAPIKeyRequest 更新API Key请求
 type UpdateAPIKeyRequest struct {
 	Name        *string  `json:"name"`
@@ -439,6 +458,68 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 	s.compileAPIKeyIPRules(apiKey)
 
 	return apiKey, nil
+}
+
+// CreateQCanvasKeyPair creates the video and media credentials for one
+// existing Sub2API user in one repository transaction. This does not create a
+// second user, balance, or billing ledger.
+func (s *APIKeyService) CreateQCanvasKeyPair(ctx context.Context, userID int64, req CreateQCanvasKeyPairRequest) (*QCanvasKeyPair, error) {
+	if req.VideoGroupID <= 0 || req.MediaGroupID <= 0 {
+		return nil, infraerrors.BadRequest("QC_KEY_PAIR_GROUP_REQUIRED", "video_group_id and media_group_id must be positive")
+	}
+	if req.VideoGroupID == req.MediaGroupID {
+		return nil, infraerrors.BadRequest("QC_KEY_PAIR_GROUPS_MUST_DIFFER", "video_group_id and media_group_id must differ")
+	}
+
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("get user: %w", err)
+	}
+
+	validateGroup := func(groupID int64) error {
+		group, groupErr := s.groupRepo.GetByID(ctx, groupID)
+		if groupErr != nil {
+			return fmt.Errorf("get group: %w", groupErr)
+		}
+		if !group.IsActive() {
+			return infraerrors.BadRequest("QC_KEY_PAIR_GROUP_NOT_ACTIVE", "selected group is not active")
+		}
+		if !s.canUserBindGroup(ctx, user, group) {
+			return ErrGroupNotAllowed
+		}
+		return nil
+	}
+	if err := validateGroup(req.VideoGroupID); err != nil {
+		return nil, err
+	}
+	if err := validateGroup(req.MediaGroupID); err != nil {
+		return nil, err
+	}
+
+	videoSecret, err := s.GenerateKey()
+	if err != nil {
+		return nil, fmt.Errorf("generate video key: %w", err)
+	}
+	mediaSecret, err := s.GenerateKey()
+	if err != nil {
+		return nil, fmt.Errorf("generate media key: %w", err)
+	}
+	video := &APIKey{UserID: userID, Key: videoSecret, Name: "QCanvas · video", GroupID: &req.VideoGroupID, Status: StatusActive}
+	media := &APIKey{UserID: userID, Key: mediaSecret, Name: "QCanvas · media", GroupID: &req.MediaGroupID, Status: StatusActive}
+
+	pairCreator, ok := s.apiKeyRepo.(apiKeyPairCreator)
+	if !ok {
+		return nil, fmt.Errorf("create QCanvas key pair: repository does not support atomic pair creation")
+	}
+	if err := pairCreator.CreatePair(ctx, video, media); err != nil {
+		return nil, fmt.Errorf("create QCanvas key pair: %w", err)
+	}
+
+	s.InvalidateAuthCacheByKey(ctx, video.Key)
+	s.InvalidateAuthCacheByKey(ctx, media.Key)
+	s.compileAPIKeyIPRules(video)
+	s.compileAPIKeyIPRules(media)
+	return &QCanvasKeyPair{Video: video, Media: media}, nil
 }
 
 // List 获取用户的API Key列表

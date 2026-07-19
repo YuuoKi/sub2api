@@ -98,6 +98,9 @@
                         <Icon name="key" size="sm" />
                         开卡
                       </button>
+                      <button class="btn btn-sm btn-outline" type="button" data-test="qcanvas-key-pair" @click="openQCanvasKeyPair(user)">
+                        QCanvas 双 Key
+                      </button>
                       <button class="btn btn-sm btn-outline" type="button" @click="toggleExpand(user)">
                         {{ expandedUserId === user.id ? '收起' : '查看卡片' }}
                       </button>
@@ -316,6 +319,52 @@
                 {{ copied ? '已复制' : '复制 Key' }}
               </button>
               <button class="btn btn-outline" type="button" data-test="issue-card-done" @click="closeIssueModal">完成</button>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <div v-if="qcanvasPairModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="closeQCanvasKeyPairModal">
+        <div class="w-full max-w-md rounded-lg border border-gray-200 bg-white p-6 shadow-xl dark:border-dark-700 dark:bg-dark-800">
+          <template v-if="!issuedQCanvasPair">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">为 {{ staffDisplayName(issueTarget?.username, issueTarget?.email) }} 开通 QCanvas 双 Key</h2>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">两张卡归属同一成员、同一余额与总账单；实际路由组由管理员明确选择。</p>
+            <form class="mt-5 space-y-4" data-test="qcanvas-key-pair-form" @submit.prevent="issueQCanvasKeyPair">
+              <div>
+                <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">视频 Key 路由组</label>
+                <select v-model.number="qcanvasPairForm.videoGroupId" class="input" data-test="qcanvas-video-group" required>
+                  <option :value="0" disabled>选择视频实际使用的组</option>
+                  <option v-for="group in eligibleGroups" :key="group.id" :value="group.id">{{ group.name }}</option>
+                </select>
+              </div>
+              <div>
+                <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">LLM / 图片 Key 路由组</label>
+                <select v-model.number="qcanvasPairForm.mediaGroupId" class="input" data-test="qcanvas-media-group" required>
+                  <option :value="0" disabled>选择 LLM / 图片实际使用的组</option>
+                  <option v-for="group in eligibleGroups" :key="group.id" :value="group.id">{{ group.name }}</option>
+                </select>
+              </div>
+              <p v-if="eligibleGroups.length < 2 && !groupsLoading" class="text-xs text-red-600">双 Key 必须选择两个不同的可用组。</p>
+              <div class="flex justify-end gap-2 pt-2">
+                <button class="btn btn-outline" type="button" @click="closeQCanvasKeyPairModal">取消</button>
+                <button class="btn btn-primary" type="submit" :disabled="issuing || groupsLoading || !canIssueQCanvasPair">
+                  <Icon name="key" size="sm" />
+                  原子开通双 Key
+                </button>
+              </div>
+            </form>
+          </template>
+          <template v-else>
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">QCanvas 双 Key 已开通</h2>
+            <p v-if="issuedQCanvasPair.video.key && issuedQCanvasPair.media.key" class="mt-1 text-xs text-amber-600 dark:text-amber-300">两把完整 Key 只显示这一次，请立刻复制并交给 QCanvas 注册页。</p>
+            <p v-else class="mt-1 text-xs text-amber-600 dark:text-amber-300">该请求已重放，明文 Key 不再返回；请不要把重试当作重新开卡。</p>
+            <div v-if="issuedQCanvasPair.video.key && issuedQCanvasPair.media.key" class="mt-4 space-y-3">
+              <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-dark-700 dark:bg-dark-900"><div class="text-xs text-gray-500">视频 Key · {{ selectedGroupName(qcanvasPairForm.videoGroupId) }}</div><div class="mt-1 break-all font-mono text-sm text-gray-900 dark:text-white">{{ issuedQCanvasPair.video.key }}</div></div>
+              <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-dark-700 dark:bg-dark-900"><div class="text-xs text-gray-500">LLM / 图片 Key · {{ selectedGroupName(qcanvasPairForm.mediaGroupId) }}</div><div class="mt-1 break-all font-mono text-sm text-gray-900 dark:text-white">{{ issuedQCanvasPair.media.key }}</div></div>
+            </div>
+            <div class="mt-4 flex justify-end gap-2">
+              <button v-if="issuedQCanvasPair.video.key && issuedQCanvasPair.media.key" class="btn btn-primary" type="button" @click="copyIssuedQCanvasPair"><Icon name="copy" size="sm" />{{ qcanvasPairCopied ? '已复制' : '复制两把 Key' }}</button>
+              <button class="btn btn-outline" type="button" data-test="qcanvas-key-pair-done" @click="closeQCanvasKeyPairModal">完成</button>
             </div>
           </template>
         </div>
@@ -562,6 +611,12 @@ const issueTarget = ref<AdminUser | null>(null)
 const issuing = ref(false)
 const issuedKey = ref<ApiKey | null>(null)
 const copied = ref(false)
+
+type IssuedQCanvasKeyPair = { video: ApiKey; media: ApiKey }
+const qcanvasPairModalOpen = ref(false)
+const issuedQCanvasPair = ref<IssuedQCanvasKeyPair | null>(null)
+const qcanvasPairCopied = ref(false)
+const qcanvasPairForm = reactive({ videoGroupId: 0, mediaGroupId: 0 })
 const activeGroups = ref<AdminGroup[]>([])
 const groupsLoading = ref(true)
 const issueForm = reactive({ name: '', quota: 0, expiresInDays: 0, groupId: 0 })
@@ -587,6 +642,24 @@ function selectEligibleDefault() {
   }
 }
 
+function selectQCanvasPairDefaults() {
+  const ids = eligibleGroups.value.map((group) => group.id)
+  if (!ids.includes(qcanvasPairForm.videoGroupId)) qcanvasPairForm.videoGroupId = ids[0] ?? 0
+  if (!ids.includes(qcanvasPairForm.mediaGroupId) || qcanvasPairForm.mediaGroupId === qcanvasPairForm.videoGroupId) {
+    qcanvasPairForm.mediaGroupId = ids.find((id) => id !== qcanvasPairForm.videoGroupId) ?? 0
+  }
+}
+
+const canIssueQCanvasPair = computed(() => {
+  return eligibleGroups.value.some((group) => group.id === qcanvasPairForm.videoGroupId) &&
+    eligibleGroups.value.some((group) => group.id === qcanvasPairForm.mediaGroupId) &&
+    qcanvasPairForm.videoGroupId !== qcanvasPairForm.mediaGroupId
+})
+
+function selectedGroupName(groupID: number): string {
+  return eligibleGroups.value.find((group) => group.id === groupID)?.name ?? `组 #${groupID}`
+}
+
 async function loadActiveGroups() {
   groupsLoading.value = true
   try {
@@ -597,6 +670,7 @@ async function loadActiveGroups() {
   } finally {
     groupsLoading.value = false
     if (issueModalOpen.value) selectEligibleDefault()
+    if (qcanvasPairModalOpen.value) selectQCanvasPairDefaults()
   }
 }
 
@@ -611,10 +685,25 @@ function openIssueCard(user: AdminUser) {
   selectEligibleDefault()
 }
 
+function openQCanvasKeyPair(user: AdminUser) {
+  issueTarget.value = user
+  issuedQCanvasPair.value = null
+  qcanvasPairCopied.value = false
+  qcanvasPairModalOpen.value = true
+  selectQCanvasPairDefaults()
+}
+
 function closeIssueModal() {
   issueModalOpen.value = false
   issueTarget.value = null
   issuedKey.value = null
+}
+
+function closeQCanvasKeyPairModal() {
+  qcanvasPairModalOpen.value = false
+  issuedQCanvasPair.value = null
+  qcanvasPairCopied.value = false
+  issueTarget.value = null
 }
 
 async function issueCard() {
@@ -648,6 +737,27 @@ async function issueCard() {
   }
 }
 
+async function issueQCanvasKeyPair() {
+  if (!issueTarget.value || !canIssueQCanvasPair.value) {
+    appStore.showError('请为视频与 LLM / 图片选择两个不同的可用组')
+    return
+  }
+  issuing.value = true
+  try {
+    issuedQCanvasPair.value = await adminAPI.apiKeys.createQCanvasKeyPairForUser(
+      issueTarget.value.id,
+      { video_group_id: qcanvasPairForm.videoGroupId, media_group_id: qcanvasPairForm.mediaGroupId },
+      crypto.randomUUID(),
+    )
+    appStore.showSuccess('QCanvas 双 Key 开通成功')
+    if (expandedUserId.value === issueTarget.value.id) await loadUserKeys(issueTarget.value.id)
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, 'QCanvas 双 Key 开通失败'))
+  } finally {
+    issuing.value = false
+  }
+}
+
 let copyResetTimeoutId: ReturnType<typeof setTimeout> | null = null
 
 async function copyIssuedKey() {
@@ -662,6 +772,16 @@ async function copyIssuedKey() {
     }, 2000)
   } catch {
     appStore.showError('复制失败，请手动选中复制')
+  }
+}
+
+async function copyIssuedQCanvasPair() {
+  if (!issuedQCanvasPair.value?.video.key || !issuedQCanvasPair.value.media.key) return
+  try {
+    await navigator.clipboard.writeText(`video=${issuedQCanvasPair.value.video.key}\nmedia=${issuedQCanvasPair.value.media.key}`)
+    qcanvasPairCopied.value = true
+  } catch {
+    appStore.showError('复制失败，请手动复制两把 Key')
   }
 }
 

@@ -41,7 +41,42 @@ func (r *apiKeyRepository) activeQuery() *dbent.APIKeyQuery {
 }
 
 func (r *apiKeyRepository) Create(ctx context.Context, key *service.APIKey) error {
-	builder := r.client.APIKey.Create().
+	return r.createWithClient(ctx, r.client, key)
+}
+
+// CreatePair persists both QCanvas credentials in one transaction. The
+// surrounding service has already validated both groups before this mutation.
+func (r *apiKeyRepository) CreatePair(ctx context.Context, video, media *service.APIKey) error {
+	if existingTx := dbent.TxFromContext(ctx); existingTx != nil {
+		return r.createPairWithClient(ctx, existingTx.Client(), video, media)
+	}
+	tx, err := r.client.Tx(ctx)
+	if err != nil && !errors.Is(err, dbent.ErrTxStarted) {
+		return err
+	}
+	exec := r.client
+	if err == nil {
+		defer func() { _ = tx.Rollback() }()
+		exec = tx.Client()
+	}
+	if err := r.createPairWithClient(ctx, exec, video, media); err != nil {
+		return err
+	}
+	if tx != nil {
+		return tx.Commit()
+	}
+	return nil
+}
+
+func (r *apiKeyRepository) createPairWithClient(ctx context.Context, client *dbent.Client, video, media *service.APIKey) error {
+	if err := r.createWithClient(ctx, client, video); err != nil {
+		return err
+	}
+	return r.createWithClient(ctx, client, media)
+}
+
+func (r *apiKeyRepository) createWithClient(ctx context.Context, client *dbent.Client, key *service.APIKey) error {
+	builder := client.APIKey.Create().
 		SetUserID(key.UserID).
 		SetKey(key.Key).
 		SetName(key.Name).

@@ -17,9 +17,78 @@ import (
 // apiKeyManager captures the existing APIKeyService invariants needed by admin operations.
 type apiKeyManager interface {
 	Create(ctx context.Context, userID int64, req service.CreateAPIKeyRequest) (*service.APIKey, error)
+	CreateQCanvasKeyPair(ctx context.Context, userID int64, req service.CreateQCanvasKeyPairRequest) (*service.QCanvasKeyPair, error)
 	GetByID(ctx context.Context, id int64) (*service.APIKey, error)
 	Update(ctx context.Context, id, userID int64, req service.UpdateAPIKeyRequest) (*service.APIKey, error)
 	Delete(ctx context.Context, id, userID int64) error
+}
+
+type AdminCreateQCanvasKeyPairRequest struct {
+	VideoGroupID int64 `json:"video_group_id"`
+	MediaGroupID int64 `json:"media_group_id"`
+}
+
+type adminQCanvasKeyPairResponse struct {
+	Video *dto.APIKey `json:"video"`
+	Media *dto.APIKey `json:"media"`
+}
+
+// CreateQCanvasKeyPair issues the two logical QCanvas credentials for one
+// existing user. The service, not this handler, owns the atomic DB mutation.
+// POST /api/v1/admin/users/:id/qcanvas-key-pair
+func (h *AdminAPIKeyHandler) CreateQCanvasKeyPair(c *gin.Context) {
+	userID, err := parsePositiveAdminID(c.Param("id"))
+	if err != nil {
+		response.BadRequest(c, "Invalid user ID")
+		return
+	}
+	if h.apiKeys == nil {
+		response.InternalError(c, "API key service not available")
+		return
+	}
+	var req AdminCreateQCanvasKeyPairRequest
+	if err := decodeAdminAPIKeyJSON(c, &req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	if req.VideoGroupID <= 0 || req.MediaGroupID <= 0 {
+		response.BadRequest(c, "video_group_id and media_group_id must be positive")
+		return
+	}
+	if req.VideoGroupID == req.MediaGroupID {
+		response.BadRequest(c, "video_group_id and media_group_id must differ")
+		return
+	}
+	idempotencyPayload := struct {
+		UserID int64                            `json:"user_id"`
+		Body   AdminCreateQCanvasKeyPairRequest `json:"body"`
+	}{UserID: userID, Body: req}
+	executeAdminIdempotentJSONWithStoredResponseSanitizer(c, "admin.users.qcanvas_key_pair.create", idempotencyPayload, service.DefaultWriteIdempotencyTTL(), sanitizeQCanvasKeyPairForReplay, func(ctx context.Context) (any, error) {
+		pair, createErr := h.apiKeys.CreateQCanvasKeyPair(ctx, userID, service.CreateQCanvasKeyPairRequest{VideoGroupID: req.VideoGroupID, MediaGroupID: req.MediaGroupID})
+		if createErr != nil {
+			return nil, createErr
+		}
+		return &adminQCanvasKeyPairResponse{Video: dto.APIKeyFromService(pair.Video), Media: dto.APIKeyFromService(pair.Media)}, nil
+	})
+}
+
+func sanitizeQCanvasKeyPairForReplay(data any) any {
+	pair, ok := data.(*adminQCanvasKeyPairResponse)
+	if !ok || pair == nil {
+		return data
+	}
+	sanitized := *pair
+	if pair.Video != nil {
+		video := *pair.Video
+		video.Key = ""
+		sanitized.Video = &video
+	}
+	if pair.Media != nil {
+		media := *pair.Media
+		media.Key = ""
+		sanitized.Media = &media
+	}
+	return &sanitized
 }
 
 // AdminAPIKeyHandler handles admin API key management.

@@ -4,6 +4,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -52,6 +53,31 @@ func (s *APIKeyRepoSuite) TestCreate() {
 	got, err := s.repo.GetByID(s.ctx, key.ID)
 	s.Require().NoError(err, "GetByID")
 	s.Require().Equal("sk-create-test", got.Key)
+}
+
+func TestAPIKeyRepositoryCreatePairRollsBackFirstInsertWhenSecondFails(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewAPIKeyRepository(client, integrationDB).(*apiKeyRepository)
+	user := mustCreateUser(t, client, &service.User{Email: fmt.Sprintf("pair-rollback-%d@test.local", time.Now().UnixNano())})
+	existingSecret := fmt.Sprintf("sk-existing-pair-%d", user.ID)
+	firstSecret := fmt.Sprintf("sk-first-pair-%d", user.ID)
+	existing := mustCreateApiKey(t, client, &service.APIKey{UserID: user.ID, Key: existingSecret, Name: "existing"})
+	t.Cleanup(func() {
+		_, _ = integrationDB.Exec(`DELETE FROM api_keys WHERE user_id = $1`, user.ID)
+		_, _ = integrationDB.Exec(`DELETE FROM users WHERE id = $1`, user.ID)
+	})
+
+	video := &service.APIKey{UserID: user.ID, Key: firstSecret, Name: "QCanvas · video", Status: service.StatusActive}
+	media := &service.APIKey{UserID: user.ID, Key: existingSecret, Name: "QCanvas · media", Status: service.StatusActive}
+	err := repo.CreatePair(ctx, video, media)
+	require.Error(t, err)
+
+	var firstCount, existingCount int
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT COUNT(*) FROM api_keys WHERE key = $1 AND deleted_at IS NULL`, firstSecret).Scan(&firstCount))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT COUNT(*) FROM api_keys WHERE id = $1 AND deleted_at IS NULL`, existing.ID).Scan(&existingCount))
+	require.Zero(t, firstCount, "the first insert must be rolled back when the second insert fails")
+	require.Equal(t, 1, existingCount, "the pre-existing conflicting key must remain unchanged")
 }
 
 func (s *APIKeyRepoSuite) TestGetByID_NotFound() {

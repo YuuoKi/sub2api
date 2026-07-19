@@ -1106,10 +1106,12 @@ func (s *UsageLogRepoSuite) TestGetBatchUserUsageStats() {
 	user1 := mustCreateUser(s.T(), s.client, &service.User{Email: "batch1@test.com"})
 	user2 := mustCreateUser(s.T(), s.client, &service.User{Email: "batch2@test.com"})
 	apiKey1 := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: user1.ID, Key: "sk-batch1", Name: "k"})
+	apiKey1Media := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: user1.ID, Key: "sk-batch1-media", Name: "QCanvas · media"})
 	apiKey2 := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: user2.ID, Key: "sk-batch2", Name: "k"})
 	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-batch"})
 
 	s.createUsageLog(user1, apiKey1, account, 10, 20, 0.5, time.Now())
+	s.createUsageLog(user1, apiKey1Media, account, 5, 10, 0.7, time.Now())
 	s.createUsageLog(user2, apiKey2, account, 15, 25, 0.6, time.Now())
 
 	stats, err := s.repo.GetBatchUserUsageStats(s.ctx, []int64{user1.ID, user2.ID}, time.Time{}, time.Time{})
@@ -1117,6 +1119,7 @@ func (s *UsageLogRepoSuite) TestGetBatchUserUsageStats() {
 	s.Require().Len(stats, 2)
 	s.Require().NotNil(stats[user1.ID])
 	s.Require().NotNil(stats[user2.ID])
+	s.Require().InDelta(1.2, stats[user1.ID].TotalActualCost, 0.000001, "two keys owned by one user must aggregate into one total")
 }
 
 func (s *UsageLogRepoSuite) TestGetBatchUserUsageStats_Empty() {

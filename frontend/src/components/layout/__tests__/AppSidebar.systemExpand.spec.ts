@@ -120,23 +120,20 @@ describe('AppSidebar System expand when collapsed', () => {
     await flushPromises()
 
     expect(appStore.sidebarCollapsed).toBe(true)
-    expect(wrapper.text()).not.toContain('运行与配置')
 
     const systemButton = wrapper
       .findAll('button')
       .find((btn) => btn.text().includes('系统'))
     expect(systemButton).toBeTruthy()
     expect(systemButton!.attributes('aria-controls')).toBeTruthy()
+    const panelId = systemButton!.attributes('aria-controls')!
+    expect(wrapper.find(`#${panelId}`).exists()).toBe(false)
 
     await systemButton!.trigger('click')
     await nextTick()
     await flushPromises()
 
     expect(appStore.sidebarCollapsed).toBe(false)
-    expect(wrapper.text()).toContain('运行与配置')
-    expect(wrapper.text()).toContain('高级与历史')
-
-    const panelId = systemButton!.attributes('aria-controls')!
     expect(wrapper.find(`#${panelId}`).exists()).toBe(true)
 
     wrapper.unmount()
@@ -158,12 +155,13 @@ describe('AppSidebar System expand when collapsed', () => {
       .findAll('button')
       .find((btn) => btn.text().includes('系统'))
     expect(systemButton).toBeTruthy()
+    const panelId = systemButton!.attributes('aria-controls')!
 
     await systemButton!.trigger('click')
     await nextTick()
 
     expect(appStore.mobileOpen).toBe(true)
-    expect(wrapper.text()).toContain('运行与配置')
+    expect(wrapper.find(`#${panelId}`).exists()).toBe(true)
 
     wrapper.unmount()
   })

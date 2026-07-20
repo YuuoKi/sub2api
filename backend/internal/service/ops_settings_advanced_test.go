@@ -124,6 +124,31 @@ func TestGetOpenAIQuotaAutoPauseSettings_ReadsDefaultsFromOpsAdvancedSettings(t 
 	}
 }
 
+func TestLANAdminIgnoresAndClearsOpenAIQuotaAutoPauseThresholds(t *testing.T) {
+	repo := newRuntimeSettingRepoStub()
+	repo.values[SettingKeyOpsAdvancedSettings] = `{"openai_account_quota_auto_pause":{"default_threshold_5h":0.95,"default_threshold_7d":0.9},"auto_refresh_interval_seconds":30}`
+	settingSvc := NewSettingService(repo, &config.Config{DeploymentProfile: config.DeploymentProfileLANAdmin})
+
+	settings := settingSvc.WarmOpenAIQuotaAutoPauseSettings(context.Background())
+	if settings.DefaultThreshold5h != 0 || settings.DefaultThreshold7d != 0 {
+		t.Fatalf("LAN admin warm settings = %+v, want zero thresholds", settings)
+	}
+
+	opsSvc := &OpsService{settingRepo: repo, cfg: &config.Config{DeploymentProfile: config.DeploymentProfileLANAdmin}}
+	cfg := defaultOpsAdvancedSettings()
+	cfg.OpenAIAccountQuotaAutoPause = OpsOpenAIAccountQuotaAutoPauseSettings{
+		DefaultThreshold5h: 0.8,
+		DefaultThreshold7d: 0.7,
+	}
+	updated, err := opsSvc.UpdateOpsAdvancedSettings(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("UpdateOpsAdvancedSettings() error = %v", err)
+	}
+	if updated.OpenAIAccountQuotaAutoPause.DefaultThreshold5h != 0 || updated.OpenAIAccountQuotaAutoPause.DefaultThreshold7d != 0 {
+		t.Fatalf("LAN admin persisted thresholds = %+v, want zeroes", updated.OpenAIAccountQuotaAutoPause)
+	}
+}
+
 // Hot-path invariant: a Get with cold cache must return immediately (zero defaults)
 // rather than blocking on the DB. The async refresher will populate the cache for
 // subsequent calls.

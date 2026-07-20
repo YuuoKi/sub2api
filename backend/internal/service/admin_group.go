@@ -143,11 +143,24 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 	if subscriptionType == "" {
 		subscriptionType = SubscriptionTypeStandard
 	}
+	lanAdminProfile := s.settingService != nil && s.settingService.IsLANAdminProfile()
+	if lanAdminProfile && subscriptionType == SubscriptionTypeSubscription {
+		return nil, infraerrors.BadRequest("LAN_ADMIN_SUBSCRIPTION_GROUP_DISABLED", "subscription groups are disabled in lan_admin")
+	}
 
 	// 限额字段：nil/负数 表示"无限制"，0 表示"不允许用量"，正数表示具体限额
 	dailyLimit := normalizeLimit(input.DailyLimitUSD)
 	weeklyLimit := normalizeLimit(input.WeeklyLimitUSD)
 	monthlyLimit := normalizeLimit(input.MonthlyLimitUSD)
+	if lanAdminProfile {
+		dailyLimit = nil
+		weeklyLimit = nil
+		monthlyLimit = nil
+	}
+	rpmLimit := input.RPMLimit
+	if lanAdminProfile {
+		rpmLimit = 0
+	}
 
 	// 图片价格：负数表示清除（使用默认价格），0 保留（表示免费）
 	imagePrice1K := normalizePrice(input.ImagePrice1K)
@@ -299,7 +312,7 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		DefaultMappedModel:              input.DefaultMappedModel,
 		MessagesDispatchModelConfig:     normalizeOpenAIMessagesDispatchModelConfig(input.MessagesDispatchModelConfig),
 		ModelsListConfig:                normalizeGroupModelsListConfig(input.ModelsListConfig),
-		RPMLimit:                        input.RPMLimit,
+		RPMLimit:                        rpmLimit,
 	}
 	sanitizeGroupMessagesDispatchFields(group)
 	if err := s.groupRepo.Create(ctx, group); err != nil {
@@ -428,6 +441,10 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	if err != nil {
 		return nil, err
 	}
+	lanAdminProfile := s.settingService != nil && s.settingService.IsLANAdminProfile()
+	if lanAdminProfile && (group.SubscriptionType == SubscriptionTypeSubscription || input.SubscriptionType == SubscriptionTypeSubscription) {
+		return nil, infraerrors.BadRequest("LAN_ADMIN_SUBSCRIPTION_GROUP_DISABLED", "subscription groups are disabled in lan_admin")
+	}
 
 	if input.Name != "" {
 		group.Name = input.Name
@@ -460,6 +477,11 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	group.DailyLimitUSD = normalizeLimit(input.DailyLimitUSD)
 	group.WeeklyLimitUSD = normalizeLimit(input.WeeklyLimitUSD)
 	group.MonthlyLimitUSD = normalizeLimit(input.MonthlyLimitUSD)
+	if lanAdminProfile {
+		group.DailyLimitUSD = nil
+		group.WeeklyLimitUSD = nil
+		group.MonthlyLimitUSD = nil
+	}
 	// 图片生成计费配置：负数表示清除（使用默认价格）
 	if input.AllowImageGeneration != nil {
 		group.AllowImageGeneration = *input.AllowImageGeneration
@@ -610,7 +632,9 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	if input.ModelsListConfig != nil {
 		group.ModelsListConfig = normalizeGroupModelsListConfig(*input.ModelsListConfig)
 	}
-	if input.RPMLimit != nil {
+	if lanAdminProfile {
+		group.RPMLimit = 0
+	} else if input.RPMLimit != nil {
 		group.RPMLimit = *input.RPMLimit
 	}
 	sanitizeGroupMessagesDispatchFields(group)

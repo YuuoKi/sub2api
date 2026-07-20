@@ -41,9 +41,9 @@ describe('AppSidebar role-aware IA wiring', () => {
   it('does not keep flat management paths at admin top level definitions', () => {
     expect(navModuleSource).toContain("ADMIN_SYSTEM_PATH = '/admin/system'")
     expect(navModuleSource).toContain('path: ADMIN_SYSTEM_PATH')
-    expect(navModuleSource).toContain('运行与配置')
-    expect(navModuleSource).toContain('高级与历史')
-    expect(navModuleSource).toMatch(/label:\s*'总览'/)
+    expect(navModuleSource).toContain('上游账号、模型和通道')
+    expect(navModuleSource).toContain('调用、任务与资产记录')
+    expect(navModuleSource).toMatch(/label:\s*'总览与成本'/)
     expect(navModuleSource).toMatch(/label:\s*'我的工作台'/)
   })
 

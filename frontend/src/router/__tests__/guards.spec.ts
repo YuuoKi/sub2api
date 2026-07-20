@@ -4,6 +4,7 @@ import {
   resolveCompletedSetupRedirectPath,
   resolvePostAuthRedirect,
 } from '@/router/setupRedirect'
+import { isLanAdminWebRouteAllowed } from '@/router'
 
 // Mock 导航加载状态
 vi.mock('@/composables/useNavigationLoading', () => {
@@ -58,6 +59,7 @@ interface MockAuthState {
   backendModeEnabled: boolean
   hasPendingAuthSession: boolean
   setupNeedsSetup?: boolean
+  mustChangePassword?: boolean
 }
 
 interface SimulateGuardHooks {
@@ -83,6 +85,15 @@ function simulateGuard(
     return resolveCompletedSetupRedirectPath(authState.isAuthenticated, authState.isAdmin)
   }
 
+  if (
+    authState.backendModeEnabled &&
+    !isLanAdminWebRouteAllowed(toPath, authState.isAuthenticated, authState.isAdmin)
+  ) {
+    return authState.isAuthenticated && authState.isAdmin
+      ? '/admin/console/overview'
+      : '/login'
+  }
+
   // 不需要认证的路由
   if (!requiresAuth) {
     if (
@@ -94,30 +105,23 @@ function simulateGuard(
       }
       return resolvePostAuthRedirect(toMeta.redirect, authState.isAdmin)
     }
-    if (authState.backendModeEnabled && !authState.isAuthenticated) {
-      const allowed = ['/login', '/key-usage', '/setup', '/payment/result']
-      const callbackPaths = [
-        '/auth/callback',
-        '/auth/linuxdo/callback',
-        '/auth/oidc/callback',
-        '/auth/wechat/callback',
-        '/auth/wechat/payment/callback',
-      ]
-      const pendingAuthPaths = ['/register', '/email-verify']
-      const isAllowed =
-        allowed.some((path) => toPath === path || toPath.startsWith(path)) ||
-        callbackPaths.includes(toPath) ||
-        (authState.hasPendingAuthSession && pendingAuthPaths.includes(toPath))
-      if (!isAllowed) {
-        return '/login'
-      }
-    }
     return null // 允许通过
   }
 
   // 需要认证但未登录
   if (!authState.isAuthenticated) {
     return '/login'
+  }
+
+  if (authState.mustChangePassword && toPath !== '/change-temporary-password') {
+    return '/change-temporary-password'
+  }
+  if (!authState.mustChangePassword && toPath === '/change-temporary-password') {
+    return authState.backendModeEnabled && authState.isAdmin
+      ? '/admin/console/overview'
+      : authState.isAdmin
+        ? '/admin/dashboard'
+        : '/dashboard'
   }
 
   // 需要管理员但不是管理员 — early return before adminCompliance / overview fetches
@@ -141,32 +145,6 @@ function simulateGuard(
     ]
     if (restrictedPaths.some((path) => toPath.startsWith(path))) {
       return authState.isAdmin ? '/admin/dashboard' : '/dashboard'
-    }
-  }
-
-  // Backend mode: admin gets full access, non-admin blocked
-  if (authState.backendModeEnabled) {
-    if (authState.isAuthenticated && authState.isAdmin) {
-      if (toPath === '/admin/console/overview') {
-        hooks?.onAdminOverviewFetch?.()
-      }
-      return null
-    }
-    const allowed = ['/login', '/key-usage', '/setup', '/payment/result']
-    const callbackPaths = [
-      '/auth/callback',
-      '/auth/linuxdo/callback',
-      '/auth/oidc/callback',
-      '/auth/wechat/callback',
-      '/auth/wechat/payment/callback',
-    ]
-    const pendingAuthPaths = ['/register', '/email-verify']
-    const isAllowed =
-      allowed.some((path) => toPath === path || toPath.startsWith(path)) ||
-      callbackPaths.includes(toPath) ||
-      (authState.hasPendingAuthSession && pendingAuthPaths.includes(toPath))
-    if (!isAllowed) {
-      return '/login'
     }
   }
 
@@ -443,7 +421,7 @@ describe('路由守卫逻辑', () => {
       expect(redirect).toBeNull()
     })
 
-    it('unauthenticated: /key-usage is allowed', () => {
+    it('unauthenticated: /key-usage is blocked', () => {
       const authState: MockAuthState = {
         isAuthenticated: false,
         isAdmin: false,
@@ -452,7 +430,7 @@ describe('路由守卫逻辑', () => {
         hasPendingAuthSession: false,
       }
       const redirect = simulateGuard('/key-usage', { requiresAuth: false }, authState)
-      expect(redirect).toBeNull()
+      expect(redirect).toBe('/login')
     })
 
     it('unauthenticated: /setup is allowed', () => {
@@ -493,7 +471,7 @@ describe('路由守卫逻辑', () => {
       expect(redirect).toBe('/admin/console/overview')
     })
 
-    it('admin: /admin/dashboard is allowed', () => {
+    it('admin: legacy /admin/dashboard redirects to the unified overview', () => {
       const authState: MockAuthState = {
         isAuthenticated: true,
         isAdmin: true,
@@ -502,7 +480,7 @@ describe('路由守卫逻辑', () => {
         hasPendingAuthSession: false,
       }
       const redirect = simulateGuard('/admin/dashboard', { requiresAdmin: true }, authState)
-      expect(redirect).toBeNull()
+      expect(redirect).toBe('/admin/console/overview')
     })
 
     it('admin: /login redirects to the unified console overview', () => {
@@ -515,6 +493,35 @@ describe('路由守卫逻辑', () => {
       }
       const redirect = simulateGuard('/login', { requiresAuth: false }, authState)
       expect(redirect).toBe('/admin/console/overview')
+    })
+
+    it('admin with a temporary password is forced through the password-change route', () => {
+      const authState: MockAuthState = {
+        isAuthenticated: true,
+        isAdmin: true,
+        isSimpleMode: false,
+        backendModeEnabled: true,
+        hasPendingAuthSession: false,
+        mustChangePassword: true,
+      }
+
+      expect(simulateGuard('/admin/console/overview', { requiresAdmin: true }, authState))
+        .toBe('/change-temporary-password')
+      expect(simulateGuard('/change-temporary-password', {}, authState)).toBeNull()
+    })
+
+    it('admin with a completed password change cannot loop back to the temporary-password route', () => {
+      const authState: MockAuthState = {
+        isAuthenticated: true,
+        isAdmin: true,
+        isSimpleMode: false,
+        backendModeEnabled: true,
+        hasPendingAuthSession: false,
+        mustChangePassword: false,
+      }
+
+      expect(simulateGuard('/change-temporary-password', {}, authState))
+        .toBe('/admin/console/overview')
     })
 
     it('non-admin authenticated: /dashboard redirects to /login', () => {
@@ -541,7 +548,7 @@ describe('路由守卫逻辑', () => {
       expect(redirect).toBeNull()
     })
 
-    it('non-admin authenticated: /key-usage is allowed', () => {
+    it('non-admin authenticated: /key-usage is blocked', () => {
       const authState: MockAuthState = {
         isAuthenticated: true,
         isAdmin: false,
@@ -550,10 +557,10 @@ describe('路由守卫逻辑', () => {
         hasPendingAuthSession: false,
       }
       const redirect = simulateGuard('/key-usage', { requiresAuth: false }, authState)
-      expect(redirect).toBeNull()
+      expect(redirect).toBe('/login')
     })
 
-    it('unauthenticated: callback routes are allowed', () => {
+    it('unauthenticated: callback routes are blocked', () => {
       const authState: MockAuthState = {
         isAuthenticated: false,
         isAdmin: false,
@@ -562,10 +569,10 @@ describe('路由守卫逻辑', () => {
         hasPendingAuthSession: false,
       }
       const redirect = simulateGuard('/auth/wechat/callback', { requiresAuth: false }, authState)
-      expect(redirect).toBeNull()
+      expect(redirect).toBe('/login')
     })
 
-    it('unauthenticated: WeChat payment callback route is allowed', () => {
+    it('unauthenticated: WeChat payment callback route is blocked', () => {
       const authState: MockAuthState = {
         isAuthenticated: false,
         isAdmin: false,
@@ -574,10 +581,10 @@ describe('路由守卫逻辑', () => {
         hasPendingAuthSession: false,
       }
       const redirect = simulateGuard('/auth/wechat/payment/callback', { requiresAuth: false }, authState)
-      expect(redirect).toBeNull()
+      expect(redirect).toBe('/login')
     })
 
-    it('unauthenticated: /payment/result is allowed', () => {
+    it('unauthenticated: /payment/result is blocked', () => {
       const authState: MockAuthState = {
         isAuthenticated: false,
         isAdmin: false,
@@ -586,10 +593,10 @@ describe('路由守卫逻辑', () => {
         hasPendingAuthSession: false,
       }
       const redirect = simulateGuard('/payment/result', { requiresAuth: false }, authState)
-      expect(redirect).toBeNull()
+      expect(redirect).toBe('/login')
     })
 
-    it('unauthenticated: /register is allowed when a pending auth session exists', () => {
+    it('unauthenticated: /register stays blocked even with a pending auth session', () => {
       const authState: MockAuthState = {
         isAuthenticated: false,
         isAdmin: false,
@@ -598,7 +605,7 @@ describe('路由守卫逻辑', () => {
         hasPendingAuthSession: true,
       }
       const redirect = simulateGuard('/register', { requiresAuth: false }, authState)
-      expect(redirect).toBeNull()
+      expect(redirect).toBe('/login')
     })
 
     it('unauthenticated: /email-verify is blocked without a pending auth session', () => {

@@ -3,9 +3,9 @@
     <div class="space-y-6">
       <div class="flex flex-col gap-3 border-b border-gray-200 pb-4 dark:border-dark-700 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 class="ui-heading">成员与开卡</h1>
+          <h1 class="ui-heading">服务身份与 API 卡片</h1>
           <p class="ui-subheading mt-1">
-            员工和外部工具（n8n、脚本、批量出图器）都在这里建账号、开卡。卡强绑定到成员：谁调了什么、花了多少钱，互不污染。
+            为 QCanvas、n8n、脚本和批量生产流程创建不可登录的服务身份，再签发独立 API 卡片。
           </p>
         </div>
         <div class="flex flex-wrap gap-2">
@@ -13,13 +13,9 @@
             <Icon name="refresh" size="sm" :class="{ 'animate-spin': loading }" />
             刷新
           </button>
-          <button class="btn btn-outline" type="button" @click="openCreateStaff('tool')">
+          <button class="btn btn-primary" type="button" data-test="create-service-identity" @click="openCreateServiceIdentity">
             <Icon name="key" size="sm" />
-            新增工具
-          </button>
-          <button class="btn btn-primary" type="button" @click="openCreateStaff('human')">
-            <Icon name="userPlus" size="sm" />
-            新增员工
+            新增服务身份
           </button>
         </div>
       </div>
@@ -33,20 +29,8 @@
               placeholder="按姓名或邮箱搜索"
               @keyup.enter="loadStaff"
             />
-            <div class="flex rounded-lg border border-gray-200 p-0.5 text-xs dark:border-dark-700">
-              <button
-                v-for="opt in memberFilters"
-                :key="opt.value"
-                type="button"
-                class="rounded-md px-2.5 py-1 font-medium transition-colors"
-                :class="memberFilter === opt.value ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700'"
-                @click="memberFilter = opt.value"
-              >
-                {{ opt.label }}
-              </button>
-            </div>
           </div>
-          <div class="text-xs text-gray-500 dark:text-gray-400">共 {{ filteredUsers.length }} 名成员（含管理员）</div>
+          <div class="text-xs text-gray-500 dark:text-gray-400">共 {{ filteredUsers.length }} 个服务身份</div>
         </div>
         <div class="overflow-x-auto">
           <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-dark-700">
@@ -98,9 +82,9 @@
                         <Icon name="key" size="sm" />
                         开卡
                       </button>
-                      <button class="btn btn-sm btn-outline" type="button" data-test="qcanvas-key-pair" @click="openQCanvasKeyPair(user)">
-                        QCanvas 双 Key
-                      </button>
+					  <button class="btn btn-sm btn-outline" type="button" data-test="qcanvas-key-pair" @click="openQCanvasKeyPair(user)">
+						QCanvas 双 Key
+					  </button>
                       <button class="btn btn-sm btn-outline" type="button" @click="toggleExpand(user)">
                         {{ expandedUserId === user.id ? '收起' : '查看卡片' }}
                       </button>
@@ -180,7 +164,7 @@
               </template>
               <tr v-if="!loading && !filteredUsers.length">
                 <td colspan="6" class="px-5 py-10 text-center text-sm text-gray-500 dark:text-gray-400">
-                  {{ memberFilter === 'tool' ? '还没有工具账号。点右上角「新增工具」给 n8n、脚本等建档。' : '还没有成员。点右上角「新增员工」开始建档。' }}
+                  还没有服务身份。点右上角「新增服务身份」为内部系统建档。
                 </td>
               </tr>
             </tbody>
@@ -188,48 +172,25 @@
         </div>
       </section>
 
-      <!-- 新增成员弹窗 -->
+      <!-- 新增服务身份弹窗 -->
       <div v-if="staffModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="staffModalOpen = false">
         <div class="w-full max-w-md rounded-lg border border-gray-200 bg-white p-6 shadow-xl dark:border-dark-700 dark:bg-dark-800">
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ staffForm.memberType === 'tool' ? '新增工具' : '新增员工' }}</h2>
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-white">新增服务身份</h2>
           <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            {{ staffForm.memberType === 'tool'
-              ? '给 n8n、剪辑脚本、批量出图器等工具建一个独立账号，消费不会算到任何人头上。'
-              : '建好档案后系统会生成一次性临时密码，再给员工开卡。' }}
+            服务身份不能登录 Web，只用于持有 API 卡片和隔离调用、成本与资产归属。
           </p>
-          <form class="mt-5 space-y-4" @submit.prevent="createStaff">
+          <form class="mt-5 space-y-4" data-test="service-identity-form" @submit.prevent="createStaff">
             <div>
-              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">类型</label>
-              <div class="flex rounded-lg border border-gray-200 p-0.5 text-sm dark:border-dark-700">
-                <button
-                  type="button"
-                  class="flex-1 rounded-md px-3 py-1.5 font-medium transition-colors"
-                  :class="staffForm.memberType === 'human' ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700'"
-                  @click="staffForm.memberType = 'human'"
-                >
-                  员工
-                </button>
-                <button
-                  type="button"
-                  class="flex-1 rounded-md px-3 py-1.5 font-medium transition-colors"
-                  :class="staffForm.memberType === 'tool' ? 'bg-sky-600 text-white' : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700'"
-                  @click="staffForm.memberType = 'tool'"
-                >
-                  外部工具
-                </button>
-              </div>
+              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">服务名称</label>
+              <input v-model="staffForm.username" class="input" maxlength="50" placeholder="例如：QCanvas 批量出图" />
             </div>
             <div>
-              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">{{ staffForm.memberType === 'tool' ? '工具名称' : '姓名' }}</label>
-              <input v-model="staffForm.username" class="input" maxlength="50" :placeholder="staffForm.memberType === 'tool' ? '例如：n8n 自动出图' : '例如：张三'" />
-            </div>
-            <div>
-              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">登录邮箱</label>
-              <input v-model="staffForm.email" class="input" type="email" required :placeholder="staffForm.memberType === 'tool' ? 'n8n@wujie.local（占位邮箱即可）' : 'zhangsan@company.com'" />
+              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">身份邮箱</label>
+              <input v-model="staffForm.email" class="input" data-test="service-identity-email" type="email" required placeholder="qcanvas@wujie.local（仅作唯一标识）" />
             </div>
             <div>
               <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">备注（可选）</label>
-              <input v-model="staffForm.notes" class="input" maxlength="200" :placeholder="staffForm.memberType === 'tool' ? '例如：夜间批量分镜流程' : '例如：短剧组剪辑'" />
+              <input v-model="staffForm.notes" class="input" maxlength="200" placeholder="例如：夜间批量分镜流程" />
             </div>
             <div class="flex justify-end gap-2 pt-2">
               <button class="btn btn-outline" type="button" @click="staffModalOpen = false">取消</button>
@@ -241,13 +202,6 @@
           </form>
         </div>
       </div>
-
-      <InitialCredentialDialog
-        :show="credentialDialogOpen"
-        :email="createdStaffEmail"
-        :credential="createdStaffCredential"
-        @close="closeCredentialDialog"
-      />
 
       <!-- 开卡弹窗 -->
       <div v-if="issueModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="closeIssueModal">
@@ -262,17 +216,7 @@
                 <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">卡名</label>
                 <input v-model="issueForm.name" class="input" maxlength="100" required placeholder="例如：张三-生产卡" />
               </div>
-              <div class="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">额度（美元）</label>
-                  <input v-model.number="issueForm.quota" class="input" type="number" min="0" step="0.01" placeholder="0 = 不限额" />
-                  <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">约 {{ formatMoney(issueForm.quota, usdCnyRate) }}；实际额度按 USD 存储</p>
-                </div>
-                <div>
-                  <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">有效期（天）</label>
-                  <input v-model.number="issueForm.expiresInDays" class="input" type="number" min="0" step="1" placeholder="0 = 长期有效" />
-                </div>
-              </div>
+              <p class="text-xs text-gray-500 dark:text-gray-400">本地额度、频率窗口和有效期固定为不限，调用边界由上游账号现有限额决定。</p>
               <div>
                 <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">计费与路由组</label>
                 <select
@@ -324,51 +268,51 @@
         </div>
       </div>
 
-      <div v-if="qcanvasPairModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="closeQCanvasKeyPairModal">
-        <div class="w-full max-w-md rounded-lg border border-gray-200 bg-white p-6 shadow-xl dark:border-dark-700 dark:bg-dark-800">
-          <template v-if="!issuedQCanvasPair">
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">为 {{ staffDisplayName(issueTarget?.username, issueTarget?.email) }} 开通 QCanvas 双 Key</h2>
-            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">两张卡归属同一成员、同一余额与总账单；实际路由组由管理员明确选择。</p>
-            <form class="mt-5 space-y-4" data-test="qcanvas-key-pair-form" @submit.prevent="issueQCanvasKeyPair">
-              <div>
-                <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">视频 Key 路由组</label>
-                <select v-model.number="qcanvasPairForm.videoGroupId" class="input" data-test="qcanvas-video-group" required>
-                  <option :value="0" disabled>选择视频实际使用的组</option>
-                  <option v-for="group in eligibleGroups" :key="group.id" :value="group.id">{{ group.name }}</option>
-                </select>
-              </div>
-              <div>
-                <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">LLM / 图片 Key 路由组</label>
-                <select v-model.number="qcanvasPairForm.mediaGroupId" class="input" data-test="qcanvas-media-group" required>
-                  <option :value="0" disabled>选择 LLM / 图片实际使用的组</option>
-                  <option v-for="group in eligibleGroups" :key="group.id" :value="group.id">{{ group.name }}</option>
-                </select>
-              </div>
-              <p v-if="eligibleGroups.length < 2 && !groupsLoading" class="text-xs text-red-600">双 Key 必须选择两个不同的可用组。</p>
-              <div class="flex justify-end gap-2 pt-2">
-                <button class="btn btn-outline" type="button" @click="closeQCanvasKeyPairModal">取消</button>
-                <button class="btn btn-primary" type="submit" :disabled="issuing || groupsLoading || !canIssueQCanvasPair">
-                  <Icon name="key" size="sm" />
-                  原子开通双 Key
-                </button>
-              </div>
-            </form>
-          </template>
-          <template v-else>
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">QCanvas 双 Key 已开通</h2>
-            <p v-if="issuedQCanvasPair.video.key && issuedQCanvasPair.media.key" class="mt-1 text-xs text-amber-600 dark:text-amber-300">两把完整 Key 只显示这一次，请立刻复制并交给 QCanvas 注册页。</p>
-            <p v-else class="mt-1 text-xs text-amber-600 dark:text-amber-300">该请求已重放，明文 Key 不再返回；请不要把重试当作重新开卡。</p>
-            <div v-if="issuedQCanvasPair.video.key && issuedQCanvasPair.media.key" class="mt-4 space-y-3">
-              <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-dark-700 dark:bg-dark-900"><div class="text-xs text-gray-500">视频 Key · {{ selectedGroupName(qcanvasPairForm.videoGroupId) }}</div><div class="mt-1 break-all font-mono text-sm text-gray-900 dark:text-white">{{ issuedQCanvasPair.video.key }}</div></div>
-              <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-dark-700 dark:bg-dark-900"><div class="text-xs text-gray-500">LLM / 图片 Key · {{ selectedGroupName(qcanvasPairForm.mediaGroupId) }}</div><div class="mt-1 break-all font-mono text-sm text-gray-900 dark:text-white">{{ issuedQCanvasPair.media.key }}</div></div>
-            </div>
-            <div class="mt-4 flex justify-end gap-2">
-              <button v-if="issuedQCanvasPair.video.key && issuedQCanvasPair.media.key" class="btn btn-primary" type="button" @click="copyIssuedQCanvasPair"><Icon name="copy" size="sm" />{{ qcanvasPairCopied ? '已复制' : '复制两把 Key' }}</button>
-              <button class="btn btn-outline" type="button" data-test="qcanvas-key-pair-done" @click="closeQCanvasKeyPairModal">完成</button>
-            </div>
-          </template>
-        </div>
-      </div>
+	  <div v-if="qcanvasPairModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="closeQCanvasKeyPairModal">
+		<div class="w-full max-w-md rounded-lg border border-gray-200 bg-white p-6 shadow-xl dark:border-dark-700 dark:bg-dark-800">
+		  <template v-if="!issuedQCanvasPair">
+			<h2 class="text-lg font-semibold text-gray-900 dark:text-white">为 {{ staffDisplayName(issueTarget?.username, issueTarget?.email) }} 开通 QCanvas 双 Key</h2>
+			<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">两张卡归属同一服务身份、同一余额与总账单；实际路由组由管理员明确选择。</p>
+			<form class="mt-5 space-y-4" data-test="qcanvas-key-pair-form" @submit.prevent="issueQCanvasKeyPair">
+			  <div>
+				<label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">视频 Key 路由组</label>
+				<select v-model.number="qcanvasPairForm.videoGroupId" class="input" data-test="qcanvas-video-group" required>
+				  <option :value="0" disabled>选择视频实际使用的组</option>
+				  <option v-for="group in eligibleGroups" :key="group.id" :value="group.id">{{ group.name }}</option>
+				</select>
+			  </div>
+			  <div>
+				<label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">LLM / 图片 Key 路由组</label>
+				<select v-model.number="qcanvasPairForm.mediaGroupId" class="input" data-test="qcanvas-media-group" required>
+				  <option :value="0" disabled>选择 LLM / 图片实际使用的组</option>
+				  <option v-for="group in eligibleGroups" :key="group.id" :value="group.id">{{ group.name }}</option>
+				</select>
+			  </div>
+			  <p v-if="eligibleGroups.length < 2 && !groupsLoading" class="text-xs text-red-600">双 Key 必须选择两个不同的可用组。</p>
+			  <div class="flex justify-end gap-2 pt-2">
+				<button class="btn btn-outline" type="button" @click="closeQCanvasKeyPairModal">取消</button>
+				<button class="btn btn-primary" type="submit" :disabled="issuing || groupsLoading || !canIssueQCanvasPair">
+				  <Icon name="key" size="sm" />
+				  原子开通双 Key
+				</button>
+			  </div>
+			</form>
+		  </template>
+		  <template v-else>
+			<h2 class="text-lg font-semibold text-gray-900 dark:text-white">QCanvas 双 Key 已开通</h2>
+			<p v-if="issuedQCanvasPair.video.key && issuedQCanvasPair.media.key" class="mt-1 text-xs text-amber-600 dark:text-amber-300">两把完整 Key 只显示这一次，请立刻复制并交给 QCanvas 注册页。</p>
+			<p v-else class="mt-1 text-xs text-amber-600 dark:text-amber-300">该请求已重放，明文 Key 不再返回；请不要把重试当作重新开卡。</p>
+			<div v-if="issuedQCanvasPair.video.key && issuedQCanvasPair.media.key" class="mt-4 space-y-3">
+			  <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-dark-700 dark:bg-dark-900"><div class="text-xs text-gray-500">视频 Key · {{ selectedGroupName(qcanvasPairForm.videoGroupId) }}</div><div class="mt-1 break-all font-mono text-sm text-gray-900 dark:text-white">{{ issuedQCanvasPair.video.key }}</div></div>
+			  <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-dark-700 dark:bg-dark-900"><div class="text-xs text-gray-500">LLM / 图片 Key · {{ selectedGroupName(qcanvasPairForm.mediaGroupId) }}</div><div class="mt-1 break-all font-mono text-sm text-gray-900 dark:text-white">{{ issuedQCanvasPair.media.key }}</div></div>
+			</div>
+			<div class="mt-4 flex justify-end gap-2">
+			  <button v-if="issuedQCanvasPair.video.key && issuedQCanvasPair.media.key" class="btn btn-primary" type="button" @click="copyIssuedQCanvasPair"><Icon name="copy" size="sm" />{{ qcanvasPairCopied ? '已复制' : '复制两把 Key' }}</button>
+			  <button class="btn btn-outline" type="button" data-test="qcanvas-key-pair-done" @click="closeQCanvasKeyPairModal">完成</button>
+			</div>
+		  </template>
+		</div>
+	  </div>
     </div>
   </AppLayout>
 </template>
@@ -377,9 +321,7 @@
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
-import InitialCredentialDialog from '@/components/admin/user/InitialCredentialDialog.vue'
 import { adminAPI } from '@/api/admin'
-import type { InitialCredential } from '@/api/admin/users'
 import type { AdminGroup, AdminUser, ApiKey } from '@/types'
 import type { BatchApiKeyUsageStats, BatchUserUsageStats } from '@/api/admin/dashboard'
 import { useAppStore } from '@/stores/app'
@@ -406,19 +348,8 @@ const usageMap = ref<Record<number, BatchUserUsageStats>>({})
 // 使用系统默认汇率展示，不臆造动态汇率。
 const usdCnyRate = ref(DEFAULT_USD_CNY_RATE)
 
-// ---- 成员类型筛选 ----
-
-type MemberFilter = 'all' | 'human' | 'tool'
-const memberFilter = ref<MemberFilter>('all')
-const memberFilters: Array<{ value: MemberFilter; label: string }> = [
-  { value: 'all', label: '全部' },
-  { value: 'human', label: '员工' },
-  { value: 'tool', label: '工具' },
-]
-
 const filteredUsers = computed(() => {
-  if (memberFilter.value === 'all') return users.value
-  return users.value.filter((user) => (user.member_type ?? 'human') === memberFilter.value)
+  return users.value.filter((user) => user.role !== 'admin' && user.member_type === 'tool')
 })
 
 // ---- 成员列表 ----
@@ -428,11 +359,11 @@ async function loadStaff() {
   try {
     const res = await adminAPI.users.list(1, 100, {
       search: search.value.trim() || undefined,
-      include_subscriptions: true,
+      include_subscriptions: false,
       sort_by: 'created_at',
       sort_order: 'asc',
     })
-    users.value = res.items || []
+    users.value = (res.items || []).filter((user) => user.role !== 'admin' && user.member_type === 'tool')
     if (users.value.length) {
       const usage = await adminAPI.dashboard.getBatchUsersUsage(users.value.map((user) => user.id))
       const map: Record<number, BatchUserUsageStats> = {}
@@ -458,46 +389,33 @@ const staffForm = reactive({
   username: '',
   email: '',
   notes: '',
-  memberType: 'human' as 'human' | 'tool',
 })
 
-const credentialDialogOpen = ref(false)
-const createdStaffEmail = ref('')
-const createdStaffCredential = ref<InitialCredential | null>(null)
-
-function openCreateStaff(memberType: 'human' | 'tool' = 'human') {
+function openCreateServiceIdentity() {
   staffForm.username = ''
   staffForm.email = ''
   staffForm.notes = ''
-  staffForm.memberType = memberType
   staffModalOpen.value = true
 }
 
 async function createStaff() {
   creatingStaff.value = true
   try {
-    const res = await adminAPI.users.create({
+    await adminAPI.users.create({
       email: staffForm.email.trim(),
       username: staffForm.username.trim() || undefined,
       notes: staffForm.notes.trim() || undefined,
-      member_type: staffForm.memberType,
+      member_type: 'tool',
+      role: 'user',
     })
-    appStore.showSuccess(staffForm.memberType === 'tool' ? '工具账号已创建，接下来可以开卡' : '员工已创建，接下来可以开卡')
+    appStore.showSuccess('服务身份已创建，接下来可以签发 API 卡片')
     staffModalOpen.value = false
-    createdStaffEmail.value = staffForm.email.trim()
-    createdStaffCredential.value = res.initial_credential
-    credentialDialogOpen.value = true
     await loadStaff()
   } catch (err) {
-    appStore.showError(extractApiErrorMessage(err, staffForm.memberType === 'tool' ? '创建工具账号失败' : '创建员工失败'))
+    appStore.showError(extractApiErrorMessage(err, '创建服务身份失败'))
   } finally {
     creatingStaff.value = false
   }
-}
-
-function closeCredentialDialog() {
-  credentialDialogOpen.value = false
-  createdStaffCredential.value = null
 }
 
 // ---- 展开成员的卡 ----
@@ -619,15 +537,11 @@ const qcanvasPairCopied = ref(false)
 const qcanvasPairForm = reactive({ videoGroupId: 0, mediaGroupId: 0 })
 const activeGroups = ref<AdminGroup[]>([])
 const groupsLoading = ref(true)
-const issueForm = reactive({ name: '', quota: 0, expiresInDays: 0, groupId: 0 })
+const issueForm = reactive({ name: '', groupId: 0 })
 
 function canUserBindGroup(user: AdminUser, group: AdminGroup): boolean {
   if (group.status !== 'active') return false
-  if (group.subscription_type === 'subscription') {
-    return (user.subscriptions ?? []).some(
-      (subscription) => subscription.group_id === group.id && subscription.status === 'active',
-    )
-  }
+  if (group.subscription_type === 'subscription') return false
   return !group.is_exclusive || (user.allowed_groups ?? []).includes(group.id)
 }
 
@@ -643,21 +557,21 @@ function selectEligibleDefault() {
 }
 
 function selectQCanvasPairDefaults() {
-  const ids = eligibleGroups.value.map((group) => group.id)
-  if (!ids.includes(qcanvasPairForm.videoGroupId)) qcanvasPairForm.videoGroupId = ids[0] ?? 0
-  if (!ids.includes(qcanvasPairForm.mediaGroupId) || qcanvasPairForm.mediaGroupId === qcanvasPairForm.videoGroupId) {
-    qcanvasPairForm.mediaGroupId = ids.find((id) => id !== qcanvasPairForm.videoGroupId) ?? 0
-  }
+	const ids = eligibleGroups.value.map((group) => group.id)
+	if (!ids.includes(qcanvasPairForm.videoGroupId)) qcanvasPairForm.videoGroupId = ids[0] ?? 0
+	if (!ids.includes(qcanvasPairForm.mediaGroupId) || qcanvasPairForm.mediaGroupId === qcanvasPairForm.videoGroupId) {
+		qcanvasPairForm.mediaGroupId = ids.find((id) => id !== qcanvasPairForm.videoGroupId) ?? 0
+	}
 }
 
 const canIssueQCanvasPair = computed(() => {
-  return eligibleGroups.value.some((group) => group.id === qcanvasPairForm.videoGroupId) &&
-    eligibleGroups.value.some((group) => group.id === qcanvasPairForm.mediaGroupId) &&
-    qcanvasPairForm.videoGroupId !== qcanvasPairForm.mediaGroupId
+	return eligibleGroups.value.some((group) => group.id === qcanvasPairForm.videoGroupId) &&
+		eligibleGroups.value.some((group) => group.id === qcanvasPairForm.mediaGroupId) &&
+		qcanvasPairForm.videoGroupId !== qcanvasPairForm.mediaGroupId
 })
 
 function selectedGroupName(groupID: number): string {
-  return eligibleGroups.value.find((group) => group.id === groupID)?.name ?? `组 #${groupID}`
+	return eligibleGroups.value.find((group) => group.id === groupID)?.name ?? `组 #${groupID}`
 }
 
 async function loadActiveGroups() {
@@ -670,7 +584,7 @@ async function loadActiveGroups() {
   } finally {
     groupsLoading.value = false
     if (issueModalOpen.value) selectEligibleDefault()
-    if (qcanvasPairModalOpen.value) selectQCanvasPairDefaults()
+	if (qcanvasPairModalOpen.value) selectQCanvasPairDefaults()
   }
 }
 
@@ -679,18 +593,16 @@ function openIssueCard(user: AdminUser) {
   issuedKey.value = null
   copied.value = false
   issueForm.name = `${staffDisplayName(user.username, user.email)}-生产卡`
-  issueForm.quota = 0
-  issueForm.expiresInDays = 0
   issueModalOpen.value = true
   selectEligibleDefault()
 }
 
 function openQCanvasKeyPair(user: AdminUser) {
-  issueTarget.value = user
-  issuedQCanvasPair.value = null
-  qcanvasPairCopied.value = false
-  qcanvasPairModalOpen.value = true
-  selectQCanvasPairDefaults()
+	issueTarget.value = user
+	issuedQCanvasPair.value = null
+	qcanvasPairCopied.value = false
+	qcanvasPairModalOpen.value = true
+	selectQCanvasPairDefaults()
 }
 
 function closeIssueModal() {
@@ -700,10 +612,10 @@ function closeIssueModal() {
 }
 
 function closeQCanvasKeyPairModal() {
-  qcanvasPairModalOpen.value = false
-  issuedQCanvasPair.value = null
-  qcanvasPairCopied.value = false
-  issueTarget.value = null
+	qcanvasPairModalOpen.value = false
+	issuedQCanvasPair.value = null
+	qcanvasPairCopied.value = false
+	issueTarget.value = null
 }
 
 async function issueCard() {
@@ -721,8 +633,7 @@ async function issueCard() {
       {
         name: issueForm.name.trim(),
         group_id: issueForm.groupId,
-        quota: issueForm.quota > 0 ? issueForm.quota : 0,
-        ...(issueForm.expiresInDays > 0 ? { expires_in_days: issueForm.expiresInDays } : {}),
+        quota: 0,
       },
       crypto.randomUUID(),
     )
@@ -738,24 +649,24 @@ async function issueCard() {
 }
 
 async function issueQCanvasKeyPair() {
-  if (!issueTarget.value || !canIssueQCanvasPair.value) {
-    appStore.showError('请为视频与 LLM / 图片选择两个不同的可用组')
-    return
-  }
-  issuing.value = true
-  try {
-    issuedQCanvasPair.value = await adminAPI.apiKeys.createQCanvasKeyPairForUser(
-      issueTarget.value.id,
-      { video_group_id: qcanvasPairForm.videoGroupId, media_group_id: qcanvasPairForm.mediaGroupId },
-      crypto.randomUUID(),
-    )
-    appStore.showSuccess('QCanvas 双 Key 开通成功')
-    if (expandedUserId.value === issueTarget.value.id) await loadUserKeys(issueTarget.value.id)
-  } catch (err) {
-    appStore.showError(extractApiErrorMessage(err, 'QCanvas 双 Key 开通失败'))
-  } finally {
-    issuing.value = false
-  }
+	if (!issueTarget.value || !canIssueQCanvasPair.value) {
+		appStore.showError('请为视频与 LLM / 图片选择两个不同的可用组')
+		return
+	}
+	issuing.value = true
+	try {
+		issuedQCanvasPair.value = await adminAPI.apiKeys.createQCanvasKeyPairForUser(
+			issueTarget.value.id,
+			{ video_group_id: qcanvasPairForm.videoGroupId, media_group_id: qcanvasPairForm.mediaGroupId },
+			crypto.randomUUID(),
+		)
+		appStore.showSuccess('QCanvas 双 Key 开通成功')
+		if (expandedUserId.value === issueTarget.value.id) await loadUserKeys(issueTarget.value.id)
+	} catch (err) {
+		appStore.showError(extractApiErrorMessage(err, 'QCanvas 双 Key 开通失败'))
+	} finally {
+		issuing.value = false
+	}
 }
 
 let copyResetTimeoutId: ReturnType<typeof setTimeout> | null = null
@@ -776,13 +687,13 @@ async function copyIssuedKey() {
 }
 
 async function copyIssuedQCanvasPair() {
-  if (!issuedQCanvasPair.value?.video.key || !issuedQCanvasPair.value.media.key) return
-  try {
-    await navigator.clipboard.writeText(`video=${issuedQCanvasPair.value.video.key}\nmedia=${issuedQCanvasPair.value.media.key}`)
-    qcanvasPairCopied.value = true
-  } catch {
-    appStore.showError('复制失败，请手动复制两把 Key')
-  }
+	if (!issuedQCanvasPair.value?.video.key || !issuedQCanvasPair.value.media.key) return
+	try {
+		await navigator.clipboard.writeText(`video=${issuedQCanvasPair.value.video.key}\nmedia=${issuedQCanvasPair.value.media.key}`)
+		qcanvasPairCopied.value = true
+	} catch {
+		appStore.showError('复制失败，请手动复制两把 Key')
+	}
 }
 
 onMounted(() => {

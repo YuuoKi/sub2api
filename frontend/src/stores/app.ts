@@ -52,6 +52,7 @@ export const useAppStore = defineStore('app', () => {
 
   const hasActiveToasts = computed(() => toasts.value.length > 0)
   const backendModeEnabled = computed(() => cachedPublicSettings.value?.backend_mode_enabled ?? false)
+	const lanAdminModeEnabled = computed(() => cachedPublicSettings.value?.lan_admin_mode_enabled ?? false)
 
   const loadingCount = ref<number>(0)
 
@@ -359,6 +360,7 @@ export const useAppStore = defineStore('app', () => {
         github_oauth_enabled: false,
         google_oauth_enabled: false,
         backend_mode_enabled: false,
+		lan_admin_mode_enabled: false,
         version: siteVersion.value,
         balance_low_notify_enabled: false,
         account_quota_notify_enabled: false,
@@ -456,6 +458,7 @@ export const useAppStore = defineStore('app', () => {
     // Computed
     hasActiveToasts,
     backendModeEnabled,
+	lanAdminModeEnabled,
 
     // Actions
     toggleSidebar,

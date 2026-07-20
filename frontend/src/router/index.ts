@@ -839,32 +839,37 @@ let authInitialized = false
 const navigationLoading = useNavigationLoadingState()
 // 延迟初始化预加载，传入 router 实例
 let routePrefetch: ReturnType<typeof useRoutePrefetch> | null = null
-const BACKEND_MODE_ALLOWED_PATHS = ['/login', '/key-usage', '/setup', '/payment/result', '/payment/airwallex', '/legal']
-const BACKEND_MODE_CALLBACK_PATHS = [
-  '/auth/callback',
-  '/auth/linuxdo/callback',
-  '/auth/dingtalk/callback',
-  '/auth/dingtalk/email-completion',
-  '/auth/oidc/callback',
-  '/auth/wechat/callback',
-  '/auth/wechat/payment/callback',
+const LAN_ADMIN_PUBLIC_PATHS = new Set(['/login', '/setup'])
+const LAN_ADMIN_PASSWORD_CHANGE_PATH = '/change-temporary-password'
+const LAN_ADMIN_WEB_PREFIXES = [
+  '/admin/console/overview',
+  '/admin/console/key-vault',
+  '/admin/console/staff',
+  '/admin/console/ai-records',
+  '/admin/accounts',
+  '/admin/groups',
+  '/admin/video/providers',
+  '/admin/video/tasks',
+  '/admin/video/system-check',
+  '/admin/channels/pricing',
+  '/admin/channels/monitor',
+  '/admin/proxies',
+  '/admin/generation-content',
+  '/admin/usage',
+  '/admin/ops',
+  '/admin/settings',
 ]
-const BACKEND_MODE_PENDING_AUTH_PATHS = ['/register', '/email-verify']
 
-function isBackendModePublicRouteAllowed(path: string, hasPendingAuthSession: boolean): boolean {
-  if (BACKEND_MODE_ALLOWED_PATHS.some((allowedPath) => path === allowedPath || path.startsWith(allowedPath))) {
-    return true
-  }
+function isPathOrChild(path: string, prefix: string): boolean {
+  return path === prefix || path.startsWith(`${prefix}/`)
+}
 
-  if (BACKEND_MODE_CALLBACK_PATHS.some((callbackPath) => path === callbackPath)) {
-    return true
-  }
-
-  if (hasPendingAuthSession && BACKEND_MODE_PENDING_AUTH_PATHS.some((allowedPath) => path === allowedPath)) {
-    return true
-  }
-
-  return false
+export function isLanAdminWebRouteAllowed(path: string, authenticated: boolean, isAdmin: boolean): boolean {
+  const normalizedPath = path.length > 1 ? path.replace(/\/+$/, '') : path
+  if (LAN_ADMIN_PUBLIC_PATHS.has(normalizedPath)) return true
+  if (!authenticated || !isAdmin) return false
+  if (normalizedPath === LAN_ADMIN_PASSWORD_CHANGE_PATH) return true
+  return LAN_ADMIN_WEB_PREFIXES.some((prefix) => isPathOrChild(normalizedPath, prefix))
 }
 
 router.beforeEach(async (to, _from, next) => {
@@ -904,6 +909,14 @@ router.beforeEach(async (to, _from, next) => {
     }
   }
 
+  if (
+    appStore.lanAdminModeEnabled &&
+    !isLanAdminWebRouteAllowed(to.path, authStore.isAuthenticated, authStore.isAdmin)
+  ) {
+    next(authStore.isAuthenticated && authStore.isAdmin ? '/admin/console/overview' : '/login')
+    return
+  }
+
   // If route doesn't require auth, allow access
   if (!requiresAuth) {
     // If already authenticated and trying to access login/register, redirect to appropriate dashboard
@@ -917,14 +930,6 @@ router.beforeEach(async (to, _from, next) => {
       // Send each role to the canonical landing page for the unified console.
       next(resolvePostAuthRedirect(to.query.redirect, authStore.isAdmin))
       return
-    }
-    // Backend mode: block public pages for unauthenticated users (except login, key-usage, setup)
-    if (appStore.backendModeEnabled && !authStore.isAuthenticated) {
-      const isAllowed = isBackendModePublicRouteAllowed(to.path, authStore.hasPendingAuthSession)
-      if (!isAllowed) {
-        next('/login')
-        return
-      }
     }
     next()
     return
@@ -946,7 +951,7 @@ router.beforeEach(async (to, _from, next) => {
     return
   }
   if (!mustChangePassword && to.path === '/change-temporary-password') {
-    next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
+    next(appStore.lanAdminModeEnabled && authStore.isAdmin ? '/admin/console/overview' : authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
     return
   }
 
@@ -1016,19 +1021,6 @@ router.beforeEach(async (to, _from, next) => {
     if (restrictedPaths.some((path) => to.path.startsWith(path))) {
       // 简易模式下访问受限页面,重定向到仪表板
       next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
-      return
-    }
-  }
-
-  // Backend mode: admin gets full access, non-admin blocked
-  if (appStore.backendModeEnabled) {
-    if (authStore.isAuthenticated && authStore.isAdmin) {
-      next()
-      return
-    }
-    const isAllowed = isBackendModePublicRouteAllowed(to.path, authStore.hasPendingAuthSession)
-    if (!isAllowed) {
-      next('/login')
       return
     }
   }

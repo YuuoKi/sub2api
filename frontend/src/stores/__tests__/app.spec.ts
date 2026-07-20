@@ -47,6 +47,7 @@ function createPublicSettings(overrides: Partial<PublicSettings> = {}): PublicSe
     github_oauth_enabled: false,
     google_oauth_enabled: false,
     backend_mode_enabled: false,
+	lan_admin_mode_enabled: false,
     version: '1.0.0',
     balance_low_notify_enabled: false,
     account_quota_notify_enabled: false,
@@ -88,6 +89,26 @@ describe('useAppStore', () => {
     const store = useAppStore()
 
     expect(store.siteName).toBe('无界 · 企业 AI 中台')
+  })
+
+  it('distinguishes immutable LAN administrator mode from mutable backend mode', () => {
+    ;(window as any).__APP_CONFIG__ = createPublicSettings({
+      backend_mode_enabled: true,
+      lan_admin_mode_enabled: false,
+    })
+    const standardStore = useAppStore()
+	standardStore.initFromInjectedConfig()
+    expect(standardStore.backendModeEnabled).toBe(true)
+    expect(standardStore.lanAdminModeEnabled).toBe(false)
+
+    setActivePinia(createPinia())
+    ;(window as any).__APP_CONFIG__ = createPublicSettings({
+      backend_mode_enabled: true,
+      lan_admin_mode_enabled: true,
+    })
+    const lanStore = useAppStore()
+	lanStore.initFromInjectedConfig()
+    expect(lanStore.lanAdminModeEnabled).toBe(true)
   })
 
   // --- Toast 消息管理 ---

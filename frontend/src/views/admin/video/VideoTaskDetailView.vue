@@ -47,19 +47,6 @@
 
         <section class="video-task-assets ui-panel p-5" aria-labelledby="video-task-assets-title">
           <h2 id="video-task-assets-title" class="text-base font-semibold">资产预览</h2>
-          <div class="mt-4 max-w-xl">
-            <label for="qcanvas-base-url" class="mb-1 block text-sm font-medium">QCanvas 本机地址</label>
-            <input
-              id="qcanvas-base-url"
-              v-model.trim="qcanvasBaseURL"
-              type="url"
-              class="input w-full"
-              placeholder="例如 http://127.0.0.1:5173"
-              autocomplete="url"
-              @change="persistQCanvasBaseURL"
-            />
-            <p class="mt-1 text-xs text-gray-500">必须显式填写 loopback origin；仅保存在当前浏览器，不是凭据。地址无效时不会签发票据。</p>
-          </div>
           <div class="mt-4 grid gap-5 lg:grid-cols-2">
             <div class="video-task-result min-w-0">
               <h3 class="text-sm font-medium">结果视频</h3>
@@ -69,25 +56,14 @@
               </video>
               <p v-else class="mt-2 text-sm text-gray-500">未返回结果视频。</p>
               <a v-if="task.result_url" :href="task.result_url" target="_blank" rel="noreferrer" class="mt-2 block break-all text-sm text-primary-600">在新窗口打开结果资产</a>
-              <button
-                v-if="task.status === 'succeeded' && task.result_url"
-                type="button"
-                class="btn btn-secondary mt-3"
-                :disabled="handoffLoading !== null"
-                @click="startAssetHandoff('video')"
-              >
-                {{ handoffLoading === 'video' ? '正在创建交接票据…' : '发送视频到 QCanvas' }}
-              </button>
             </div>
             <div class="video-task-tail-frame min-w-0">
               <h3 class="text-sm font-medium">尾帧</h3>
               <img v-if="task.last_frame_url" :src="task.last_frame_url" alt="视频任务尾帧" class="mt-2 aspect-video w-full bg-black object-contain" />
               <p v-else class="mt-2 text-sm text-gray-500">未返回尾帧。</p>
               <a v-if="task.last_frame_url" :href="task.last_frame_url" target="_blank" rel="noreferrer" class="mt-2 block break-all text-sm text-primary-600">在新窗口打开尾帧</a>
-              <p v-if="task.last_frame_url" class="mt-2 text-xs text-gray-500">当前历史尾帧是 JPEG/JFIF，不开放 PNG 交接按钮，也不会伪报 MIME。既有 Gemini PNG 由 tapcanvas-api 本地文件导入。</p>
             </div>
           </div>
-          <p v-if="handoffError" class="mt-3 text-sm text-red-600" role="alert">{{ handoffError }}</p>
         </section>
 
         <section v-if="failureReason" class="video-task-failure card p-5" aria-labelledby="video-task-failure-title">
@@ -106,8 +82,7 @@ import { useRoute } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TaskProgressRing from '@/components/common/TaskProgressRing.vue'
 import { adminAPI } from '@/api/admin'
-import { buildQCanvasAssetHandoffTargetURL, startQCanvasAssetHandoffTransfer } from '@/api/admin/video'
-import type { AssetHandoffKind, VideoTaskAdmin } from '@/api/admin/video'
+import type { VideoTaskAdmin } from '@/api/admin/video'
 import { extractApiErrorMessage } from '@/utils/apiError'
 
 interface EvidenceField {
@@ -144,45 +119,6 @@ function taskPhaseLabel(status: string): string {
 
 const loading = ref(true)
 const errorMessage = ref('')
-const handoffError = ref('')
-const handoffLoading = ref<AssetHandoffKind | null>(null)
-const qcanvasBaseURL = ref(
-  window.localStorage.getItem('wujie-qcanvas-base-url') || import.meta.env.VITE_QCANVAS_BASE_URL || ''
-)
-
-const persistQCanvasBaseURL = (): void => {
-  const value = qcanvasBaseURL.value.trim()
-  if (value) window.localStorage.setItem('wujie-qcanvas-base-url', value)
-  else window.localStorage.removeItem('wujie-qcanvas-base-url')
-}
-
-const startAssetHandoff = async (kind: AssetHandoffKind): Promise<void> => {
-  if (!task.value || handoffLoading.value !== null) return
-  handoffError.value = ''
-  try {
-    buildQCanvasAssetHandoffTargetURL(qcanvasBaseURL.value)
-    persistQCanvasBaseURL()
-  } catch (error) {
-    handoffError.value = extractApiErrorMessage(error, '请先填写有效的 QCanvas 本机地址')
-    return
-  }
-  const targetWindow = window.open('', '_blank')
-  if (!targetWindow) {
-    handoffError.value = '浏览器阻止了新窗口，未创建交接票据。'
-    return
-  }
-  handoffLoading.value = kind
-  try {
-    const issued = await adminAPI.video.createAssetHandoff(task.value.id, kind)
-    startQCanvasAssetHandoffTransfer(targetWindow, issued.ticket, qcanvasBaseURL.value)
-  } catch (error) {
-    targetWindow.close()
-    handoffError.value = extractApiErrorMessage(error, '创建 QCanvas 交接票据失败')
-  } finally {
-    handoffLoading.value = null
-  }
-}
-
 const balanceEvidence = computed(() => {
   if (!task.value || task.value.balance_before_usd == null || task.value.balance_after_usd == null || task.value.balance_delta_usd == null) {
     return unavailable

@@ -193,6 +193,38 @@ type apiKeyPairCreator interface {
 	CreatePair(ctx context.Context, video, media *APIKey) error
 }
 
+func normalizeLANAdminCreateAPIKeyRequest(cfg *config.Config, req *CreateAPIKeyRequest) {
+	if cfg == nil || !cfg.IsLANAdminProfile() || req == nil {
+		return
+	}
+	req.Quota = 0
+	req.ExpiresInDays = nil
+	req.RateLimit5h = 0
+	req.RateLimit1d = 0
+	req.RateLimit7d = 0
+}
+
+func normalizeLANAdminUpdateAPIKeyRequest(cfg *config.Config, req *UpdateAPIKeyRequest) {
+	if cfg == nil || !cfg.IsLANAdminProfile() || req == nil {
+		return
+	}
+	zero := 0.0
+	req.ExpiresAt = nil
+	req.ClearExpiration = true
+	if req.Quota != nil {
+		req.Quota = &zero
+	}
+	if req.RateLimit5h != nil {
+		req.RateLimit5h = &zero
+	}
+	if req.RateLimit1d != nil {
+		req.RateLimit1d = &zero
+	}
+	if req.RateLimit7d != nil {
+		req.RateLimit7d = &zero
+	}
+}
+
 // UpdateAPIKeyRequest 更新API Key请求
 type UpdateAPIKeyRequest struct {
 	Name        *string  `json:"name"`
@@ -351,6 +383,9 @@ func (s *APIKeyService) incrementAPIKeyErrorCount(ctx context.Context, userID in
 func (s *APIKeyService) canUserBindGroup(ctx context.Context, user *User, group *Group) bool {
 	// 订阅类型分组：需要有效订阅
 	if group.IsSubscriptionType() {
+		if s.cfg != nil && s.cfg.IsLANAdminProfile() {
+			return false
+		}
 		_, err := s.userSubRepo.GetActiveByUserIDAndGroupID(ctx, user.ID, group.ID)
 		return err == nil // 有有效订阅则允许
 	}
@@ -360,6 +395,7 @@ func (s *APIKeyService) canUserBindGroup(ctx context.Context, user *User, group 
 
 // Create 创建API Key
 func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIKeyRequest) (*APIKey, error) {
+	normalizeLANAdminCreateAPIKeyRequest(s.cfg, &req)
 	// 验证用户存在
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
@@ -714,6 +750,7 @@ func (s *APIKeyService) GetByKey(ctx context.Context, key string) (*APIKey, erro
 
 // Update 更新API Key
 func (s *APIKeyService) Update(ctx context.Context, id int64, userID int64, req UpdateAPIKeyRequest) (*APIKey, error) {
+	normalizeLANAdminUpdateAPIKeyRequest(s.cfg, &req)
 	apiKey, err := s.apiKeyRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("get api key: %w", err)

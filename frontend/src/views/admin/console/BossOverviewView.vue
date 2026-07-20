@@ -28,82 +28,6 @@
         </div>
       </div>
 
-      <!-- 公司月度总预算进度 -->
-      <section
-        v-if="monthlyBudgetCNY > 0"
-        class="ui-panel p-4"
-      >
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div class="min-w-0">
-            <p class="text-sm font-medium text-gray-900 dark:text-white">本月预算进度</p>
-            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              已用 ¥{{ monthlySpendCNY.toFixed(2) }} / 预算 ¥{{ monthlyBudgetCNY.toFixed(2) }}
-              （{{ monthlyBudgetUsagePercent.toFixed(1) }}%）
-            </p>
-          </div>
-          <form class="flex flex-wrap items-center gap-2" @submit.prevent="saveMonthlyBudget">
-            <input
-              v-model.number="budgetDraft"
-              type="number"
-              min="0"
-              step="1"
-              class="input h-9 w-32"
-              placeholder="月预算 ¥"
-            />
-            <button class="btn btn-sm btn-outline" type="submit" :disabled="budgetSaving">
-              {{ budgetSaving ? '保存中…' : '更新预算' }}
-            </button>
-          </form>
-        </div>
-        <div class="mt-3 h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-dark-700">
-          <div
-            class="h-full rounded-full transition-all"
-            :class="monthlyBudgetUsagePercent >= 100
-              ? 'bg-red-500'
-              : monthlyBudgetUsagePercent >= 80
-                ? 'bg-yellow-500'
-                : 'bg-teal-500'"
-            :style="{ width: `${Math.min(100, monthlyBudgetUsagePercent)}%` }"
-          />
-        </div>
-      </section>
-      <section
-        v-else
-        class="flex flex-col gap-3 rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 dark:border-dark-600 dark:bg-dark-800/60 sm:flex-row sm:items-center sm:justify-between"
-      >
-        <p class="text-sm text-gray-600 dark:text-gray-300">尚未设置公司月度总预算。设一个数字后，总览会显示本月花费进度条。</p>
-        <form class="flex flex-wrap items-center gap-2" @submit.prevent="saveMonthlyBudget">
-          <input
-            v-model.number="budgetDraft"
-            type="number"
-            min="0"
-            step="1"
-            class="input h-9 w-32"
-            placeholder="例如 1000"
-          />
-          <button class="btn btn-sm btn-outline" type="submit" :disabled="budgetSaving">设置月预算</button>
-        </form>
-      </section>
-
-      <!-- P2-4：备份超期黄条 -->
-      <section
-        v-if="backupStale"
-        class="flex flex-col gap-3 rounded-lg border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-500/30 dark:bg-yellow-500/10 sm:flex-row sm:items-center sm:justify-between"
-        role="status"
-      >
-        <div class="min-w-0">
-          <p class="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-            {{ backupStaleMessage }}
-          </p>
-          <p class="mt-1 text-xs text-gray-600 dark:text-gray-400">
-            建议到数据管理做一次备份，避免故障时无法回滚。
-          </p>
-        </div>
-        <RouterLink class="btn btn-sm btn-outline shrink-0" to="/admin/settings">
-          去系统设置
-        </RouterLink>
-      </section>
-
       <!-- 核心指标卡 -->
       <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div
@@ -306,13 +230,6 @@ const ranking = ref<UserSpendingRankingItem[]>([])
 const rankingTotals = ref({ actual_cost: 0, requests: 0, tokens: 0 })
 // 后端 /admin/dashboard/stats 未提供实时汇率字段；使用系统默认汇率展示，不臆造动态汇率。
 const usdCnyRate = ref(DEFAULT_USD_CNY_RATE)
-const monthlyBudgetCNY = ref(0)
-const monthlySpendCNY = ref(0)
-const monthlyBudgetUsagePercent = ref(0)
-const budgetDraft = ref(0)
-const budgetSaving = ref(false)
-const backupStale = ref(false)
-const backupStaleMessage = ref('')
 
 const rangeOptions: Array<{ key: ConsoleRangeKey; label: string }> = [
   { key: '7d', label: '近 7 天' },
@@ -498,72 +415,15 @@ function goAiRecordsByModel(model: string) {
   void router.push({ path: '/admin/console/ai-records', query: { model: trimmed } })
 }
 
-async function saveMonthlyBudget() {
-  const value = Number(budgetDraft.value)
-  if (!Number.isFinite(value) || value < 0) {
-    appStore.showError('月预算须为大于等于 0 的数字')
-    return
-  }
-  budgetSaving.value = true
-  try {
-    const res = await adminAPI.dashboard.updateMonthlyBudget(value)
-    monthlyBudgetCNY.value = Number(res.monthly_budget_cny || 0)
-    monthlySpendCNY.value = Number(res.monthly_spend_cny || 0)
-    monthlyBudgetUsagePercent.value = Number(res.monthly_budget_usage_percent || 0)
-    budgetDraft.value = monthlyBudgetCNY.value
-  } catch (err) {
-    appStore.showError(extractApiErrorMessage(err, '保存月预算失败'))
-  } finally {
-    budgetSaving.value = false
-  }
-}
-
-async function loadBackupStale() {
-  backupStale.value = false
-  backupStaleMessage.value = ''
-  try {
-    const res = await adminAPI.dataManagement.listBackupJobs({ page_size: 20 })
-    const items = res.items || []
-    const succeeded = items.filter((job) => job.status === 'succeeded')
-    if (!succeeded.length) {
-      backupStale.value = true
-      backupStaleMessage.value = '超过 7 天未检测到成功备份（或尚无备份记录）'
-      return
-    }
-    const latest = succeeded
-      .map((job) => new Date(job.finished_at || job.started_at || 0).getTime())
-      .filter((ts) => Number.isFinite(ts) && ts > 0)
-      .sort((a, b) => b - a)[0]
-    if (!latest) {
-      backupStale.value = true
-      backupStaleMessage.value = '超过 7 天未检测到成功备份（或尚无备份记录）'
-      return
-    }
-    const ageMs = Date.now() - latest
-    if (ageMs > 7 * 24 * 60 * 60 * 1000) {
-      const days = Math.floor(ageMs / (24 * 60 * 60 * 1000))
-      backupStale.value = true
-      backupStaleMessage.value = `最近一次成功备份已过去 ${days} 天`
-    }
-  } catch {
-    // 数据管理未配置/无权限时静默，不挡总览
-  }
-}
-
 async function loadAll() {
   loading.value = true
   const { start, end } = getConsoleRange(rangeKey.value)
   try {
-    const [trendRes, modelsRes, rankingRes, budgetRes] = await Promise.all([
+    const [trendRes, modelsRes, rankingRes] = await Promise.all([
       adminAPI.dashboard.getUsageTrend({ start_date: start, end_date: end, granularity: 'day' }),
       adminAPI.dashboard.getModelStats({ start_date: start, end_date: end }),
       adminAPI.dashboard.getUserSpendingRanking({ start_date: start, end_date: end, limit: 20 }),
-      adminAPI.dashboard.getStats(),
     ])
-    monthlyBudgetCNY.value = Number(budgetRes.monthly_budget_cny || 0)
-    monthlySpendCNY.value = Number(budgetRes.monthly_spend_cny || 0)
-    monthlyBudgetUsagePercent.value = Number(budgetRes.monthly_budget_usage_percent || 0)
-    budgetDraft.value = monthlyBudgetCNY.value
     trend.value = trendRes.trend || []
     models.value = modelsRes.models || []
     ranking.value = rankingRes.ranking || []
@@ -572,7 +432,6 @@ async function loadAll() {
       requests: rankingRes.total_requests || 0,
       tokens: rankingRes.total_tokens || 0,
     }
-    void loadBackupStale()
   } catch (err) {
     appStore.showError(extractApiErrorMessage(err, '加载总览数据失败'))
   } finally {

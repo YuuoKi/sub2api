@@ -33,6 +33,7 @@ export interface BuildAdminRoleNavOptions {
 }
 
 export interface BuildEmployeeRoleNavOptions {
+  lanAdminOnly?: boolean
   includeMoreGroup?: boolean
   batchImageEnabled?: boolean
   availableChannelsEnabled?: boolean
@@ -125,68 +126,52 @@ export function isDefaultCollapsedGroup(item: RoleNavItem): boolean {
 }
 
 export function buildAdminRoleNav(options: BuildAdminRoleNavOptions = {}): RoleNavItem[] {
-  const opsChildren: RoleNavItem[] = [
-    { path: '/admin/ops', label: '运维监控', featureFlagKey: 'ops' },
-    { path: '/admin/groups', label: '分组管理', hideInSimpleMode: true },
-    { path: '/admin/video/providers', label: '生成通道' },
-    { path: '/admin/video/system-check', label: '系统检查' },
-    { path: '/admin/channels/pricing', label: '渠道定价', hideInSimpleMode: true },
-    { path: '/admin/channels/monitor', label: '渠道监控', featureFlagKey: 'channelMonitor' },
-    { path: '/admin/accounts', label: '账号管理' },
-    { path: '/admin/announcements', label: '公告' },
-    { path: '/admin/proxies', label: 'IP管理' },
-    { path: '/admin/risk-control', label: '风控中心', hideInSimpleMode: true, featureFlagKey: 'riskControl' },
-    { path: '/admin/usage', label: '全局用量' },
-    { path: '/admin/settings', label: '系统设置' },
-    { path: '/admin/console/ai-records', label: 'AI 记录' },
-    { path: '/admin/generation-content', label: '生成内容' },
-    { path: '/admin/dashboard', label: '技术仪表盘' },
-    { path: '/admin/users', label: '用户管理', hideInSimpleMode: true },
-    ...(options.customAdminMenus ?? []).map((menu): RoleNavItem => ({
-      path: `/custom/${menu.id}`,
-      label: menu.label,
-      customMenuId: menu.id,
-      iconSvg: menu.icon_svg,
-    })),
-  ]
-
-  const advancedChildren: RoleNavItem[] = [
-    { path: '/admin/subscriptions', label: '订阅管理', hideInSimpleMode: true },
-    { path: '/admin/redeem', label: '兑换码', hideInSimpleMode: true },
-    { path: '/admin/promo-codes', label: '优惠码', hideInSimpleMode: true },
-    { path: '/admin/orders/dashboard', label: '支付概览' },
-    { path: '/admin/orders', label: '订单管理' },
-    { path: '/admin/orders/plans', label: '订阅套餐' },
-    { path: '/admin/affiliates', label: '邀请返利' },
-    { path: '/admin/affiliates/invites', label: '邀请记录' },
-    { path: '/admin/affiliates/rebates', label: '返利记录' },
-    { path: '/admin/affiliates/transfers', label: '提取记录' },
-  ]
-
   const items: RoleNavItem[] = [
-    { path: '/admin/console/overview', label: '总览' },
-    { path: '/admin/console/key-vault', label: '密钥库' },
-    { path: '/admin/console/staff', label: '成员与开卡' },
-    { path: '/admin/video/tasks', label: '任务记录' },
+    { path: '/admin/console/overview', label: '总览与成本' },
+    { path: '/admin/console/key-vault', label: '上游账号、模型和通道' },
+    { path: '/admin/console/staff', label: '员工/API 卡片管理' },
+    { path: '/admin/video/tasks', label: '调用、任务与资产记录' },
     {
       path: ADMIN_SYSTEM_PATH,
-      label: '系统',
+      label: '系统、健康、备份与恢复',
       expandOnly: true,
       defaultCollapsed: true,
       children: [
         {
-          path: '/admin/system/ops-config',
-          label: '运行与配置',
+          path: '/admin/system/upstream',
+          label: '上游账号、模型和通道',
           expandOnly: true,
           defaultCollapsed: true,
-          children: opsChildren,
+          children: [
+            { path: '/admin/accounts', label: '上游账号' },
+            { path: '/admin/groups', label: '模型分组', hideInSimpleMode: true },
+            { path: '/admin/video/providers', label: '视频通道' },
+            { path: '/admin/channels/pricing', label: '模型与通道定价', hideInSimpleMode: true },
+            { path: '/admin/channels/monitor', label: '通道监控', featureFlagKey: 'channelMonitor' },
+            { path: '/admin/proxies', label: '上游网络' },
+          ],
         },
         {
-          path: '/admin/system/advanced',
-          label: '高级与历史',
+          path: '/admin/system/records-assets',
+          label: '调用、任务与资产记录',
           expandOnly: true,
           defaultCollapsed: true,
-          children: advancedChildren,
+          children: [
+            { path: '/admin/console/ai-records', label: '调用记录' },
+            { path: '/admin/generation-content', label: '生成资产' },
+            { path: '/admin/usage', label: '用量与成本' },
+          ],
+        },
+        {
+          path: '/admin/system/health-recovery',
+          label: '系统、健康、备份与恢复',
+          expandOnly: true,
+          defaultCollapsed: true,
+          children: [
+            { path: '/admin/ops', label: '系统健康', featureFlagKey: 'ops' },
+            { path: '/admin/video/system-check', label: '视频链路检查' },
+            { path: '/admin/settings', label: '系统、备份与恢复' },
+          ],
         },
       ],
     },
@@ -196,6 +181,8 @@ export function buildAdminRoleNav(options: BuildAdminRoleNavOptions = {}): RoleN
 }
 
 export function buildEmployeeRoleNav(options: BuildEmployeeRoleNavOptions = {}): RoleNavItem[] {
+  if (options.lanAdminOnly === true) return []
+
   const items: RoleNavItem[] = [
     { path: '/dashboard', label: '我的工作台' },
     { path: '/video/create', label: '创建任务' },

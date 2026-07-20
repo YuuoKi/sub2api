@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"sort"
 	"strings"
 	"time"
@@ -146,6 +147,16 @@ func (s *adminServiceImpl) CreateUser(ctx context.Context, input *CreateUserInpu
 	if strings.TrimSpace(memberType) == "" {
 		memberType = UserMemberTypeHuman
 	}
+	lanAdminProfile := s.settingService != nil && s.settingService.IsLANAdminProfile()
+	if lanAdminProfile {
+		if err := validateLANAdminUserKind(role, memberType); err != nil {
+			return nil, err
+		}
+	}
+	rpmLimit := input.RPMLimit
+	if lanAdminProfile {
+		rpmLimit = 0
+	}
 	notes, err := ApplyUserMemberTypeToNotes(input.Notes, memberType)
 	if err != nil {
 		return nil, err
@@ -158,17 +169,21 @@ func (s *adminServiceImpl) CreateUser(ctx context.Context, input *CreateUserInpu
 		Role:               role,
 		Balance:            balance,
 		Concurrency:        input.Concurrency,
-		RPMLimit:           input.RPMLimit,
+		RPMLimit:           rpmLimit,
 		Status:             StatusActive,
-		MustChangePassword: true,
+		MustChangePassword: !(lanAdminProfile && role == RoleUser),
 		AllowedGroups:      input.AllowedGroups,
 	}
 	temporaryPassword, err := generateTemporaryPassword()
 	if err != nil {
 		return nil, err
 	}
-	expiresAt := time.Now().UTC().Add(temporaryPasswordLifetime)
-	user.TemporaryPasswordExpiresAt = &expiresAt
+	interactiveCredential := user.MustChangePassword
+	var expiresAt time.Time
+	if interactiveCredential {
+		expiresAt = time.Now().UTC().Add(temporaryPasswordLifetime)
+		user.TemporaryPasswordExpiresAt = &expiresAt
+	}
 	if err := user.SetPassword(temporaryPassword); err != nil {
 		return nil, err
 	}
@@ -180,12 +195,38 @@ func (s *adminServiceImpl) CreateUser(ctx context.Context, input *CreateUserInpu
 		logger.LegacyPrintf("service.admin", "audit: admin user created actor_admin_id=%d target_user_id=%d",
 			input.ActorAdminID, user.ID)
 	}
-	s.assignDefaultSubscriptions(ctx, user.ID)
-	user.InitialCredential = &InitialCredential{
-		TemporaryPassword: temporaryPassword,
-		ExpiresAt:         expiresAt,
+	if !lanAdminProfile {
+		s.assignDefaultSubscriptions(ctx, user.ID)
+	}
+	if interactiveCredential {
+		user.InitialCredential = &InitialCredential{
+			TemporaryPassword: temporaryPassword,
+			ExpiresAt:         expiresAt,
+		}
 	}
 	return user, nil
+}
+
+func validateLANAdminUserKind(role, memberType string) error {
+	switch role {
+	case RoleUser:
+		if memberType != UserMemberTypeTool {
+			return infraerrors.New(
+				http.StatusForbidden,
+				"LAN_ADMIN_HUMAN_USER_DISABLED",
+				"lan_admin accepts only tool service identities; human users cannot be created or updated",
+			)
+		}
+	case RoleAdmin:
+		if memberType != UserMemberTypeHuman {
+			return infraerrors.New(
+				http.StatusForbidden,
+				"LAN_ADMIN_ADMIN_MUST_BE_HUMAN",
+				"lan_admin administrators must use independent human identities",
+			)
+		}
+	}
+	return nil
 }
 
 func (s *adminServiceImpl) ResetUserPassword(ctx context.Context, id int64) (*InitialCredential, error) {
@@ -266,6 +307,30 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 	if err != nil {
 		return nil, err
 	}
+	targetRole := user.Role
+	if input.Role != "" {
+		targetRole, err = normalizeUserRole(input.Role, user.Role)
+		if err != nil {
+			return nil, err
+		}
+	}
+	targetMemberType := UserMemberTypeFromNotes(user.Notes)
+	currentMemberType := targetMemberType
+	if input.MemberType != nil {
+		targetMemberType = normalizeUserMemberType(*input.MemberType)
+	}
+	if s.settingService != nil && s.settingService.IsLANAdminProfile() {
+		if err := validateLANAdminUserKind(targetRole, targetMemberType); err != nil {
+			return nil, err
+		}
+		if targetRole != user.Role || targetMemberType != currentMemberType {
+			return nil, infraerrors.New(
+				http.StatusForbidden,
+				"LAN_ADMIN_IDENTITY_KIND_IMMUTABLE",
+				"lan_admin service identities and administrator identities cannot be converted into each other",
+			)
+		}
+	}
 
 	// Protect admin users: cannot disable admin accounts
 	if user.Role == "admin" && input.Status == "disabled" {
@@ -298,25 +363,23 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 
 	// 角色变更(admin/user);空字符串表示不修改。
 	if input.Role != "" {
-		role, err := normalizeUserRole(input.Role, user.Role)
-		if err != nil {
-			return nil, err
-		}
 		// 防锁死保护：不允许降级系统中最后一个管理员（自我降级已在 handler 层拦截，
 		// 此处兜底覆盖跨管理员互降导致零 admin 的场景）。
-		if user.Role == RoleAdmin && role == RoleUser {
+		if user.Role == RoleAdmin && targetRole == RoleUser {
 			if err := s.ensureNotLastAdmin(ctx); err != nil {
 				return nil, err
 			}
 		}
-		user.Role = role
+		user.Role = targetRole
 	}
 
 	if input.Concurrency != nil {
 		user.Concurrency = *input.Concurrency
 	}
 
-	if input.RPMLimit != nil {
+	if s.settingService != nil && s.settingService.IsLANAdminProfile() {
+		user.RPMLimit = 0
+	} else if input.RPMLimit != nil {
 		user.RPMLimit = *input.RPMLimit
 	}
 

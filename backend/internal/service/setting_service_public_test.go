@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -12,6 +13,8 @@ import (
 
 type settingPublicRepoStub struct {
 	values map[string]string
+	err    error
+	calls  int
 }
 
 func (s *settingPublicRepoStub) Get(ctx context.Context, key string) (*Setting, error) {
@@ -31,6 +34,10 @@ func (s *settingPublicRepoStub) Set(ctx context.Context, key, value string) erro
 }
 
 func (s *settingPublicRepoStub) GetMultiple(ctx context.Context, keys []string) (map[string]string, error) {
+	s.calls++
+	if s.err != nil {
+		return nil, s.err
+	}
 	out := make(map[string]string, len(keys))
 	for _, key := range keys {
 		if value, ok := s.values[key]; ok {
@@ -38,6 +45,58 @@ func (s *settingPublicRepoStub) GetMultiple(ctx context.Context, keys []string) 
 		}
 	}
 	return out, nil
+}
+
+func TestSettingService_GetPublicSettings_LANAdminProfileOverridesDatabaseFalse(t *testing.T) {
+	repo := &settingPublicRepoStub{values: map[string]string{
+		SettingKeyBackendModeEnabled: "false",
+	}}
+	svc := NewSettingService(repo, &config.Config{DeploymentProfile: config.DeploymentProfileLANAdmin})
+
+	settings, err := svc.GetPublicSettings(context.Background())
+	require.NoError(t, err)
+	require.True(t, settings.BackendModeEnabled)
+	require.True(t, settings.LANAdminModeEnabled)
+}
+
+func TestSettingService_GetPublicSettings_StandardBackendModeIsNotLANAdminMode(t *testing.T) {
+	repo := &settingPublicRepoStub{values: map[string]string{
+		SettingKeyBackendModeEnabled: "true",
+	}}
+	svc := NewSettingService(repo, &config.Config{DeploymentProfile: config.DeploymentProfileStandard})
+
+	settings, err := svc.GetPublicSettings(context.Background())
+	require.NoError(t, err)
+	require.True(t, settings.BackendModeEnabled)
+	require.False(t, settings.LANAdminModeEnabled)
+}
+
+func TestSettingService_GetPublicSettingsForInjection_LANAdminProfileFailsClosedOnRepositoryError(t *testing.T) {
+	repo := &settingPublicRepoStub{err: errors.New("database unavailable")}
+	svc := NewSettingService(repo, &config.Config{DeploymentProfile: config.DeploymentProfileLANAdmin})
+	svc.SetVersion("test-version")
+
+	payload, err := svc.GetPublicSettingsForInjection(context.Background())
+	require.NoError(t, err)
+	injection, ok := payload.(*PublicSettingsInjectionPayload)
+	require.True(t, ok)
+	require.True(t, injection.BackendModeEnabled)
+	require.True(t, injection.LANAdminModeEnabled)
+	require.NotEmpty(t, injection.SiteName)
+	require.Equal(t, "test-version", injection.Version)
+	require.NotEmpty(t, injection.ServerTimezone)
+	require.NotEmpty(t, injection.ServerUTCOffset)
+	require.Equal(t, 1, repo.calls)
+}
+
+func TestSettingService_GetPublicSettingsForInjection_StandardProfilePreservesRepositoryError(t *testing.T) {
+	wantErr := errors.New("database unavailable")
+	repo := &settingPublicRepoStub{err: wantErr}
+	svc := NewSettingService(repo, &config.Config{DeploymentProfile: config.DeploymentProfileStandard})
+
+	payload, err := svc.GetPublicSettingsForInjection(context.Background())
+	require.Nil(t, payload)
+	require.ErrorIs(t, err, wantErr)
 }
 
 func (s *settingPublicRepoStub) SetMultiple(ctx context.Context, settings map[string]string) error {

@@ -61,7 +61,7 @@ describe('Gate 2 remaining UX contract', () => {
     expect(enAdmin).toContain("title: 'Global usage'")
     // Role-aware IA uses brand Chinese labels; employee spend + admin global usage stay reachable.
     expect(roleNav).toContain("label: '我的花费'")
-    expect(roleNav).toContain("label: '全局用量'")
+    expect(roleNav).toContain("label: '用量与成本'")
   })
 
   it('adds prerequisite-aware chained empty states without creating data automatically', () => {
@@ -90,5 +90,37 @@ describe('Gate 2 remaining UX contract', () => {
       expect(view).not.toContain('<h1')
       expect(view).toContain('<h2')
     }
+  })
+
+  it('keeps the LAN overview read-only and uses only the formal backup surface', () => {
+    const overview = source('src/views/admin/console/BossOverviewView.vue')
+    expect(overview).not.toContain('updateMonthlyBudget')
+    expect(overview).not.toContain('dataManagement')
+    expect(overview).not.toContain('listBackupJobs')
+  })
+
+  it('uses the staff capability only for non-interactive service identities and unlimited cards', () => {
+    const staff = source('src/views/admin/console/StaffView.vue')
+    expect(staff).toContain('data-test="create-service-identity"')
+    expect(staff).toContain("member_type: 'tool'")
+    expect(staff).toContain("role: 'user'")
+    expect(staff).toContain('quota: 0')
+    expect(staff).not.toContain('InitialCredentialDialog')
+    expect(staff).not.toContain('issueForm.quota')
+  })
+
+  it('removes local provider-account quota controls from the LAN administrator surface', () => {
+    const createAccount = source('src/components/account/CreateAccountModal.vue')
+    const editAccount = source('src/components/account/EditAccountModal.vue')
+    const actionMenu = source('src/components/admin/account/AccountActionMenu.vue')
+
+    expect(createAccount).toContain("!appStore.lanAdminModeEnabled && form.platform === 'anthropic'")
+    expect(createAccount).toContain("!appStore.lanAdminModeEnabled && (form.type === 'apikey' || form.type === 'bedrock')")
+    expect(editAccount).toContain("!appStore.lanAdminModeEnabled && account?.platform === 'anthropic'")
+    expect(editAccount).toContain("!appStore.lanAdminModeEnabled && (account?.type === 'apikey' || account?.type === 'bedrock')")
+    expect(actionMenu).toContain('!appStore.lanAdminModeEnabled &&')
+
+	const opsSettings = source('src/views/admin/ops/components/OpsSettingsDialog.vue')
+	expect(opsSettings).toContain('v-if="!appStore.lanAdminModeEnabled"')
   })
 })

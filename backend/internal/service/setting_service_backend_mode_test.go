@@ -158,6 +158,26 @@ func TestIsBackendModeEnabled_ReturnsFalseOnDBError(t *testing.T) {
 	require.Equal(t, 1, repo.calls)
 }
 
+func TestIsBackendModeEnabled_LANAdminProfileBypassesRepository(t *testing.T) {
+	resetBackendModeTestCache(t)
+
+	repo := &bmRepoStub{
+		getValueFn: func(ctx context.Context, key string) (string, error) {
+			t.Fatal("lan_admin deployment profile must not read backend mode from repository")
+			return "false", errors.New("unreachable")
+		},
+	}
+	svc := NewSettingService(repo, &config.Config{DeploymentProfile: config.DeploymentProfileLANAdmin})
+
+	require.True(t, svc.IsBackendModeEnabled(context.Background()))
+	require.Equal(t, 0, repo.calls)
+}
+
+func TestIsLANAdminProfileUsesOnlyImmutableDeploymentConfig(t *testing.T) {
+	require.True(t, NewSettingService(nil, &config.Config{DeploymentProfile: config.DeploymentProfileLANAdmin}).IsLANAdminProfile())
+	require.False(t, NewSettingService(nil, &config.Config{DeploymentProfile: config.DeploymentProfileStandard}).IsLANAdminProfile())
+}
+
 func TestIsBackendModeEnabled_CachesResult(t *testing.T) {
 	resetBackendModeTestCache(t)
 

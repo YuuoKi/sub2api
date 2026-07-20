@@ -737,6 +737,13 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 	if s.cfg.RunMode == config.RunModeSimple {
 		return nil
 	}
+	// The LAN administrator profile uses upstream provider limits as the call
+	// boundary. Local balance, quota, expiry-window and RPM checks must never
+	// block QCanvas; usage and real cost are still recorded by the downstream
+	// reservation/settlement path.
+	if s.cfg.IsLANAdminProfile() {
+		return nil
+	}
 	if s.circuitBreaker != nil && !s.circuitBreaker.Allow() {
 		return ErrBillingServiceUnavailable
 	}

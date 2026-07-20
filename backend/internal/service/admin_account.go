@@ -68,6 +68,37 @@ func normalizeAccountConcurrency(platform, accountType string, concurrency int) 
 	return concurrency
 }
 
+// lanAdminAccountLocalLimitKeys are local business-budget controls. The LAN
+// release delegates spend boundaries to the upstream provider, so these keys
+// must never enter newly created or edited production account records.
+var lanAdminAccountLocalLimitKeys = []string{
+	"quota_limit",
+	"quota_daily_limit",
+	"quota_weekly_limit",
+	"quota_daily_reset_mode",
+	"quota_daily_reset_hour",
+	"quota_daily_reset_at",
+	"quota_weekly_reset_mode",
+	"quota_weekly_reset_day",
+	"quota_weekly_reset_hour",
+	"quota_weekly_reset_at",
+	"quota_reset_timezone",
+}
+
+func (s *adminServiceImpl) normalizeLANAdminAccountExtra(extra map[string]any) map[string]any {
+	if extra == nil || s == nil || s.settingService == nil || !s.settingService.IsLANAdminProfile() {
+		return extra
+	}
+	normalized := make(map[string]any, len(extra))
+	for key, value := range extra {
+		normalized[key] = value
+	}
+	for _, key := range lanAdminAccountLocalLimitKeys {
+		delete(normalized, key)
+	}
+	return normalized
+}
+
 func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccountInput) (*Account, error) {
 	// 绑定分组
 	groupIDs := input.GroupIDs
@@ -103,7 +134,7 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 		Platform:    input.Platform,
 		Type:        input.Type,
 		Credentials: input.Credentials,
-		Extra:       input.Extra,
+		Extra:       s.normalizeLANAdminAccountExtra(input.Extra),
 		ProxyID:     input.ProxyID,
 		Concurrency: normalizeAccountConcurrency(input.Platform, input.Type, input.Concurrency),
 		Priority:    input.Priority,
@@ -235,13 +266,14 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	// Extra 使用 map：需要区分“未提供(nil)”与“显式清空({})”。
 	// 关闭配额限制时前端会删除 quota_* 键并提交 extra:{}，此时也必须落库。
 	if input.Extra != nil {
+		normalizedExtra := s.normalizeLANAdminAccountExtra(input.Extra)
 		// 保留配额用量字段，防止编辑账号时意外重置
 		for _, key := range []string{"quota_used", "quota_daily_used", "quota_daily_start", "quota_weekly_used", "quota_weekly_start"} {
 			if v, ok := account.Extra[key]; ok {
-				input.Extra[key] = v
+				normalizedExtra[key] = v
 			}
 		}
-		account.Extra = input.Extra
+		account.Extra = normalizedExtra
 		if account.Platform == PlatformAntigravity && wasOveragesEnabled && !account.IsOveragesEnabled() {
 			delete(account.Extra, "antigravity_credits_overages") // 清理旧版 overages 运行态
 			// 清除 AICredits 限流 key
@@ -353,6 +385,7 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 // UpdateAccountExtra 仅对 Extra JSONB 做 key 级合并，避免覆盖其它运行态键
 // （如 model_rate_limits / passive_usage_* 等）。
 func (s *adminServiceImpl) UpdateAccountExtra(ctx context.Context, id int64, updates map[string]any) error {
+	updates = s.normalizeLANAdminAccountExtra(updates)
 	if len(updates) == 0 {
 		return nil
 	}
@@ -457,7 +490,7 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 	// Prepare bulk updates for columns and JSONB fields.
 	repoUpdates := AccountBulkUpdate{
 		Credentials: input.Credentials,
-		Extra:       input.Extra,
+		Extra:       s.normalizeLANAdminAccountExtra(input.Extra),
 	}
 	if input.Name != "" {
 		repoUpdates.Name = &input.Name

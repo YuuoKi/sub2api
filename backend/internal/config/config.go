@@ -20,6 +20,11 @@ const (
 	RunModeSimple   = "simple"
 )
 
+const (
+	DeploymentProfileStandard = "standard"
+	DeploymentProfileLANAdmin = "lan_admin"
+)
+
 // 使用量记录队列溢出策略
 const (
 	UsageRecordOverflowPolicyDrop   = "drop"
@@ -89,6 +94,7 @@ type Config struct {
 	Concurrency             ConcurrencyConfig             `mapstructure:"concurrency"`
 	TokenRefresh            TokenRefreshConfig            `mapstructure:"token_refresh"`
 	RunMode                 string                        `mapstructure:"run_mode" yaml:"run_mode"`
+	DeploymentProfile       string                        `mapstructure:"deployment_profile" yaml:"deployment_profile"`
 	Timezone                string                        `mapstructure:"timezone"` // e.g. "Asia/Shanghai", "UTC"
 	Gemini                  GeminiConfig                  `mapstructure:"gemini"`
 	Update                  UpdateConfig                  `mapstructure:"update"`
@@ -1441,6 +1447,36 @@ func NormalizeRunMode(value string) string {
 	}
 }
 
+// NormalizeDeploymentProfile returns the canonical immutable deployment profile.
+// Runtime loading validates unknown non-empty values before normalization.
+func NormalizeDeploymentProfile(value string) string {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	switch normalized {
+	case DeploymentProfileLANAdmin:
+		return DeploymentProfileLANAdmin
+	default:
+		return DeploymentProfileStandard
+	}
+}
+
+func validateDeploymentProfile(value string) (string, error) {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	switch normalized {
+	case "", DeploymentProfileStandard:
+		return DeploymentProfileStandard, nil
+	case DeploymentProfileLANAdmin:
+		return DeploymentProfileLANAdmin, nil
+	default:
+		return "", fmt.Errorf("invalid deployment_profile %q: must be %q or %q", normalized, DeploymentProfileStandard, DeploymentProfileLANAdmin)
+	}
+}
+
+// IsLANAdminProfile reports whether this process was started in the immutable
+// administrator-only LAN deployment profile.
+func (c *Config) IsLANAdminProfile() bool {
+	return c != nil && NormalizeDeploymentProfile(c.DeploymentProfile) == DeploymentProfileLANAdmin
+}
+
 // Load 读取并校验完整配置（要求 jwt.secret 已显式提供）。
 func Load() (*Config, error) {
 	return load(false)
@@ -1500,6 +1536,11 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 	}
 
 	cfg.RunMode = NormalizeRunMode(cfg.RunMode)
+	deploymentProfile, err := validateDeploymentProfile(cfg.DeploymentProfile)
+	if err != nil {
+		return nil, err
+	}
+	cfg.DeploymentProfile = deploymentProfile
 	cfg.Server.Mode = strings.ToLower(strings.TrimSpace(cfg.Server.Mode))
 	if cfg.Server.Mode == "" {
 		cfg.Server.Mode = "debug"
@@ -1624,6 +1665,7 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 
 func setDefaults() {
 	viper.SetDefault("run_mode", RunModeStandard)
+	viper.SetDefault("deployment_profile", DeploymentProfileStandard)
 	viper.SetDefault("gateway.content_capture.enabled", false)
 	viper.SetDefault("gateway.content_capture.prompt_max_bytes", 256*1024)
 	viper.SetDefault("gateway.content_capture.response_max_bytes", 64*1024)

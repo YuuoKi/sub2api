@@ -192,6 +192,7 @@ export interface LoginAgreementDocument {
 }
 
 export interface PublicSettings {
+	lan_admin_mode_enabled: boolean
   registration_enabled: boolean
   email_verify_enabled: boolean
   force_email_on_third_party_signup: boolean

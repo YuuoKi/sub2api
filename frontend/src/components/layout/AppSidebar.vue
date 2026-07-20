@@ -748,6 +748,7 @@ const userNavItems = computed((): NavItem[] =>
   toSidebarNavItems(
     buildEmployeeRoleNav({
       isSimpleMode: authStore.isSimpleMode,
+      lanAdminOnly: appStore.lanAdminModeEnabled,
     }),
   ),
 )
@@ -759,11 +760,13 @@ const adminNavItems = computed((): NavItem[] =>
       channelMonitorEnabled: flagChannelMonitor() !== false,
       riskControlEnabled: flagRiskControl() !== false,
       isSimpleMode: authStore.isSimpleMode,
-      customAdminMenus: customMenuItemsForAdmin.value.map((item) => ({
-        id: item.id,
-        label: item.label,
-        icon_svg: item.icon_svg,
-      })),
+      customAdminMenus: appStore.lanAdminModeEnabled
+        ? []
+        : customMenuItemsForAdmin.value.map((item) => ({
+            id: item.id,
+            label: item.label,
+            icon_svg: item.icon_svg,
+          })),
     }),
   ),
 )

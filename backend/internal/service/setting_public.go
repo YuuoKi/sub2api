@@ -282,6 +282,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 	}
 
 	return &PublicSettings{
+		LANAdminModeEnabled:              s != nil && s.cfg.IsLANAdminProfile(),
 		RegistrationEnabled:              settings[SettingKeyRegistrationEnabled] == "true",
 		EmailVerifyEnabled:               emailVerifyEnabled,
 		ForceEmailOnThirdPartySignup:     settings[SettingKeyForceEmailOnThirdPartySignup] == "true",
@@ -317,7 +318,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		WeChatOAuthOpenEnabled:           weChatOpenEnabled,
 		WeChatOAuthMPEnabled:             weChatMPEnabled,
 		WeChatOAuthMobileEnabled:         weChatMobileEnabled,
-		BackendModeEnabled:               settings[SettingKeyBackendModeEnabled] == "true",
+		BackendModeEnabled:               (s != nil && s.cfg.IsLANAdminProfile()) || settings[SettingKeyBackendModeEnabled] == "true",
 		PaymentEnabled:                   settings[SettingPaymentEnabled] == "true",
 		OIDCOAuthEnabled:                 oidcEnabled,
 		OIDCOAuthProviderName:            oidcProviderName,
@@ -440,6 +441,7 @@ func (s *SettingService) IsUserErrorViewAllowed(ctx context.Context) bool {
 // A unit test diffs this struct's JSON keys against dto.PublicSettings to catch
 // drift automatically (see setting_service_injection_test.go).
 type PublicSettingsInjectionPayload struct {
+	LANAdminModeEnabled              bool                     `json:"lan_admin_mode_enabled"`
 	RegistrationEnabled              bool                     `json:"registration_enabled"`
 	EmailVerifyEnabled               bool                     `json:"email_verify_enabled"`
 	RegistrationEmailSuffixWhitelist []string                 `json:"registration_email_suffix_whitelist"`
@@ -505,10 +507,21 @@ type PublicSettingsInjectionPayload struct {
 func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any, error) {
 	settings, err := s.GetPublicSettings(ctx)
 	if err != nil {
+		if s != nil && s.cfg.IsLANAdminProfile() {
+			return &PublicSettingsInjectionPayload{
+				SiteName:            branding.ResolveProductName(""),
+				BackendModeEnabled:  true,
+				LANAdminModeEnabled: true,
+				Version:             s.version,
+				ServerTimezone:      timezone.Name(),
+				ServerUTCOffset:     timezone.UTCOffset(),
+			}, nil
+		}
 		return nil, err
 	}
 
 	return &PublicSettingsInjectionPayload{
+		LANAdminModeEnabled:              settings.LANAdminModeEnabled,
 		RegistrationEnabled:              settings.RegistrationEnabled,
 		EmailVerifyEnabled:               settings.EmailVerifyEnabled,
 		RegistrationEmailSuffixWhitelist: settings.RegistrationEmailSuffixWhitelist,

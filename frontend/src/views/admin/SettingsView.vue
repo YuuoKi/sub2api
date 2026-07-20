@@ -45,7 +45,7 @@
         </div>
 
         <!-- Tab: Security — Admin API Key -->
-        <div v-show="activeTab === 'security'" class="space-y-6">
+        <div v-if="!lanAdminModeEnabled" v-show="activeTab === 'security'" class="space-y-6">
           <!-- Admin API Key Settings -->
           <div class="card">
             <div
@@ -202,7 +202,7 @@
         <!-- /Tab: Security — Admin API Key -->
 
         <!-- Tab: Gateway -->
-        <div v-show="activeTab === 'gateway'" class="space-y-6">
+        <div v-if="!lanAdminModeEnabled" v-show="activeTab === 'gateway'" class="space-y-6">
           <!-- Overload Cooldown (529) Settings -->
           <div class="card">
             <div
@@ -1423,7 +1423,7 @@
         <!-- /Tab: Gateway -->
 
         <!-- Tab: Security — Registration, Turnstile, LinuxDo -->
-        <div v-show="activeTab === 'security'" class="space-y-6">
+        <div v-if="!lanAdminModeEnabled" v-show="activeTab === 'security'" class="space-y-6">
           <!-- Registration Settings -->
           <div class="card">
             <div
@@ -3126,7 +3126,7 @@
         <!-- /Tab: Security — Registration, Turnstile, LinuxDo, OIDC -->
 
         <!-- Tab: Users -->
-        <div v-show="activeTab === 'users'" class="space-y-6">
+        <div v-if="!lanAdminModeEnabled" v-show="activeTab === 'users'" class="space-y-6">
           <!-- Default Settings -->
           <div class="card">
             <div
@@ -3742,7 +3742,7 @@
         <!-- /Tab: Users -->
 
         <!-- Tab: Gateway — Claude Code, Scheduling -->
-        <div v-show="activeTab === 'gateway'" class="space-y-6">
+        <div v-if="!lanAdminModeEnabled" v-show="activeTab === 'gateway'" class="space-y-6">
           <!-- Claude Code Settings -->
           <div class="card">
             <div
@@ -5070,7 +5070,7 @@
         <!-- /Tab: Gateway — Claude Code, Scheduling -->
 
         <!-- Tab: General -->
-        <div v-show="activeTab === 'general'" class="space-y-6">
+        <div v-if="!lanAdminModeEnabled" v-show="activeTab === 'general'" class="space-y-6">
           <!-- Site Settings -->
           <div class="card">
             <div
@@ -5619,7 +5619,7 @@
 	        <!-- /Tab: General -->
 
 	        <!-- Tab: Login Agreement -->
-	        <div v-show="activeTab === 'agreement'" class="space-y-6">
+	        <div v-if="!lanAdminModeEnabled" v-show="activeTab === 'agreement'" class="space-y-6">
 	          <div class="card">
 	            <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
 	              <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -5821,7 +5821,7 @@
         <!-- /Tab: Login Agreement -->
 
 	        <!-- Tab: Features (功能开关) -->
-        <div v-show="activeTab === 'features'" class="space-y-6">
+        <div v-if="!lanAdminModeEnabled" v-show="activeTab === 'features'" class="space-y-6">
 
         <div class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
@@ -6368,7 +6368,7 @@
 
         <!-- Tab: Email -->
         <!-- Tab: Payment -->
-        <div v-show="activeTab === 'payment'" class="space-y-6">
+        <div v-if="!lanAdminModeEnabled" v-show="activeTab === 'payment'" class="space-y-6">
           <!-- Payment System Settings -->
           <div class="card">
             <div
@@ -6851,7 +6851,7 @@
           />
         </div>
 
-        <div v-show="activeTab === 'email'" class="space-y-6">
+        <div v-if="!lanAdminModeEnabled" v-show="activeTab === 'email'" class="space-y-6">
           <!-- Email disabled hint - show when email_verify_enabled is off -->
           <div v-if="!form.email_verify_enabled" class="card">
             <div class="p-6">
@@ -7278,7 +7278,7 @@
         </div>
 
         <!-- Save Button -->
-        <div v-show="activeTab !== 'backup'" class="flex justify-end">
+        <div v-if="!lanAdminModeEnabled && activeTab !== 'backup'" class="flex justify-end">
           <button
             type="submit"
             :disabled="saving || loadFailed"
@@ -7349,7 +7349,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from "vue";
+import { ref, reactive, computed, onMounted, unref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { adminAPI } from "@/api";
 import {
@@ -7418,6 +7418,9 @@ import {
 const { t, locale } = useI18n();
 const appStore = useAppStore();
 const adminSettingsStore = useAdminSettingsStore();
+const lanAdminModeEnabled = computed(() =>
+  Boolean(unref(appStore.lanAdminModeEnabled)),
+);
 const isZhLocale = computed(() => locale.value.startsWith("zh"));
 
 function localText(zh: string, en: string): string {
@@ -7435,7 +7438,7 @@ type SettingsTab =
   | "email"
   | "backup";
 const activeTab = ref<SettingsTab>("general");
-const settingsTabs = [
+const allSettingsTabs = [
   { key: "general" as SettingsTab, icon: "home" as const },
   { key: "agreement" as SettingsTab, icon: "document" as const },
   { key: "features" as SettingsTab, icon: "bolt" as const },
@@ -7446,6 +7449,21 @@ const settingsTabs = [
   { key: "email" as SettingsTab, icon: "mail" as const },
   { key: "backup" as SettingsTab, icon: "database" as const },
 ];
+const settingsTabs = computed(() =>
+  lanAdminModeEnabled.value
+    ? allSettingsTabs.filter((tab) => tab.key === "backup")
+    : allSettingsTabs,
+);
+
+watch(
+  lanAdminModeEnabled,
+  (enabled) => {
+    if (enabled) {
+      activeTab.value = "backup";
+    }
+  },
+  { immediate: true },
+);
 
 const settingsTabKeyboardActions = {
   ArrowLeft: -1,
@@ -7457,6 +7475,9 @@ const settingsTabKeyboardActions = {
 } as const;
 
 function selectSettingsTab(tab: SettingsTab): void {
+  if (!settingsTabs.value.some((item) => item.key === tab)) {
+    return;
+  }
   activeTab.value = tab;
 }
 
@@ -7476,19 +7497,20 @@ function handleSettingsTabKeydown(event: KeyboardEvent, tab: SettingsTab): void 
   }
 
   event.preventDefault();
-  const currentIndex = settingsTabs.findIndex((item) => item.key === tab);
+  const visibleTabs = settingsTabs.value;
+  const currentIndex = visibleTabs.findIndex((item) => item.key === tab);
   let nextIndex = currentIndex < 0 ? 0 : currentIndex;
 
   if (action === "first") {
     nextIndex = 0;
   } else if (action === "last") {
-    nextIndex = settingsTabs.length - 1;
+    nextIndex = visibleTabs.length - 1;
   } else {
     nextIndex =
-      (nextIndex + action + settingsTabs.length) % settingsTabs.length;
+      (nextIndex + action + visibleTabs.length) % visibleTabs.length;
   }
 
-  const nextTab = settingsTabs[nextIndex]?.key;
+  const nextTab = visibleTabs[nextIndex]?.key;
   if (!nextTab) {
     return;
   }
@@ -9252,6 +9274,9 @@ function findDuplicateDefaultSubscription(
 }
 
 async function saveSettings() {
+  if (lanAdminModeEnabled.value) {
+    return;
+  }
   saving.value = true;
   try {
     const normalizedTableDefaultPageSize = Math.floor(
@@ -10600,6 +10625,10 @@ async function handleDeleteProvider() {
 }
 
 onMounted(() => {
+  if (lanAdminModeEnabled.value) {
+    loading.value = false;
+    return;
+  }
   loadSettings();
   loadSubscriptionGroups();
   loadAdminApiKey();

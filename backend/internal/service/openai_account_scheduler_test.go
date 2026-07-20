@@ -1174,6 +1174,30 @@ func TestOpenAIGatewayService_SelectAccountForModelWithExclusions_UsesGlobalDefa
 	require.Equal(t, int64(35402), account.ID)
 }
 
+func TestOpenAIGatewayService_LANAdminIgnoresHistoricalAccountQuotaAutoPauseThreshold(t *testing.T) {
+	ctx := withLANAdminOpenAIQuotaAutoPauseDisabled(context.Background())
+	primary := Account{
+		ID:          35411,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeAPIKey,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    0,
+		Extra: map[string]any{
+			"codex_5h_used_percent":   99.0,
+			"auto_pause_5h_threshold": 0.5,
+		},
+	}
+	secondary := Account{ID: 35412, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true, Concurrency: 1, Priority: 5}
+	svc := &OpenAIGatewayService{accountRepo: schedulerTestOpenAIAccountRepo{accounts: []Account{primary, secondary}}, cfg: &config.Config{}}
+
+	account, err := svc.SelectAccountForModelWithExclusions(ctx, nil, "", "gpt-5.1", nil)
+	require.NoError(t, err)
+	require.NotNil(t, account)
+	require.Equal(t, int64(35411), account.ID)
+}
+
 // Regression: a per-account explicit-disable flag exempts the account from auto-pause
 // even when a global default threshold is set. Without this, "leave threshold blank"
 // silently falls back to global default and admins have no way to whitelist a single

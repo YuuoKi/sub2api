@@ -73,6 +73,67 @@ func TestNormalizeRunMode(t *testing.T) {
 	}
 }
 
+func TestNormalizeDeploymentProfile(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"lan_admin", DeploymentProfileLANAdmin},
+		{"  LAN_ADMIN  ", DeploymentProfileLANAdmin},
+		{"standard", DeploymentProfileStandard},
+		{"unknown", DeploymentProfileStandard},
+		{"", DeploymentProfileStandard},
+	}
+
+	for _, tt := range tests {
+		require.Equal(t, tt.expected, NormalizeDeploymentProfile(tt.input))
+	}
+}
+
+func TestLoadDeploymentProfileFromEnvironment(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("DEPLOYMENT_PROFILE", "  LAN_ADMIN  ")
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.Equal(t, DeploymentProfileLANAdmin, cfg.DeploymentProfile)
+	require.True(t, cfg.IsLANAdminProfile())
+}
+
+func TestLoadRejectsUnknownDeploymentProfile(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		bootstrap bool
+	}{
+		{name: "normal load"},
+		{name: "bootstrap load", bootstrap: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			resetViperWithJWTSecret(t)
+			t.Setenv("DEPLOYMENT_PROFILE", "lan-admn")
+
+			var err error
+			if tt.bootstrap {
+				_, err = LoadForBootstrap()
+			} else {
+				_, err = Load()
+			}
+
+			require.EqualError(t, err, `invalid deployment_profile "lan-admn": must be "standard" or "lan_admin"`)
+		})
+	}
+}
+
+func TestLoadTreatsBlankDeploymentProfileAsStandard(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("DEPLOYMENT_PROFILE", "   ")
+
+	cfg, err := Load()
+
+	require.NoError(t, err)
+	require.Equal(t, DeploymentProfileStandard, cfg.DeploymentProfile)
+}
+
 func TestLoadDefaultSchedulingConfig(t *testing.T) {
 	resetViperWithJWTSecret(t)
 

@@ -75,6 +75,12 @@ type SettingService struct {
 	openAIQuotaAutoPauseSettingsSF    singleflight.Group
 }
 
+// IsLANAdminProfile reports the immutable process deployment profile. Unlike
+// IsBackendModeEnabled, it never consults mutable database settings.
+func (s *SettingService) IsLANAdminProfile() bool {
+	return s != nil && s.cfg != nil && s.cfg.IsLANAdminProfile()
+}
+
 // DefaultPlatformQuotaSetting 单 platform 三档限额（nil = 沿用上层；0 = 显式禁用；>0 = 上限）
 type DefaultPlatformQuotaSetting struct {
 	DailyLimitUSD   *float64 `json:"daily"`

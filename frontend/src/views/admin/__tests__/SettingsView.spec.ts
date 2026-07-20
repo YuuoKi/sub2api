@@ -51,6 +51,10 @@ const {
 }));
 
 const localeRef = vi.hoisted(() => ({ value: "zh-CN" }));
+const backendModeControl = vi.hoisted(() => ({
+  initialValue: false,
+  set: (_enabled: boolean) => undefined,
+}));
 
 vi.mock("@/api", () => ({
   adminAPI: {
@@ -82,15 +86,24 @@ vi.mock("@/api", () => ({
   },
 }));
 
-vi.mock("@/stores", () => ({
-  useAppStore: () => ({
-    showError,
-    showSuccess,
-    showWarning: vi.fn(),
-    showInfo: vi.fn(),
-    fetchPublicSettings,
-  }),
-}));
+vi.mock("@/stores", async () => {
+  const { ref } = await vi.importActual<typeof import("vue")>("vue");
+  const backendModeEnabled = ref(backendModeControl.initialValue);
+  backendModeControl.set = (enabled: boolean) => {
+    backendModeEnabled.value = enabled;
+  };
+
+  return {
+    useAppStore: () => ({
+      backendModeEnabled,
+      showError,
+      showSuccess,
+      showWarning: vi.fn(),
+      showInfo: vi.fn(),
+      fetchPublicSettings,
+    }),
+  };
+});
 
 vi.mock("@/stores/adminSettings", () => ({
   useAdminSettingsStore: () => ({
@@ -523,6 +536,7 @@ async function openUsersTab(wrapper: ReturnType<typeof mountView>) {
 
 describe("admin SettingsView payment visible method controls", () => {
   beforeEach(() => {
+    backendModeControl.set(false);
     getSettings.mockReset();
     updateSettings.mockReset();
     getWebSearchEmulationConfig.mockReset();
@@ -598,6 +612,34 @@ describe("admin SettingsView payment visible method controls", () => {
     });
     fetchPublicSettings.mockResolvedValue(undefined);
     adminSettingsFetch.mockResolvedValue(undefined);
+  });
+
+  it("renders only the backup settings surface in backend mode", async () => {
+    backendModeControl.set(true);
+
+    const wrapper = mountView();
+    await flushPromises();
+
+    const tabs = wrapper.findAll('[role="tab"]');
+    expect(tabs).toHaveLength(1);
+    expect(tabs[0]?.attributes("id")).toBe("settings-tab-backup");
+    expect(tabs[0]?.attributes("aria-selected")).toBe("true");
+    expect(wrapper.find('button[type="submit"]').exists()).toBe(false);
+  });
+
+  it("switches an open legacy tab to backup when backend mode turns on", async () => {
+    const wrapper = mountView();
+    await flushPromises();
+    await openPaymentTab(wrapper);
+
+    backendModeControl.set(true);
+    await flushPromises();
+
+    const tabs = wrapper.findAll('[role="tab"]');
+    expect(tabs).toHaveLength(1);
+    expect(tabs[0]?.attributes("id")).toBe("settings-tab-backup");
+    expect(tabs[0]?.attributes("aria-selected")).toBe("true");
+    expect(wrapper.find('button[type="submit"]').exists()).toBe(false);
   });
 
   it("does not render legacy visible payment method controls", async () => {
@@ -902,6 +944,7 @@ describe("admin SettingsView payment visible method controls", () => {
 
 describe("admin SettingsView wechat connect controls", () => {
   beforeEach(() => {
+    backendModeControl.set(false);
     getSettings.mockReset();
     updateSettings.mockReset();
     getWebSearchEmulationConfig.mockReset();
@@ -1148,6 +1191,7 @@ describe("admin SettingsView wechat connect controls", () => {
 
 describe("admin SettingsView platform quota matrix", () => {
   beforeEach(() => {
+    backendModeControl.set(false);
     getSettings.mockReset();
     updateSettings.mockReset();
     getWebSearchEmulationConfig.mockReset();

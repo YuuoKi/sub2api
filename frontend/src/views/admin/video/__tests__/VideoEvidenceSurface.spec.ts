@@ -44,12 +44,14 @@ describe('video task evidence surfaces', () => {
     }
   })
 
-  it('offers the real video handoff and keeps the known JPEG/JFIF tail frame unavailable', () => {
+  it('keeps asset preview/download but removes the legacy QCanvas launcher and handoff API', () => {
     const detail = source('src/views/admin/video/VideoTaskDetailView.vue')
-    expect(detail).toContain('发送视频到 QCanvas')
-    expect(detail).not.toContain('发送尾帧到 QCanvas')
-    expect(detail).toContain('不开放 PNG 交接按钮')
-    expect(detail).toContain('createAssetHandoff')
+    expect(detail).not.toContain('发送视频到 QCanvas')
+    expect(detail).not.toContain('QCanvas 本机地址')
+    expect(detail).not.toContain('createAssetHandoff')
+    expect(detail).not.toContain('startQCanvasAssetHandoffTransfer')
+    expect(detail).toContain('在新窗口打开结果资产')
+    expect(detail).toContain('在新窗口打开尾帧')
     expect(detail).not.toContain('sourceUrl=')
     expect(detail).not.toContain('apiKey=')
   })

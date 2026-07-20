@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/stretchr/testify/require"
 )
 
@@ -14,6 +15,28 @@ type updateAccountOveragesRepoStub struct {
 	mockAccountRepoForGemini
 	account     *Account
 	updateCalls int
+}
+
+type lanAdminAccountExtraRepoStub struct {
+	mockAccountRepoForGemini
+	createdExtra map[string]any
+	bulkExtra    map[string]any
+	updatedExtra map[string]any
+}
+
+func (r *lanAdminAccountExtraRepoStub) Create(_ context.Context, account *Account) error {
+	r.createdExtra = account.Extra
+	return nil
+}
+
+func (r *lanAdminAccountExtraRepoStub) BulkUpdate(_ context.Context, _ []int64, updates AccountBulkUpdate) (int64, error) {
+	r.bulkExtra = updates.Extra
+	return 1, nil
+}
+
+func (r *lanAdminAccountExtraRepoStub) UpdateExtra(_ context.Context, _ int64, updates map[string]any) error {
+	r.updatedExtra = updates
+	return nil
 }
 
 func (r *updateAccountOveragesRepoStub) GetByID(ctx context.Context, id int64) (*Account, error) {
@@ -152,6 +175,92 @@ func TestUpdateAccount_EmptyExtraPayloadCanClearQuotaLimits(t *testing.T) {
 	require.NotContains(t, repo.account.Extra, "quota_daily_limit")
 	require.NotContains(t, repo.account.Extra, "quota_weekly_limit")
 	require.Len(t, repo.account.Extra, 0)
+}
+
+func TestUpdateAccount_LANAdminDropsLocalQuotaConfiguration(t *testing.T) {
+	accountID := int64(105)
+	repo := &updateAccountOveragesRepoStub{
+		account: &Account{
+			ID:       accountID,
+			Platform: PlatformAnthropic,
+			Type:     AccountTypeAPIKey,
+			Status:   StatusActive,
+			Extra:    map[string]any{},
+		},
+	}
+	svc := &adminServiceImpl{
+		accountRepo: repo,
+		settingService: NewSettingService(nil, &config.Config{
+			DeploymentProfile: config.DeploymentProfileLANAdmin,
+		}),
+	}
+
+	updated, err := svc.UpdateAccount(context.Background(), accountID, &UpdateAccountInput{
+		Extra: map[string]any{
+			"quota_limit":              100.0,
+			"quota_daily_limit":        10.0,
+			"quota_weekly_limit":       40.0,
+			"quota_daily_reset_mode":   "fixed",
+			"quota_daily_reset_hour":   float64(9),
+			"quota_weekly_reset_mode":  "fixed",
+			"quota_weekly_reset_day":   float64(1),
+			"quota_weekly_reset_hour":  float64(0),
+			"quota_reset_timezone":     "UTC",
+			"provider_specific_option": true,
+		},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, updated)
+	require.Equal(t, 1, repo.updateCalls)
+	for _, key := range lanAdminAccountLocalLimitKeys {
+		require.NotContains(t, updated.Extra, key)
+	}
+	require.Equal(t, true, updated.Extra["provider_specific_option"])
+}
+
+func TestLANAdminAccountWritePathsDropLocalQuotaConfiguration(t *testing.T) {
+	repo := &lanAdminAccountExtraRepoStub{}
+	svc := &adminServiceImpl{
+		accountRepo: repo,
+		settingService: NewSettingService(nil, &config.Config{
+			DeploymentProfile: config.DeploymentProfileLANAdmin,
+		}),
+	}
+	inputExtra := map[string]any{
+		"quota_limit":              100.0,
+		"quota_daily_limit":        10.0,
+		"quota_weekly_reset_mode":  "fixed",
+		"quota_weekly_reset_day":   float64(1),
+		"provider_specific_option": true,
+	}
+
+	created, err := svc.CreateAccount(context.Background(), &CreateAccountInput{
+		Name:                  "provider-account",
+		Platform:              PlatformAnthropic,
+		Type:                  AccountTypeAPIKey,
+		Extra:                 inputExtra,
+		SkipDefaultGroupBind:  true,
+		SkipMixedChannelCheck: true,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, created)
+	require.Equal(t, true, repo.createdExtra["provider_specific_option"])
+	require.NotContains(t, repo.createdExtra, "quota_limit")
+	require.NotContains(t, repo.createdExtra, "quota_daily_limit")
+
+	_, err = svc.BulkUpdateAccounts(context.Background(), &BulkUpdateAccountsInput{
+		AccountIDs: []int64{1},
+		Extra:      inputExtra,
+	})
+	require.NoError(t, err)
+	require.Equal(t, true, repo.bulkExtra["provider_specific_option"])
+	require.NotContains(t, repo.bulkExtra, "quota_limit")
+
+	err = svc.UpdateAccountExtra(context.Background(), 1, inputExtra)
+	require.NoError(t, err)
+	require.Equal(t, true, repo.updatedExtra["provider_specific_option"])
+	require.NotContains(t, repo.updatedExtra, "quota_limit")
 }
 
 func TestUpdateAccount_FixedWeeklyResetClearsLegacyRollingUsage(t *testing.T) {

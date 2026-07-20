@@ -89,13 +89,16 @@ vi.mock("@/api", () => ({
 vi.mock("@/stores", async () => {
   const { ref } = await vi.importActual<typeof import("vue")>("vue");
   const backendModeEnabled = ref(backendModeControl.initialValue);
+  const lanAdminModeEnabled = ref(backendModeControl.initialValue);
   backendModeControl.set = (enabled: boolean) => {
     backendModeEnabled.value = enabled;
+    lanAdminModeEnabled.value = enabled;
   };
 
   return {
     useAppStore: () => ({
       backendModeEnabled,
+      lanAdminModeEnabled,
       showError,
       showSuccess,
       showWarning: vi.fn(),

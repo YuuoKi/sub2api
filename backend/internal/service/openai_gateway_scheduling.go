@@ -304,6 +304,9 @@ func shouldAutoPauseOpenAIAccountByQuota(ctx context.Context, account *Account) 
 	if account == nil || !account.IsOpenAI() {
 		return false, openAIQuotaAutoPauseDecision{}
 	}
+	if isLANAdminOpenAIQuotaAutoPauseDisabled(ctx) {
+		return false, openAIQuotaAutoPauseDecision{}
+	}
 	// Per-account explicit-disable flags must take precedence over the global default.
 	// Without these, leaving the account threshold blank means "use global default",
 	// so an admin has no way to exempt a single account from auto-pause once a global
@@ -493,12 +496,28 @@ func readOpenAIQuotaUsedPercent(extra map[string]any, window string) float64 {
 }
 
 type openAIQuotaAutoPauseCtxKey struct{}
+type lanAdminOpenAIQuotaAutoPauseDisabledKey struct{}
 
 func withOpenAIQuotaAutoPauseSettings(ctx context.Context, settings OpsOpenAIAccountQuotaAutoPauseSettings) context.Context {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	return context.WithValue(ctx, openAIQuotaAutoPauseCtxKey{}, settings)
+}
+
+func withLANAdminOpenAIQuotaAutoPauseDisabled(ctx context.Context) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, lanAdminOpenAIQuotaAutoPauseDisabledKey{}, true)
+}
+
+func isLANAdminOpenAIQuotaAutoPauseDisabled(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	disabled, _ := ctx.Value(lanAdminOpenAIQuotaAutoPauseDisabledKey{}).(bool)
+	return disabled
 }
 
 func openAIQuotaAutoPauseSettingsFromContext(ctx context.Context) OpsOpenAIAccountQuotaAutoPauseSettings {
@@ -510,6 +529,9 @@ func openAIQuotaAutoPauseSettingsFromContext(ctx context.Context) OpsOpenAIAccou
 }
 
 func (s *OpenAIGatewayService) withOpenAIQuotaAutoPauseContext(ctx context.Context) context.Context {
+	if s != nil && s.cfg != nil && s.cfg.IsLANAdminProfile() {
+		return withLANAdminOpenAIQuotaAutoPauseDisabled(ctx)
+	}
 	if s == nil || s.settingService == nil {
 		return ctx
 	}

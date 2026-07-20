@@ -482,6 +482,10 @@ func (s *OpsService) UpdateOpsAdvancedSettings(ctx context.Context, cfg *OpsAdva
 		return nil, err
 	}
 
+	if s.cfg != nil && s.cfg.IsLANAdminProfile() {
+		cfg.OpenAIAccountQuotaAutoPause = OpsOpenAIAccountQuotaAutoPauseSettings{}
+	}
+
 	normalizeOpsAdvancedSettings(cfg)
 	raw, err := json.Marshal(cfg)
 	if err != nil {

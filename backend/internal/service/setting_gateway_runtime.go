@@ -810,6 +810,9 @@ func (s *SettingService) GetOpenAIQuotaAutoPauseSettings(ctx context.Context) Op
 	if s == nil {
 		return OpsOpenAIAccountQuotaAutoPauseSettings{}
 	}
+	if s.IsLANAdminProfile() {
+		return OpsOpenAIAccountQuotaAutoPauseSettings{}
+	}
 	cached, _ := s.openAIQuotaAutoPauseSettingsCache.Load().(*cachedOpenAIQuotaAutoPauseSettings)
 	now := time.Now().UnixNano()
 	if cached != nil && now < cached.expiresAt {
@@ -834,6 +837,10 @@ func (s *SettingService) GetOpenAIQuotaAutoPauseSettings(ctx context.Context) Op
 // constructing the service.
 func (s *SettingService) WarmOpenAIQuotaAutoPauseSettings(ctx context.Context) OpsOpenAIAccountQuotaAutoPauseSettings {
 	if s == nil {
+		return OpsOpenAIAccountQuotaAutoPauseSettings{}
+	}
+	if s.IsLANAdminProfile() {
+		s.SetOpenAIQuotaAutoPauseSettings(OpsOpenAIAccountQuotaAutoPauseSettings{})
 		return OpsOpenAIAccountQuotaAutoPauseSettings{}
 	}
 	s.refreshOpenAIQuotaAutoPauseSettings(ctx)

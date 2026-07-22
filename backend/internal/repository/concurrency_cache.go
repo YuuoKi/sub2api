@@ -982,6 +982,33 @@ func (c *concurrencyCache) allIndexMembers(ctx context.Context, indexKey string)
 	return members, nil
 }
 
+// CountActiveAccountSlots sums live in-flight account concurrency slots via the active index.
+func (c *concurrencyCache) CountActiveAccountSlots(ctx context.Context) (int64, error) {
+	if c == nil || c.rdb == nil {
+		return 0, nil
+	}
+	members, err := c.allIndexMembers(ctx, accountActiveIndexKey)
+	if err != nil {
+		return 0, err
+	}
+	if len(members) == 0 {
+		return 0, nil
+	}
+	now, err := c.redisUnixSeconds(ctx)
+	if err != nil {
+		return 0, err
+	}
+	loads, _, err := c.readIndexLoads(ctx, accountSlotIndex, members, now)
+	if err != nil {
+		return 0, err
+	}
+	var total int64
+	for i := range loads {
+		total += int64(loads[i].slotCount)
+	}
+	return total, nil
+}
+
 // cleanupStaleProcessSlotsForIndex 逐个处理索引中的账号/用户。
 // Lua 脚本一次只碰一个槽位 key，兼容 Redis Cluster，随后删除重启后已失效的等待计数；
 // 索引 member 的去留由脚本返回的剩余槽位数决定，最后批量写回。

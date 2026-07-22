@@ -10,11 +10,17 @@ describe('HomeView / KeyUsageView product name contract', () => {
   it('routes siteName through resolveProductName instead of raw cached site_name', () => {
     const home = read('HomeView.vue')
     const keyUsage = read('KeyUsageView.vue')
+    const register = read('auth/RegisterView.vue')
+    const emailVerify = read('auth/EmailVerifyView.vue')
 
     expect(home).toContain("import { resolveProductName } from '@/utils/productMode'")
     expect(keyUsage).toContain("import { resolveProductName } from '@/utils/productMode'")
+    expect(register).toContain("import { DEFAULT_PRODUCT_NAME, resolveProductName } from '@/utils/productMode'")
+    expect(emailVerify).toContain("import { DEFAULT_PRODUCT_NAME, resolveProductName } from '@/utils/productMode'")
     expect(home).toMatch(/siteName\s*=\s*computed\(\s*\(\)\s*=>\s*resolveProductName\(/)
     expect(keyUsage).toMatch(/siteName\s*=\s*computed\(\s*\(\)\s*=>\s*resolveProductName\(/)
+    expect(register).toContain('resolveProductName(settings.site_name)')
+    expect(emailVerify).toContain('resolveProductName(settings.site_name)')
     expect(home).not.toMatch(
       /cachedPublicSettings\?\.site_name\s*\|\|\s*appStore\.siteName\s*\|\|\s*['"]无界/
     )

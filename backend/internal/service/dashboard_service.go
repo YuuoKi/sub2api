@@ -38,19 +38,55 @@ type dashboardStatsCacheEntry struct {
 	UpdatedAt int64                      `json:"updated_at"`
 }
 
+// DashboardRealtimeMetrics is the admin /dashboard/realtime response contract.
+type DashboardRealtimeMetrics struct {
+	ActiveRequests      int64   `json:"active_requests"`
+	RequestsPerMinute   int64   `json:"requests_per_minute"`
+	AverageResponseTime float64 `json:"average_response_time"`
+	ErrorRate           float64 `json:"error_rate"`
+}
+
+// ActiveRequestCounter reports currently in-flight account concurrency slots.
+type ActiveRequestCounter interface {
+	CountActiveRequests(ctx context.Context) (int64, error)
+}
+
 // DashboardService 提供管理员仪表盘统计服务。
 type DashboardService struct {
-	usageRepo      UsageLogRepository
-	aggRepo        DashboardAggregationRepository
-	cache          DashboardStatsCache
-	cacheFreshTTL  time.Duration
-	cacheTTL       time.Duration
-	refreshTimeout time.Duration
-	refreshing     int32
-	aggEnabled     bool
-	aggInterval    time.Duration
-	aggLookback    time.Duration
-	aggUsageDays   int
+	usageRepo            UsageLogRepository
+	aggRepo              DashboardAggregationRepository
+	cache                DashboardStatsCache
+	activeRequestCounter ActiveRequestCounter
+	cacheFreshTTL        time.Duration
+	cacheTTL             time.Duration
+	refreshTimeout       time.Duration
+	refreshing           int32
+	aggEnabled           bool
+	aggInterval          time.Duration
+	aggLookback          time.Duration
+	aggUsageDays         int
+}
+
+// ProvideDashboardService constructs DashboardService and wires optional active-request counting.
+func ProvideDashboardService(
+	usageRepo UsageLogRepository,
+	aggRepo DashboardAggregationRepository,
+	cache DashboardStatsCache,
+	cfg *config.Config,
+	concurrency *ConcurrencyService,
+) *DashboardService {
+	svc := NewDashboardService(usageRepo, aggRepo, cache, cfg)
+	if concurrency != nil {
+		svc.SetActiveRequestCounter(concurrency)
+	}
+	return svc
+}
+
+func (s *DashboardService) SetActiveRequestCounter(counter ActiveRequestCounter) {
+	if s == nil {
+		return
+	}
+	s.activeRequestCounter = counter
 }
 
 func NewDashboardService(usageRepo UsageLogRepository, aggRepo DashboardAggregationRepository, cache DashboardStatsCache, cfg *config.Config) *DashboardService {
@@ -100,6 +136,58 @@ func NewDashboardService(usageRepo UsageLogRepository, aggRepo DashboardAggregat
 		aggLookback:    aggLookback,
 		aggUsageDays:   aggUsageDays,
 	}
+}
+
+// GetRealtimeMetrics returns live admin dashboard counters from usage + concurrency sources.
+// Empty/unavailable dependencies yield zeros for that field only — never a hard-coded mock payload.
+func (s *DashboardService) GetRealtimeMetrics(ctx context.Context) (*DashboardRealtimeMetrics, error) {
+	if s == nil {
+		return &DashboardRealtimeMetrics{}, nil
+	}
+
+	out := &DashboardRealtimeMetrics{}
+
+	now := time.Now().UTC()
+	windowStart := now.Add(-time.Minute)
+	if fetcher, ok := s.usageRepo.(dashboardStatsRangeFetcher); ok {
+		windowStats, err := fetcher.GetDashboardStatsWithRange(ctx, windowStart, now)
+		if err != nil {
+			return nil, fmt.Errorf("get realtime usage window: %w", err)
+		}
+		if windowStats != nil {
+			out.RequestsPerMinute = windowStats.TotalRequests
+			out.AverageResponseTime = windowStats.AverageDurationMs
+		}
+	} else {
+		stats, err := s.fetchDashboardStats(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("get realtime dashboard stats: %w", err)
+		}
+		if stats != nil {
+			out.RequestsPerMinute = stats.Rpm
+			out.AverageResponseTime = stats.AverageDurationMs
+		}
+	}
+
+	accountStats, err := s.usageRepo.GetDashboardStats(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("get realtime account health: %w", err)
+	}
+	if accountStats != nil && accountStats.TotalAccounts > 0 {
+		unhealthy := accountStats.ErrorAccounts + accountStats.RateLimitAccounts + accountStats.OverloadAccounts
+		out.ErrorRate = float64(unhealthy) / float64(accountStats.TotalAccounts) * 100
+	}
+
+	if s.activeRequestCounter != nil {
+		active, countErr := s.activeRequestCounter.CountActiveRequests(ctx)
+		if countErr != nil {
+			logger.LegacyPrintf("service.dashboard", "[Dashboard] active request count failed: %v", countErr)
+		} else {
+			out.ActiveRequests = active
+		}
+	}
+
+	return out, nil
 }
 
 func (s *DashboardService) GetDashboardStats(ctx context.Context) (*usagestats.DashboardStats, error) {

@@ -582,6 +582,22 @@ func (s *ConcurrencyService) StartSlotCleanupWorker(_ AccountRepository, interva
 // GetAccountConcurrencyBatch gets current concurrency counts for multiple accounts.
 // Uses a detached context with timeout to prevent HTTP request cancellation from
 // causing the entire batch to fail (which would show all concurrency as 0).
+// CountActiveRequests sums in-flight account concurrency slots from the active index.
+// Implements ActiveRequestCounter for the admin dashboard realtime endpoint.
+func (s *ConcurrencyService) CountActiveRequests(ctx context.Context) (int64, error) {
+	if s == nil || s.cache == nil {
+		return 0, nil
+	}
+	type activeSlotCounter interface {
+		CountActiveAccountSlots(ctx context.Context) (int64, error)
+	}
+	counter, ok := s.cache.(activeSlotCounter)
+	if !ok {
+		return 0, nil
+	}
+	return counter.CountActiveAccountSlots(ctx)
+}
+
 func (s *ConcurrencyService) GetAccountConcurrencyBatch(ctx context.Context, accountIDs []int64) (map[int64]int, error) {
 	if len(accountIDs) == 0 {
 		return map[int64]int{}, nil

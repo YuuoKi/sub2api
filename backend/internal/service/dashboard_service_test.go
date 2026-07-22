@@ -393,3 +393,53 @@ func TestDashboardService_AggDisabled_UsesUsageLogsFallback(t *testing.T) {
 	require.False(t, repo.rangeEnd.IsZero())
 	require.Equal(t, truncateToDayUTC(repo.rangeEnd.AddDate(0, 0, -7)), repo.rangeStart)
 }
+
+type activeRequestCounterStub struct {
+	n   int64
+	err error
+}
+
+func (s *activeRequestCounterStub) CountActiveRequests(ctx context.Context) (int64, error) {
+	return s.n, s.err
+}
+
+func TestDashboardServiceGetRealtimeMetricsFromUsageAndConcurrency(t *testing.T) {
+	repo := &usageRepoStub{
+		rangeStats: &usagestats.DashboardStats{
+			TotalRequests:     12,
+			AverageDurationMs: 240,
+		},
+		stats: &usagestats.DashboardStats{
+			TotalAccounts:     10,
+			ErrorAccounts:     1,
+			RateLimitAccounts: 1,
+			OverloadAccounts:  0,
+			Rpm:               3,
+			AverageDurationMs: 100,
+		},
+	}
+	svc := NewDashboardService(repo, nil, nil, nil)
+	svc.SetActiveRequestCounter(&activeRequestCounterStub{n: 7})
+
+	got, err := svc.GetRealtimeMetrics(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, int64(7), got.ActiveRequests)
+	require.Equal(t, int64(12), got.RequestsPerMinute)
+	require.InDelta(t, 240.0, got.AverageResponseTime, 0.001)
+	require.InDelta(t, 20.0, got.ErrorRate, 0.001)
+}
+
+func TestDashboardServiceGetRealtimeMetricsEmptySources(t *testing.T) {
+	repo := &usageRepoStub{
+		rangeStats: &usagestats.DashboardStats{},
+		stats:      &usagestats.DashboardStats{},
+	}
+	svc := NewDashboardService(repo, nil, nil, nil)
+
+	got, err := svc.GetRealtimeMetrics(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, int64(0), got.ActiveRequests)
+	require.Equal(t, int64(0), got.RequestsPerMinute)
+	require.Equal(t, 0.0, got.AverageResponseTime)
+	require.Equal(t, 0.0, got.ErrorRate)
+}

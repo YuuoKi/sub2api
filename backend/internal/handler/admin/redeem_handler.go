@@ -373,18 +373,58 @@ func (h *RedeemHandler) Expire(c *gin.Context) {
 // GetStats handles getting redeem code statistics
 // GET /api/v1/admin/redeem-codes/stats
 func (h *RedeemHandler) GetStats(c *gin.Context) {
-	// Return mock data for now
+	ctx := c.Request.Context()
+	now := time.Now().UTC()
+
+	var (
+		totalCodes            int64
+		activeCodes           int64
+		usedCodes             int64
+		expiredCodes          int64
+		totalValueDistributed float64
+		byType                = map[string]int64{
+			service.RedeemTypeBalance:      0,
+			service.RedeemTypeConcurrency:  0,
+			service.RedeemTypeSubscription: 0,
+			service.RedeemTypeInvitation:   0,
+		}
+	)
+
+	page := 1
+	const pageSize = 200
+	for {
+		codes, total, err := h.adminService.ListRedeemCodes(ctx, page, pageSize, "", "", "", "id", "desc")
+		if err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+		totalCodes = total
+		for i := range codes {
+			code := &codes[i]
+			byType[code.Type]++
+			switch {
+			case code.Status == service.StatusUsed:
+				usedCodes++
+				totalValueDistributed += code.Value
+			case code.IsExpiredAt(now) || code.Status == service.StatusExpired:
+				expiredCodes++
+			case code.Status == service.StatusUnused:
+				activeCodes++
+			}
+		}
+		if int64(page*pageSize) >= total || len(codes) == 0 {
+			break
+		}
+		page++
+	}
+
 	response.Success(c, gin.H{
-		"total_codes":             0,
-		"active_codes":            0,
-		"used_codes":              0,
-		"expired_codes":           0,
-		"total_value_distributed": 0.0,
-		"by_type": gin.H{
-			"balance":     0,
-			"concurrency": 0,
-			"trial":       0,
-		},
+		"total_codes":             totalCodes,
+		"active_codes":            activeCodes,
+		"used_codes":              usedCodes,
+		"expired_codes":           expiredCodes,
+		"total_value_distributed": totalValueDistributed,
+		"by_type":                 byType,
 	})
 }
 

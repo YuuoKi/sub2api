@@ -194,7 +194,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -406,6 +406,17 @@ onMounted(() => {
   void loadStaffOptions()
   void reload()
 })
+
+// Same-route query drill-downs (e.g. BossOverview → ai-records?user_id=) reuse the component;
+// re-apply filters whenever the query changes.
+watch(
+  () => route.query,
+  () => {
+    applyRouteQuery()
+    page.value = 1
+    void reload()
+  }
+)
 
 onUnmounted(() => {
   reloadAbortController?.abort()

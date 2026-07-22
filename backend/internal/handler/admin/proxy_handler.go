@@ -293,14 +293,45 @@ func (h *ProxyHandler) GetStats(c *gin.Context) {
 		return
 	}
 
-	// Return mock data for now
-	_ = proxyID
+	ctx := c.Request.Context()
+	if _, err := h.adminService.GetProxy(ctx, proxyID); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	accounts, err := h.adminService.GetProxyAccounts(ctx, proxyID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	totalAccounts := len(accounts)
+	averageLatency := 0.0
+	successRate := 100.0
+	if proxies, listErr := h.adminService.GetAllProxiesWithAccountCount(ctx); listErr == nil {
+		for i := range proxies {
+			if proxies[i].ID != proxyID {
+				continue
+			}
+			if proxies[i].LatencyMs != nil {
+				averageLatency = float64(*proxies[i].LatencyMs)
+			}
+			switch proxies[i].LatencyStatus {
+			case "failed":
+				successRate = 0
+			case "success":
+				successRate = 100
+			}
+			break
+		}
+	}
+
 	response.Success(c, gin.H{
-		"total_accounts":  0,
-		"active_accounts": 0,
+		"total_accounts":  totalAccounts,
+		"active_accounts": totalAccounts,
 		"total_requests":  0,
-		"success_rate":    100.0,
-		"average_latency": 0,
+		"success_rate":    successRate,
+		"average_latency": averageLatency,
 	})
 }
 

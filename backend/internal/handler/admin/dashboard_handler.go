@@ -263,13 +263,12 @@ func (h *DashboardHandler) BackfillAggregation(c *gin.Context) {
 // GetRealtimeMetrics handles getting real-time system metrics
 // GET /api/v1/admin/dashboard/realtime
 func (h *DashboardHandler) GetRealtimeMetrics(c *gin.Context) {
-	// Return mock data for now
-	response.Success(c, gin.H{
-		"active_requests":       0,
-		"requests_per_minute":   0,
-		"average_response_time": 0,
-		"error_rate":            0.0,
-	})
+	metrics, err := h.dashboardService.GetRealtimeMetrics(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, metrics)
 }
 
 // GetUsageTrend handles getting usage trend data

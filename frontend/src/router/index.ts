@@ -11,7 +11,11 @@ import { useAdminComplianceStore } from '@/stores/adminCompliance'
 import { useNavigationLoadingState } from '@/composables/useNavigationLoading'
 import { useRoutePrefetch } from '@/composables/useRoutePrefetch'
 import { getSetupStatus } from '@/api/setup'
-import { resolveCompletedSetupRedirectPath, resolvePostAuthRedirect } from './setupRedirect'
+import {
+  resolveAuthenticatedLandingPath,
+  resolveCompletedSetupRedirectPath,
+  resolvePostAuthRedirect
+} from './setupRedirect'
 import { resolveRouteDocumentTitle } from './title'
 
 /**
@@ -951,7 +955,7 @@ router.beforeEach(async (to, _from, next) => {
     return
   }
   if (!mustChangePassword && to.path === '/change-temporary-password') {
-    next(appStore.lanAdminModeEnabled && authStore.isAdmin ? '/admin/console/overview' : authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
+    next(resolveAuthenticatedLandingPath(authStore.isAdmin))
     return
   }
 
@@ -995,7 +999,7 @@ router.beforeEach(async (to, _from, next) => {
     appStore.publicSettingsLoaded &&
     appStore.cachedPublicSettings?.payment_enabled === false
   ) {
-    next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
+    next(resolveAuthenticatedLandingPath(authStore.isAdmin))
     return
   }
 
@@ -1019,8 +1023,8 @@ router.beforeEach(async (to, _from, next) => {
     ]
 
     if (restrictedPaths.some((path) => to.path.startsWith(path))) {
-      // 简易模式下访问受限页面,重定向到仪表板
-      next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
+      // 简易模式下访问受限页面,重定向到控制台首页
+      next(resolveAuthenticatedLandingPath(authStore.isAdmin))
       return
     }
   }

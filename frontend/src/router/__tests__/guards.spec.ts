@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import {
+  resolveAuthenticatedLandingPath,
   resolveCompletedSetupRedirectPath,
   resolvePostAuthRedirect,
 } from '@/router/setupRedirect'
@@ -117,11 +118,7 @@ function simulateGuard(
     return '/change-temporary-password'
   }
   if (!authState.mustChangePassword && toPath === '/change-temporary-password') {
-    return authState.backendModeEnabled && authState.isAdmin
-      ? '/admin/console/overview'
-      : authState.isAdmin
-        ? '/admin/dashboard'
-        : '/dashboard'
+    return resolveAuthenticatedLandingPath(authState.isAdmin)
   }
 
   // 需要管理员但不是管理员 — early return before adminCompliance / overview fetches
@@ -144,7 +141,7 @@ function simulateGuard(
       '/redeem',
     ]
     if (restrictedPaths.some((path) => toPath.startsWith(path))) {
-      return authState.isAdmin ? '/admin/dashboard' : '/dashboard'
+      return resolveAuthenticatedLandingPath(authState.isAdmin)
     }
   }
 
@@ -343,7 +340,7 @@ describe('路由守卫逻辑', () => {
       expect(redirect).toBe('/dashboard')
     })
 
-    it('管理员简易模式访问 /admin/groups 重定向到 /admin/dashboard', () => {
+    it('管理员简易模式访问 /admin/groups 重定向到控制台首页', () => {
       const authState: MockAuthState = {
         isAuthenticated: true,
         isAdmin: true,
@@ -352,7 +349,7 @@ describe('路由守卫逻辑', () => {
         hasPendingAuthSession: false,
       }
       const redirect = simulateGuard('/admin/groups', { requiresAdmin: true }, authState)
-      expect(redirect).toBe('/admin/dashboard')
+      expect(redirect).toBe('/admin/console/overview')
     })
 
     it('管理员简易模式访问 /admin/subscriptions 重定向', () => {
@@ -368,7 +365,7 @@ describe('路由守卫逻辑', () => {
         { requiresAdmin: true },
         authState
       )
-      expect(redirect).toBe('/admin/dashboard')
+      expect(redirect).toBe('/admin/console/overview')
     })
 
     it('简易模式下非受限页面正常访问', () => {

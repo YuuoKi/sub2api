@@ -45,11 +45,12 @@ func TestGenerateTemporaryPasswordUsesUniqueCryptographicValues(t *testing.T) {
 
 func TestAdminServiceResetUserPasswordReplacesCredentialAndRevokesOldPassword(t *testing.T) {
 	user := &User{
-		ID:          72,
-		Email:       "reset@example.com",
-		Role:        RoleUser,
-		Status:      StatusActive,
-		Concurrency: 1,
+		ID:           72,
+		Email:        "reset@example.com",
+		Role:         RoleUser,
+		Status:       StatusActive,
+		Concurrency:  1,
+		TokenVersion: 3,
 	}
 	require.NoError(t, user.SetPassword("old-password"))
 	repo := &userRepoStub{user: user}
@@ -63,6 +64,7 @@ func TestAdminServiceResetUserPasswordReplacesCredentialAndRevokesOldPassword(t 
 	require.True(t, user.CheckPassword(credential.TemporaryPassword))
 	require.True(t, user.MustChangePassword)
 	require.NotNil(t, user.TemporaryPasswordExpiresAt)
+	require.Equal(t, int64(4), user.TokenVersion, "admin reset must bump TokenVersion to invalidate existing sessions")
 }
 
 func TestAuthServiceRejectsExpiredTemporaryPassword(t *testing.T) {

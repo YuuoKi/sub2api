@@ -242,6 +242,8 @@ func (s *adminServiceImpl) ResetUserPassword(ctx context.Context, id int64) (*In
 	if err := user.SetPassword(temporaryPassword); err != nil {
 		return nil, err
 	}
+	// Invalidate existing JWTs — same contract as ChangePassword / forgot-password reset.
+	user.TokenVersion++
 	user.MustChangePassword = true
 	user.TemporaryPasswordExpiresAt = &expiresAt
 	if err := s.userRepo.Update(ctx, user); err != nil {

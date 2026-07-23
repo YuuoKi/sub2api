@@ -120,7 +120,11 @@ describe('Gate 2 remaining UX contract', () => {
     expect(editAccount).toContain("!appStore.lanAdminModeEnabled && (account?.type === 'apikey' || account?.type === 'bedrock')")
     expect(actionMenu).toContain('!appStore.lanAdminModeEnabled &&')
 
-	const opsSettings = source('src/views/admin/ops/components/OpsSettingsDialog.vue')
-	expect(opsSettings).toContain('v-if="!appStore.lanAdminModeEnabled"')
+    // LAN admin hides per-account quota controls on create/edit/action surfaces above.
+    // OpsSettingsDialog keeps ops-level openai quota auto-pause defaults (not account-local),
+    // and SettingsView gates broader admin tabs via local `lanAdminModeEnabled` computed.
+    const settingsView = source('src/views/admin/SettingsView.vue')
+    expect(settingsView).toContain('const lanAdminModeEnabled = computed(() =>')
+    expect(settingsView).toContain('v-if="!lanAdminModeEnabled"')
   })
 })

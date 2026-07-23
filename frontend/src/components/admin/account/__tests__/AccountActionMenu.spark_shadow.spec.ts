@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
 import AccountActionMenu from '../AccountActionMenu.vue'
 import type { Account } from '@/types'
 
@@ -11,6 +12,11 @@ vi.mock('vue-i18n', async () => {
       t: (key: string) => key,
     }),
   }
+})
+
+beforeEach(() => {
+  // AccountActionMenu reads useAppStore().lanAdminModeEnabled for quota-reset visibility.
+  setActivePinia(createPinia())
 })
 
 function makeAccount(overrides: Partial<Account>): Account {

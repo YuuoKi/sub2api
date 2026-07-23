@@ -797,7 +797,8 @@ async function loadActiveGroups() {
   } finally {
     groupsLoading.value = false
     if (issueModalOpen.value) selectEligibleDefault()
-	if (qcanvasPairModalOpen.value) selectQCanvasPairDefaults()
+	// 开卡向导第 2 步与双 Key 弹窗共用 qcanvasPairForm，组加载完成后都要补默认选择
+	if (qcanvasPairModalOpen.value || (staffModalOpen.value && wizardStep.value === 2)) selectQCanvasPairDefaults()
   }
 }
 

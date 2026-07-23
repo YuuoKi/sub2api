@@ -246,7 +246,7 @@ export default {
     emailSuffixNotAllowedWithAllowed:
       'This email domain is not allowed. Allowed domains: {suffixes}',
     emailSuffixAllowedMore: 'and {count} more',
-    loginSuccess: 'Login successful! Welcome back.',
+    loginSuccess: 'Login successful',
     accountCreatedSuccess: 'Account created successfully! Welcome to {siteName}.',
     reloginRequired: 'Session expired. Please log in again.',
     turnstileExpired: 'Verification expired, please try again',

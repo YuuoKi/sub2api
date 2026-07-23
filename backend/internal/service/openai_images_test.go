@@ -356,6 +356,37 @@ func TestOpenAIGatewayServiceParseOpenAIImagesRequest_AllowsGrokImageModels(t *t
 	}
 }
 
+func TestOpenAIGatewayServiceParseOpenAIImagesRequest_AllowsSeedreamImageModels(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// Official Volcengine Ark model ids (docs 82379/1330310, verified 2026-07-23).
+	for _, model := range []string{
+		"doubao-seedream-5-0-pro-260628",
+		"doubao-seedream-5-0-260128",
+		"doubao-seedream-5-0-lite-260128",
+		"doubao-seedream-4-5-251128",
+		"doubao-seedream-4-0-250828",
+	} {
+		t.Run(model, func(t *testing.T) {
+			body := []byte(fmt.Sprintf(`{"model":%q,"prompt":"draw a cat","size":"2K","watermark":false,"response_format":"url"}`, model))
+			req := httptest.NewRequest(http.MethodPost, "/v1/images/generations", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(rec)
+			c.Request = req
+
+			svc := &OpenAIGatewayService{}
+			parsed, err := svc.ParseOpenAIImagesRequest(c, body)
+			require.NoError(t, err)
+			require.NotNil(t, parsed)
+			require.Equal(t, model, parsed.Model)
+			// Ark-specific fields (watermark, tier sizes like "2K") must not block passthrough.
+			require.Equal(t, "2K", parsed.Size)
+			require.Equal(t, ImageBillingSize2K, parsed.SizeTier)
+		})
+	}
+}
+
 func TestOpenAIGatewayServiceParseOpenAIImagesRequest_JSONEditURLs(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	body := []byte(`{

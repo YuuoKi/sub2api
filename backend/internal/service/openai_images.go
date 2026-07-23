@@ -456,7 +456,18 @@ func applyOpenAIImagesDefaults(req *OpenAIImagesRequest) {
 
 func isOpenAIImageGenerationModel(model string) bool {
 	model = strings.ToLower(strings.TrimSpace(model))
-	return strings.HasPrefix(model, "gpt-image-") || isGrokImageGenerationModel(model)
+	return strings.HasPrefix(model, "gpt-image-") ||
+		isGrokImageGenerationModel(model) ||
+		isSeedreamImageGenerationModel(model)
+}
+
+// isSeedreamImageGenerationModel matches ByteDance Volcengine Ark Seedream（即梦）
+// image models (e.g. doubao-seedream-5-0-pro-260628). Ark exposes an
+// OpenAI-compatible /api/v3/images/generations contract, so these models ride the
+// standard images passthrough without a dedicated adapter.
+func isSeedreamImageGenerationModel(model string) bool {
+	model = strings.ToLower(strings.TrimSpace(model))
+	return strings.HasPrefix(model, "doubao-seedream-")
 }
 
 func isGrokImageGenerationModel(model string) bool {

@@ -50,16 +50,15 @@
                   <td class="px-5 py-3">
                     <div class="flex items-center gap-3">
                       <span
-                        class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold"
-                        :class="user.member_type === 'tool' ? 'bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-200' : 'bg-teal-100 text-teal-700 dark:bg-teal-500/20 dark:text-teal-200'"
+                        class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100 text-sm font-semibold text-gray-600 dark:bg-dark-700 dark:text-gray-300"
                       >
                         {{ staffDisplayName(user.username, user.email).slice(0, 1).toUpperCase() }}
                       </span>
                       <div class="min-w-0">
                         <div class="flex items-center gap-2 font-medium text-gray-900 dark:text-white">
                           {{ staffDisplayName(user.username, user.email) }}
-                          <span v-if="user.member_type === 'tool'" class="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-700 dark:bg-sky-500/20 dark:text-sky-200">工具</span>
-                          <span v-if="user.role === 'admin'" class="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:bg-violet-500/20 dark:text-violet-200">管理员</span>
+                          <span v-if="user.member_type === 'tool'" class="text-xs text-gray-400 dark:text-gray-500">工具</span>
+                          <span v-if="user.role === 'admin'" class="text-xs text-gray-400 dark:text-gray-500">管理员</span>
                         </div>
                         <div class="truncate text-xs text-gray-500 dark:text-gray-400">{{ user.email }}</div>
                       </div>
@@ -75,7 +74,7 @@
                     </span>
                   </td>
                   <td class="px-5 py-3 tabular-nums text-gray-700 dark:text-gray-200">{{ formatMoney(usageMap[user.id]?.today_actual_cost, usdCnyRate) }}</td>
-                  <td class="px-5 py-3 tabular-nums font-medium text-teal-600 dark:text-teal-300">{{ formatMoney(usageMap[user.id]?.total_actual_cost, usdCnyRate) }}</td>
+                  <td class="px-5 py-3 tabular-nums text-gray-900 dark:text-white">{{ formatMoney(usageMap[user.id]?.total_actual_cost, usdCnyRate) }}</td>
                   <td class="px-5 py-3">
                     <div class="flex justify-end gap-1.5" @click.stop>
                       <button class="btn btn-sm btn-primary" type="button" data-test="issue-card" @click="openIssueCard(user)">
@@ -139,7 +138,7 @@
                                 />
                               </div>
                             </td>
-                            <td class="px-3 py-2 text-xs tabular-nums text-teal-600 dark:text-teal-300">{{ formatMoney(keyUsageMap[key.id]?.total_actual_cost, usdCnyRate) }}</td>
+                            <td class="px-3 py-2 text-xs tabular-nums text-gray-900 dark:text-white">{{ formatMoney(keyUsageMap[key.id]?.total_actual_cost, usdCnyRate) }}</td>
                             <td class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">{{ formatDateTime(key.last_used_at) }}</td>
                             <td class="px-3 py-2">
                               <div class="flex justify-end gap-1.5">

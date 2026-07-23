@@ -1,0 +1,52 @@
+[
+  {
+    "name": "auth-no-blob",
+    "ok": true,
+    "extra": "blur-3xl=0"
+  },
+  {
+    "name": "auth-no-gradient-title",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "auth-title-login",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "overview-no-rings",
+    "ok": true,
+    "extra": "rings=0"
+  },
+  {
+    "name": "overview-no-doughnut",
+    "ok": true,
+    "extra": "canvas=0"
+  },
+  {
+    "name": "overview-subtitle",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "overview-error-upstream-card",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "keyvault-no-colloquial",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "keyvault-platform-muted",
+    "ok": true,
+    "extra": "colorBadges=0"
+  },
+  {
+    "name": "staff-no-type-badges",
+    "ok": true,
+    "extra": "typeBadges=0"
+  }
+]

@@ -4,7 +4,7 @@
       <div class="flex flex-col gap-3 border-b border-gray-200 pb-4 dark:border-dark-700 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 class="ui-heading">总览</h1>
-          <p class="ui-subheading mt-1">花了多少钱、做了多少调用、谁在用什么 AI，一眼看完。</p>
+          <p class="ui-subheading mt-1">消费与调用概览</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <div class="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5 dark:border-dark-700 dark:bg-dark-800">
@@ -28,37 +28,21 @@
         </div>
       </div>
 
-      <!-- 核心指标卡 -->
-      <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <!-- 核心指标：紧凑数字行，无装饰圆环 -->
+      <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <div
           v-for="card in statCards"
           :key="card.label"
-          class="relative overflow-hidden rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800"
+          class="rounded-lg border border-gray-200 bg-white px-4 py-3 dark:border-dark-700 dark:bg-dark-800"
         >
-          <div class="flex items-start justify-between gap-3">
-            <div class="min-w-0">
-              <div class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ card.label }}</div>
-              <div class="mt-2 truncate text-3xl font-semibold tabular-nums text-gray-900 dark:text-white">
-                <AnimatedNumber :value="card.value" :format="card.format" />
-              </div>
-              <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ card.hint }}</div>
-            </div>
-            <svg class="h-14 w-14 shrink-0 -rotate-90" viewBox="0 0 48 48" aria-hidden="true">
-              <circle cx="24" cy="24" r="20" fill="none" stroke-width="4" class="stroke-gray-100 dark:stroke-dark-700" />
-              <circle
-                cx="24" cy="24" r="20" fill="none" stroke-width="4" stroke-linecap="round"
-                :class="card.ringClass"
-                :stroke-dasharray="RING_CIRCUMFERENCE"
-                :stroke-dashoffset="ringOffset(card.ratio)"
-                style="transition: stroke-dashoffset 0.9s cubic-bezier(0.33, 1, 0.68, 1)"
-              />
-              <foreignObject x="12" y="12" width="24" height="24" class="rotate-90 origin-center">
-                <div class="flex h-full w-full items-center justify-center">
-                  <Icon :name="card.icon" size="sm" :class="card.iconClass" />
-                </div>
-              </foreignObject>
-            </svg>
+          <div class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ card.label }}</div>
+          <div
+            class="mt-1.5 truncate text-2xl font-semibold tabular-nums"
+            :class="card.tone === 'red' ? 'text-red-600 dark:text-red-400' : card.tone === 'amber' ? 'text-amber-600 dark:text-amber-400' : 'text-gray-900 dark:text-white'"
+          >
+            <AnimatedNumber :value="card.value" :format="card.format" />
           </div>
+          <div class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{{ card.hint }}</div>
         </div>
       </section>
 
@@ -72,7 +56,7 @@
             </div>
             <div class="text-right">
               <div class="text-xs text-gray-500 dark:text-gray-400">本期合计</div>
-              <div class="text-lg font-semibold text-teal-600 dark:text-teal-300">{{ formatMoney(totalSpend, usdCnyRate) }}</div>
+              <div class="text-lg font-semibold text-gray-900 dark:text-white">{{ formatMoney(totalSpend, usdCnyRate) }}</div>
             </div>
           </div>
           <div class="mt-4 h-64">
@@ -86,24 +70,25 @@
         <section class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
           <h2 class="text-base font-semibold text-gray-900 dark:text-white">用了什么 AI</h2>
           <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">按实际花费统计的模型分布</p>
-          <div v-if="modelChartData" class="mt-4 flex items-center gap-5">
-            <div class="h-44 w-44 shrink-0">
-              <Doughnut :data="modelChartData" :options="modelChartOptions" />
-            </div>
-            <div class="max-h-48 min-w-0 flex-1 space-y-2 overflow-y-auto pr-1">
-              <button
-                v-for="(model, index) in topModels"
-                :key="model.model"
-                type="button"
-                class="flex w-full items-center gap-2 rounded-md px-1 py-0.5 text-left text-xs hover:bg-gray-50 dark:hover:bg-dark-700/40"
-                @click="goAiRecordsByModel(model.model)"
-              >
-                <span class="h-2.5 w-2.5 shrink-0 rounded-full" :style="{ backgroundColor: chartColors[index % chartColors.length] }"></span>
+          <!-- 单色占比条 + 列表，不再使用多色饼图 -->
+          <div v-if="topModels.length" class="mt-4 space-y-2.5">
+            <button
+              v-for="model in topModels"
+              :key="model.model"
+              type="button"
+              class="block w-full text-left"
+              @click="goAiRecordsByModel(model.model)"
+            >
+              <div class="flex items-baseline justify-between gap-2 text-xs">
                 <span class="min-w-0 flex-1 truncate text-gray-700 dark:text-gray-200" :title="model.model">{{ model.model }}</span>
                 <span class="shrink-0 tabular-nums text-gray-500 dark:text-gray-400">{{ formatCount(model.requests) }} 次</span>
-                <span class="shrink-0 tabular-nums font-medium text-teal-600 dark:text-teal-300">{{ formatMoney(model.actual_cost, usdCnyRate) }}</span>
-              </button>
-            </div>
+                <span class="shrink-0 tabular-nums font-medium text-gray-900 dark:text-white">{{ formatMoney(model.actual_cost, usdCnyRate) }}</span>
+                <span class="w-12 shrink-0 text-right tabular-nums text-gray-500 dark:text-gray-400">{{ modelShare(model.actual_cost).toFixed(1) }}%</span>
+              </div>
+              <div class="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-dark-700">
+                <div class="h-full rounded-full bg-ui-accent" :style="{ width: `${modelShare(model.actual_cost)}%` }" />
+              </div>
+            </button>
           </div>
           <div v-else class="mt-4 flex h-44 items-center justify-center text-sm text-gray-500 dark:text-gray-400">
             {{ loading ? '加载中…' : '本期还没有模型调用。' }}
@@ -143,27 +128,24 @@
                 @click="goAiRecordsByUser(item.user_id)"
               >
                 <td class="px-5 py-3">
-                  <span
-                    class="inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold"
-                    :class="index < 3 ? 'bg-teal-100 text-teal-700 dark:bg-teal-500/20 dark:text-teal-200' : 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-gray-300'"
-                  >
+                  <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-gray-100 text-xs font-semibold text-gray-600 dark:bg-dark-700 dark:text-gray-300">
                     {{ index + 1 }}
                   </span>
                 </td>
                 <td class="px-5 py-3 font-medium text-gray-900 dark:text-white">
                   <span class="inline-flex items-center gap-1.5">
                     {{ item.email || `用户 #${item.user_id}` }}
-                    <span v-if="item.member_type === 'tool'" class="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-700 dark:bg-sky-500/20 dark:text-sky-200">工具</span>
+                    <span v-if="item.member_type === 'tool'" class="text-xs text-gray-400 dark:text-gray-500">工具</span>
                   </span>
                 </td>
                 <td class="px-5 py-3 tabular-nums text-gray-700 dark:text-gray-200">{{ formatCount(item.requests) }}</td>
                 <td class="px-5 py-3 tabular-nums text-gray-700 dark:text-gray-200">{{ formatTokens(item.tokens) }}</td>
-                <td class="px-5 py-3 tabular-nums font-medium text-teal-600 dark:text-teal-300">{{ formatMoney(item.actual_cost, usdCnyRate) }}</td>
+                <td class="px-5 py-3 tabular-nums text-gray-900 dark:text-white">{{ formatMoney(item.actual_cost, usdCnyRate) }}</td>
                 <td class="px-5 py-3">
                   <div class="flex items-center gap-2">
                     <div class="h-2 flex-1 overflow-hidden rounded-full bg-gray-100 dark:bg-dark-700">
                       <div
-                        class="h-full rounded-full bg-gradient-to-r from-teal-500 to-cyan-400"
+                        class="h-full rounded-full bg-ui-accent"
                         :style="{ width: `${spendRatio(item.actual_cost)}%`, transition: 'width 0.9s cubic-bezier(0.33, 1, 0.68, 1)' }"
                       ></div>
                     </div>
@@ -174,7 +156,7 @@
               <tr v-if="!loading && !ranking.length">
                 <td colspan="6" class="px-5 py-10 text-center text-sm text-gray-500 dark:text-gray-400">
                   本期还没有成员调用记录。先去
-                  <RouterLink class="font-medium text-teal-600 hover:underline dark:text-teal-300" to="/admin/console/staff">成员与开卡</RouterLink>
+                  <RouterLink class="font-medium text-gray-900 underline hover:no-underline dark:text-white" to="/admin/console/staff">成员与开卡</RouterLink>
                   给成员开一张卡。
                 </td>
               </tr>
@@ -190,7 +172,6 @@
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import {
-  ArcElement,
   CategoryScale,
   Chart as ChartJS,
   Filler,
@@ -200,7 +181,7 @@ import {
   PointElement,
   Tooltip,
 } from 'chart.js'
-import { Doughnut, Line } from 'vue-chartjs'
+import { Line } from 'vue-chartjs'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import AnimatedNumber from './AnimatedNumber.vue'
@@ -217,7 +198,7 @@ import {
   getConsoleRange,
 } from './consoleUtils'
 
-ChartJS.register(ArcElement, CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip, Legend)
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip, Legend)
 
 const appStore = useAppStore()
 const router = useRouter()
@@ -228,6 +209,8 @@ const trend = ref<TrendDataPoint[]>([])
 const models = ref<ModelStat[]>([])
 const ranking = ref<UserSpendingRankingItem[]>([])
 const rankingTotals = ref({ actual_cost: 0, requests: 0, tokens: 0 })
+// 异常上游数：status=error 的上游账号（老板第一眼要看到的风险指标）
+const errorAccounts = ref(0)
 // 后端 /admin/dashboard/stats 未提供实时汇率字段；使用系统默认汇率展示，不臆造动态汇率。
 const usdCnyRate = ref(DEFAULT_USD_CNY_RATE)
 
@@ -238,15 +221,6 @@ const rangeOptions: Array<{ key: ConsoleRangeKey; label: string }> = [
 ]
 
 const rangeLabel = computed(() => rangeOptions.find((option) => option.key === rangeKey.value)?.label ?? '本期')
-
-const chartColors = ['#14b8a6', '#06b6d4', '#8b5cf6', '#f59e0b', '#ef4444', '#ec4899', '#84cc16', '#6366f1', '#f97316', '#10b981']
-
-const RING_CIRCUMFERENCE = 2 * Math.PI * 20
-
-function ringOffset(ratio: number): number {
-  const clamped = Math.max(0.03, Math.min(1, ratio))
-  return RING_CIRCUMFERENCE * (1 - clamped)
-}
 
 const totalSpend = computed(() => rankingTotals.value.actual_cost)
 const totalRequests = computed(() => rankingTotals.value.requests)
@@ -260,10 +234,7 @@ type StatCard = {
   value: number
   hint: string
   format?: (value: number) => string
-  ratio: number
-  icon: 'dollar' | 'bolt' | 'play' | 'users'
-  ringClass: string
-  iconClass: string
+  tone?: 'default' | 'amber' | 'red'
 }
 
 const statCards = computed<StatCard[]>(() => {
@@ -273,38 +244,28 @@ const statCards = computed<StatCard[]>(() => {
       value: totalSpend.value,
       hint: '所有成员实际扣费合计',
       format: (v) => formatMoney(v, usdCnyRate.value),
-      ratio: totalSpend.value > 0 ? 1 : 0,
-      icon: 'dollar',
-      ringClass: 'stroke-teal-500',
-      iconClass: 'text-teal-600 dark:text-teal-300',
     },
     {
       label: 'AI 调用次数',
       value: totalRequests.value,
       hint: `${rangeLabel.value}全部模型调用`,
-      ratio: totalRequests.value > 0 ? 1 : 0,
-      icon: 'bolt',
-      ringClass: 'stroke-cyan-500',
-      iconClass: 'text-cyan-600 dark:text-cyan-300',
     },
     {
       label: 'Token 用量',
       value: totalTokens.value,
       hint: `${rangeLabel.value}累计 Token`,
       format: (v) => formatTokens(v),
-      ratio: totalTokens.value > 0 ? 1 : 0,
-      icon: 'play',
-      ringClass: 'stroke-emerald-500',
-      iconClass: 'text-emerald-600 dark:text-emerald-300',
     },
     {
       label: '活跃成员',
       value: activeStaff.value,
       hint: `${rangeLabel.value}有调用记录的成员`,
-      ratio: activeStaff.value > 0 ? 1 : 0,
-      icon: 'users',
-      ringClass: 'stroke-violet-500',
-      iconClass: 'text-violet-600 dark:text-violet-300',
+    },
+    {
+      label: '异常上游',
+      value: errorAccounts.value,
+      hint: '状态异常的上游账号数',
+      tone: errorAccounts.value > 0 ? 'red' : 'default',
     },
   ]
 })
@@ -359,38 +320,11 @@ const topModels = computed(() => {
   return [...models.value].sort((a, b) => b.actual_cost - a.actual_cost).slice(0, 8)
 })
 
-const modelChartData = computed(() => {
-  if (!topModels.value.length) return null
-  return {
-    labels: topModels.value.map((model) => model.model),
-    datasets: [
-      {
-        data: topModels.value.map((model) => model.actual_cost),
-        backgroundColor: chartColors.slice(0, topModels.value.length),
-        borderWidth: 0,
-      },
-    ],
-  }
-})
-
-const modelChartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  cutout: '62%',
-  animation: { animateRotate: true, duration: 900 },
-  plugins: {
-    legend: { display: false },
-    tooltip: {
-      callbacks: {
-        label: (context: { label?: string; raw: unknown; dataset: { data: unknown[] } }) => {
-          const value = Number(context.raw)
-          const total = (context.dataset.data as number[]).reduce((sum, v) => sum + v, 0)
-          const pct = total > 0 ? ((value / total) * 100).toFixed(1) : '0.0'
-          return ` ${context.label}: ${formatMoney(value, usdCnyRate.value)} (${pct}%)`
-        },
-      },
-    },
-  },
+// 单色占比：占本期模型总花费的比例
+function modelShare(cost: number): number {
+  const total = topModels.value.reduce((sum, model) => sum + model.actual_cost, 0)
+  if (total <= 0) return 0
+  return Math.min(100, (cost / total) * 100)
 }
 
 function spendRatio(cost: number): number {
@@ -419,10 +353,11 @@ async function loadAll() {
   loading.value = true
   const { start, end } = getConsoleRange(rangeKey.value)
   try {
-    const [trendRes, modelsRes, rankingRes] = await Promise.all([
+    const [trendRes, modelsRes, rankingRes, accountsRes] = await Promise.all([
       adminAPI.dashboard.getUsageTrend({ start_date: start, end_date: end, granularity: 'day' }),
       adminAPI.dashboard.getModelStats({ start_date: start, end_date: end }),
       adminAPI.dashboard.getUserSpendingRanking({ start_date: start, end_date: end, limit: 20 }),
+      adminAPI.accounts.list(1, 100),
     ])
     trend.value = trendRes.trend || []
     models.value = modelsRes.models || []
@@ -432,6 +367,7 @@ async function loadAll() {
       requests: rankingRes.total_requests || 0,
       tokens: rankingRes.total_tokens || 0,
     }
+    errorAccounts.value = (accountsRes.items || []).filter((account) => account.status === 'error').length
   } catch (err) {
     appStore.showError(extractApiErrorMessage(err, '加载总览数据失败'))
   } finally {

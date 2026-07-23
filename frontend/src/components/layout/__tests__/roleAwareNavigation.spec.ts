@@ -43,6 +43,7 @@ describe('admin role-aware top-level IA', () => {
 
     expect(system?.children?.map((item) => item.path)).toEqual([
       '/admin/ops',
+      '/admin/video/system-check',
       '/admin/settings',
       '/admin/system/advanced',
     ])

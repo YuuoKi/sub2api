@@ -29,7 +29,8 @@ describe('quotaWarning classes', () => {
 
   it('handles the none variant explicitly (exhaustive switch, no string fallthrough)', () => {
     expect(quotaWarningTextClass('none')).toContain('gray')
-    expect(quotaWarningBarClass('none')).toContain('teal')
+    // 正常态走全站统一 accent（bg-ui-accent），不再单独使用 teal
+    expect(quotaWarningBarClass('none')).toContain('ui-accent')
   })
 })
 

@@ -139,6 +139,7 @@ export function buildAdminRoleNav(options: BuildAdminRoleNavOptions = {}): RoleN
       defaultCollapsed: true,
       children: [
         { path: '/admin/ops', label: '系统健康', featureFlagKey: 'ops' },
+        { path: '/admin/video/system-check', label: '视频链路检查' },
         { path: '/admin/settings', label: '设置与备份' },
         {
           path: '/admin/system/advanced',

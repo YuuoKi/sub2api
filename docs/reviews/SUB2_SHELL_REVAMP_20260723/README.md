@@ -76,3 +76,30 @@ P0.1/P0.4 在 8080 验收（契约两版一致）。探针数据均已清理或�
 | 回归通过 | 9 | vue-tsc/eslint 零告警；批量 flake 复跑全绿 |
 
 均分 ≥8，P1 READY_FOR_REVIEW。
+
+## P2 after 验收（视觉去 AI 味）
+
+| 项 | 证据 | 结果 |
+|---|---|---|
+| Auth 去光斑/渐变/「欢迎回来」 | `after/p2-01-login-clean.png` | blur-3xl=0；渐变标题=0；标题「登录」；卡片 rounded-lg |
+| 总览去环/饼 + KPI 紧凑 + 异常上游 | `after/p2-02-overview-clean.png`（空态结构）/ `after/p2-02b-overview-with-data.png`（8080 有数据） | 圆环 svg=0、饼图 canvas=0；5 张紧凑数字卡含「异常上游」；副标「消费与调用概览」；模型分布改单色（ui-accent）占比条+列表；成员排行渐变条/ teal 金额/前三特殊徽章全部收敛 |
+| 密钥库口语化/四彩 badge | `after/p2-03-keyvault-clean.png` | 「把老板手上的密钥…」删除；平台列改 muted 文本无底色（orange/blue/violet badge=0）；空态一行事实句 |
+| 员工卡类型 badge/teal 金额 | `after/p2-04-staff-clean.png` | 工具/管理员改 muted 文本；头像统一 gray；teal 金额改本色；sky/violet badge=0 |
+| AiRecords | 代码收敛 | 花费 teal→本色；「图片×N」purple→gray；teal 信息条改 divider 灰字 |
+| btn-primary 全局 | style.css | 去渐变去 glow，实色 bg-ui-accent（登录页按钮可见） |
+| DashboardView | — | 旧 /admin/dashboard 已按 P1 白名单保持隐藏（plan 允许「直接下线」），不再重复建设 |
+
+## 8 维自评（P2）
+
+| 维度 | 分 | 依据 |
+|---|---|---|
+| 功能正确性 | 9 | 10 项 DOM 断言全 OK；有数据环境复核占比条渲染 |
+| 后端契约不动 | 10 | 纯样式/文案/图表减法，零接口变更 |
+| 安全语义 | 9 | 未动明文一次、门禁、白名单 |
+| 中文文案 | 9 | 副标营销句清除，状态词表四色制 |
+| 真实链路验收 | 8 | 登录→总览→密钥库→员工卡真实导航+截图（本项为视觉验收，无需写库） |
+| 测试同步 | 9 | consoleUtils.spec 同步 accent 契约，无 skip |
+| 截图证据 | 9 | before(01/02/04/06)/after(p2-01..04+02b) 成对 |
+| 回归通过 | 9 | console 32/32、布局契约 4/4、vue-tsc 零告警 |
+
+均分 ≥8，P2 READY_FOR_REVIEW。

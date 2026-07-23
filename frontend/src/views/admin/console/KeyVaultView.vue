@@ -4,9 +4,6 @@
       <div class="flex flex-col gap-3 border-b border-gray-200 pb-4 dark:border-dark-700 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 class="ui-heading">密钥库</h1>
-          <p class="ui-subheading mt-1">
-            把老板手上的上游密钥统一收进来：文字与作图账号、视频通道，各归各位。密钥加密保存，前端只显示脱敏状态。
-          </p>
         </div>
         <div class="flex flex-wrap gap-2">
           <button class="btn btn-outline" type="button" :disabled="loading" @click="reload">
@@ -59,11 +56,7 @@
             <tbody class="divide-y divide-gray-100 dark:divide-dark-700">
               <tr v-for="account in accounts" :key="account.id" class="hover:bg-gray-50 dark:hover:bg-dark-700/40">
                 <td class="px-5 py-3 font-medium text-gray-900 dark:text-white">{{ account.name }}</td>
-                <td class="px-5 py-3">
-                  <span class="inline-flex rounded-md px-2 py-1 text-xs font-medium" :class="platformBadgeClass(account.platform)">
-                    {{ platformLabel(account.platform) }}
-                  </span>
-                </td>
+                <td class="px-5 py-3 text-gray-500 dark:text-gray-400">{{ platformLabel(account.platform) }}</td>
                 <td class="px-5 py-3">
                   <AccountGroupsCell :groups="account.groups" />
                 </td>
@@ -97,8 +90,8 @@
                 </td>
               </tr>
               <tr v-if="!loading && !accounts.length">
-                <td colspan="8" class="px-5 py-10 text-center text-sm text-gray-500 dark:text-gray-400">
-                  还没有录入任何 AI 账号。点右上角「录入 AI 账号」，把老板手上的密钥收进来。
+                <td colspan="8" class="px-5 py-6 text-center text-sm text-gray-500 dark:text-gray-400">
+                  还没有录入任何 AI 账号。点右上角「录入 AI 账号」添加第一把。
                 </td>
               </tr>
             </tbody>
@@ -200,7 +193,7 @@
               </p>
               <div
                 v-if="!platformGroups.length"
-                class="mt-2 rounded-md border border-dashed border-gray-300 p-3 text-xs dark:border-dark-600"
+                class="mt-2 border-t border-gray-200 pt-3 text-xs dark:border-dark-700"
                 data-test="group-quick-create"
               >
                 <p class="text-gray-600 dark:text-gray-300">当前平台还没有分组，先建一个（也可到「模型分组」页精细调整）：</p>
@@ -398,16 +391,6 @@ function platformLabel(platform: string): string {
     antigravity: 'Antigravity',
   }
   return labels[platform] || platform
-}
-
-function platformBadgeClass(platform: string): string {
-  const classes: Record<string, string> = {
-    anthropic: 'bg-orange-50 text-orange-700 dark:bg-orange-500/10 dark:text-orange-300',
-    openai: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300',
-    gemini: 'bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300',
-    antigravity: 'bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300',
-  }
-  return classes[platform] || 'bg-gray-100 text-gray-700 dark:bg-dark-700 dark:text-gray-200'
 }
 
 function accountTypeLabel(type: string): string {

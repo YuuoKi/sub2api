@@ -214,7 +214,7 @@ export default {
 
   // Auth
   auth: {
-    welcomeBack: 'Welcome Back',
+    welcomeBack: 'Sign In',
     signInToAccount: 'Sign in to your account to continue',
     signIn: 'Sign In',
     signingIn: 'Signing in...',

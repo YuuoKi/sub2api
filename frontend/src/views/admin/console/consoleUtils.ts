@@ -117,7 +117,7 @@ export function quotaWarningBarClass(level: QuotaWarningLevel): string {
     case 'warn':
       return 'bg-yellow-500'
     case 'none':
-      return 'bg-teal-500'
+      return 'bg-ui-accent'
     default: {
       const _exhaustive: never = level
       throw new Error(`Unhandled QuotaWarningLevel: ${String(_exhaustive)}`)

@@ -47,7 +47,7 @@
           </div>
           <div>
             <div class="text-xs text-gray-500 dark:text-gray-400">实际花费</div>
-            <div class="mt-1 text-lg font-semibold tabular-nums text-teal-600 dark:text-teal-300">{{ formatMoney(stats.total_actual_cost, usdCnyRate) }}</div>
+            <div class="mt-1 text-lg font-semibold tabular-nums text-gray-900 dark:text-white">{{ formatMoney(stats.total_actual_cost, usdCnyRate) }}</div>
           </div>
           <div>
             <div class="text-xs text-gray-500 dark:text-gray-400">Tokens</div>
@@ -105,7 +105,7 @@
                     </span>
                     <span
                       v-if="log.image_count > 0"
-                      class="inline-flex rounded-md bg-purple-50 px-1.5 py-0.5 text-[10px] font-medium text-purple-700 dark:bg-purple-500/10 dark:text-purple-300"
+                      class="inline-flex rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-dark-700 dark:text-gray-300"
                     >
                       图片 ×{{ Math.max(log.image_count, 1) }}{{ log.image_size ? ` · ${log.image_size}` : '' }}
                     </span>
@@ -114,7 +114,7 @@
                 <td class="px-5 py-3 text-xs tabular-nums text-gray-600 dark:text-gray-300">
                   {{ formatTokens(log.input_tokens + log.output_tokens) }}
                 </td>
-                <td class="px-5 py-3 tabular-nums font-medium text-teal-600 dark:text-teal-300">{{ formatMoney(log.actual_cost, usdCnyRate) }}</td>
+                <td class="px-5 py-3 tabular-nums text-gray-900 dark:text-white">{{ formatMoney(log.actual_cost, usdCnyRate) }}</td>
                 <td class="px-5 py-3 text-xs tabular-nums text-gray-500 dark:text-gray-400">{{ formatDuration(log.duration_ms) }}</td>
               </tr>
               <tr v-if="!loading && !logs.length">
@@ -137,7 +137,7 @@
 
       <!-- 提示词采集样本 -->
       <section v-show="innerTab === 'prompts'" class="space-y-3">
-        <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-teal-200 bg-teal-50 px-4 py-3 text-xs text-teal-800 dark:border-teal-500/20 dark:bg-teal-500/10 dark:text-teal-100">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-1 pb-3 text-xs text-gray-500 dark:border-dark-700 dark:text-gray-400">
           <span>提示词与结果已脱敏采集。可在此标注采纳/质量分；完整周报也可在生成内容看板查看。</span>
           <RouterLink class="font-medium underline hover:no-underline" to="/admin/generation-content">
             打开生成内容看板

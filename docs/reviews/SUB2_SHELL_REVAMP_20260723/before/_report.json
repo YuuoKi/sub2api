@@ -1,0 +1,93 @@
+{
+  "steps": [
+    {
+      "name": "shot:01-login",
+      "ok": true,
+      "extra": ""
+    },
+    {
+      "name": "login",
+      "ok": true,
+      "extra": "http://127.0.0.1:3000/admin/console/overview"
+    },
+    {
+      "name": "shot:02-overview",
+      "ok": true,
+      "extra": ""
+    },
+    {
+      "name": "shot:03-keyvault-list",
+      "ok": true,
+      "extra": ""
+    },
+    {
+      "name": "shot:04-keyvault-create-modal",
+      "ok": true,
+      "extra": ""
+    },
+    {
+      "name": "shot:04b-keyvault-create-nogroup-filled",
+      "ok": true,
+      "extra": ""
+    },
+    {
+      "name": "shot:04c-keyvault-after-save-nogroup",
+      "ok": true,
+      "extra": ""
+    },
+    {
+      "name": "probe-account-cleanup",
+      "ok": true,
+      "extra": ""
+    },
+    {
+      "name": "shot:05-keyvault-video-tab",
+      "ok": true,
+      "extra": ""
+    },
+    {
+      "name": "shot:06-staff",
+      "ok": true,
+      "extra": ""
+    },
+    {
+      "name": "shot:07-video-providers",
+      "ok": true,
+      "extra": ""
+    },
+    {
+      "name": "shot:08-sidebar",
+      "ok": true,
+      "extra": ""
+    },
+    {
+      "name": "shot:09-version-popover",
+      "ok": true,
+      "extra": ""
+    }
+  ],
+  "errors": [
+    "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "console: Failed to fetch admin compliance status: {status: 404, code: undefined, reason: undefined, error: undefined, message: Request failed with status code 404}",
+    "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "console: Failed to fetch admin compliance status: {status: 404, code: undefined, reason: undefined, error: undefined, message: Request failed with status code 404}",
+    "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "console: Failed to fetch admin compliance status: {status: 404, code: undefined, reason: undefined, error: undefined, message: Request failed with status code 404}",
+    "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "console: Failed to fetch admin compliance status: {status: 404, code: undefined, reason: undefined, error: undefined, message: Request failed with status code 404}",
+    "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "console: Failed to fetch admin compliance status: {status: 404, code: undefined, reason: undefined, error: undefined, message: Request failed with status code 404}",
+    "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "console: Failed to fetch admin compliance status: {status: 404, code: undefined, reason: undefined, error: undefined, message: Request failed with status code 404}",
+    "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "console: Failed to fetch admin compliance status: {status: 404, code: undefined, reason: undefined, error: undefined, message: Request failed with status code 404}",
+    "console: Failed to load resource: the server responded with a status of 404 (Not Found)"
+  ]
+}

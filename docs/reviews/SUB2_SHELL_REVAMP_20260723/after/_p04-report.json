@@ -1,0 +1,27 @@
+[
+  {
+    "name": "test-button-hidden",
+    "ok": true,
+    "extra": "count=0"
+  },
+  {
+    "name": "disable-needs-confirmation",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "cancel-keeps-active",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "disable-confirmed-works",
+    "ok": true,
+    "extra": "Gemini AI Studio (QCanvas) Gemini QCanvas 交付模型 API Key 已停用 2026/7/19 12:19 — 编辑 "
+  },
+  {
+    "name": "re-enabled-restore",
+    "ok": true,
+    "extra": ""
+  }
+]

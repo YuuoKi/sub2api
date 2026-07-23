@@ -48,6 +48,7 @@
               <tr>
                 <th class="px-5 py-3 font-medium">名称</th>
                 <th class="px-5 py-3 font-medium">平台</th>
+                <th class="px-5 py-3 font-medium">分组</th>
                 <th class="px-5 py-3 font-medium">接入方式</th>
                 <th class="px-5 py-3 font-medium">状态</th>
                 <th class="px-5 py-3 font-medium">最近使用</th>
@@ -63,6 +64,9 @@
                     {{ platformLabel(account.platform) }}
                   </span>
                 </td>
+                <td class="px-5 py-3">
+                  <AccountGroupsCell :groups="account.groups" />
+                </td>
                 <td class="px-5 py-3 text-gray-600 dark:text-gray-300">{{ accountTypeLabel(account.type) }}</td>
                 <td class="px-5 py-3">
                   <span class="inline-flex rounded-md px-2 py-1 text-xs font-medium" :class="accountStatusClass(account)">
@@ -75,15 +79,6 @@
                 </td>
                 <td class="px-5 py-3">
                   <div class="flex justify-end gap-1.5">
-                    <button
-                      class="btn btn-sm btn-outline"
-                      type="button"
-                      :disabled="testingAccountId === account.id"
-                      @click="testAccount(account)"
-                    >
-                      <Icon name="beaker" size="sm" :class="{ 'animate-pulse': testingAccountId === account.id }" />
-                      测试
-                    </button>
                     <button class="btn btn-sm btn-outline" type="button" @click="openEditAccount(account)">
                       <Icon name="edit" size="sm" />
                       编辑
@@ -102,7 +97,7 @@
                 </td>
               </tr>
               <tr v-if="!loading && !accounts.length">
-                <td colspan="7" class="px-5 py-10 text-center text-sm text-gray-500 dark:text-gray-400">
+                <td colspan="8" class="px-5 py-10 text-center text-sm text-gray-500 dark:text-gray-400">
                   还没有录入任何 AI 账号。点右上角「录入 AI 账号」，把老板手上的密钥收进来。
                 </td>
               </tr>
@@ -194,6 +189,48 @@
               </div>
             </div>
             <div>
+              <GroupSelector
+                v-model="accountForm.groupIds"
+                :groups="groups"
+                :platform="accountForm.platform"
+                data-test="account-groups"
+              />
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                必选，至少一个分组。账号的调用按分组计费与路由（例如作图走 media 组）。
+              </p>
+              <div
+                v-if="!platformGroups.length"
+                class="mt-2 rounded-md border border-dashed border-gray-300 p-3 text-xs dark:border-dark-600"
+                data-test="group-quick-create"
+              >
+                <p class="text-gray-600 dark:text-gray-300">当前平台还没有分组，先建一个（也可到「模型分组」页精细调整）：</p>
+                <div class="mt-2 flex flex-wrap items-center gap-2">
+                  <button class="btn btn-sm btn-outline" type="button" :disabled="creatingGroup" data-test="quick-create-media" @click="quickCreateGroup('media')">
+                    作图组 media
+                  </button>
+                  <button class="btn btn-sm btn-outline" type="button" :disabled="creatingGroup" data-test="quick-create-video" @click="quickCreateGroup('video')">
+                    视频组 video
+                  </button>
+                  <input
+                    v-model="quickGroupName"
+                    class="input !w-40 !py-1 text-xs"
+                    maxlength="50"
+                    placeholder="或输入分组名"
+                    data-test="quick-create-name"
+                  />
+                  <button
+                    class="btn btn-sm btn-primary"
+                    type="button"
+                    :disabled="creatingGroup || !quickGroupName.trim()"
+                    data-test="quick-create-custom"
+                    @click="quickCreateGroup(quickGroupName)"
+                  >
+                    {{ creatingGroup ? '创建中…' : '创建并选中' }}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div>
               <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">API Key</label>
               <input
                 v-model="accountForm.apiKey"
@@ -229,17 +266,19 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
+import GroupSelector from '@/components/common/GroupSelector.vue'
+import AccountGroupsCell from '@/components/account/AccountGroupsCell.vue'
 import { adminAPI } from '@/api/admin'
-import type { Account, AccountPlatform } from '@/types'
+import type { Account, AccountPlatform, AdminGroup } from '@/types'
 import type { VideoProviderAccount } from '@/api/admin/video'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import { requestConfirmation } from '@/composables/useAppDialog'
-import { formatDateTime } from './consoleUtils'
+import { CONSOLE_ERROR_ZH, formatDateTime } from './consoleUtils'
 
 const appStore = useAppStore()
 const route = useRoute()
@@ -255,13 +294,13 @@ const loading = ref(false)
 const accounts = ref<Account[]>([])
 const accountsTotal = ref(0)
 const providers = ref<VideoProviderAccount[]>([])
+const groups = ref<AdminGroup[]>([])
 
 // ---- 通用 AI 账号 ----
 
 const accountModalOpen = ref(false)
 const editingAccount = ref<Account | null>(null)
 const savingAccount = ref(false)
-const testingAccountId = ref<number | null>(null)
 
 const accountForm = reactive({
   platform: 'anthropic' as AccountPlatform,
@@ -269,7 +308,80 @@ const accountForm = reactive({
   apiKey: '',
   baseUrl: '',
   notes: '',
+  groupIds: [] as number[],
 })
+
+// 分组必选：当前平台可选的分组；切平台时清掉不再匹配的已选 id
+const platformGroups = computed(() => groups.value.filter((g) => g.platform === accountForm.platform))
+const creatingGroup = ref(false)
+const quickGroupName = ref('')
+
+watch(
+  () => accountForm.platform,
+  () => {
+    const valid = new Set(platformGroups.value.map((g) => g.id))
+    accountForm.groupIds = accountForm.groupIds.filter((id) => valid.has(id))
+  },
+)
+
+async function quickCreateGroup(name: string) {
+  const trimmed = name.trim()
+  if (!trimmed || creatingGroup.value) return
+  creatingGroup.value = true
+  try {
+    // 后端建组契约要求全量字段（缺失会 500）；与 GroupsView 默认表单对齐，按模板名预置媒体开关
+    const created = await adminAPI.groups.create({
+      name: trimmed,
+      description: '',
+      platform: accountForm.platform,
+      rate_multiplier: 1,
+      is_exclusive: false,
+      subscription_type: 'standard',
+      daily_limit_usd: null,
+      weekly_limit_usd: null,
+      monthly_limit_usd: null,
+      allow_image_generation: trimmed === 'media',
+      allow_batch_image_generation: false,
+      image_rate_independent: false,
+      image_rate_multiplier: 1,
+      batch_image_discount_multiplier: 0.5,
+      batch_image_hold_multiplier: 0.6,
+      image_price_1k: null,
+      image_price_2k: null,
+      image_price_4k: null,
+      video_rate_independent: false,
+      video_rate_multiplier: 1,
+      video_price_480p: null,
+      video_price_720p: null,
+      video_price_1080p: null,
+      peak_rate_enabled: false,
+      peak_start: '',
+      peak_end: '',
+      peak_rate_multiplier: 1,
+      claude_code_only: false,
+      fallback_group_id: null,
+      fallback_group_id_on_invalid_request: null,
+      allow_messages_dispatch: false,
+      require_oauth_only: false,
+      require_privacy_set: false,
+      model_routing_enabled: false,
+      supported_model_scopes: ['claude', 'gemini_text', 'gemini_image'],
+      mcp_xml_inject: true,
+      copy_accounts_from_group_ids: [],
+      rpm_limit: 0,
+    })
+    await loadGroups()
+    if (!accountForm.groupIds.includes(created.id)) {
+      accountForm.groupIds = [...accountForm.groupIds, created.id]
+    }
+    quickGroupName.value = ''
+    appStore.showSuccess(`分组「${created.name}」已创建并选中`)
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, '创建分组失败', CONSOLE_ERROR_ZH))
+  } finally {
+    creatingGroup.value = false
+  }
+}
 
 const platformDefaults: Record<string, string> = {
   anthropic: 'https://api.anthropic.com',
@@ -329,6 +441,8 @@ function openCreate() {
   accountForm.apiKey = ''
   accountForm.baseUrl = ''
   accountForm.notes = ''
+  accountForm.groupIds = []
+  quickGroupName.value = ''
   accountModalOpen.value = true
 }
 
@@ -339,6 +453,9 @@ function openEditAccount(account: Account) {
   accountForm.apiKey = ''
   accountForm.baseUrl = String(account.credentials?.base_url ?? '')
   accountForm.notes = account.notes || ''
+  // 回填已绑定分组；老数据若没有 group_ids 字段则用预加载的 groups 兜底
+  accountForm.groupIds = [...(account.group_ids ?? account.groups?.map((g) => g.id) ?? [])]
+  quickGroupName.value = ''
   accountModalOpen.value = true
 }
 
@@ -355,6 +472,11 @@ function closeAccountModal() {
 }
 
 async function saveAccount() {
+  // 分组必选：未选组直接拦截并显式报错，避免账号落成「无组孤儿」（计费/路由都走不通）
+  if (accountForm.groupIds.length === 0) {
+    appStore.showError('请至少选择一个分组；没有可用分组时先点下方「作图组 media / 视频组 video」快速创建')
+    return
+  }
   savingAccount.value = true
   try {
     if (editingAccount.value) {
@@ -369,6 +491,7 @@ async function saveAccount() {
         name: accountForm.name.trim(),
         notes: accountForm.notes.trim() || null,
         credentials,
+        group_ids: [...accountForm.groupIds],
       })
       appStore.showSuccess('账号已更新')
     } else {
@@ -381,26 +504,34 @@ async function saveAccount() {
         platform: accountForm.platform,
         type: 'apikey',
         credentials,
+        group_ids: [...accountForm.groupIds],
       })
       appStore.showSuccess('账号已录入密钥库')
     }
     closeAccountModal()
     await loadAccounts()
   } catch (err) {
-    appStore.showError(extractApiErrorMessage(err, '保存账号失败'))
+    appStore.showError(extractApiErrorMessage(err, '保存账号失败', CONSOLE_ERROR_ZH))
   } finally {
     savingAccount.value = false
   }
 }
 
 async function toggleAccountStatus(account: Account) {
+  const next = account.status === 'active' ? 'inactive' : 'active'
+  if (next === 'inactive') {
+    const confirmed = await requestConfirmation({
+      message: `确定停用账号「${account.name}」？停用后走该账号的调用会立即失败。`,
+      danger: true,
+    })
+    if (!confirmed) return
+  }
   try {
-    const next = account.status === 'active' ? 'inactive' : 'active'
     await adminAPI.accounts.toggleStatus(account.id, next)
     appStore.showSuccess(next === 'active' ? '账号已启用' : '账号已停用')
     await loadAccounts()
   } catch (err) {
-    appStore.showError(extractApiErrorMessage(err, '切换账号状态失败'))
+    appStore.showError(extractApiErrorMessage(err, '切换账号状态失败', CONSOLE_ERROR_ZH))
   }
 }
 
@@ -415,23 +546,7 @@ async function removeAccount(account: Account) {
     appStore.showSuccess('账号已删除')
     await loadAccounts()
   } catch (err) {
-    appStore.showError(extractApiErrorMessage(err, '删除账号失败'))
-  }
-}
-
-async function testAccount(account: Account) {
-  testingAccountId.value = account.id
-  try {
-    const result = await adminAPI.accounts.testAccount(account.id)
-    if (result.success) {
-      appStore.showSuccess(`「${account.name}」连通正常${result.latency_ms ? `（${result.latency_ms}ms）` : ''}`)
-    } else {
-      appStore.showError(`「${account.name}」测试失败：${result.message}`)
-    }
-  } catch (err) {
-    appStore.showError(extractApiErrorMessage(err, '账号连通性测试失败'))
-  } finally {
-    testingAccountId.value = null
+    appStore.showError(extractApiErrorMessage(err, '删除账号失败', CONSOLE_ERROR_ZH))
   }
 }
 
@@ -439,6 +554,10 @@ async function loadAccounts() {
   const res = await adminAPI.accounts.list(1, 100)
   accounts.value = res.items || []
   accountsTotal.value = res.total || accounts.value.length
+}
+
+async function loadGroups() {
+  groups.value = await adminAPI.groups.getAll()
 }
 
 // ---- 视频通道（只读摘要；创建/编辑/授权统一在 /admin/video/providers 完成） ----
@@ -453,9 +572,9 @@ async function loadProviders() {
 async function reload() {
   loading.value = true
   try {
-    await Promise.all([loadAccounts(), loadProviders()])
+    await Promise.all([loadAccounts(), loadProviders(), loadGroups()])
   } catch (err) {
-    appStore.showError(extractApiErrorMessage(err, '加载密钥库失败'))
+    appStore.showError(extractApiErrorMessage(err, '加载密钥库失败', CONSOLE_ERROR_ZH))
   } finally {
     loading.value = false
   }

@@ -5,6 +5,7 @@ import StaffView from '../StaffView.vue'
 const mocks = vi.hoisted(() => ({
   usersList: vi.fn(),
   usersCreate: vi.fn(),
+  usersUpdateBalance: vi.fn(),
   getBatchUsersUsage: vi.fn(),
   getStats: vi.fn(),
   createApiKeyForUser: vi.fn(),
@@ -19,6 +20,7 @@ vi.mock('@/api/admin', () => ({
     users: {
       list: mocks.usersList,
       create: mocks.usersCreate,
+      updateBalance: mocks.usersUpdateBalance,
       getUserApiKeys: mocks.getUserApiKeys,
     },
     dashboard: {
@@ -42,6 +44,7 @@ vi.mock('@/stores/app', () => ({
 
 const AppLayoutStub = { template: '<div><slot /></div>' }
 const IconStub = { template: '<i />' }
+const RouterLinkStub = { template: '<a><slot /></a>' }
 
 const FULL_KEY = 'sk-once-visible-1234567890abcdef'
 
@@ -76,7 +79,7 @@ describe('StaffView key-once issuance', () => {
   it('shows the full key exactly once right after creation, and never persists it to localStorage', async () => {
     const setItemSpy = vi.spyOn(window.localStorage, 'setItem')
     const wrapper = mount(StaffView, {
-      global: { stubs: { AppLayout: AppLayoutStub, Icon: IconStub } },
+      global: { stubs: { AppLayout: AppLayoutStub, Icon: IconStub, RouterLink: RouterLinkStub } },
     })
     await flushPromises()
 
@@ -94,7 +97,7 @@ describe('StaffView key-once issuance', () => {
 
 	it('issues QCanvas video and media keys atomically with two distinct group selections', async () => {
 		const wrapper = mount(StaffView, {
-			global: { stubs: { AppLayout: AppLayoutStub, Icon: IconStub } },
+			global: { stubs: { AppLayout: AppLayoutStub, Icon: IconStub, RouterLink: RouterLinkStub } },
 		})
 		await flushPromises()
 
@@ -115,7 +118,7 @@ describe('StaffView key-once issuance', () => {
 
 	it('forgets both QCanvas secrets after the result dialog closes', async () => {
 		const wrapper = mount(StaffView, {
-			global: { stubs: { AppLayout: AppLayoutStub, Icon: IconStub } },
+			global: { stubs: { AppLayout: AppLayoutStub, Icon: IconStub, RouterLink: RouterLinkStub } },
 		})
 		await flushPromises()
 
@@ -136,7 +139,7 @@ describe('StaffView key-once issuance', () => {
 			stats: { 1: { user_id: 1, total_actual_cost: 1.2, today_actual_cost: 0.7, by_platform: [] } },
 		})
 		const wrapper = mount(StaffView, {
-			global: { stubs: { AppLayout: AppLayoutStub, Icon: IconStub } },
+			global: { stubs: { AppLayout: AppLayoutStub, Icon: IconStub, RouterLink: RouterLinkStub } },
 		})
 		await flushPromises()
 
@@ -145,7 +148,7 @@ describe('StaffView key-once issuance', () => {
 
   it('binds a newly issued service card to an active group', async () => {
     const wrapper = mount(StaffView, {
-      global: { stubs: { AppLayout: AppLayoutStub, Icon: IconStub } },
+      global: { stubs: { AppLayout: AppLayoutStub, Icon: IconStub, RouterLink: RouterLinkStub } },
     })
     await flushPromises()
 
@@ -162,7 +165,7 @@ describe('StaffView key-once issuance', () => {
 
   it('creates only a tool service identity and never opens a temporary credential flow', async () => {
     const wrapper = mount(StaffView, {
-      global: { stubs: { AppLayout: AppLayoutStub, Icon: IconStub } },
+      global: { stubs: { AppLayout: AppLayoutStub, Icon: IconStub, RouterLink: RouterLinkStub } },
     })
     await flushPromises()
 
@@ -182,7 +185,7 @@ describe('StaffView key-once issuance', () => {
 
   it('removes local quota and expiry inputs and always issues an unlimited API card', async () => {
     const wrapper = mount(StaffView, {
-      global: { stubs: { AppLayout: AppLayoutStub, Icon: IconStub } },
+      global: { stubs: { AppLayout: AppLayoutStub, Icon: IconStub, RouterLink: RouterLinkStub } },
     })
     await flushPromises()
 
@@ -207,7 +210,7 @@ describe('StaffView key-once issuance', () => {
     ])
 
     const wrapper = mount(StaffView, {
-      global: { stubs: { AppLayout: AppLayoutStub, Icon: IconStub } },
+      global: { stubs: { AppLayout: AppLayoutStub, Icon: IconStub, RouterLink: RouterLinkStub } },
     })
     await flushPromises()
 
@@ -229,7 +232,7 @@ describe('StaffView key-once issuance', () => {
     mocks.groupsGetAll.mockReturnValue(new Promise((resolve) => { resolveGroups = resolve }))
 
     const wrapper = mount(StaffView, {
-      global: { stubs: { AppLayout: AppLayoutStub, Icon: IconStub } },
+      global: { stubs: { AppLayout: AppLayoutStub, Icon: IconStub, RouterLink: RouterLinkStub } },
     })
     await flushPromises()
 
@@ -253,7 +256,7 @@ describe('StaffView key-once issuance', () => {
 
   it('masks the key again once the issuance dialog is closed and reopened', async () => {
     const wrapper = mount(StaffView, {
-      global: { stubs: { AppLayout: AppLayoutStub, Icon: IconStub } },
+      global: { stubs: { AppLayout: AppLayoutStub, Icon: IconStub, RouterLink: RouterLinkStub } },
     })
     await flushPromises()
 
@@ -268,9 +271,71 @@ describe('StaffView key-once issuance', () => {
     expect(wrapper.text()).not.toContain(FULL_KEY)
   })
 
+  it('one-page wizard: creates identity, issues dual keys with recharge, then shows both plaintext keys once', async () => {
+    mocks.usersUpdateBalance.mockResolvedValue({ id: 2, balance: 55 })
+    const wrapper = mount(StaffView, {
+      global: { stubs: { AppLayout: AppLayoutStub, Icon: IconStub, RouterLink: RouterLinkStub } },
+    })
+    await flushPromises()
+
+    // 第 1 步：建服务身份
+    await wrapper.find('[data-test="create-service-identity"]').trigger('click')
+    await wrapper.find('[data-test="service-identity-email"]').setValue('batch@wujie.local')
+    await wrapper.find('form[data-test="service-identity-form"]').trigger('submit.prevent')
+    await flushPromises()
+    expect(mocks.usersCreate).toHaveBeenCalledWith(expect.objectContaining({ email: 'batch@wujie.local', member_type: 'tool' }))
+
+    // 第 2 步：两个不同的组 + 充值金额；同组选项在选择器里被禁用
+    expect(wrapper.find('form[data-test="wizard-pair-form"]').exists()).toBe(true)
+    await wrapper.find('[data-test="wizard-video-group"]').setValue('8')
+    await wrapper.find('[data-test="wizard-media-group"]').setValue('7')
+    const mediaOptions = wrapper.find('[data-test="wizard-media-group"]').findAll('option')
+    expect(mediaOptions.find((o) => o.attributes('value') === '8')?.attributes('disabled')).toBeDefined()
+    await wrapper.find('[data-test="wizard-amount"]').setValue(55)
+    await wrapper.find('form[data-test="wizard-pair-form"]').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(mocks.createQCanvasKeyPairForUser).toHaveBeenCalledWith(
+      2,
+      { video_group_id: 8, media_group_id: 7 },
+      expect.any(String),
+    )
+    expect(mocks.usersUpdateBalance).toHaveBeenCalledWith(2, 55, 'add', expect.any(String))
+
+    // 第 3 步：明文双 Key 同屏展示一次
+    expect(wrapper.find('[data-test="wizard-video-key"]').text()).toContain('sk-video-one-time')
+    expect(wrapper.find('[data-test="wizard-media-key"]').text()).toContain('sk-media-one-time')
+    expect(wrapper.find('[data-test="wizard-recharge-result"]').text()).toContain('55.00')
+
+    // 关闭后明文不残留
+    await wrapper.find('[data-test="wizard-done"]').trigger('click')
+    expect(wrapper.text()).not.toContain('sk-video-one-time')
+    expect(wrapper.text()).not.toContain('sk-media-one-time')
+  })
+
+  it('one-page wizard: skips recharge when amount is 0', async () => {
+    const wrapper = mount(StaffView, {
+      global: { stubs: { AppLayout: AppLayoutStub, Icon: IconStub, RouterLink: RouterLinkStub } },
+    })
+    await flushPromises()
+
+    await wrapper.find('[data-test="create-service-identity"]').trigger('click')
+    await wrapper.find('[data-test="service-identity-email"]').setValue('batch@wujie.local')
+    await wrapper.find('form[data-test="service-identity-form"]').trigger('submit.prevent')
+    await flushPromises()
+
+    await wrapper.find('[data-test="wizard-video-group"]').setValue('8')
+    await wrapper.find('[data-test="wizard-media-group"]').setValue('7')
+    await wrapper.find('form[data-test="wizard-pair-form"]').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(mocks.createQCanvasKeyPairForUser).toHaveBeenCalledTimes(1)
+    expect(mocks.usersUpdateBalance).not.toHaveBeenCalled()
+  })
+
   it('only ever renders masked key metadata in the staff key list, never the full value', async () => {
     const wrapper = mount(StaffView, {
-      global: { stubs: { AppLayout: AppLayoutStub, Icon: IconStub } },
+      global: { stubs: { AppLayout: AppLayoutStub, Icon: IconStub, RouterLink: RouterLinkStub } },
     })
     await flushPromises()
     await wrapper.find('[data-test="toggle-expand"]').trigger('click')
@@ -288,7 +353,7 @@ describe('StaffView key-once issuance', () => {
     })
 
     const wrapper = mount(StaffView, {
-      global: { stubs: { AppLayout: AppLayoutStub, Icon: IconStub } },
+      global: { stubs: { AppLayout: AppLayoutStub, Icon: IconStub, RouterLink: RouterLinkStub } },
     })
     await flushPromises()
     await wrapper.find('[data-test="toggle-expand"]').trigger('click')

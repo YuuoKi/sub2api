@@ -83,9 +83,10 @@ describe('VideoProvidersView', () => {
     expect(dialog?.textContent).toContain('4 秒')
     expect(dialog?.textContent).toContain('720p')
     expect(dialog?.textContent).toContain('制作一组')
-    expect(dialog?.textContent).toContain('预算上限')
     expect(dialog?.textContent).toContain('剩余授权次数')
-    expect(dialog?.textContent).toContain('不可用（后端未提供）')
+    // 「不可用（后端未提供）」假字段已按改版方案移除：不再渲染无信息占位行
+    expect(dialog?.textContent).not.toContain('预算上限')
+    expect(dialog?.textContent).not.toContain('不可用（后端未提供）')
     expect(dialog?.textContent).not.toContain('当前登录管理员')
 
     document.body.querySelector<HTMLButtonElement>('[data-testid="cancel-video-authorization"]')?.click()

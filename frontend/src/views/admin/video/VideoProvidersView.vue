@@ -35,10 +35,17 @@
             <input id="video-provider-secret" v-model="form.api_key" class="input video-provider-secret w-full" type="password" autocomplete="new-password" :required="!editingId" :placeholder="editingId ? '留空表示不更换' : '输入上游密钥'" />
             <p class="mt-1 text-xs text-gray-500">保存后只显示脱敏摘要，不回显明文。</p>
           </div>
-          <label class="video-provider-enabled flex min-h-11 items-center gap-2 self-end text-sm">
-            <input v-model="form.enabled" type="checkbox" />
-            保存后启用
-          </label>
+          <div class="video-provider-toggles flex flex-col gap-2 self-end">
+            <label class="video-provider-enabled flex min-h-6 items-center gap-2 text-sm">
+              <input v-model="form.enabled" type="checkbox" />
+              保存后启用
+            </label>
+            <label class="video-provider-authorize flex min-h-6 items-center gap-2 text-sm" data-test="authorize-after-save">
+              <input v-model="form.authorize_after_save" type="checkbox" />
+              保存后自动授权一次最小真实调用
+            </label>
+            <p class="text-xs text-gray-500">{{ AUTHORIZE_HINT }}</p>
+          </div>
           <div class="video-provider-actions flex flex-col gap-2 sm:flex-row md:col-span-2">
             <button class="btn btn-primary" :disabled="saving || !contract">{{ saving ? '正在保存…' : '保存' }}</button>
             <button v-if="editingId" type="button" class="btn btn-secondary" @click="resetForm">取消编辑</button>
@@ -121,7 +128,9 @@ const authorizing = ref(false)
 const editingId = ref<number | null>(null)
 const authorizationOpen = ref(false)
 const selectedProvider = ref<VideoProviderAccount>()
-const form = reactive({ group_id: 0, display_name: 'Seedance 2.0', api_key: '', enabled: false })
+const form = reactive({ group_id: 0, display_name: 'Seedance 2.0', api_key: '', enabled: true, authorize_after_save: true })
+// 保存后自动完成一次性授权（后端门禁语义不变：授权只是记账，第一次真实出片才消费）
+const AUTHORIZE_HINT = '保存后自动授权一次最小真实调用：这只是记账，不会马上扣费；等第一次真实出片后通道永久可用。'
 const onlyStandardGroup = '仅显示受控标准员工组。'
 
 async function load() {
@@ -141,19 +150,22 @@ async function load() {
 
 function resetForm() {
   editingId.value = null
-  Object.assign(form, { group_id: 0, display_name: 'Seedance 2.0', api_key: '', enabled: false })
+  Object.assign(form, { group_id: 0, display_name: 'Seedance 2.0', api_key: '', enabled: true, authorize_after_save: true })
 }
 
 function startEdit(provider: VideoProviderAccount) {
   editingId.value = provider.id
-  Object.assign(form, { group_id: provider.group_id, display_name: provider.display_name, api_key: '', enabled: provider.enabled })
+  Object.assign(form, { group_id: provider.group_id, display_name: provider.display_name, api_key: '', enabled: provider.enabled, authorize_after_save: true })
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
+// 保存成功后按勾选自动完成一次性授权；授权失败不掩盖「通道已保存」这个事实
 async function save() {
   saving.value = true
   try {
+    let savedId: number
     if (editingId.value) {
+      savedId = editingId.value
       await adminAPI.video.updateProvider(editingId.value, {
         group_id: form.group_id,
         display_name: form.display_name,
@@ -161,11 +173,33 @@ async function save() {
         ...(form.api_key ? { api_key: form.api_key } : {})
       })
     } else {
-      await adminAPI.video.createProvider({ ...form, provider: 'seedance' })
+      const created = await adminAPI.video.createProvider({
+        group_id: form.group_id,
+        display_name: form.display_name,
+        enabled: form.enabled,
+        api_key: form.api_key,
+        provider: 'seedance'
+      })
+      savedId = created.id
     }
+    const wantAuthorize = form.authorize_after_save
     resetForm()
-    app.showSuccess('通道已保存；密钥明文不会再次回显')
     await load()
+    if (wantAuthorize) {
+      const saved = providers.value.find((p) => p.id === savedId)
+      if (saved && !authorizationDisabledReason(saved)) {
+        try {
+          await adminAPI.video.authorizeTinyReal(savedId)
+          app.showSuccess('通道已保存并记录单次授权；等第一次真实出片后通道永久可用')
+          await load()
+          return
+        } catch (authError) {
+          app.showError(`通道已保存，但自动授权失败：${extractApiErrorMessage(authError, '可在卡片上手动授权')}`)
+          return
+        }
+      }
+    }
+    app.showSuccess('通道已保存；密钥明文不会再次回显')
   } catch (error) {
     app.showError(extractApiErrorMessage(error, '保存失败'))
   } finally {
@@ -176,6 +210,7 @@ async function save() {
 async function toggle(provider: VideoProviderAccount) {
   try {
     await adminAPI.video.updateProvider(provider.id, { enabled: !provider.enabled })
+    app.showSuccess(provider.enabled ? `通道「${provider.display_name}」已停用` : `通道「${provider.display_name}」已启用`)
     await load()
   } catch (error) {
     app.showError(extractApiErrorMessage(error, '更新失败'))
@@ -218,8 +253,8 @@ async function confirmAuthorization() {
 }
 
 function authLabel(provider: VideoProviderAccount): string {
-  if (provider.tiny_real_consumed_at) return `已消费（${provider.tiny_real_consumed_at}）`
-  if (provider.tiny_real_authorized_at) return `待消费（授权人 #${provider.tiny_real_authorized_by || '未知'}）`
+  if (provider.tiny_real_consumed_at) return `已开通（首次真实出片完成于 ${provider.tiny_real_consumed_at}）`
+  if (provider.tiny_real_authorized_at) return '待消费 = 等第一次真实出片，之后通道永久可用'
   return '未授权'
 }
 

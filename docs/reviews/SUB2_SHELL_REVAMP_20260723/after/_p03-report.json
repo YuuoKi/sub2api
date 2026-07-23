@@ -1,0 +1,37 @@
+[
+  {
+    "name": "default-enabled-checked",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "default-authorize-checked",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "auto-authorize-toast",
+    "ok": false,
+    "extra": "no-toast"
+  },
+  {
+    "name": "provider-card-exists",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "pending-consume-human-copy",
+    "ok": true,
+    "extra": "待消费 = 等第一次真实出片，之后通道永久可用"
+  },
+  {
+    "name": "card-enabled",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "reauthorize-disabled",
+    "ok": true,
+    "extra": ""
+  }
+]

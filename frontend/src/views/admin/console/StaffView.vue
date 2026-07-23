@@ -85,6 +85,12 @@
 					  <button class="btn btn-sm btn-outline" type="button" data-test="qcanvas-key-pair" @click="openQCanvasKeyPair(user)">
 						QCanvas 双 Key
 					  </button>
+                      <button class="btn btn-sm btn-outline" type="button" data-test="row-recharge" @click="openRecharge(user)">
+                        充值
+                      </button>
+                      <RouterLink class="btn btn-sm btn-outline" :to="`/admin/console/ai-records?user_id=${user.id}`" data-test="row-view-spend">
+                        查看花费
+                      </RouterLink>
                       <button class="btn btn-sm btn-outline" type="button" @click="toggleExpand(user)">
                         {{ expandedUserId === user.id ? '收起' : '查看卡片' }}
                       </button>
@@ -172,34 +178,119 @@
         </div>
       </section>
 
-      <!-- 新增服务身份弹窗 -->
-      <div v-if="staffModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="staffModalOpen = false">
+      <!-- 新增服务身份：一页 3 步向导（建身份 → 开双 Key + 充值 → 明文展示一次） -->
+      <div v-if="staffModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="closeWizard">
         <div class="w-full max-w-md rounded-lg border border-gray-200 bg-white p-6 shadow-xl dark:border-dark-700 dark:bg-dark-800">
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-white">新增服务身份</h2>
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            服务身份不能登录 Web，只用于持有 API 卡片和隔离调用、成本与资产归属。
-          </p>
-          <form class="mt-5 space-y-4" data-test="service-identity-form" @submit.prevent="createStaff">
-            <div>
-              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">服务名称</label>
-              <input v-model="staffForm.username" class="input" maxlength="50" placeholder="例如：QCanvas 批量出图" />
+          <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">新增服务身份</h2>
+            <span class="text-xs text-gray-400">第 {{ wizardStep }} 步 / 共 3 步</span>
+          </div>
+
+          <!-- 第 1 步：建服务身份 -->
+          <template v-if="wizardStep === 1">
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              服务身份不能登录 Web，只用于持有 API 卡片和隔离调用、成本与资产归属。
+            </p>
+            <form class="mt-5 space-y-4" data-test="service-identity-form" @submit.prevent="createStaff">
+              <div>
+                <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">服务名称</label>
+                <input v-model="staffForm.username" class="input" maxlength="50" placeholder="例如：QCanvas 批量出图" />
+              </div>
+              <div>
+                <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">身份邮箱</label>
+                <input v-model="staffForm.email" class="input" data-test="service-identity-email" type="email" required placeholder="qcanvas@wujie.local（仅作唯一标识）" />
+              </div>
+              <div>
+                <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">备注（可选）</label>
+                <input v-model="staffForm.notes" class="input" maxlength="200" placeholder="例如：夜间批量分镜流程" />
+              </div>
+              <div class="flex justify-end gap-2 pt-2">
+                <button class="btn btn-outline" type="button" @click="closeWizard">取消</button>
+                <button class="btn btn-primary" type="submit" data-test="wizard-step1-next" :disabled="creatingStaff">
+                  {{ creatingStaff ? '创建中…' : '下一步：开卡充值' }}
+                </button>
+              </div>
+            </form>
+          </template>
+
+          <!-- 第 2 步：开双 Key + 充值 -->
+          <template v-else-if="wizardStep === 2">
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              身份「{{ staffDisplayName(wizardUser?.username, wizardUser?.email) }}」已建好。选两个不同的路由组开出双 Key，可顺手充一笔。
+            </p>
+            <form class="mt-5 space-y-4" data-test="wizard-pair-form" @submit.prevent="wizardIssueAndRecharge">
+              <div>
+                <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">视频 Key 路由组</label>
+                <select v-model.number="qcanvasPairForm.videoGroupId" class="input" data-test="wizard-video-group" required>
+                  <option :value="0" disabled>选择视频实际使用的组</option>
+                  <option v-for="group in eligibleGroups" :key="group.id" :value="group.id" :disabled="group.id === qcanvasPairForm.mediaGroupId">
+                    {{ group.name }}
+                  </option>
+                </select>
+              </div>
+              <div>
+                <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">LLM / 图片 Key 路由组</label>
+                <select v-model.number="qcanvasPairForm.mediaGroupId" class="input" data-test="wizard-media-group" required>
+                  <option :value="0" disabled>选择 LLM / 图片实际使用的组</option>
+                  <option v-for="group in eligibleGroups" :key="group.id" :value="group.id" :disabled="group.id === qcanvasPairForm.videoGroupId">
+                    {{ group.name }}
+                  </option>
+                </select>
+              </div>
+              <p v-if="eligibleGroups.length < 2 && !groupsLoading" class="text-xs text-red-600">双 Key 必须选择两个不同的可用组，当前可用组不足。</p>
+              <div>
+                <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">充值金额（美元，可填 0）</label>
+                <input
+                  v-model.number="wizardRechargeAmount"
+                  class="input"
+                  data-test="wizard-amount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="例如 50"
+                />
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  按 1 美元 ≈ ¥{{ usdCnyRate }} 入账到该身份余额；不充可填 0，之后随时在行内「充值」。
+                </p>
+              </div>
+              <div class="flex justify-end gap-2 pt-2">
+                <button class="btn btn-outline" type="button" @click="closeWizard">取消</button>
+                <button class="btn btn-primary" type="submit" data-test="wizard-submit" :disabled="issuing || groupsLoading || !canIssueQCanvasPair">
+                  {{ issuing ? '开通中…' : '开通双 Key' }}
+                </button>
+              </div>
+            </form>
+          </template>
+
+          <!-- 第 3 步：明文双 Key（仅这一次） -->
+          <template v-else>
+            <p v-if="issuedQCanvasPair?.video.key && issuedQCanvasPair?.media.key" class="mt-1 text-xs text-amber-600 dark:text-amber-300">
+              两把完整 Key 只显示这一次，请立刻复制并交给 QCanvas 注册页。关掉后只能看到脱敏元数据。
+            </p>
+            <p v-else class="mt-1 text-xs text-amber-600 dark:text-amber-300">
+              该请求已重放，明文 Key 不再返回；请不要把重试当作重新开卡。
+            </p>
+            <div v-if="issuedQCanvasPair?.video.key && issuedQCanvasPair?.media.key" class="mt-4 space-y-3">
+              <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-dark-700 dark:bg-dark-900">
+                <div class="text-xs text-gray-500">视频 Key · {{ selectedGroupName(qcanvasPairForm.videoGroupId) }}</div>
+                <div class="mt-1 break-all font-mono text-sm text-gray-900 dark:text-white" data-test="wizard-video-key">{{ issuedQCanvasPair.video.key }}</div>
+              </div>
+              <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-dark-700 dark:bg-dark-900">
+                <div class="text-xs text-gray-500">LLM / 图片 Key · {{ selectedGroupName(qcanvasPairForm.mediaGroupId) }}</div>
+                <div class="mt-1 break-all font-mono text-sm text-gray-900 dark:text-white" data-test="wizard-media-key">{{ issuedQCanvasPair.media.key }}</div>
+              </div>
             </div>
-            <div>
-              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">身份邮箱</label>
-              <input v-model="staffForm.email" class="input" data-test="service-identity-email" type="email" required placeholder="qcanvas@wujie.local（仅作唯一标识）" />
-            </div>
-            <div>
-              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">备注（可选）</label>
-              <input v-model="staffForm.notes" class="input" maxlength="200" placeholder="例如：夜间批量分镜流程" />
-            </div>
-            <div class="flex justify-end gap-2 pt-2">
-              <button class="btn btn-outline" type="button" @click="staffModalOpen = false">取消</button>
-              <button class="btn btn-primary" type="submit" :disabled="creatingStaff">
-                <Icon name="check" size="sm" />
-                创建
+            <p v-if="wizardRechargeResult" class="mt-3 text-xs text-gray-600 dark:text-gray-300" data-test="wizard-recharge-result">
+              {{ wizardRechargeResult }}
+            </p>
+            <div class="mt-4 flex justify-end gap-2">
+              <button v-if="issuedQCanvasPair?.video.key && issuedQCanvasPair?.media.key" class="btn btn-primary" type="button" data-test="wizard-copy" @click="copyIssuedQCanvasPair">
+                <Icon name="copy" size="sm" />
+                {{ qcanvasPairCopied ? '已复制' : '复制两把 Key' }}
               </button>
+              <button class="btn btn-outline" type="button" data-test="wizard-done" @click="closeWizard">完成</button>
             </div>
-          </form>
+          </template>
         </div>
       </div>
 
@@ -278,14 +369,14 @@
 				<label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">视频 Key 路由组</label>
 				<select v-model.number="qcanvasPairForm.videoGroupId" class="input" data-test="qcanvas-video-group" required>
 				  <option :value="0" disabled>选择视频实际使用的组</option>
-				  <option v-for="group in eligibleGroups" :key="group.id" :value="group.id">{{ group.name }}</option>
+				  <option v-for="group in eligibleGroups" :key="group.id" :value="group.id" :disabled="group.id === qcanvasPairForm.mediaGroupId">{{ group.name }}</option>
 				</select>
 			  </div>
 			  <div>
 				<label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">LLM / 图片 Key 路由组</label>
 				<select v-model.number="qcanvasPairForm.mediaGroupId" class="input" data-test="qcanvas-media-group" required>
 				  <option :value="0" disabled>选择 LLM / 图片实际使用的组</option>
-				  <option v-for="group in eligibleGroups" :key="group.id" :value="group.id">{{ group.name }}</option>
+				  <option v-for="group in eligibleGroups" :key="group.id" :value="group.id" :disabled="group.id === qcanvasPairForm.videoGroupId">{{ group.name }}</option>
 				</select>
 			  </div>
 			  <p v-if="eligibleGroups.length < 2 && !groupsLoading" class="text-xs text-red-600">双 Key 必须选择两个不同的可用组。</p>
@@ -313,12 +404,35 @@
 		  </template>
 		</div>
 	  </div>
+
+	  <!-- 行内充值弹窗 -->
+	  <div v-if="rechargeModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="rechargeModalOpen = false">
+		<div class="w-full max-w-sm rounded-lg border border-gray-200 bg-white p-6 shadow-xl dark:border-dark-700 dark:bg-dark-800">
+		  <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+			给 {{ staffDisplayName(rechargeTarget?.username, rechargeTarget?.email) }} 充值
+		  </h2>
+		  <form class="mt-5 space-y-4" data-test="recharge-form" @submit.prevent="submitRecharge">
+			<div>
+			  <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">充值金额（美元）</label>
+			  <input v-model.number="rechargeAmount" class="input" data-test="recharge-amount" type="number" min="0.01" step="0.01" required placeholder="例如 50" />
+			  <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">按 1 美元 ≈ ¥{{ usdCnyRate }} 入账，立即生效。</p>
+			</div>
+			<div class="flex justify-end gap-2 pt-2">
+			  <button class="btn btn-outline" type="button" @click="rechargeModalOpen = false">取消</button>
+			  <button class="btn btn-primary" type="submit" data-test="recharge-submit" :disabled="recharging">
+				{{ recharging ? '充值中…' : '确认充值' }}
+			  </button>
+			</div>
+		  </form>
+		</div>
+	  </div>
     </div>
   </AppLayout>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { adminAPI } from '@/api/admin'
@@ -329,6 +443,7 @@ import { extractApiErrorMessage } from '@/utils/apiError'
 import { requestConfirmation } from '@/composables/useAppDialog'
 import { DEFAULT_USD_CNY_RATE } from '@/composables/useDisplayCurrency'
 import {
+  CONSOLE_ERROR_ZH,
   formatAccountUsd,
   formatDateTime,
   formatMoney,
@@ -375,16 +490,20 @@ async function loadStaff() {
       usageMap.value = {}
     }
   } catch (err) {
-    appStore.showError(extractApiErrorMessage(err, '加载成员列表失败'))
+    appStore.showError(extractApiErrorMessage(err, '加载成员列表失败', CONSOLE_ERROR_ZH))
   } finally {
     loading.value = false
   }
 }
 
-// ---- 新增成员 ----
+// ---- 新增成员（一页 3 步向导：建身份 → 开双 Key + 充值 → 明文展示一次） ----
 
 const staffModalOpen = ref(false)
 const creatingStaff = ref(false)
+const wizardStep = ref(1)
+const wizardUser = ref<AdminUser | null>(null)
+const wizardRechargeAmount = ref<number>(0)
+const wizardRechargeResult = ref('')
 const staffForm = reactive({
   username: '',
   email: '',
@@ -395,26 +514,114 @@ function openCreateServiceIdentity() {
   staffForm.username = ''
   staffForm.email = ''
   staffForm.notes = ''
+  wizardStep.value = 1
+  wizardUser.value = null
+  wizardRechargeAmount.value = 0
+  wizardRechargeResult.value = ''
+  issuedQCanvasPair.value = null
+  qcanvasPairCopied.value = false
+  qcanvasPairForm.videoGroupId = 0
+  qcanvasPairForm.mediaGroupId = 0
   staffModalOpen.value = true
+}
+
+function closeWizard() {
+  staffModalOpen.value = false
+  wizardStep.value = 1
+  wizardUser.value = null
+  wizardRechargeResult.value = ''
+  issuedQCanvasPair.value = null
+  qcanvasPairCopied.value = false
+  issueTarget.value = null
 }
 
 async function createStaff() {
   creatingStaff.value = true
   try {
-    await adminAPI.users.create({
+    const res = await adminAPI.users.create({
       email: staffForm.email.trim(),
       username: staffForm.username.trim() || undefined,
       notes: staffForm.notes.trim() || undefined,
       member_type: 'tool',
       role: 'user',
     })
-    appStore.showSuccess('服务身份已创建，接下来可以签发 API 卡片')
-    staffModalOpen.value = false
+    const created = res.user
+    wizardUser.value = created
+    issueTarget.value = created
+    appStore.showSuccess('服务身份已创建，继续开卡充值')
+    wizardStep.value = 2
+    selectQCanvasPairDefaults()
     await loadStaff()
   } catch (err) {
-    appStore.showError(extractApiErrorMessage(err, '创建服务身份失败'))
+    appStore.showError(extractApiErrorMessage(err, '创建服务身份失败', CONSOLE_ERROR_ZH))
   } finally {
     creatingStaff.value = false
+  }
+}
+
+// 第 2 步提交：先开通双 Key（明文仅此一次），再按需充值；充值失败不遮挡已签发的 Key
+async function wizardIssueAndRecharge() {
+  if (!wizardUser.value || !canIssueQCanvasPair.value) {
+    appStore.showError('请为视频与 LLM / 图片选择两个不同的可用组')
+    return
+  }
+  issuing.value = true
+  wizardRechargeResult.value = ''
+  try {
+    issuedQCanvasPair.value = await adminAPI.apiKeys.createQCanvasKeyPairForUser(
+      wizardUser.value.id,
+      { video_group_id: qcanvasPairForm.videoGroupId, media_group_id: qcanvasPairForm.mediaGroupId },
+      crypto.randomUUID(),
+    )
+    const amount = Number(wizardRechargeAmount.value) || 0
+    if (amount > 0) {
+      try {
+        const updated = await adminAPI.users.updateBalance(wizardUser.value.id, amount, 'add', '开卡向导充值')
+        wizardRechargeResult.value = `已充值 $${amount.toFixed(2)}，当前余额 $${Number(updated.balance ?? 0).toFixed(2)}。`
+      } catch (rechargeErr) {
+        wizardRechargeResult.value = `充值失败：${extractApiErrorMessage(rechargeErr, '请稍后在行内「充值」重试', CONSOLE_ERROR_ZH)}。Key 已签发，请先复制。`
+        appStore.showError('双 Key 已开通，但充值失败，可在列表行内重试')
+      }
+    }
+    wizardStep.value = 3
+    if (expandedUserId.value === wizardUser.value.id) await loadUserKeys(wizardUser.value.id)
+    await loadStaff()
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, 'QCanvas 双 Key 开通失败', CONSOLE_ERROR_ZH))
+  } finally {
+    issuing.value = false
+  }
+}
+
+// ---- 行内充值 ----
+
+const rechargeModalOpen = ref(false)
+const rechargeTarget = ref<AdminUser | null>(null)
+const rechargeAmount = ref<number>(0)
+const recharging = ref(false)
+
+function openRecharge(user: AdminUser) {
+  rechargeTarget.value = user
+  rechargeAmount.value = 0
+  rechargeModalOpen.value = true
+}
+
+async function submitRecharge() {
+  const amount = Number(rechargeAmount.value)
+  if (!rechargeTarget.value || !(amount > 0)) {
+    appStore.showError('请输入大于 0 的充值金额')
+    return
+  }
+  recharging.value = true
+  try {
+    const updated = await adminAPI.users.updateBalance(rechargeTarget.value.id, amount, 'add', '行内充值')
+    appStore.showSuccess(`已充值 $${amount.toFixed(2)}，当前余额 $${Number(updated.balance ?? 0).toFixed(2)}`)
+    rechargeModalOpen.value = false
+    rechargeTarget.value = null
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, '充值失败', CONSOLE_ERROR_ZH))
+  } finally {
+    recharging.value = false
   }
 }
 
@@ -450,7 +657,7 @@ async function loadUserKeys(userId: number) {
       keyUsageMap.value = {}
     }
   } catch (err) {
-    appStore.showError(extractApiErrorMessage(err, '加载成员卡片失败'))
+    appStore.showError(extractApiErrorMessage(err, '加载成员卡片失败', CONSOLE_ERROR_ZH))
   } finally {
     keysLoading.value = false
   }
@@ -490,15 +697,22 @@ function keyStatusClass(status: ApiKey['status']): string {
 const keyActionBusy = ref(false)
 
 async function toggleKeyStatus(key: ApiKey) {
+  // admin 契约只接受 active/disabled（不要发 inactive，后端会 400）
+  const next = key.status === 'active' ? 'disabled' : 'active'
+  if (next === 'disabled') {
+    const confirmed = await requestConfirmation({
+      message: `确定停用卡「${key.name || '未命名'}」？停用后该卡调用会立即失败。`,
+      danger: true,
+    })
+    if (!confirmed) return
+  }
   keyActionBusy.value = true
   try {
-    // admin 契约只接受 active/disabled（不要发 inactive，后端会 400）
-    const next = key.status === 'active' ? 'disabled' : 'active'
     await adminAPI.apiKeys.updateApiKeyFields(key.id, { status: next })
     appStore.showSuccess(next === 'active' ? '卡已启用' : '卡已停用')
     if (expandedUserId.value) await loadUserKeys(expandedUserId.value)
   } catch (err) {
-    appStore.showError(extractApiErrorMessage(err, '切换卡状态失败'))
+    appStore.showError(extractApiErrorMessage(err, '切换卡状态失败', CONSOLE_ERROR_ZH))
   } finally {
     keyActionBusy.value = false
   }
@@ -516,7 +730,7 @@ async function removeKey(key: ApiKey) {
     appStore.showSuccess('卡已删除')
     if (expandedUserId.value) await loadUserKeys(expandedUserId.value)
   } catch (err) {
-    appStore.showError(extractApiErrorMessage(err, '删除卡失败'))
+    appStore.showError(extractApiErrorMessage(err, '删除卡失败', CONSOLE_ERROR_ZH))
   } finally {
     keyActionBusy.value = false
   }
@@ -580,7 +794,7 @@ async function loadActiveGroups() {
     activeGroups.value = await adminAPI.groups.getAll()
   } catch (err) {
     activeGroups.value = []
-    appStore.showError(extractApiErrorMessage(err, '加载启用组失败'))
+    appStore.showError(extractApiErrorMessage(err, '加载启用组失败', CONSOLE_ERROR_ZH))
   } finally {
     groupsLoading.value = false
     if (issueModalOpen.value) selectEligibleDefault()
@@ -642,7 +856,7 @@ async function issueCard() {
       await loadUserKeys(issueTarget.value.id)
     }
   } catch (err) {
-    appStore.showError(extractApiErrorMessage(err, '开卡失败'))
+    appStore.showError(extractApiErrorMessage(err, '开卡失败', CONSOLE_ERROR_ZH))
   } finally {
     issuing.value = false
   }
@@ -663,7 +877,7 @@ async function issueQCanvasKeyPair() {
 		appStore.showSuccess('QCanvas 双 Key 开通成功')
 		if (expandedUserId.value === issueTarget.value.id) await loadUserKeys(issueTarget.value.id)
 	} catch (err) {
-		appStore.showError(extractApiErrorMessage(err, 'QCanvas 双 Key 开通失败'))
+		appStore.showError(extractApiErrorMessage(err, 'QCanvas 双 Key 开通失败', CONSOLE_ERROR_ZH))
 	} finally {
 		issuing.value = false
 	}

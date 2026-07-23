@@ -20,16 +20,8 @@
           <dd class="mt-1 font-medium text-gray-900 dark:text-white">{{ contract.duration_seconds }} 秒 / {{ contract.resolution }}</dd>
         </div>
         <div class="seedance-authorization-field">
-          <dt class="text-gray-500">员工 / 分组</dt>
-          <dd class="mt-1 font-medium text-gray-900 dark:text-white">员工：{{ unavailable }}；分组：{{ provider.group_name || unavailable }}</dd>
-        </div>
-        <div class="seedance-authorization-field">
-          <dt class="text-gray-500">授权人</dt>
-          <dd class="mt-1 font-medium text-gray-900 dark:text-white">{{ authorizationActor }}</dd>
-        </div>
-        <div class="seedance-authorization-field">
-          <dt class="text-gray-500">预算上限</dt>
-          <dd class="mt-1 font-medium text-gray-900 dark:text-white">{{ unavailable }}</dd>
+          <dt class="text-gray-500">分组</dt>
+          <dd class="mt-1 font-medium text-gray-900 dark:text-white">{{ provider.group_name || '未绑定' }}</dd>
         </div>
         <div class="seedance-authorization-field">
           <dt class="text-gray-500">剩余授权次数</dt>
@@ -83,16 +75,14 @@ const emit = defineEmits<{
   (event: 'confirm'): void
 }>()
 
-const unavailable = '不可用（后端未提供）'
 const remainingCount = computed(() => {
   if (props.provider.tiny_real_consumed_at) return '0（已消费）'
   if (props.provider.tiny_real_authorized_at) return '1（待消费）'
   return '当前 0；本次授权成功后为 1'
 })
-const authorizationActor = computed(() => props.provider.tiny_real_authorized_by ? `管理员 #${props.provider.tiny_real_authorized_by}` : unavailable)
 const consumptionState = computed(() => {
-  if (props.provider.tiny_real_consumed_at) return `已消费（${props.provider.tiny_real_consumed_at}）`
-  if (props.provider.tiny_real_authorized_at) return '待消费；成功消费后剩余次数变为 0'
-  return '尚未授权；本次确认后进入“待消费”'
+  if (props.provider.tiny_real_consumed_at) return `已开通（首次真实出片完成于 ${props.provider.tiny_real_consumed_at}）`
+  if (props.provider.tiny_real_authorized_at) return '待消费；成功消费后剩余次数变为 0，之后通道永久可用'
+  return '尚未授权；本次确认后进入「待消费」= 等第一次真实出片'
 })
 </script>

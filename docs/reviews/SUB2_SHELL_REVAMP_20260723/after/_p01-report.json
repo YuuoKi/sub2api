@@ -1,0 +1,37 @@
+[
+  {
+    "name": "quick-create-visible-for-openai",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "save-blocked-without-group",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "quick-create-media-group",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "account-created-in-list",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "list-shows-media-group",
+    "ok": true,
+    "extra": "K3验收-Ark作图 OpenAI media API Key 正常 — — 测试 编辑 停用"
+  },
+  {
+    "name": "edit-backfills-group",
+    "ok": true,
+    "extra": "checked=1"
+  },
+  {
+    "name": "cleanup-account-deleted",
+    "ok": true,
+    "extra": ""
+  }
+]

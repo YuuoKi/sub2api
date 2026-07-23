@@ -1,0 +1,47 @@
+[
+  {
+    "name": "wizard-step1-creates-identity",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "wizard-has-2plus-groups",
+    "ok": true,
+    "extra": "选择视频实际使用的组/media/video/default"
+  },
+  {
+    "name": "same-group-disabled-in-media-selector",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "wizard-step2-issues-pair",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "plaintext-dual-keys-shown",
+    "ok": true,
+    "extra": "sk-25d…/sk-779…"
+  },
+  {
+    "name": "recharge-result-shown",
+    "ok": true,
+    "extra": "已充值 $12.34，当前余额 $12.34。"
+  },
+  {
+    "name": "staff-row-appears",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "view-spend-deeplink",
+    "ok": true,
+    "extra": "/admin/console/ai-records?user_id=4"
+  },
+  {
+    "name": "row-recharge-works",
+    "ok": true,
+    "extra": ""
+  }
+]

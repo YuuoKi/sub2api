@@ -70,6 +70,16 @@ export function staffDisplayName(username?: string | null, email?: string | null
   return mail || '未知员工'
 }
 
+/**
+ * 控制台中文错误码表：后端 reason → 人话。
+ * 高管控制台禁止英文后端原文直出 toast；命中表的走译文，未命中的回退到后端 message。
+ */
+export const CONSOLE_ERROR_ZH: Record<string, string> = {
+  probe_invalid_baseurl: '此接口地址不支持简易连通测试，请直接使用或改用完整「上游账号」页诊断',
+  internal_error: '服务器内部错误，请稍后重试；反复出现请去「系统」页看健康检查',
+  ADMIN_COMPLIANCE_ACK_REQUIRED: '需要先在页面上完成管理员合规确认',
+}
+
 export type QuotaWarningLevel = 'none' | 'warn' | 'critical'
 
 /** Derive quota warning level from used/limit (mirrors backend QuotaUsagePercent). */

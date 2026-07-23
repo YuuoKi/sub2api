@@ -1,0 +1,92 @@
+[
+  {
+    "name": "sidebar-has-总览",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "sidebar-has-密钥库",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "sidebar-has-员工卡",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "sidebar-has-用量",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "sidebar-has-系统",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "sidebar-no-old-总览与成本",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "sidebar-no-old-上游账号、模",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "sidebar-no-old-员工/API",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "sidebar-no-old-调用、任务与",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "sidebar-no-old-系统、健康、",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "sidebar-no-ellipsis",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "system-children",
+    "ok": true,
+    "extra": "无界 · 企业 AI 管理中台 v0.1.151 总览 密钥库 员工卡 用量 系统 系统健康 设置与备份 高级 上游账号 模型分组 视频通道 模型与通道定价 通道监控 上游网络 任务记录 生成资产 用量与成本 浅色模式 收起"
+  },
+  {
+    "name": "advanced-children",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "badge-short-version",
+    "ok": true,
+    "extra": "v0.1.151"
+  },
+  {
+    "name": "no-amber-ping",
+    "ok": true,
+    "extra": "ping=0"
+  },
+  {
+    "name": "no-update-prompt",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "popover-shows-current-version",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "no-check-updates-request",
+    "ok": true,
+    "extra": "0 hits"
+  }
+]

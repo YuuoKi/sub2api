@@ -52,3 +52,27 @@ P0.1/P0.4 在 8080 验收（契约两版一致）。探针数据均已清理或�
 | 回归通过 | 9 | vue-tsc、eslint 零告警；console 4 文件 32 用例全绿 |
 
 均分 ≥8，P0 READY_FOR_REVIEW。
+
+## P1 after 验收（IA + 版本）
+
+| 项 | 证据 | 结果 |
+|---|---|---|
+| 侧栏 5 项短词无截断 | `after/p1-01-sidebar-five-items.png` | 总览/密钥库/员工卡/用量/系统；旧长名全消失；无「…」；L1/L2 父子同名重复消除 |
+| 系统→高级 收口 | `after/p1-02-system-advanced-expanded.png` | 系统健康/设置与备份/高级（上游账号/模型分组/视频通道/定价/通道监控/上游网络/任务记录/生成资产/用量与成本）；视频链路检查并入系统健康（URL 仍可达） |
+| 版本短显 + 无琥珀 ping | `after/p1-03-version-popover-clean.png` | badge `v0.1.151`；弹窗仅「当前版本/已是最新版本」，无「有新版本可用/立即更新」；完整版本点击复制 |
+| lan 不请求 check-updates | `_p1-report.json` | 全程 0 次 `/admin/system/check-updates` 请求（request 监听断言） |
+
+## 8 维自评（P1）
+
+| 维度 | 分 | 依据 |
+|---|---|---|
+| 功能正确性 | 9 | 侧栏/弹窗断言全 OK，request 级证据证明不调用 check-updates |
+| 后端契约不动 | 10 | 仅读取既有 `lan_admin_mode_enabled` 与公共 `version` 字段 |
+| 安全语义 | 9 | 白名单未放宽；商业化面仍全部隐藏且 URL 不可达 |
+| 中文文案 | 9 | 新增 i18n key 中英齐备；侧栏全短词中文 |
+| 真实链路验收 | 9 | 真人点击展开两级菜单 + 开版本弹窗 |
+| 测试同步 | 9 | roleAwareNavigation/AppSidebar 两 spec 同步新契约，115/115 绿；VersionBadge.restart 3/3 |
+| 截图证据 | 9 | before(08/09)/after(p1-01..03) 成对 |
+| 回归通过 | 9 | vue-tsc/eslint 零告警；批量 flake 复跑全绿 |
+
+均分 ≥8，P1 READY_FOR_REVIEW。

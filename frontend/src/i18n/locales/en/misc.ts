@@ -49,6 +49,7 @@ export default {
     rollbackFailed: 'Rollback Failed',
     manualRollbackCommand: 'Manual rollback',
     copyCommand: 'Copy',
+    copyFullVersion: 'Click to copy the full version string',
     copied: 'Copied',
     noRollbackVersions: 'No versions available for rollback',
     loadVersionsFailed: 'Failed to load versions',

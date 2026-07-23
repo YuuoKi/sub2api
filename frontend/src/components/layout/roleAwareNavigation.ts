@@ -49,7 +49,7 @@ export const ADMIN_TOP_LEVEL_PATHS = [
   '/admin/console/overview',
   '/admin/console/key-vault',
   '/admin/console/staff',
-  '/admin/video/tasks',
+  '/admin/console/ai-records',
   ADMIN_SYSTEM_PATH,
 ] as const
 
@@ -126,20 +126,23 @@ export function isDefaultCollapsedGroup(item: RoleNavItem): boolean {
 }
 
 export function buildAdminRoleNav(options: BuildAdminRoleNavOptions = {}): RoleNavItem[] {
+  // 高管控制台：一层语义、短词、无截断。完整管理面收进「系统 → 高级」，仅 URL 可达的页不再占侧栏。
   const items: RoleNavItem[] = [
-    { path: '/admin/console/overview', label: '总览与成本' },
-    { path: '/admin/console/key-vault', label: '上游账号、模型和通道' },
-    { path: '/admin/console/staff', label: '员工/API 卡片管理' },
-    { path: '/admin/video/tasks', label: '调用、任务与资产记录' },
+    { path: '/admin/console/overview', label: '总览' },
+    { path: '/admin/console/key-vault', label: '密钥库' },
+    { path: '/admin/console/staff', label: '员工卡' },
+    { path: '/admin/console/ai-records', label: '用量' },
     {
       path: ADMIN_SYSTEM_PATH,
-      label: '系统、健康、备份与恢复',
+      label: '系统',
       expandOnly: true,
       defaultCollapsed: true,
       children: [
+        { path: '/admin/ops', label: '系统健康', featureFlagKey: 'ops' },
+        { path: '/admin/settings', label: '设置与备份' },
         {
-          path: '/admin/system/upstream',
-          label: '上游账号、模型和通道',
+          path: '/admin/system/advanced',
+          label: '高级',
           expandOnly: true,
           defaultCollapsed: true,
           children: [
@@ -149,28 +152,9 @@ export function buildAdminRoleNav(options: BuildAdminRoleNavOptions = {}): RoleN
             { path: '/admin/channels/pricing', label: '模型与通道定价', hideInSimpleMode: true },
             { path: '/admin/channels/monitor', label: '通道监控', featureFlagKey: 'channelMonitor' },
             { path: '/admin/proxies', label: '上游网络' },
-          ],
-        },
-        {
-          path: '/admin/system/records-assets',
-          label: '调用、任务与资产记录',
-          expandOnly: true,
-          defaultCollapsed: true,
-          children: [
-            { path: '/admin/console/ai-records', label: '调用记录' },
+            { path: '/admin/video/tasks', label: '任务记录' },
             { path: '/admin/generation-content', label: '生成资产' },
             { path: '/admin/usage', label: '用量与成本' },
-          ],
-        },
-        {
-          path: '/admin/system/health-recovery',
-          label: '系统、健康、备份与恢复',
-          expandOnly: true,
-          defaultCollapsed: true,
-          children: [
-            { path: '/admin/ops', label: '系统健康', featureFlagKey: 'ops' },
-            { path: '/admin/video/system-check', label: '视频链路检查' },
-            { path: '/admin/settings', label: '系统、备份与恢复' },
           ],
         },
       ],

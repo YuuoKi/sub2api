@@ -260,6 +260,24 @@ export const useAppStore = defineStore('app', () => {
       return null
     }
 
+    // 内部部署（lan_admin）：不调用 check-updates（无外网发行服务器可问，也不该引导更新），
+    // 版本号取公共设置里的短版本，hasUpdate 恒为 false。
+    if (lanAdminModeEnabled.value) {
+      currentVersion.value = cachedPublicSettings.value?.version || ''
+      latestVersion.value = ''
+      hasUpdate.value = false
+      buildType.value = 'source'
+      releaseInfo.value = null
+      versionLoaded.value = true
+      return {
+        current_version: currentVersion.value,
+        latest_version: '',
+        has_update: false,
+        build_type: buildType.value,
+        cached: true
+      }
+    }
+
     versionLoading.value = true
     try {
       const data = await checkUpdatesAPI(force)

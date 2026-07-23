@@ -14,16 +14,16 @@ import {
 } from '../roleAwareNavigation'
 
 describe('admin role-aware top-level IA', () => {
-  it('uses the five locked lan_admin capability entries', () => {
+  it('uses the five locked lan_admin capability entries with short single-layer labels', () => {
     const items = buildAdminRoleNav({})
 
     expect(collectTopLevelPaths(items)).toEqual([...ADMIN_TOP_LEVEL_PATHS])
     expect(items.map((item) => item.label)).toEqual([
-      '总览与成本',
-      '上游账号、模型和通道',
-      '员工/API 卡片管理',
-      '调用、任务与资产记录',
-      '系统、健康、备份与恢复',
+      '总览',
+      '密钥库',
+      '员工卡',
+      '用量',
+      '系统',
     ])
   })
 
@@ -33,7 +33,7 @@ describe('admin role-aware top-level IA', () => {
     expect(isDefaultCollapsedGroup(system!)).toBe(true)
   })
 
-  it('exposes only upstream, records/assets and system health/recovery leaves', () => {
+  it('exposes ops/settings directly and tucks legacy surfaces under System > Advanced', () => {
     const system = findNavItem(buildAdminRoleNav({
       customAdminMenus: [{ id: 9, label: '旧入口' }],
       opsMonitoringEnabled: true,
@@ -41,19 +41,22 @@ describe('admin role-aware top-level IA', () => {
       riskControlEnabled: true,
     }), ADMIN_SYSTEM_PATH)
 
-    expect(collectLeafPaths(system)).toEqual([
+    expect(system?.children?.map((item) => item.path)).toEqual([
+      '/admin/ops',
+      '/admin/settings',
+      '/admin/system/advanced',
+    ])
+    const advanced = findNavItem(system?.children ?? [], '/admin/system/advanced')
+    expect(collectLeafPaths(advanced)).toEqual([
       '/admin/accounts',
       '/admin/groups',
       '/admin/video/providers',
       '/admin/channels/pricing',
       '/admin/channels/monitor',
       '/admin/proxies',
-      '/admin/console/ai-records',
+      '/admin/video/tasks',
       '/admin/generation-content',
       '/admin/usage',
-      '/admin/ops',
-      '/admin/video/system-check',
-      '/admin/settings',
     ])
   })
 

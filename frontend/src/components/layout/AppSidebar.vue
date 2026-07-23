@@ -475,21 +475,6 @@ const ServerIcon = {
     )
 }
 
-const BellIcon = {
-  render: () =>
-    h(
-      'svg',
-      { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' },
-      [
-        h('path', {
-          'stroke-linecap': 'round',
-          'stroke-linejoin': 'round',
-          d: 'M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9a6 6 0 10-12 0v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0'
-        })
-      ]
-    )
-}
-
 const TicketIcon = {
   render: () =>
     h(
@@ -659,14 +644,12 @@ const flagRiskControl = makeSidebarFlag(FeatureFlags.riskControl)
 function iconForPath(path: string): unknown {
   switch (path) {
     case '/admin/console/overview':
-    case '/admin/dashboard':
     case '/dashboard':
       return DashboardIcon
     case '/admin/console/key-vault':
     case '/keys':
       return KeyIcon
     case '/admin/console/staff':
-    case '/admin/users':
       return UsersIcon
     case '/admin/video/tasks':
     case '/video/tasks':
@@ -674,7 +657,6 @@ function iconForPath(path: string): unknown {
     case '/admin/usage':
     case '/usage':
     case '/admin/console/ai-records':
-    case '/admin/orders/dashboard':
       return ChartIcon
     case '/video/create':
     case '/batch-image':
@@ -682,7 +664,6 @@ function iconForPath(path: string): unknown {
     case '/admin/system':
     case '/admin/settings':
       return CogIcon
-    case '/admin/system/ops-config':
     case '/admin/groups':
     case '/admin/generation-content':
       return FolderIcon
@@ -693,28 +674,15 @@ function iconForPath(path: string): unknown {
     case '/admin/accounts':
       return GlobeIcon
     case '/admin/video/system-check':
-    case '/admin/risk-control':
       return ShieldIcon
     case '/admin/channels/pricing':
       return PriceTagIcon
     case '/admin/channels/monitor':
     case '/monitor':
       return SignalIcon
-    case '/admin/announcements':
-      return BellIcon
     case '/admin/proxies':
       return ServerIcon
-    case '/admin/redeem':
     case '/redeem':
-      return TicketIcon
-    case '/admin/subscriptions':
-    case '/admin/promo-codes':
-    case '/admin/orders':
-    case '/admin/orders/plans':
-    case '/admin/affiliates':
-    case '/admin/affiliates/invites':
-    case '/admin/affiliates/rebates':
-    case '/admin/affiliates/transfers':
       return TicketIcon
     case '/available-channels':
       return ChannelIcon

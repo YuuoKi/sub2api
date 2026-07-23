@@ -48,6 +48,7 @@ export default {
     rollbackFailed: '回退失败',
     manualRollbackCommand: '手动回退方式',
     copyCommand: '复制',
+    copyFullVersion: '点击复制完整版本号',
     copied: '已复制',
     noRollbackVersions: '暂无可回退的版本',
     loadVersionsFailed: '获取版本列表失败',

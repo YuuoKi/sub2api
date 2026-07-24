@@ -11,6 +11,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestCreateVideoProviderDetectsConflictOnCustomModel(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	repo := &videoAdminRepository{db: db}
+	mock.ExpectQuery(`EXISTS\(SELECT 1 FROM groups[\s\S]+provider=\$2 AND default_model=\$3 AND id<>\$4`).
+		WithArgs(int64(9), "seedance", "relay-model", int64(0)).
+		WillReturnRows(sqlmock.NewRows([]string{"valid", "conflict"}).AddRow(true, true))
+	_, err = repo.CreateVideoProvider(context.Background(), service.VideoProviderAccount{
+		GroupID: 9, Provider: "seedance", DisplayName: "dup", BaseURL: "https://relay.test/v1", DefaultModel: "relay-model",
+	})
+	require.ErrorIs(t, err, service.ErrVideoAdminConflict)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestAuthorizeTinyRealRequiresCanonicalActiveStandardProvider(t *testing.T) {
 	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
 	require.NoError(t, err)

@@ -54,7 +54,7 @@ func (h *VideoHandler) ListProviders(c *gin.Context) {
 	response.Success(c, gin.H{"items": items})
 }
 func (h *VideoHandler) Contract(c *gin.Context) {
-	response.Success(c, gin.H{"provider": "seedance", "base_url": service.SeedanceBaseURL, "default_model": service.SeedanceModel, "duration_seconds": 4, "resolution": "720p"})
+	response.Success(c, gin.H{"provider": "seedance", "base_url": service.SeedanceBaseURL, "default_model": service.SeedanceModel, "duration_seconds": 4, "resolution": "720p", "platforms": service.VideoProviderRegistry()})
 }
 func (h *VideoHandler) CreateProvider(c *gin.Context) {
 	var req videoProviderRequest
@@ -91,6 +91,16 @@ func (h *VideoHandler) UpdateProvider(c *gin.Context) {
 		return
 	}
 	response.Success(c, item)
+}
+func (h *VideoHandler) DeleteProvider(c *gin.Context) {
+	id, ok := videoID(c)
+	if !ok {
+		return
+	}
+	if writeVideoAdminError(c, h.service.DeleteProvider(c.Request.Context(), id)) {
+		return
+	}
+	response.Success(c, gin.H{"message": "Video provider deleted successfully"})
 }
 func (h *VideoHandler) AuthorizeTinyReal(c *gin.Context) {
 	id, ok := videoID(c)

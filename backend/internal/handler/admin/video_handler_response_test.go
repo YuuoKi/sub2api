@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -13,7 +14,10 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
 
-type pricingVideoAdminRepo struct{ task service.VideoTask }
+type pricingVideoAdminRepo struct {
+	task      service.VideoTask
+	deleteErr error
+}
 
 func (r *pricingVideoAdminRepo) ListVideoProviders(context.Context) ([]service.VideoProviderAccount, error) {
 	return nil, nil
@@ -24,6 +28,7 @@ func (r *pricingVideoAdminRepo) CreateVideoProvider(context.Context, service.Vid
 func (r *pricingVideoAdminRepo) UpdateVideoProvider(context.Context, int64, service.VideoProviderAdminUpdate) (*service.VideoProviderAccount, error) {
 	return nil, nil
 }
+func (r *pricingVideoAdminRepo) DeleteVideoProvider(context.Context, int64) error { return r.deleteErr }
 func (r *pricingVideoAdminRepo) AuthorizeTinyReal(context.Context, int64, int64) (*service.VideoProviderAccount, error) {
 	return nil, nil
 }
@@ -58,6 +63,51 @@ func TestVideoAdminListAndDetailExposePricingProvenance(t *testing.T) {
 		require.Contains(t, recorder.Body.String(), `"pricing_source":"config.video_gateway"`, path)
 		require.Contains(t, recorder.Body.String(), `"pricing_version":"seedance_completion_tokens_usd_v1"`, path)
 	}
+}
+
+func TestVideoAdminDeleteProviderResponses(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &pricingVideoAdminRepo{}
+	handler := &VideoHandler{service: service.NewVideoAdminService(repo, nil)}
+	router := gin.New()
+	router.DELETE("/providers/:id", handler.DeleteProvider)
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodDelete, "/providers/7", nil))
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Contains(t, recorder.Body.String(), "Video provider deleted successfully")
+
+	repo.deleteErr = service.ErrVideoProviderNotFound
+	recorder = httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodDelete, "/providers/99", nil))
+	require.Equal(t, http.StatusNotFound, recorder.Code)
+
+	repo.deleteErr = fmt.Errorf("%w: 该通道仍被视频任务引用，不能删除", service.ErrVideoAdminConflict)
+	recorder = httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodDelete, "/providers/7", nil))
+	require.Equal(t, http.StatusConflict, recorder.Code)
+
+	repo.deleteErr = nil
+	recorder = httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodDelete, "/providers/0", nil))
+	require.Equal(t, http.StatusBadRequest, recorder.Code)
+}
+
+func TestVideoAdminContractExposesPlatformRegistry(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	handler := &VideoHandler{}
+	router := gin.New()
+	router.GET("/contract", handler.Contract)
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/contract", nil))
+	require.Equal(t, http.StatusOK, recorder.Code)
+	body := recorder.Body.String()
+	require.Contains(t, body, `"provider":"seedance"`)
+	require.Contains(t, body, `"platforms"`)
+	require.Contains(t, body, `"provider":"jimeng"`)
+	require.Contains(t, body, `"adapter_ready":true`)
+	require.Contains(t, body, `"adapter_ready":false`)
 }
 
 func TestVideoTaskAdminResponseIncludesPersistedSpecificationEvidence(t *testing.T) {

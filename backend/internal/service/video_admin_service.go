@@ -49,6 +49,7 @@ type VideoAdminRepository interface {
 	ListVideoProviders(context.Context) ([]VideoProviderAccount, error)
 	CreateVideoProvider(context.Context, VideoProviderAccount) (*VideoProviderAccount, error)
 	UpdateVideoProvider(context.Context, int64, VideoProviderAdminUpdate) (*VideoProviderAccount, error)
+	DeleteVideoProvider(context.Context, int64) error
 	AuthorizeTinyReal(context.Context, int64, int64) (*VideoProviderAccount, error)
 	ListVideoTasks(context.Context, VideoAdminTaskFilter) ([]VideoTask, int64, error)
 	GetVideoTaskAdmin(context.Context, int64) (*VideoTask, error)
@@ -91,8 +92,12 @@ func (s *VideoAdminService) ListProviders(ctx context.Context) ([]VideoProviderA
 	return s.repo.ListVideoProviders(ctx)
 }
 func (s *VideoAdminService) CreateProvider(ctx context.Context, in VideoProviderAdminCreate) (*VideoProviderAccount, error) {
-	if strings.ToLower(strings.TrimSpace(in.Provider)) != "seedance" {
-		return nil, fmt.Errorf("%w: only seedance provider is supported", ErrVideoAdminInvalidRequest)
+	spec, ok := lookupVideoProvider(in.Provider)
+	if !ok {
+		return nil, fmt.Errorf("%w: 不支持的视频平台", ErrVideoAdminInvalidRequest)
+	}
+	if !spec.AdapterReady {
+		return nil, fmt.Errorf("%w: 该平台即将接入，暂不能创建通道", ErrVideoAdminInvalidRequest)
 	}
 	if in.GroupID <= 0 || strings.TrimSpace(in.DisplayName) == "" || strings.TrimSpace(in.APIKey) == "" {
 		return nil, fmt.Errorf("%w: group, display name and api key are required", ErrVideoAdminInvalidRequest)
@@ -101,7 +106,7 @@ func (s *VideoAdminService) CreateProvider(ctx context.Context, in VideoProvider
 	if err != nil {
 		return nil, err
 	}
-	item := VideoProviderAccount{GroupID: in.GroupID, Provider: "seedance", DisplayName: strings.TrimSpace(in.DisplayName), Enabled: in.Enabled, EncryptedAPIKey: encrypted, MaskedKey: maskVideoSecret(in.APIKey), BaseURL: SeedanceBaseURL, DefaultModel: SeedanceModel, APIKeyConfigured: true}
+	item := VideoProviderAccount{GroupID: in.GroupID, Provider: spec.Provider, DisplayName: strings.TrimSpace(in.DisplayName), Enabled: in.Enabled, EncryptedAPIKey: encrypted, MaskedKey: maskVideoSecret(in.APIKey), BaseURL: videoProviderBaseURL(spec, in.BaseURL), DefaultModel: videoProviderDefaultModel(spec, in.DefaultModel), APIKeyConfigured: true}
 	created, err := s.repo.CreateVideoProvider(ctx, item)
 	if err != nil {
 		return nil, err
@@ -121,14 +126,27 @@ func (s *VideoAdminService) UpdateProvider(ctx context.Context, id int64, in Vid
 		masked := maskVideoSecret(*in.APIKey)
 		in.EncryptedAPIKey, in.MaskedKey = &encrypted, &masked
 	}
-	canonicalBaseURL, canonicalModel := SeedanceBaseURL, SeedanceModel
-	in.BaseURL, in.DefaultModel = &canonicalBaseURL, &canonicalModel
+	canonical, _ := lookupVideoProvider("seedance")
+	if in.BaseURL != nil && strings.TrimSpace(*in.BaseURL) == "" {
+		baseURL := videoProviderBaseURL(canonical, "")
+		in.BaseURL = &baseURL
+	}
+	if in.DefaultModel != nil && strings.TrimSpace(*in.DefaultModel) == "" {
+		model := videoProviderDefaultModel(canonical, "")
+		in.DefaultModel = &model
+	}
 	item, err := s.repo.UpdateVideoProvider(ctx, id, in)
 	if err != nil {
 		return nil, err
 	}
 	redactVideoProvider(item)
 	return item, nil
+}
+func (s *VideoAdminService) DeleteProvider(ctx context.Context, id int64) error {
+	if id <= 0 {
+		return ErrVideoProviderNotFound
+	}
+	return s.repo.DeleteVideoProvider(ctx, id)
 }
 func (s *VideoAdminService) AuthorizeTinyReal(ctx context.Context, id, actor int64) (*VideoProviderAccount, error) {
 	if id <= 0 || actor <= 0 {
@@ -167,6 +185,18 @@ func (s *VideoAdminService) OpenLocalAsset(ctx context.Context, id int64) (*Vide
 }
 func (s *VideoAdminService) SystemCheck(ctx context.Context) (VideoSystemCheck, error) {
 	return s.repo.VideoSystemCheck(ctx)
+}
+func videoProviderBaseURL(spec VideoProviderSpec, requested string) string {
+	if trimmed := strings.TrimSpace(requested); trimmed != "" {
+		return trimmed
+	}
+	return spec.DefaultBaseURL
+}
+func videoProviderDefaultModel(spec VideoProviderSpec, requested string) string {
+	if trimmed := strings.TrimSpace(requested); trimmed != "" {
+		return trimmed
+	}
+	return spec.DefaultModel
 }
 func maskVideoSecret(value string) string {
 	value = strings.TrimSpace(value)

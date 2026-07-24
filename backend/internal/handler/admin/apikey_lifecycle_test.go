@@ -293,16 +293,41 @@ func TestAdminQCanvasKeyPairCreateIdempotencyReturnsTwoSecretsOnlyOnce(t *testin
 	require.Empty(t, replayBody.Data.Media.Key)
 }
 
-func TestAdminQCanvasKeyPairRejectsEqualGroupsBeforeIssuing(t *testing.T) {
+func TestAdminQCanvasKeyPairAllowsEqualGroups(t *testing.T) {
+	repo := newMemoryIdempotencyRepoStub()
+	service.SetDefaultIdempotencyCoordinator(service.NewIdempotencyCoordinator(repo, service.DefaultIdempotencyConfig()))
+	t.Cleanup(func() { service.SetDefaultIdempotencyCoordinator(nil) })
+
 	manager := newLifecycleAPIKeyManager()
 	h := &AdminAPIKeyHandler{adminService: newStubAdminService(), apiKeys: manager}
 	router := gin.New()
 	router.POST("/api/v1/admin/users/:id/qcanvas-key-pair", h.CreateQCanvasKeyPair)
 
-	recorder := performAPIKeyLifecycleRequest(router, http.MethodPost, "/api/v1/admin/users/42/qcanvas-key-pair", `{"video_group_id":11,"media_group_id":11}`)
-	require.Equal(t, http.StatusBadRequest, recorder.Code)
-	require.Zero(t, manager.createPairCalls)
-	require.NotContains(t, recorder.Body.String(), "sk-")
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/admin/users/42/qcanvas-key-pair", bytes.NewBufferString(`{"video_group_id":11,"media_group_id":11}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Idempotency-Key", "qcanvas-pair-same-group")
+	router.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, 1, manager.createPairCalls)
+	var body struct {
+		Data struct {
+			Video struct {
+				Key     string `json:"key"`
+				GroupID int64  `json:"group_id"`
+			} `json:"video"`
+			Media struct {
+				Key     string `json:"key"`
+				GroupID int64  `json:"group_id"`
+			} `json:"media"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &body))
+	require.NotEmpty(t, body.Data.Video.Key)
+	require.NotEmpty(t, body.Data.Media.Key)
+	require.Equal(t, int64(11), body.Data.Video.GroupID)
+	require.Equal(t, int64(11), body.Data.Media.GroupID)
 }
 
 func TestAdminAPIKeyListDoesNotExposeExistingSecret(t *testing.T) {

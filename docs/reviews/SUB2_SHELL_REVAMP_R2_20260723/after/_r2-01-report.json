@@ -1,0 +1,47 @@
+[
+  {
+    "name": "usage-has-ai-records",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "usage-has-ops-health",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "ops-under-usage-group",
+    "ok": true,
+    "extra": "opsGroup=用量"
+  },
+  {
+    "name": "ai-records-under-usage-group",
+    "ok": true,
+    "extra": "aiGroup=用量"
+  },
+  {
+    "name": "system-has-settings-backup",
+    "ok": true,
+    "extra": "[{\"href\":\"/admin/settings\",\"text\":\"设置与备份\"}]"
+  },
+  {
+    "name": "system-no-ops-health",
+    "ok": true,
+    "extra": "/admin/settings"
+  },
+  {
+    "name": "system-has-advanced",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "advanced-has-video-providers",
+    "ok": true,
+    "extra": "/admin/settings,/admin/accounts,/admin/groups,/admin/video/providers,/admin/channels/pricing,/admin/channels/monitor,/admin/proxies,/admin/video/tasks,/admin/generation-content,/admin/usage"
+  },
+  {
+    "name": "system-still-no-ops-health",
+    "ok": true,
+    "extra": ""
+  }
+]

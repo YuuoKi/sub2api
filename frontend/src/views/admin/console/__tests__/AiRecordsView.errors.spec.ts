@@ -139,6 +139,75 @@ describe('AiRecordsView error surfacing', () => {
   })
 })
 
+describe('AiRecordsView weekly report summary', () => {
+  const weeklyReportFixture = (overrides: Record<string, unknown> = {}) => ({
+    period_start: '2026-07-13T00:00:00Z',
+    period_end: '2026-07-20T00:00:00Z',
+    entries: 12,
+    video_tasks: 5,
+    total_cost_estimate: 1.5,
+    usd_cny_rate: 7.2,
+    adopted_count: 3,
+    rejected_count: 1,
+    pending_count: 2,
+    unreviewed_count: 0,
+    adoption_rate: 0.6,
+    anomalies: { failed_tasks: 0, missing_task_joins: 0, truncated_rows: 0 },
+    markdown: '# Weekly Production Ledger\nPeriod: ...\nEntries: 12',
+    ...overrides,
+  })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.usageList.mockResolvedValue(resolvedLogsPage())
+    mocks.usageGetStats.mockResolvedValue(resolvedStats())
+    mocks.getSamples.mockResolvedValue({ samples: [], is_live: true })
+    mocks.usersList.mockResolvedValue({ items: [], total: 0 })
+  })
+
+  it('renders structured Chinese fields instead of the raw English ledger markdown', async () => {
+    mocks.getWeeklyReport.mockResolvedValue(weeklyReportFixture())
+    const wrapper = mount(AiRecordsView, GLOBAL_STUBS)
+    await flushPromises()
+    await wrapper.find('[data-test="tab-prompts"]').trigger('click')
+
+    const panel = wrapper.find('[data-test="weekly-report"]')
+    expect(panel.exists()).toBe(true)
+    for (const label of ['周期', '条目', '视频任务', '成本估算', '采纳情况', '异常']) {
+      expect(panel.text()).toContain(label)
+    }
+    expect(panel.text()).toContain('12')
+    expect(panel.text()).toContain('采纳率 60%')
+    expect(panel.text()).not.toContain('Weekly Production Ledger')
+  })
+
+  it('hides the whole panel when entries and cost are both zero (empty state card takes over)', async () => {
+    mocks.getWeeklyReport.mockResolvedValue(weeklyReportFixture({ entries: 0, video_tasks: 0, total_cost_estimate: 0 }))
+    const wrapper = mount(AiRecordsView, GLOBAL_STUBS)
+    await flushPromises()
+    await wrapper.find('[data-test="tab-prompts"]').trigger('click')
+
+    expect(wrapper.find('[data-test="weekly-report"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('经验周报摘要')
+  })
+
+  it('still shows the panel on zero data when failed-task anomalies exist (失败信号不能吞)', async () => {
+    mocks.getWeeklyReport.mockResolvedValue(weeklyReportFixture({
+      entries: 0,
+      video_tasks: 0,
+      total_cost_estimate: 0,
+      anomalies: { failed_tasks: 2, missing_task_joins: 0, truncated_rows: 0 },
+    }))
+    const wrapper = mount(AiRecordsView, GLOBAL_STUBS)
+    await flushPromises()
+    await wrapper.find('[data-test="tab-prompts"]').trigger('click')
+
+    const panel = wrapper.find('[data-test="weekly-report"]')
+    expect(panel.exists()).toBe(true)
+    expect(panel.text()).toContain('失败任务 2')
+  })
+})
+
 describe('AiRecordsView AbortSignal wiring', () => {
   beforeEach(() => {
     vi.clearAllMocks()

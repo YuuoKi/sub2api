@@ -1,12 +1,22 @@
 import { apiClient } from '../client'
 
 export interface VideoProviderAccount {
-  id: number; group_id: number; group_name: string; provider: 'seedance'; display_name: string
+  id: number; group_id: number; group_name: string; provider: string; display_name: string
   enabled: boolean; api_key_configured: boolean; masked_key: string; base_url: string; default_model: string
   tiny_real_authorized_at?: string; tiny_real_authorized_by?: number; tiny_real_consumed_at?: string
 }
-export interface VideoProviderPayload { group_id?: number; provider?: 'seedance'; display_name?: string; enabled?: boolean; api_key?: string; base_url?: string; default_model?: string }
-export interface VideoProviderContract { provider: 'seedance'; base_url: string; default_model: string; duration_seconds: number; resolution: string }
+export interface VideoProviderPayload {
+  group_id?: number; provider?: string; display_name?: string; enabled?: boolean; api_key?: string
+  base_url?: string; default_model?: string
+}
+export interface VideoPlatformContract {
+  provider: string; display_name: string; default_base_url: string; default_model: string; adapter_ready: boolean
+}
+export interface VideoProviderContract {
+  provider: string; base_url: string; default_model: string; duration_seconds: number; resolution: string
+  // 平台目录：adapter_ready=false 的平台仅作展示，后端拒绝创建
+  platforms?: VideoPlatformContract[]
+}
 export interface VideoTaskAdmin {
   id: number; api_key_id: number; group_id: number; provider_account_id: number; provider: string; model: string; task_type: string; prompt: string; status: string
   request_model: string; request_duration_seconds: number; request_resolution: string
@@ -44,6 +54,7 @@ const listProviders = async () => (await apiClient.get<{ items: VideoProviderAcc
 const contract = async () => (await apiClient.get<VideoProviderContract>('/admin/video/contract')).data
 const createProvider = async (payload: VideoProviderPayload) => (await apiClient.post<VideoProviderAccount>('/admin/video/providers', payload)).data
 const updateProvider = async (id: number, payload: VideoProviderPayload) => (await apiClient.put<VideoProviderAccount>(`/admin/video/providers/${id}`, payload)).data
+const deleteProvider = async (id: number) => (await apiClient.delete<{ message: string }>(`/admin/video/providers/${id}`)).data
 const authorizeTinyReal = async (id: number) => (await apiClient.post<VideoProviderAccount>(`/admin/video/providers/${id}/tiny-real-authorization`, { confirmation: 'tiny_real' })).data
 const listTasks = async (page = 1, pageSize = 20, status = '') => (await apiClient.get<VideoTaskPage>('/admin/video/tasks', { params: { page, page_size: pageSize, status: status || undefined } })).data
 const getTask = async (id: number) => (await apiClient.get<VideoTaskAdmin>(`/admin/video/tasks/${id}`)).data
@@ -102,4 +113,4 @@ export const startQCanvasAssetHandoffTransfer = (
   return cleanup
 }
 const systemCheck = async () => (await apiClient.get<VideoSystemCheck>('/admin/video/system-check')).data
-export default { contract, listProviders, createProvider, updateProvider, authorizeTinyReal, listTasks, getTask, createAssetHandoff, systemCheck }
+export default { contract, listProviders, createProvider, updateProvider, deleteProvider, authorizeTinyReal, listTasks, getTask, createAssetHandoff, systemCheck }

@@ -1,0 +1,47 @@
+[
+  {
+    "name": "page-title-staff-and-card",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "single-group-selected",
+    "ok": true,
+    "extra": "[{\"value\":\"2\",\"text\":\"media\"},{\"value\":\"3\",\"text\":\"video\"},{\"value\":\"1\",\"text\":\"default\"}]"
+  },
+  {
+    "name": "pair-request-same-group",
+    "ok": true,
+    "extra": "{\"video_group_id\":3,\"media_group_id\":3}"
+  },
+  {
+    "name": "pair-http-ok",
+    "ok": true,
+    "extra": "status=200 body={\"code\":0,\"message\":\"success\",\"data\":{\"video\":{\"id\":1,\"user_id\":3,\"key\":\"sk-b88390707d014ce3509f444e075ec773519ba77af2680129c3205f2436e894c4\",\"name\":\"QCanvas · video\",\"group_id\":3,\"status\":\"active\",\"i"
+  },
+  {
+    "name": "video-key-plaintext-shown",
+    "ok": true,
+    "extra": "sk-b883907…"
+  },
+  {
+    "name": "media-key-plaintext-shown",
+    "ok": true,
+    "extra": "sk-4f702e1…"
+  },
+  {
+    "name": "two-keys-distinct",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "recharge-1-usd-shown",
+    "ok": true,
+    "extra": "已充值 $1.00，当前余额 $1.00。"
+  },
+  {
+    "name": "balance-1-usd",
+    "ok": true,
+    "extra": "balance=1"
+  }
+]

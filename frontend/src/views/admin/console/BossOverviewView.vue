@@ -46,8 +46,28 @@
         </div>
       </section>
 
-      <!-- 花费趋势 + 模型分布 -->
-      <div class="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+      <!-- 花费趋势 + 模型分布；无数据时整块换成紧凑三步上手引导卡 -->
+      <section v-if="showGuideCard" class="rounded-lg border border-gray-200 bg-white px-5 py-4 dark:border-dark-700 dark:bg-dark-800">
+        <h2 class="text-base font-semibold text-gray-900 dark:text-white">三步上手</h2>
+        <div class="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
+          <RouterLink class="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900 dark:text-gray-200 dark:hover:text-white" to="/admin/console/key-vault">
+            <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-semibold text-gray-600 dark:bg-dark-700 dark:text-gray-300">1</span>
+            录入 AI 账号
+          </RouterLink>
+          <RouterLink class="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900 dark:text-gray-200 dark:hover:text-white" to="/admin/console/staff">
+            <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-semibold text-gray-600 dark:bg-dark-700 dark:text-gray-300">2</span>
+            给员工开卡
+          </RouterLink>
+          <span class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+            <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-semibold text-gray-600 dark:bg-dark-700 dark:text-gray-300">3</span>
+            回到这里看消费
+          </span>
+        </div>
+      </section>
+      <section v-else-if="showLoadError" class="rounded-lg border border-gray-200 bg-white px-5 py-4 text-sm text-gray-500 dark:border-dark-700 dark:bg-dark-800 dark:text-gray-400" data-test="overview-load-error">
+        总览数据加载失败，点右上角「刷新」重试。
+      </section>
+      <div v-else class="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
         <section class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
           <div class="flex items-center justify-between gap-3">
             <div>
@@ -59,7 +79,7 @@
               <div class="text-lg font-semibold text-gray-900 dark:text-white">{{ formatMoney(totalSpend, usdCnyRate) }}</div>
             </div>
           </div>
-          <div class="mt-4 h-64">
+          <div class="mt-4 h-52">
             <Line v-if="trendChartData" :data="trendChartData" :options="trendChartOptions" />
             <div v-else class="flex h-full items-center justify-center text-sm text-gray-500 dark:text-gray-400">
               {{ loading ? '加载中…' : '本期还没有调用记录。' }}
@@ -70,8 +90,8 @@
         <section class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
           <h2 class="text-base font-semibold text-gray-900 dark:text-white">用了什么 AI</h2>
           <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">按实际花费统计的模型分布</p>
-          <!-- 单色占比条 + 列表，不再使用多色饼图 -->
-          <div v-if="topModels.length" class="mt-4 space-y-2.5">
+          <!-- 单色占比条 + 列表，不再使用多色饼图；Top 6 之外合并为「其他」 -->
+          <div v-if="topModels.length" class="mt-4 space-y-2">
             <button
               v-for="model in topModels"
               :key="model.model"
@@ -112,12 +132,12 @@
           <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-dark-700">
             <thead class="bg-gray-50 text-left text-xs uppercase text-gray-500 dark:bg-dark-700/40 dark:text-gray-400">
               <tr>
-                <th class="px-5 py-3 font-medium">排名</th>
-                <th class="px-5 py-3 font-medium">成员</th>
-                <th class="px-5 py-3 font-medium">调用次数</th>
-                <th class="px-5 py-3 font-medium">Tokens</th>
-                <th class="px-5 py-3 font-medium">花费</th>
-                <th class="w-1/5 px-5 py-3 font-medium">占比</th>
+                <th class="px-5 py-2 font-medium">排名</th>
+                <th class="px-5 py-2 font-medium">成员</th>
+                <th class="px-5 py-2 font-medium">调用次数</th>
+                <th class="px-5 py-2 font-medium">Tokens</th>
+                <th class="px-5 py-2 font-medium">花费</th>
+                <th class="w-1/5 px-5 py-2 font-medium">占比</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-100 dark:divide-dark-700">
@@ -127,21 +147,21 @@
                 class="cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-700/40"
                 @click="goAiRecordsByUser(item.user_id)"
               >
-                <td class="px-5 py-3">
+                <td class="px-5 py-2">
                   <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-gray-100 text-xs font-semibold text-gray-600 dark:bg-dark-700 dark:text-gray-300">
                     {{ index + 1 }}
                   </span>
                 </td>
-                <td class="px-5 py-3 font-medium text-gray-900 dark:text-white">
+                <td class="px-5 py-2 font-medium text-gray-900 dark:text-white">
                   <span class="inline-flex items-center gap-1.5">
                     {{ item.email || `用户 #${item.user_id}` }}
                     <span v-if="item.member_type === 'tool'" class="text-xs text-gray-400 dark:text-gray-500">工具</span>
                   </span>
                 </td>
-                <td class="px-5 py-3 tabular-nums text-gray-700 dark:text-gray-200">{{ formatCount(item.requests) }}</td>
-                <td class="px-5 py-3 tabular-nums text-gray-700 dark:text-gray-200">{{ formatTokens(item.tokens) }}</td>
-                <td class="px-5 py-3 tabular-nums text-gray-900 dark:text-white">{{ formatMoney(item.actual_cost, usdCnyRate) }}</td>
-                <td class="px-5 py-3">
+                <td class="px-5 py-2 tabular-nums text-gray-700 dark:text-gray-200">{{ formatCount(item.requests) }}</td>
+                <td class="px-5 py-2 tabular-nums text-gray-700 dark:text-gray-200">{{ formatTokens(item.tokens) }}</td>
+                <td class="px-5 py-2 tabular-nums text-gray-900 dark:text-white">{{ formatMoney(item.actual_cost, usdCnyRate) }}</td>
+                <td class="px-5 py-2">
                   <div class="flex items-center gap-2">
                     <div class="h-2 flex-1 overflow-hidden rounded-full bg-gray-100 dark:bg-dark-700">
                       <div
@@ -204,6 +224,8 @@ const appStore = useAppStore()
 const router = useRouter()
 
 const loading = ref(false)
+// 加载失败不能伪装成「未上手」空态：失败时显示中性错误提示而非三步上手卡
+const loadFailed = ref(false)
 const rangeKey = ref<ConsoleRangeKey>('30d')
 const trend = ref<TrendDataPoint[]>([])
 const models = ref<ModelStat[]>([])
@@ -316,9 +338,29 @@ const trendChartOptions = {
   },
 }
 
+const OTHER_MODEL_LABEL = '其他'
+
 const topModels = computed(() => {
-  return [...models.value].sort((a, b) => b.actual_cost - a.actual_cost).slice(0, 8)
+  const sorted = [...models.value].sort((a, b) => b.actual_cost - a.actual_cost)
+  if (sorted.length <= 6) return sorted
+  const top = sorted.slice(0, 6)
+  const rest = sorted.slice(6)
+  top.push({
+    model: OTHER_MODEL_LABEL,
+    requests: rest.reduce((sum, model) => sum + model.requests, 0),
+    input_tokens: rest.reduce((sum, model) => sum + model.input_tokens, 0),
+    output_tokens: rest.reduce((sum, model) => sum + model.output_tokens, 0),
+    cache_creation_tokens: rest.reduce((sum, model) => sum + model.cache_creation_tokens, 0),
+    cache_read_tokens: rest.reduce((sum, model) => sum + model.cache_read_tokens, 0),
+    total_tokens: rest.reduce((sum, model) => sum + model.total_tokens, 0),
+    cost: rest.reduce((sum, model) => sum + model.cost, 0),
+    actual_cost: rest.reduce((sum, model) => sum + model.actual_cost, 0),
+  })
+  return top
 })
+
+const showGuideCard = computed(() => !loading.value && !loadFailed.value && !trendChartData.value && !topModels.value.length)
+const showLoadError = computed(() => !loading.value && loadFailed.value && !trendChartData.value && !topModels.value.length)
 
 // 单色占比：占本期模型总花费的比例
 function modelShare(cost: number): number {
@@ -346,6 +388,11 @@ function goAiRecordsByUser(userId: number) {
 function goAiRecordsByModel(model: string) {
   const trimmed = (model || '').trim()
   if (!trimmed) return
+  // 「其他」是聚合行，没有对应模型名，去调用记录总表
+  if (trimmed === OTHER_MODEL_LABEL) {
+    void router.push({ path: '/admin/console/ai-records' })
+    return
+  }
   void router.push({ path: '/admin/console/ai-records', query: { model: trimmed } })
 }
 
@@ -368,7 +415,9 @@ async function loadAll() {
       tokens: rankingRes.total_tokens || 0,
     }
     errorAccounts.value = (accountsRes.items || []).filter((account) => account.status === 'error').length
+    loadFailed.value = false
   } catch (err) {
+    loadFailed.value = true
     appStore.showError(extractApiErrorMessage(err, '加载总览数据失败'))
   } finally {
     loading.value = false

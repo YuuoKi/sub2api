@@ -25,6 +25,7 @@ func TestAdminVideoRoutesAreRegistered(t *testing.T) {
 		http.MethodGet + " /api/v1/admin/video/providers":                              false,
 		http.MethodPost + " /api/v1/admin/video/providers":                             false,
 		http.MethodPut + " /api/v1/admin/video/providers/:id":                          false,
+		http.MethodDelete + " /api/v1/admin/video/providers/:id":                       false,
 		http.MethodPost + " /api/v1/admin/video/providers/:id/tiny-real-authorization": false,
 		http.MethodGet + " /api/v1/admin/video/tasks":                                  false,
 		http.MethodGet + " /api/v1/admin/video/tasks/:id":                              false,

@@ -47,6 +47,17 @@ describe('AppSidebar role-aware IA wiring', () => {
     expect(navModuleSource).toMatch(/label:\s*'我的工作台'/)
   })
 
+  it('nests AI records and ops health under the expandable Usage parent', () => {
+    expect(navModuleSource).toContain("ADMIN_USAGE_PATH = '/admin/console/usage'")
+    expect(navModuleSource).toContain('path: ADMIN_USAGE_PATH')
+    expect(navModuleSource).toContain("label: 'AI 调用记录'")
+    expect(navModuleSource).toContain("path: '/admin/console/ai-records'")
+    expect(navModuleSource).toContain("label: '系统健康'")
+    expect(navModuleSource).toContain("path: '/admin/ops'")
+    // 系统健康只挂在「用量」下；「系统」不再重复出现
+    expect(navModuleSource.match(/path: '\/admin\/ops'/g)).toHaveLength(1)
+  })
+
   it('keeps nested System rendering helpers for expandOnly groups', () => {
     expect(componentSource).toContain('expandOnly')
     expect(componentSource).toContain('isGroupExpanded')

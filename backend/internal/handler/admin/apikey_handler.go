@@ -55,10 +55,6 @@ func (h *AdminAPIKeyHandler) CreateQCanvasKeyPair(c *gin.Context) {
 		response.BadRequest(c, "video_group_id and media_group_id must be positive")
 		return
 	}
-	if req.VideoGroupID == req.MediaGroupID {
-		response.BadRequest(c, "video_group_id and media_group_id must differ")
-		return
-	}
 	idempotencyPayload := struct {
 		UserID int64                            `json:"user_id"`
 		Body   AdminCreateQCanvasKeyPairRequest `json:"body"`

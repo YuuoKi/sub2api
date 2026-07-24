@@ -125,6 +125,7 @@ func registerAdminVideoRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	video.GET("/providers", h.Admin.Video.ListProviders)
 	video.POST("/providers", h.Admin.Video.CreateProvider)
 	video.PUT("/providers/:id", h.Admin.Video.UpdateProvider)
+	video.DELETE("/providers/:id", h.Admin.Video.DeleteProvider)
 	video.POST("/providers/:id/tiny-real-authorization", h.Admin.Video.AuthorizeTinyReal)
 	video.GET("/tasks", h.Admin.Video.ListTasks)
 	video.GET("/tasks/:id", h.Admin.Video.GetTask)

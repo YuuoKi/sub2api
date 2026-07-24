@@ -99,12 +99,12 @@ describe('Gate 2 remaining UX contract', () => {
     expect(overview).not.toContain('listBackupJobs')
   })
 
-  it('uses the staff capability only for non-interactive service identities and unlimited cards', () => {
+  it('uses the staff capability only for non-interactive service identities and one-shot dual keys', () => {
     const staff = source('src/views/admin/console/StaffView.vue')
     expect(staff).toContain('data-test="create-service-identity"')
     expect(staff).toContain("member_type: 'tool'")
     expect(staff).toContain("role: 'user'")
-    expect(staff).toContain('quota: 0')
+    expect(staff).toContain('createQCanvasKeyPairForUser')
     expect(staff).not.toContain('InitialCredentialDialog')
     expect(staff).not.toContain('issueForm.quota')
   })

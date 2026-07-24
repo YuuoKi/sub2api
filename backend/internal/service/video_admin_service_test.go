@@ -8,9 +8,11 @@ import (
 )
 
 type fakeVideoAdminRepo struct {
-	created VideoProviderAccount
-	updated VideoProviderAdminUpdate
-	task    *VideoTask
+	created   VideoProviderAccount
+	updated   VideoProviderAdminUpdate
+	task      *VideoTask
+	deletedID int64
+	deleteErr error
 }
 
 func (f *fakeVideoAdminRepo) ListVideoProviders(context.Context) ([]VideoProviderAccount, error) {
@@ -23,6 +25,13 @@ func (f *fakeVideoAdminRepo) CreateVideoProvider(_ context.Context, provider Vid
 func (f *fakeVideoAdminRepo) UpdateVideoProvider(_ context.Context, _ int64, in VideoProviderAdminUpdate) (*VideoProviderAccount, error) {
 	f.updated = in
 	return &VideoProviderAccount{ID: 1, GroupID: 9, Provider: "seedance", DisplayName: "Seedance", BaseURL: derefString(in.BaseURL), DefaultModel: derefString(in.DefaultModel)}, nil
+}
+func (f *fakeVideoAdminRepo) DeleteVideoProvider(_ context.Context, id int64) error {
+	if f.deleteErr != nil {
+		return f.deleteErr
+	}
+	f.deletedID = id
+	return nil
 }
 func (f *fakeVideoAdminRepo) AuthorizeTinyReal(context.Context, int64, int64) (*VideoProviderAccount, error) {
 	return nil, nil
@@ -57,26 +66,103 @@ func TestVideoAdminServiceCreateMasksAndEncryptsSecret(t *testing.T) {
 	require.Empty(t, item.EncryptedAPIKey)
 }
 
-func TestVideoAdminServiceRejectsNonSeedanceProvider(t *testing.T) {
-	svc := NewVideoAdminService(&fakeVideoAdminRepo{}, fakeVideoEncryptor{})
-	_, err := svc.CreateProvider(context.Background(), VideoProviderAdminCreate{GroupID: 1, Provider: "mock", DisplayName: "mock", APIKey: "x"})
-	require.ErrorContains(t, err, "seedance")
+func TestLookupVideoProvider(t *testing.T) {
+	spec, ok := lookupVideoProvider(" Seedance ")
+	require.True(t, ok)
+	require.Equal(t, "seedance", spec.Provider)
+	require.Equal(t, SeedanceBaseURL, spec.DefaultBaseURL)
+	require.Equal(t, SeedanceModel, spec.DefaultModel)
+	require.True(t, spec.AdapterReady)
+
+	_, ok = lookupVideoProvider("unknown")
+	require.False(t, ok)
+
+	registry := VideoProviderRegistry()
+	require.Len(t, registry, 4)
+	for _, provider := range []string{"seedance", "jimeng", "veo", "kling"} {
+		_, found := lookupVideoProvider(provider)
+		require.True(t, found, provider)
+	}
 }
 
-func TestVideoAdminServiceForcesCanonicalEndpointAndModel(t *testing.T) {
+func TestVideoAdminServiceRejectsUnsupportedProvider(t *testing.T) {
+	svc := NewVideoAdminService(&fakeVideoAdminRepo{}, fakeVideoEncryptor{})
+	_, err := svc.CreateProvider(context.Background(), VideoProviderAdminCreate{GroupID: 1, Provider: "mock", DisplayName: "mock", APIKey: "x"})
+	require.ErrorIs(t, err, ErrVideoAdminInvalidRequest)
+	require.ErrorContains(t, err, "不支持的视频平台")
+}
+
+func TestVideoAdminServiceRejectsNotReadyProvider(t *testing.T) {
+	repo := &fakeVideoAdminRepo{}
+	svc := NewVideoAdminService(repo, fakeVideoEncryptor{})
+	for _, provider := range []string{"jimeng", "veo", "kling"} {
+		_, err := svc.CreateProvider(context.Background(), VideoProviderAdminCreate{GroupID: 1, Provider: provider, DisplayName: provider, APIKey: "x"})
+		require.ErrorIs(t, err, ErrVideoAdminInvalidRequest, provider)
+		require.ErrorContains(t, err, "该平台即将接入，暂不能创建通道", provider)
+	}
+	require.Empty(t, repo.created.Provider)
+}
+
+func TestVideoAdminServicePassesThroughCustomEndpointAndModel(t *testing.T) {
 	repo := &fakeVideoAdminRepo{}
 	svc := NewVideoAdminService(repo, fakeVideoEncryptor{})
 	_, err := svc.CreateProvider(context.Background(), VideoProviderAdminCreate{
-		GroupID: 9, Provider: "seedance", DisplayName: "Seedance", APIKey: "secret", BaseURL: "https://evil.test", DefaultModel: "wrong-model",
+		GroupID: 9, Provider: "seedance", DisplayName: "Seedance 中转", APIKey: "secret", BaseURL: "https://relay.test/v1", DefaultModel: "relay-model",
+	})
+	require.NoError(t, err)
+	require.Equal(t, "https://relay.test/v1", repo.created.BaseURL)
+	require.Equal(t, "relay-model", repo.created.DefaultModel)
+
+	_, err = svc.UpdateProvider(context.Background(), 1, VideoProviderAdminUpdate{BaseURL: stringPointer("https://relay.test/v1"), DefaultModel: stringPointer("relay-model")})
+	require.NoError(t, err)
+	require.Equal(t, "https://relay.test/v1", derefString(repo.updated.BaseURL))
+	require.Equal(t, "relay-model", derefString(repo.updated.DefaultModel))
+}
+
+func TestVideoAdminServiceFallsBackToRegistryDefaults(t *testing.T) {
+	repo := &fakeVideoAdminRepo{}
+	svc := NewVideoAdminService(repo, fakeVideoEncryptor{})
+	_, err := svc.CreateProvider(context.Background(), VideoProviderAdminCreate{
+		GroupID: 9, Provider: "seedance", DisplayName: "Seedance", APIKey: "secret",
 	})
 	require.NoError(t, err)
 	require.Equal(t, SeedanceBaseURL, repo.created.BaseURL)
 	require.Equal(t, SeedanceModel, repo.created.DefaultModel)
 
-	_, err = svc.UpdateProvider(context.Background(), 1, VideoProviderAdminUpdate{BaseURL: stringPointer("https://evil.test"), DefaultModel: stringPointer("wrong-model")})
+	// 显式提供空值时回落注册表默认
+	_, err = svc.UpdateProvider(context.Background(), 1, VideoProviderAdminUpdate{BaseURL: stringPointer("  "), DefaultModel: stringPointer("")})
 	require.NoError(t, err)
 	require.Equal(t, SeedanceBaseURL, derefString(repo.updated.BaseURL))
 	require.Equal(t, SeedanceModel, derefString(repo.updated.DefaultModel))
+}
+
+func TestVideoAdminServicePartialUpdateKeepsCustomEndpointAndModel(t *testing.T) {
+	repo := &fakeVideoAdminRepo{}
+	svc := NewVideoAdminService(repo, fakeVideoEncryptor{})
+	enabled := false
+	_, err := svc.UpdateProvider(context.Background(), 1, VideoProviderAdminUpdate{Enabled: &enabled})
+	require.NoError(t, err)
+	// 字段缺席必须保持 nil，由 repo 层 CASE WHEN 保留原值，不能强制重置自定义中转配置
+	require.Nil(t, repo.updated.BaseURL)
+	require.Nil(t, repo.updated.DefaultModel)
+}
+
+func TestVideoAdminServiceDeleteProvider(t *testing.T) {
+	repo := &fakeVideoAdminRepo{}
+	svc := NewVideoAdminService(repo, fakeVideoEncryptor{})
+
+	require.NoError(t, svc.DeleteProvider(context.Background(), 5))
+	require.Equal(t, int64(5), repo.deletedID)
+
+	repo.deleteErr = ErrVideoProviderNotFound
+	err := svc.DeleteProvider(context.Background(), 99)
+	require.ErrorIs(t, err, ErrVideoProviderNotFound)
+
+	repo.deleteErr = nil
+	repo.deletedID = 0
+	err = svc.DeleteProvider(context.Background(), 0)
+	require.ErrorIs(t, err, ErrVideoProviderNotFound)
+	require.Zero(t, repo.deletedID)
 }
 
 func TestVideoAdminServiceRejectsInvalidTinyRealAuthorizationIdentity(t *testing.T) {

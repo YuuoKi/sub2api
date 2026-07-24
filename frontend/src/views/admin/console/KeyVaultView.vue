@@ -14,10 +14,10 @@
             <Icon name="plus" size="sm" />
             录入 AI 账号
           </button>
-          <RouterLink v-else class="btn btn-primary" to="/admin/video/providers">
+          <button v-else class="btn btn-primary" type="button" data-test="open-create-provider" @click="openCreateProvider">
             <Icon name="plus" size="sm" />
-            管理视频通道
-          </RouterLink>
+            录入视频通道
+          </button>
         </div>
       </div>
 
@@ -102,17 +102,17 @@
         </div>
       </section>
 
-      <!-- 视频通道：只读摘要，管理入口在 /admin/video/providers（含一次性真实调用授权门禁，不在此处复制） -->
+      <!-- 视频通道：页内完整管理（含一次性真实调用授权门禁，不离开密钥库） -->
       <section v-show="activeTab === 'video'" class="rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-800">
         <div class="overflow-x-auto">
           <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-dark-700">
             <thead class="bg-gray-50 text-left text-xs uppercase text-gray-500 dark:bg-dark-700/40 dark:text-gray-400">
               <tr>
-                <th class="px-5 py-3 font-medium">通道名称</th>
-                <th class="px-5 py-3 font-medium">员工组</th>
-                <th class="px-5 py-3 font-medium">默认模型</th>
-                <th class="px-5 py-3 font-medium">凭证状态</th>
-                <th class="px-5 py-3 font-medium">是否启用</th>
+                <th class="px-5 py-3 font-medium">名称</th>
+                <th class="px-5 py-3 font-medium">平台</th>
+                <th class="px-5 py-3 font-medium">分组</th>
+                <th class="px-5 py-3 font-medium">状态</th>
+                <th class="px-5 py-3 font-medium">最近使用</th>
                 <th class="px-5 py-3 text-right font-medium">操作</th>
               </tr>
             </thead>
@@ -121,34 +121,44 @@
                 <td class="px-5 py-3 font-medium text-gray-900 dark:text-white">
                   {{ provider.display_name }}
                 </td>
+                <td class="px-5 py-3 text-gray-600 dark:text-gray-300">{{ videoPlatformLabel(provider.provider) }}</td>
                 <td class="px-5 py-3 text-gray-600 dark:text-gray-300">{{ provider.group_name || '—' }}</td>
-                <td class="px-5 py-3 text-gray-600 dark:text-gray-300">{{ provider.default_model || '—' }}</td>
-                <td class="px-5 py-3">
-                  <span
-                    class="inline-flex rounded-md px-2 py-1 text-xs font-medium"
-                    :class="provider.api_key_configured ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300'"
-                  >
-                    {{ provider.api_key_configured ? `已配置 ${provider.masked_key || ''}` : '未配置凭证' }}
-                  </span>
-                </td>
                 <td class="px-5 py-3">
                   <span
                     class="inline-flex rounded-md px-2 py-1 text-xs font-medium"
                     :class="provider.enabled ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-gray-300'"
                   >
-                    {{ provider.enabled ? '启用中' : '未启用' }}
+                    {{ provider.enabled ? '启用中' : '已停用' }}
                   </span>
+                  <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {{ provider.api_key_configured ? `凭证已配置 ${provider.masked_key || ''}` : '凭证未配置' }}
+                  </div>
                 </td>
-                <td class="px-5 py-3 text-right">
-                  <RouterLink class="btn btn-sm btn-outline" to="/admin/video/providers">
-                    <Icon name="edit" size="sm" />
-                    去管理
-                  </RouterLink>
+                <td class="px-5 py-3 text-xs text-gray-500 dark:text-gray-400">{{ formatDateTime(provider.tiny_real_consumed_at) }}</td>
+                <td class="px-5 py-3">
+                  <div class="flex justify-end gap-1.5">
+                    <button
+                      class="btn btn-sm btn-outline"
+                      type="button"
+                      :data-test="`toggle-provider-${provider.id}`"
+                      @click="toggleProvider(provider)"
+                    >
+                      {{ provider.enabled ? '停用' : '启用' }}
+                    </button>
+                    <button
+                      class="btn btn-sm btn-outline !text-red-600 dark:!text-red-400"
+                      type="button"
+                      :data-test="`remove-provider-${provider.id}`"
+                      @click="removeProvider(provider)"
+                    >
+                      <Icon name="trash" size="sm" />
+                    </button>
+                  </div>
                 </td>
               </tr>
               <tr v-if="!loading && !providers.length">
                 <td colspan="6" class="px-5 py-10 text-center text-sm text-gray-500 dark:text-gray-400">
-                  暂无视频通道。点右上角「管理视频通道」接入 Seedance。
+                  还没有视频通道。点右上角「录入视频通道」接入第一家。
                 </td>
               </tr>
             </tbody>
@@ -254,20 +264,131 @@
           </form>
         </div>
       </div>
+
+      <!-- 视频通道 录入弹窗（字段顺序对齐 LLM 账号表单） -->
+      <div v-if="providerModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="closeProviderModal">
+        <div class="w-full max-w-lg rounded-lg border border-gray-200 bg-white p-6 shadow-xl dark:border-dark-700 dark:bg-dark-800">
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-white">录入视频通道</h2>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            选平台、起个名、选分组、填密钥。密钥保存后不再回显。
+          </p>
+          <form class="mt-5 space-y-4" data-test="provider-form" @submit.prevent="saveProvider">
+            <div class="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">平台</label>
+                <select v-model="providerForm.provider" class="input" data-test="provider-platform">
+                  <option
+                    v-for="platform in videoPlatforms"
+                    :key="platform.provider"
+                    :value="platform.provider"
+                    :disabled="!platform.adapter_ready"
+                  >
+                    {{ platform.display_name }}{{ platform.adapter_ready ? '' : '（即将接入）' }}
+                  </option>
+                </select>
+              </div>
+              <div>
+                <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">名称</label>
+                <input v-model="providerForm.name" class="input" maxlength="100" placeholder="哪家的哪个号，随便打" data-test="provider-name" required />
+              </div>
+            </div>
+            <div>
+              <GroupSelector
+                v-model="providerForm.groupIds"
+                :groups="groups"
+                data-test="provider-groups"
+              />
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                必选，通道的调用按分组计费与路由。
+              </p>
+              <div
+                v-if="!groups.length"
+                class="mt-2 border-t border-gray-200 pt-3 text-xs dark:border-dark-700"
+                data-test="provider-group-quick-create"
+              >
+                <p class="text-gray-600 dark:text-gray-300">还没有分组，先建一个（也可到「模型分组」页精细调整）：</p>
+                <div class="mt-2 flex flex-wrap items-center gap-2">
+                  <button class="btn btn-sm btn-outline" type="button" :disabled="creatingGroup" data-test="provider-quick-create-video" @click="quickCreateGroup('video', VIDEO_GROUP_PLATFORM)">
+                    视频组 video
+                  </button>
+                  <input
+                    v-model="quickGroupName"
+                    class="input !w-40 !py-1 text-xs"
+                    maxlength="50"
+                    placeholder="或输入分组名"
+                    data-test="provider-quick-create-name"
+                  />
+                  <button
+                    class="btn btn-sm btn-primary"
+                    type="button"
+                    :disabled="creatingGroup || !quickGroupName.trim()"
+                    data-test="provider-quick-create-custom"
+                    @click="quickCreateGroup(quickGroupName, VIDEO_GROUP_PLATFORM, 'provider')"
+                  >
+                    {{ creatingGroup ? '创建中…' : '创建并选中' }}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div>
+              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">API Key</label>
+              <input
+                v-model="providerForm.apiKey"
+                class="input"
+                type="password"
+                autocomplete="off"
+                maxlength="4000"
+                data-test="provider-api-key"
+                placeholder="上游平台发放的密钥"
+                required
+              />
+            </div>
+            <div>
+              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">接口地址（可选）</label>
+              <input
+                v-model="providerForm.baseUrl"
+                class="input"
+                maxlength="500"
+                data-test="provider-base-url"
+                :placeholder="selectedVideoPlatform?.default_base_url || '留空使用官方默认地址'"
+              />
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">接中转站时填，官方直连留空。</p>
+            </div>
+            <div class="flex flex-col gap-2">
+              <label class="flex min-h-6 items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                <input v-model="providerForm.enabled" type="checkbox" data-test="provider-enabled" />
+                保存后启用
+              </label>
+              <label class="flex min-h-6 items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                <input v-model="providerForm.authorizeAfterSave" type="checkbox" data-test="provider-authorize-after-save" />
+                保存后自动授权一次最小真实调用
+              </label>
+              <p class="text-xs text-gray-500 dark:text-gray-400">授权只是记账，不会马上扣费；等第一次真实出片后通道永久可用。</p>
+            </div>
+            <div class="flex justify-end gap-2 pt-2">
+              <button class="btn btn-outline" type="button" data-test="cancel-provider" @click="closeProviderModal">取消</button>
+              <button class="btn btn-primary" type="submit" data-test="save-provider" :disabled="savingProvider">
+                <Icon name="check" size="sm" />
+                保存
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
     </div>
   </AppLayout>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { useRoute } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import GroupSelector from '@/components/common/GroupSelector.vue'
 import AccountGroupsCell from '@/components/account/AccountGroupsCell.vue'
 import { adminAPI } from '@/api/admin'
-import type { Account, AccountPlatform, AdminGroup } from '@/types'
-import type { VideoProviderAccount } from '@/api/admin/video'
+import type { Account, AccountPlatform, AdminGroup, GroupPlatform } from '@/types'
+import type { VideoPlatformContract, VideoProviderAccount, VideoProviderContract } from '@/api/admin/video'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import { requestConfirmation } from '@/composables/useAppDialog'
@@ -317,7 +438,7 @@ watch(
   },
 )
 
-async function quickCreateGroup(name: string) {
+async function quickCreateGroup(name: string, platform: GroupPlatform = accountForm.platform, target: 'account' | 'provider' = 'account') {
   const trimmed = name.trim()
   if (!trimmed || creatingGroup.value) return
   creatingGroup.value = true
@@ -326,7 +447,7 @@ async function quickCreateGroup(name: string) {
     const created = await adminAPI.groups.create({
       name: trimmed,
       description: '',
-      platform: accountForm.platform,
+      platform,
       rate_multiplier: 1,
       is_exclusive: false,
       subscription_type: 'standard',
@@ -364,7 +485,11 @@ async function quickCreateGroup(name: string) {
       rpm_limit: 0,
     })
     await loadGroups()
-    if (!accountForm.groupIds.includes(created.id)) {
+    if (target === 'provider') {
+      if (!providerForm.groupIds.includes(created.id)) {
+        providerForm.groupIds = [...providerForm.groupIds, created.id]
+      }
+    } else if (!accountForm.groupIds.includes(created.id)) {
       accountForm.groupIds = [...accountForm.groupIds, created.id]
     }
     quickGroupName.value = ''
@@ -543,7 +668,159 @@ async function loadGroups() {
   groups.value = await adminAPI.groups.getAll()
 }
 
-// ---- 视频通道（只读摘要；创建/编辑/授权统一在 /admin/video/providers 完成） ----
+// ---- 视频通道（页内完整管理：列表/启停/删除/录入 + 保存后自动授权） ----
+
+const VIDEO_GROUP_PLATFORM: GroupPlatform = 'openai'
+
+const providerModalOpen = ref(false)
+const savingProvider = ref(false)
+const videoContract = ref<VideoProviderContract | null>(null)
+
+const providerForm = reactive({
+  provider: 'seedance',
+  name: '',
+  apiKey: '',
+  baseUrl: '',
+  groupIds: [] as number[],
+  enabled: true,
+  authorizeAfterSave: true,
+})
+
+// contract 请求失败时回落为只含 seedance 的静态兜底平台
+const FALLBACK_VIDEO_PLATFORMS: VideoPlatformContract[] = [
+  { provider: 'seedance', display_name: 'Seedance', default_base_url: '', default_model: '', adapter_ready: true },
+]
+
+const videoPlatforms = computed<VideoPlatformContract[]>(() => {
+  const platforms = videoContract.value?.platforms
+  return platforms && platforms.length ? platforms : FALLBACK_VIDEO_PLATFORMS
+})
+
+const selectedVideoPlatform = computed(
+  () => videoPlatforms.value.find((platform) => platform.provider === providerForm.provider) ?? null,
+)
+
+const STATIC_VIDEO_PLATFORM_LABELS: Record<string, string> = {
+  seedance: 'Seedance',
+  jimeng: '即梦',
+  veo: 'Veo 3.1',
+  kling: '快乐小马',
+}
+
+function videoPlatformLabel(provider: string): string {
+  return (
+    videoPlatforms.value.find((platform) => platform.provider === provider)?.display_name
+    || STATIC_VIDEO_PLATFORM_LABELS[provider]
+    || provider
+  )
+}
+
+async function loadVideoContract() {
+  try {
+    videoContract.value = await adminAPI.video.contract()
+  } catch {
+    // 平台目录加载失败不阻塞列表：下拉回落为 seedance 静态兜底
+    videoContract.value = null
+  }
+}
+
+function openCreateProvider() {
+  providerForm.provider = videoPlatforms.value.find((platform) => platform.adapter_ready)?.provider ?? 'seedance'
+  providerForm.name = ''
+  providerForm.apiKey = ''
+  providerForm.baseUrl = ''
+  providerForm.groupIds = []
+  providerForm.enabled = true
+  providerForm.authorizeAfterSave = true
+  quickGroupName.value = ''
+  providerModalOpen.value = true
+  if (!videoContract.value) void loadVideoContract()
+}
+
+function clearProviderSecrets() {
+  // 与 LLM 账号同一约定：密钥不留在可回显的 reactive 状态里
+  providerForm.apiKey = ''
+}
+
+function closeProviderModal() {
+  providerModalOpen.value = false
+  clearProviderSecrets()
+}
+
+async function saveProvider() {
+  if (providerForm.groupIds.length === 0) {
+    appStore.showError('请至少选择一个分组；没有可用分组时先点下方「视频组 video」快速创建')
+    return
+  }
+  const platform = selectedVideoPlatform.value
+  if (platform && !platform.adapter_ready) {
+    appStore.showError(`平台「${platform.display_name}」即将接入，暂时不能录入`)
+    return
+  }
+  savingProvider.value = true
+  try {
+    const created = await adminAPI.video.createProvider({
+      group_id: providerForm.groupIds[0],
+      provider: providerForm.provider,
+      display_name: providerForm.name.trim(),
+      api_key: providerForm.apiKey.trim(),
+      enabled: providerForm.enabled,
+      ...(providerForm.baseUrl.trim() ? { base_url: providerForm.baseUrl.trim() } : {}),
+      ...(platform?.default_model ? { default_model: platform.default_model } : {}),
+    })
+    const wantAuthorize = providerForm.authorizeAfterSave
+    closeProviderModal()
+    await loadProviders()
+    if (wantAuthorize && created.enabled && created.api_key_configured && !created.tiny_real_authorized_at && !created.tiny_real_consumed_at) {
+      try {
+        await adminAPI.video.authorizeTinyReal(created.id)
+        appStore.showSuccess('通道已保存并记录单次授权；等第一次真实出片后通道永久可用')
+        await loadProviders()
+        return
+      } catch (authError) {
+        appStore.showError(`通道已保存，但自动授权失败：${extractApiErrorMessage(authError, '可稍后在视频通道页手动授权', CONSOLE_ERROR_ZH)}`)
+        return
+      }
+    }
+    appStore.showSuccess('通道已录入密钥库')
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, '保存视频通道失败', CONSOLE_ERROR_ZH))
+  } finally {
+    savingProvider.value = false
+  }
+}
+
+async function toggleProvider(provider: VideoProviderAccount) {
+  if (provider.enabled) {
+    const confirmed = await requestConfirmation({
+      message: `确定停用通道「${provider.display_name}」？停用后走该通道的视频调用会立即失败。`,
+      danger: true,
+    })
+    if (!confirmed) return
+  }
+  try {
+    await adminAPI.video.updateProvider(provider.id, { enabled: !provider.enabled })
+    appStore.showSuccess(provider.enabled ? '通道已停用' : '通道已启用')
+    await loadProviders()
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, '切换通道状态失败', CONSOLE_ERROR_ZH))
+  }
+}
+
+async function removeProvider(provider: VideoProviderAccount) {
+  const confirmed = await requestConfirmation({
+    message: `确定删除通道「${provider.display_name}」？删除后走该通道的视频调用会失败。`,
+    danger: true,
+  })
+  if (!confirmed) return
+  try {
+    await adminAPI.video.deleteProvider(provider.id)
+    appStore.showSuccess('通道已删除')
+    await loadProviders()
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, '删除通道失败', CONSOLE_ERROR_ZH))
+  }
+}
 
 async function loadProviders() {
   const res = await adminAPI.video.listProviders()
@@ -555,7 +832,7 @@ async function loadProviders() {
 async function reload() {
   loading.value = true
   try {
-    await Promise.all([loadAccounts(), loadProviders(), loadGroups()])
+    await Promise.all([loadAccounts(), loadProviders(), loadGroups(), loadVideoContract()])
   } catch (err) {
     appStore.showError(extractApiErrorMessage(err, '加载密钥库失败', CONSOLE_ERROR_ZH))
   } finally {

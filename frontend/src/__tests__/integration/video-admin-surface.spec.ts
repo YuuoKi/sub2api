@@ -11,8 +11,13 @@ describe('canonical video admin surface', () => {
     const roleNav = source('src/components/layout/roleAwareNavigation.ts')
     for (const path of ['/admin/video/providers', '/admin/video/tasks', '/admin/video/system-check']) {
       expect(router).toContain(path)
+    }
+    // 旧视频通道页由密钥库视频 Tab 接管、视频链路检查并入系统健康页：
+    // 侧栏只保留 tasks 入口（三条 URL 均保持可达，深链不受影响）
+    for (const path of ['/admin/video/tasks']) {
       expect(roleNav).toContain(path)
     }
+    expect(roleNav).not.toContain('/admin/video/providers')
     expect(router).not.toContain('video_gateway_demo')
     expect(sidebar).not.toContain('video_gateway_demo')
     expect(roleNav).not.toContain('video_gateway_demo')

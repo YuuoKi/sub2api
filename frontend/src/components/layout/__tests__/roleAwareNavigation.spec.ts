@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   ADMIN_SYSTEM_PATH,
   ADMIN_TOP_LEVEL_PATHS,
+  ADMIN_USAGE_PATH,
   EMPLOYEE_MORE_PATH,
   EMPLOYEE_TOP_LEVEL_PATHS,
   buildAdminRoleNav,
@@ -33,7 +34,18 @@ describe('admin role-aware top-level IA', () => {
     expect(isDefaultCollapsedGroup(system!)).toBe(true)
   })
 
-  it('exposes ops/settings directly and tucks legacy surfaces under System > Advanced', () => {
+  it('makes Usage an expandable parent of AI records and ops health', () => {
+    const usage = findNavItem(buildAdminRoleNav({ opsMonitoringEnabled: true }), ADMIN_USAGE_PATH)
+    expect(usage?.expandOnly).toBe(true)
+    expect(collectLeafPaths(usage)).toEqual(['/admin/console/ai-records', '/admin/ops'])
+  })
+
+  it('drops the ops health child of Usage when the ops feature flag is off', () => {
+    const usage = findNavItem(buildAdminRoleNav({ opsMonitoringEnabled: false }), ADMIN_USAGE_PATH)
+    expect(collectLeafPaths(usage)).toEqual(['/admin/console/ai-records'])
+  })
+
+  it('keeps only settings and Advanced under System, tucking legacy surfaces under System > Advanced', () => {
     const system = findNavItem(buildAdminRoleNav({
       customAdminMenus: [{ id: 9, label: '旧入口' }],
       opsMonitoringEnabled: true,
@@ -42,8 +54,6 @@ describe('admin role-aware top-level IA', () => {
     }), ADMIN_SYSTEM_PATH)
 
     expect(system?.children?.map((item) => item.path)).toEqual([
-      '/admin/ops',
-      '/admin/video/system-check',
       '/admin/settings',
       '/admin/system/advanced',
     ])
@@ -51,7 +61,6 @@ describe('admin role-aware top-level IA', () => {
     expect(collectLeafPaths(advanced)).toEqual([
       '/admin/accounts',
       '/admin/groups',
-      '/admin/video/providers',
       '/admin/channels/pricing',
       '/admin/channels/monitor',
       '/admin/proxies',

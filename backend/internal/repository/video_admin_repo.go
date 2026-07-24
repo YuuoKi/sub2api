@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/lib/pq"
 )
 
 type videoAdminRepository struct{ db *sql.DB }
@@ -51,7 +52,7 @@ func (r *videoAdminRepository) ListVideoProviders(ctx context.Context) ([]servic
 	return items, rows.Err()
 }
 func (r *videoAdminRepository) CreateVideoProvider(ctx context.Context, item service.VideoProviderAccount) (*service.VideoProviderAccount, error) {
-	valid, conflict, err := r.validateVideoProviderTarget(ctx, item.GroupID, 0)
+	valid, conflict, err := r.validateVideoProviderTarget(ctx, item.GroupID, item.Provider, item.DefaultModel, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +76,8 @@ func (r *videoAdminRepository) CreateVideoProvider(ctx context.Context, item ser
 }
 func (r *videoAdminRepository) UpdateVideoProvider(ctx context.Context, id int64, in service.VideoProviderAdminUpdate) (*service.VideoProviderAccount, error) {
 	var currentGroupID int64
-	if err := r.db.QueryRowContext(ctx, `SELECT group_id FROM video_provider_accounts WHERE id=$1`, id).Scan(&currentGroupID); errors.Is(err, sql.ErrNoRows) {
+	var currentProvider, currentModel string
+	if err := r.db.QueryRowContext(ctx, `SELECT group_id, provider, default_model FROM video_provider_accounts WHERE id=$1`, id).Scan(&currentGroupID, &currentProvider, &currentModel); errors.Is(err, sql.ErrNoRows) {
 		return nil, service.ErrVideoProviderNotFound
 	} else if err != nil {
 		return nil, err
@@ -84,7 +86,11 @@ func (r *videoAdminRepository) UpdateVideoProvider(ctx context.Context, id int64
 	if in.GroupID != nil {
 		targetGroupID = *in.GroupID
 	}
-	valid, conflict, err := r.validateVideoProviderTarget(ctx, targetGroupID, id)
+	targetModel := currentModel
+	if in.DefaultModel != nil {
+		targetModel = *in.DefaultModel
+	}
+	valid, conflict, err := r.validateVideoProviderTarget(ctx, targetGroupID, currentProvider, targetModel, id)
 	if err != nil {
 		return nil, err
 	}
@@ -117,6 +123,26 @@ func (r *videoAdminRepository) UpdateVideoProvider(ctx context.Context, id int64
 	}
 	return item, err
 }
+func (r *videoAdminRepository) DeleteVideoProvider(ctx context.Context, id int64) error {
+	var exists, deleted bool
+	err := r.db.QueryRowContext(ctx, `WITH deleted AS (DELETE FROM video_provider_accounts WHERE id=$1
+		AND NOT EXISTS (SELECT 1 FROM video_tasks WHERE provider_account_id=$1) RETURNING id)
+		SELECT EXISTS(SELECT 1 FROM video_provider_accounts WHERE id=$1), EXISTS(SELECT 1 FROM deleted)`, id).Scan(&exists, &deleted)
+	if err != nil {
+		var pqErr *pq.Error
+		if errors.As(err, &pqErr) && pqErr.Code == "23503" {
+			return fmt.Errorf("%w: 该通道仍被视频任务引用，不能删除", service.ErrVideoAdminConflict)
+		}
+		return err
+	}
+	if deleted {
+		return nil
+	}
+	if !exists {
+		return service.ErrVideoProviderNotFound
+	}
+	return fmt.Errorf("%w: 该通道仍被视频任务引用，不能删除", service.ErrVideoAdminConflict)
+}
 func (r *videoAdminRepository) AuthorizeTinyReal(ctx context.Context, id, actor int64) (*service.VideoProviderAccount, error) {
 	row := r.db.QueryRowContext(ctx, `WITH updated AS (UPDATE video_provider_accounts SET tiny_real_authorized_at=NOW(), tiny_real_authorized_by=$2, updated_at=NOW()
 		FROM groups candidate WHERE video_provider_accounts.id=$1 AND candidate.id=video_provider_accounts.group_id
@@ -139,12 +165,12 @@ func (r *videoAdminRepository) AuthorizeTinyReal(ctx context.Context, id, actor 
 	return item, err
 }
 
-func (r *videoAdminRepository) validateVideoProviderTarget(ctx context.Context, groupID, excludeID int64) (bool, bool, error) {
+func (r *videoAdminRepository) validateVideoProviderTarget(ctx context.Context, groupID int64, provider, model string, excludeID int64) (bool, bool, error) {
 	var valid, conflict bool
 	err := r.db.QueryRowContext(ctx, `SELECT
 		EXISTS(SELECT 1 FROM groups WHERE id=$1 AND status='active' AND subscription_type='standard' AND deleted_at IS NULL),
-		EXISTS(SELECT 1 FROM video_provider_accounts WHERE group_id=$1 AND provider='seedance' AND default_model=$2 AND id<>$3)`,
-		groupID, service.SeedanceModel, excludeID).Scan(&valid, &conflict)
+		EXISTS(SELECT 1 FROM video_provider_accounts WHERE group_id=$1 AND provider=$2 AND default_model=$3 AND id<>$4)`,
+		groupID, provider, model, excludeID).Scan(&valid, &conflict)
 	return valid, conflict, err
 }
 func (r *videoAdminRepository) ListVideoTasks(ctx context.Context, filter service.VideoAdminTaskFilter) ([]service.VideoTask, int64, error) {

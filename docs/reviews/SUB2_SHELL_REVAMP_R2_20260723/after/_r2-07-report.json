@@ -1,0 +1,22 @@
+[
+  {
+    "name": "probe-staff-deleted",
+    "ok": true,
+    "extra": "status=200 body={\"code\":0,\"message\":\"success\",\"data\":{\"message\":\"User deleted successfully\"}}"
+  },
+  {
+    "name": "probe-staff-gone",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "no-probe-providers-left",
+    "ok": true,
+    "extra": "leftovers=0 remain=0"
+  },
+  {
+    "name": "ui-staff-list-clean",
+    "ok": true,
+    "extra": ""
+  }
+]

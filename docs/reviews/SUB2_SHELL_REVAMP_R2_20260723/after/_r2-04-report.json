@@ -1,0 +1,72 @@
+[
+  {
+    "name": "authorize-default-checked",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "authorize-unchecked-by-user",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "enabled-still-checked",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "create-http-ok",
+    "ok": true,
+    "extra": "status=201 body={\"code\":0,\"message\":\"success\",\"data\":{\"id\":4,\"group_id\":3,\"group_name\":\"video\",\"provider\":\"seedance\",\"display_name\":\"R2探针-中转通道\",\"enabled\":true,\"masked_key\":\"r2-p…0723\",\"default_model\":\"doubao-seedance-2-0-260128\",\"api_key_configured\":true}}"
+  },
+  {
+    "name": "create-request-carries-base-url",
+    "ok": true,
+    "extra": "{\"group_id\":3,\"provider\":\"seedance\",\"display_name\":\"R2探针-中转通道\",\"api_key\":\"r2-probe-fake-key-20260723\",\"enabled\":true,\"base_url\":\"http://relay.example.com/v3\",\"default_model\":\"doubao-seedance-2-0-260128\"}"
+  },
+  {
+    "name": "provider-in-list",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "no-autoauth-call",
+    "ok": true,
+    "extra": "tiny-real-authorization 请求数=0"
+  },
+  {
+    "name": "api-list-has-provider",
+    "ok": true,
+    "extra": "{\"id\":4,\"group_id\":3,\"group_name\":\"video\",\"provider\":\"seedance\",\"display_name\":\"R2探针-中转通道\",\"enabled\":true,\"masked_key\":\"r2-p…0723\",\"default_model\":\"doubao-seedance-2-0-260128\",\"api_key_configured\":true}"
+  },
+  {
+    "name": "api-list-enabled",
+    "ok": true,
+    "extra": "enabled=true"
+  },
+  {
+    "name": "db-base-url-persisted",
+    "ok": true,
+    "extra": "R2探针-中转通道|http://relay.example.com/v3|doubao-seedance-2-0-260128"
+  },
+  {
+    "name": "probe-create-ok",
+    "ok": true,
+    "extra": "status=201 {\"code\":0,\"message\":\"success\",\"data\":{\"id\":5,\"group_id\":2,\"group_name\":\"media\",\"provider\":\"seedance\",\"display_name\":\"R2探针-default-model透传\",\"enabled\":false,\"masked_key\":\"r2-p…0723\",\"default_model\":\"dou"
+  },
+  {
+    "name": "default-model-passthrough",
+    "ok": true,
+    "extra": "{\"id\":5,\"group_id\":2,\"group_name\":\"media\",\"provider\":\"seedance\",\"display_name\":\"R2探针-default-model透传\",\"enabled\":false,\"masked_key\":\"r2-p…0723\",\"default_model\":\"doubao-seedance-2-0-probe\",\"api_key_configured\":true}"
+  },
+  {
+    "name": "probe-base-url-echo-none",
+    "ok": true,
+    "extra": "base_url 不回显为预期设计"
+  },
+  {
+    "name": "db-probe-custom-model-persisted",
+    "ok": true,
+    "extra": "http://relay.example.com/v3|doubao-seedance-2-0-probe"
+  }
+]

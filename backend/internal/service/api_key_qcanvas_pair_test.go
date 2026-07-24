@@ -78,7 +78,25 @@ func TestAPIKeyService_CreateQCanvasKeyPair(t *testing.T) {
 		require.Len(t, repo.persisted, 2)
 	})
 
-	t.Run("rejects equal or unavailable groups before any write", func(t *testing.T) {
+	t.Run("creates both keys on the same group when groups match", func(t *testing.T) {
+		repo := &qcanvasPairAPIKeyRepoStub{}
+		svc := &APIKeyService{
+			cfg:        &config.Config{},
+			apiKeyRepo: repo,
+			userRepo:   &qcanvasPairUserRepoStub{user: &User{ID: 7}},
+			groupRepo:  &qcanvasPairGroupRepoStub{groups: map[int64]*Group{11: activeGroup(11)}},
+		}
+
+		pair, err := svc.CreateQCanvasKeyPair(context.Background(), 7, CreateQCanvasKeyPairRequest{VideoGroupID: 11, MediaGroupID: 11})
+		require.NoError(t, err)
+		require.NotNil(t, pair)
+		require.Equal(t, int64(11), *pair.Video.GroupID)
+		require.Equal(t, int64(11), *pair.Media.GroupID)
+		require.NotEqual(t, pair.Video.Key, pair.Media.Key)
+		require.Len(t, repo.persisted, 2)
+	})
+
+	t.Run("rejects unavailable groups before any write", func(t *testing.T) {
 		repo := &qcanvasPairAPIKeyRepoStub{}
 		svc := &APIKeyService{
 			cfg:        &config.Config{},
@@ -87,10 +105,7 @@ func TestAPIKeyService_CreateQCanvasKeyPair(t *testing.T) {
 			groupRepo:  &qcanvasPairGroupRepoStub{groups: map[int64]*Group{11: activeGroup(11), 22: {ID: 22, Status: StatusDisabled, SubscriptionType: SubscriptionTypeStandard}}},
 		}
 
-		_, err := svc.CreateQCanvasKeyPair(context.Background(), 7, CreateQCanvasKeyPairRequest{VideoGroupID: 11, MediaGroupID: 11})
-		require.Error(t, err)
-		require.Empty(t, repo.persisted)
-		_, err = svc.CreateQCanvasKeyPair(context.Background(), 7, CreateQCanvasKeyPairRequest{VideoGroupID: 11, MediaGroupID: 22})
+		_, err := svc.CreateQCanvasKeyPair(context.Background(), 7, CreateQCanvasKeyPairRequest{VideoGroupID: 11, MediaGroupID: 22})
 		require.Error(t, err)
 		require.Empty(t, repo.persisted)
 	})

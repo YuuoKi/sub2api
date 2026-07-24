@@ -1,0 +1,14 @@
+{
+  "note": "SPA 导航 3 次（总览→密钥库→员工卡）期间的三类请求计数；boot = 刷新首发基线",
+  "boot_baseline": {
+    "subscriptions": 3,
+    "announcements": 3,
+    "adminSettings": 0
+  },
+  "spa_nav_x3": {
+    "subscriptions": 0,
+    "announcements": 0,
+    "adminSettings": 0
+  },
+  "pass": true
+}

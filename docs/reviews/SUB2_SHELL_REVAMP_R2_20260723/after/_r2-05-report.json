@@ -1,0 +1,22 @@
+[
+  {
+    "name": "probe-present-before-delete",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "delete-http-ok",
+    "ok": true,
+    "extra": "status=200 body={\"code\":0,\"message\":\"success\",\"data\":{\"message\":\"Video provider deleted successfully\"}}"
+  },
+  {
+    "name": "delete-success-toast",
+    "ok": true,
+    "extra": "通道已删除"
+  },
+  {
+    "name": "probe-gone-from-list",
+    "ok": true,
+    "extra": ""
+  }
+]

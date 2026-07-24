@@ -1,0 +1,87 @@
+[
+  {
+    "name": "fix01-advanced-8-items",
+    "ok": true,
+    "extra": "[\"上游账号\",\"模型分组\",\"模型与通道定价\",\"通道监控\",\"上游网络\",\"任务记录\",\"生成资产\",\"用量与成本\"]"
+  },
+  {
+    "name": "fix01-video-providers-gone",
+    "ok": true,
+    "extra": "/admin/settings,/admin/accounts,/admin/groups,/admin/channels/pricing,/admin/channels/monitor,/admin/proxies,/admin/video/tasks,/admin/generation-content,/admin/usage"
+  },
+  {
+    "name": "fix01-tasks-still-there",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "fix02-no-notes-column",
+    "ok": true,
+    "extra": "[\"成员\",\"状态\",\"今日花费\",\"累计花费\",\"操作\"]"
+  },
+  {
+    "name": "fix02-probe-present",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "fix02-no-tool-badge",
+    "ok": true,
+    "extra": "工具 badge 数=0"
+  },
+  {
+    "name": "fix03-card-table-visible",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "fix04-no-english-ledger",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "fix04-weekly-block-hidden",
+    "ok": true,
+    "extra": "weekly-report 块数=0"
+  },
+  {
+    "name": "fix04-cn-desc-present",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "fix04-empty-card-present",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "fix05-title-system-health",
+    "ok": true,
+    "extra": "headings=[\"系统健康\",\"系统健康\"]"
+  },
+  {
+    "name": "fix05-no-legacy-ops-name",
+    "ok": true,
+    "extra": ""
+  },
+  {
+    "name": "fix06-no-refire-on-spa-nav",
+    "ok": true,
+    "extra": "SPA×3 计数={\"subscriptions\":0,\"announcements\":0,\"adminSettings\":0}；首发基线={\"subscriptions\":3,\"announcements\":3,\"adminSettings\":0}"
+  },
+  {
+    "name": "fix03m-horizontal-scrollable",
+    "ok": true,
+    "extra": "{\"wrapperFound\":true,\"overflowX\":\"auto\",\"wrapperClient\":577,\"wrapperScroll\":577,\"tableWidth\":577,\"viewportW\":390,\"bodyScrollW\":390}"
+  },
+  {
+    "name": "fix07-probe-deleted",
+    "ok": true,
+    "extra": "status=200"
+  },
+  {
+    "name": "fix07-staff-empty-state",
+    "ok": true,
+    "extra": ""
+  }
+]

@@ -145,26 +145,37 @@
         </div>
 
         <div
-          v-if="weeklyReport"
+          v-if="weeklySummary"
           class="ui-panel p-4"
+          data-test="weekly-report"
         >
-          <div class="flex flex-wrap items-end justify-between gap-3">
+          <h2 class="text-sm font-semibold text-gray-900 dark:text-white">经验周报摘要</h2>
+          <dl class="mt-3 grid gap-3 text-xs sm:grid-cols-3">
             <div>
-              <h2 class="text-sm font-semibold text-gray-900 dark:text-white">经验周报摘要</h2>
-              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                采纳率 {{ Math.round((weeklyReport.adoption_rate || 0) * 100) }}% ·
-                采纳 {{ weeklyReport.adopted_count }} /
-                待审 {{ (weeklyReport.pending_count || 0) + (weeklyReport.unreviewed_count || 0) }}
-              </p>
+              <dt class="text-gray-500 dark:text-gray-400">周期</dt>
+              <dd class="mt-0.5 text-gray-700 dark:text-gray-200">{{ weeklySummary.period }}</dd>
             </div>
-            <div class="text-right text-xs text-gray-500 dark:text-gray-400">
-              条目 {{ weeklyReport.entries }} · 视频任务 {{ weeklyReport.video_tasks }}
+            <div>
+              <dt class="text-gray-500 dark:text-gray-400">条目</dt>
+              <dd class="mt-0.5 tabular-nums text-gray-700 dark:text-gray-200">{{ weeklySummary.entries }}</dd>
             </div>
-          </div>
-          <pre
-            v-if="weeklyReport.markdown"
-            class="mt-3 max-h-48 overflow-auto whitespace-pre-wrap rounded-md bg-gray-50 p-3 text-xs text-gray-700 dark:bg-dark-900 dark:text-gray-200"
-          >{{ weeklyReport.markdown }}</pre>
+            <div>
+              <dt class="text-gray-500 dark:text-gray-400">视频任务</dt>
+              <dd class="mt-0.5 tabular-nums text-gray-700 dark:text-gray-200">{{ weeklySummary.videoTasks }}</dd>
+            </div>
+            <div>
+              <dt class="text-gray-500 dark:text-gray-400">成本估算</dt>
+              <dd class="mt-0.5 tabular-nums text-gray-700 dark:text-gray-200">{{ weeklySummary.cost }}</dd>
+            </div>
+            <div>
+              <dt class="text-gray-500 dark:text-gray-400">采纳情况</dt>
+              <dd class="mt-0.5 text-gray-700 dark:text-gray-200">{{ weeklySummary.adoption }}</dd>
+            </div>
+            <div>
+              <dt class="text-gray-500 dark:text-gray-400">异常</dt>
+              <dd class="mt-0.5 text-gray-700 dark:text-gray-200">{{ weeklySummary.anomalies }}</dd>
+            </div>
+          </dl>
         </div>
         <div
           v-else-if="weeklyReportError"
@@ -305,6 +316,34 @@ async function loadSamples(signal?: AbortSignal) {
 async function loadWeeklyReport(signal?: AbortSignal) {
   weeklyReport.value = await adminAPI.generationContent.getWeeklyReport({ signal })
 }
+
+// 经验周报摘要：不再直接渲染英文 ledger markdown，改为结构化中文字段；
+// 条目为 0 且成本为 0 时整块不显示（空态已有「暂无采集数据」卡），
+// 但有失败任务信号时即使零数据也显示（失败信号不能吞）。
+function formatPeriodDate(value: string): string {
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return value
+  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`
+}
+
+const weeklySummary = computed(() => {
+  const report = weeklyReport.value
+  if (!report) return null
+  if (!report.entries && !report.total_cost_estimate && !report.anomalies?.failed_tasks) return null
+  const anomalies = report.anomalies
+  const anomalyParts: string[] = []
+  if (anomalies?.failed_tasks) anomalyParts.push(`失败任务 ${anomalies.failed_tasks}`)
+  if (anomalies?.missing_task_joins) anomalyParts.push(`缺关联 ${anomalies.missing_task_joins}`)
+  if (anomalies?.truncated_rows) anomalyParts.push(`截断行 ${anomalies.truncated_rows}`)
+  return {
+    period: `${formatPeriodDate(report.period_start)} ~ ${formatPeriodDate(report.period_end)}`,
+    entries: report.entries,
+    videoTasks: report.video_tasks,
+    cost: formatMoney(report.total_cost_estimate, report.usd_cny_rate ?? usdCnyRate.value),
+    adoption: `采纳率 ${Math.round((report.adoption_rate || 0) * 100)}% · 采纳 ${report.adopted_count} · 驳回 ${report.rejected_count} · 待审 ${(report.pending_count || 0) + (report.unreviewed_count || 0)}`,
+    anomalies: anomalyParts.length ? anomalyParts.join(' · ') : '无',
+  }
+})
 
 async function loadStaffOptions() {
   staffAbortController?.abort()

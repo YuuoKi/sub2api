@@ -43,13 +43,14 @@ export interface BuildEmployeeRoleNavOptions {
 }
 
 export const ADMIN_SYSTEM_PATH = '/admin/system'
+export const ADMIN_USAGE_PATH = '/admin/console/usage'
 export const EMPLOYEE_MORE_PATH = '/more'
 
 export const ADMIN_TOP_LEVEL_PATHS = [
   '/admin/console/overview',
   '/admin/console/key-vault',
   '/admin/console/staff',
-  '/admin/console/ai-records',
+  ADMIN_USAGE_PATH,
   ADMIN_SYSTEM_PATH,
 ] as const
 
@@ -131,15 +132,21 @@ export function buildAdminRoleNav(options: BuildAdminRoleNavOptions = {}): RoleN
     { path: '/admin/console/overview', label: '总览' },
     { path: '/admin/console/key-vault', label: '密钥库' },
     { path: '/admin/console/staff', label: '员工卡' },
-    { path: '/admin/console/ai-records', label: '用量' },
+    {
+      path: ADMIN_USAGE_PATH,
+      label: '用量',
+      expandOnly: true,
+      children: [
+        { path: '/admin/console/ai-records', label: 'AI 调用记录' },
+        { path: '/admin/ops', label: '系统健康', featureFlagKey: 'ops' },
+      ],
+    },
     {
       path: ADMIN_SYSTEM_PATH,
       label: '系统',
       expandOnly: true,
       defaultCollapsed: true,
       children: [
-        { path: '/admin/ops', label: '系统健康', featureFlagKey: 'ops' },
-        { path: '/admin/video/system-check', label: '视频链路检查' },
         { path: '/admin/settings', label: '设置与备份' },
         {
           path: '/admin/system/advanced',
@@ -149,7 +156,6 @@ export function buildAdminRoleNav(options: BuildAdminRoleNavOptions = {}): RoleN
           children: [
             { path: '/admin/accounts', label: '上游账号' },
             { path: '/admin/groups', label: '模型分组', hideInSimpleMode: true },
-            { path: '/admin/video/providers', label: '视频通道' },
             { path: '/admin/channels/pricing', label: '模型与通道定价', hideInSimpleMode: true },
             { path: '/admin/channels/monitor', label: '通道监控', featureFlagKey: 'channelMonitor' },
             { path: '/admin/proxies', label: '上游网络' },

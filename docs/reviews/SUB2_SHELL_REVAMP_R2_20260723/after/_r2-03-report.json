@@ -1,0 +1,27 @@
+[
+  {
+    "name": "contract-has-platforms",
+    "ok": true,
+    "extra": "[\"seedance:true\",\"jimeng:false\",\"veo:false\",\"kling:false\"]"
+  },
+  {
+    "name": "seedance-selectable",
+    "ok": true,
+    "extra": "{\"value\":\"seedance\",\"text\":\"Seedance 2.0\",\"disabled\":false}"
+  },
+  {
+    "name": "jimeng-disabled-coming",
+    "ok": true,
+    "extra": "{\"value\":\"jimeng\",\"text\":\"即梦（即将接入）\",\"disabled\":true}"
+  },
+  {
+    "name": "veo-disabled-coming",
+    "ok": true,
+    "extra": "{\"value\":\"veo\",\"text\":\"Veo 3.1（即将接入）\",\"disabled\":true}"
+  },
+  {
+    "name": "kling-disabled-coming",
+    "ok": true,
+    "extra": "{\"value\":\"kling\",\"text\":\"快乐小马（即将接入）\",\"disabled\":true}"
+  }
+]

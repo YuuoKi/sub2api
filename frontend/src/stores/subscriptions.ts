@@ -7,6 +7,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import subscriptionsAPI from '@/api/subscriptions'
 import type { UserSubscription } from '@/types'
+import { useAppStore } from './app'
 
 // Cache TTL: 60 seconds
 const CACHE_TTL_MS = 60_000
@@ -35,6 +36,8 @@ export const useSubscriptionStore = defineStore('subscriptions', () => {
    * @param force - Force refresh even if cache is valid
    */
   async function fetchActiveSubscriptions(force = false): Promise<UserSubscription[]> {
+    // LAN 内网模式：订阅端点被 backend-mode guard 拒绝（恒 403），跳过预加载
+    if (useAppStore().lanAdminModeEnabled) return activeSubscriptions.value
     const now = Date.now()
 
     // Return cached data if valid
@@ -87,6 +90,8 @@ export const useSubscriptionStore = defineStore('subscriptions', () => {
    */
   function startPolling() {
     if (pollerInterval) return
+    // LAN 内网模式无订阅端点可用，不启动轮询
+    if (useAppStore().lanAdminModeEnabled) return
 
     pollerInterval = setInterval(() => {
       fetchActiveSubscriptions(true).catch((error) => {

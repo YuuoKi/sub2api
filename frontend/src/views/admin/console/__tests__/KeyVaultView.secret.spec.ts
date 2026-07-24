@@ -7,8 +7,14 @@ const mocks = vi.hoisted(() => ({
   accountsCreate: vi.fn(),
   accountsUpdate: vi.fn(),
   listProviders: vi.fn(),
+  videoContract: vi.fn(),
+  createProvider: vi.fn(),
+  updateProvider: vi.fn(),
+  deleteProvider: vi.fn(),
+  authorizeTinyReal: vi.fn(),
   groupsGetAll: vi.fn(),
   groupsCreate: vi.fn(),
+  requestConfirmation: vi.fn(),
   showSuccess: vi.fn(),
   showError: vi.fn(),
 }))
@@ -22,12 +28,21 @@ vi.mock('@/api/admin', () => ({
     },
     video: {
       listProviders: mocks.listProviders,
+      contract: mocks.videoContract,
+      createProvider: mocks.createProvider,
+      updateProvider: mocks.updateProvider,
+      deleteProvider: mocks.deleteProvider,
+      authorizeTinyReal: mocks.authorizeTinyReal,
     },
     groups: {
       getAll: mocks.groupsGetAll,
       create: mocks.groupsCreate,
     },
   },
+}))
+
+vi.mock('@/composables/useAppDialog', () => ({
+  requestConfirmation: mocks.requestConfirmation,
 }))
 
 vi.mock('@/stores/app', () => ({
@@ -67,6 +82,18 @@ const AccountGroupsCellStub = {
 
 const SECRET_KEY = 'sk-super-secret-upstream-key-1234567890'
 const ANTHROPIC_GROUP = { id: 7, name: 'media', platform: 'anthropic', status: 'active' }
+
+const VIDEO_CONTRACT = {
+  provider: 'seedance',
+  base_url: 'https://ark.cn-beijing.volces.com',
+  default_model: 'seedance-2.0',
+  duration_seconds: 4,
+  resolution: '720p',
+  platforms: [
+    { provider: 'seedance', display_name: 'Seedance', default_base_url: 'https://ark.cn-beijing.volces.com', default_model: 'seedance-2.0', adapter_ready: true },
+    { provider: 'jimeng', display_name: '即梦', default_base_url: '', default_model: '', adapter_ready: false },
+  ],
+}
 
 async function mountView() {
   const wrapper = mount(KeyVaultView, {
@@ -192,5 +219,124 @@ describe('KeyVaultView group binding (P0)', () => {
 
     const payload = mocks.accountsCreate.mock.calls[0][0]
     expect(payload.group_ids).toEqual([9])
+  })
+})
+
+describe('KeyVaultView video provider management', () => {
+  const PROVIDER = {
+    id: 3,
+    group_id: 7,
+    group_name: 'media',
+    provider: 'seedance',
+    display_name: 'ark 一号',
+    enabled: true,
+    api_key_configured: true,
+    masked_key: 'sk-...c7f4',
+    base_url: '',
+    default_model: 'seedance-2.0',
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.accountsList.mockResolvedValue({ items: [], total: 0 })
+    mocks.listProviders.mockResolvedValue({ items: [PROVIDER] })
+    mocks.videoContract.mockResolvedValue(VIDEO_CONTRACT)
+    mocks.groupsGetAll.mockResolvedValue([ANTHROPIC_GROUP])
+    mocks.requestConfirmation.mockResolvedValue(true)
+    mocks.createProvider.mockResolvedValue({ ...PROVIDER, id: 4 })
+    mocks.updateProvider.mockResolvedValue({ ...PROVIDER, enabled: false })
+    mocks.deleteProvider.mockResolvedValue({ message: 'ok' })
+    mocks.authorizeTinyReal.mockResolvedValue({ ...PROVIDER, tiny_real_authorized_at: '2026-07-23T00:00:00Z' })
+  })
+
+  async function switchToVideoTab(wrapper: ReturnType<typeof mount>) {
+    const tab = wrapper.findAll('button').find((button) => button.text() === '视频通道')
+    expect(tab).toBeTruthy()
+    await tab!.trigger('click')
+  }
+
+  it('creates a provider in-page with group/provider/default_model passthrough and auto-authorizes once', async () => {
+    const wrapper = await mountView()
+    await switchToVideoTab(wrapper)
+
+    await wrapper.find('[data-test="open-create-provider"]').trigger('click')
+    // 未就绪平台置灰并标注「即将接入」
+    const platformOptions = wrapper.find('[data-test="provider-platform"]').findAll('option')
+    const jimeng = platformOptions.find((option) => option.attributes('value') === 'jimeng')
+    expect(jimeng?.attributes('disabled')).toBeDefined()
+    expect(jimeng?.text()).toContain('即将接入')
+
+    await wrapper.find('[data-test="provider-name"]').setValue('ark 一号')
+    await wrapper.find('[data-test="group-check-7"]').setValue(true)
+    await wrapper.find('[data-test="provider-api-key"]').setValue(SECRET_KEY)
+    await wrapper.find('form[data-test="provider-form"]').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(mocks.createProvider).toHaveBeenCalledTimes(1)
+    expect(mocks.createProvider).toHaveBeenCalledWith(expect.objectContaining({
+      group_id: 7,
+      provider: 'seedance',
+      display_name: 'ark 一号',
+      api_key: SECRET_KEY,
+      enabled: true,
+      default_model: 'seedance-2.0',
+    }))
+    // 「保存后自动授权一次最小真实调用」默认勾选
+    expect(mocks.authorizeTinyReal).toHaveBeenCalledWith(4)
+
+    // 保存后密钥不回显：重开弹窗是空密码框
+    await wrapper.find('[data-test="open-create-provider"]').trigger('click')
+    expect((wrapper.find('[data-test="provider-api-key"]').element as HTMLInputElement).value).toBe('')
+    expect(wrapper.text()).not.toContain(SECRET_KEY)
+  })
+
+  it('blocks provider save when no group is selected', async () => {
+    const wrapper = await mountView()
+    await switchToVideoTab(wrapper)
+
+    await wrapper.find('[data-test="open-create-provider"]').trigger('click')
+    await wrapper.find('[data-test="provider-name"]').setValue('ark 一号')
+    await wrapper.find('[data-test="provider-api-key"]').setValue(SECRET_KEY)
+    await wrapper.find('form[data-test="provider-form"]').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(mocks.createProvider).not.toHaveBeenCalled()
+    expect(mocks.showError).toHaveBeenCalledWith(expect.stringContaining('请至少选择一个分组'))
+  })
+
+  it('falls back to a static seedance-only platform list when the contract request fails', async () => {
+    mocks.videoContract.mockRejectedValue(new Error('network down'))
+    const wrapper = await mountView()
+    await switchToVideoTab(wrapper)
+
+    await wrapper.find('[data-test="open-create-provider"]').trigger('click')
+    await flushPromises()
+    const platformOptions = wrapper.find('[data-test="provider-platform"]').findAll('option')
+    expect(platformOptions).toHaveLength(1)
+    expect(platformOptions[0].attributes('value')).toBe('seedance')
+  })
+
+  it('disables a provider only after a danger confirmation', async () => {
+    const wrapper = await mountView()
+    await switchToVideoTab(wrapper)
+
+    mocks.requestConfirmation.mockResolvedValueOnce(false)
+    await wrapper.find('[data-test="toggle-provider-3"]').trigger('click')
+    expect(mocks.updateProvider).not.toHaveBeenCalled()
+
+    await wrapper.find('[data-test="toggle-provider-3"]').trigger('click')
+    await flushPromises()
+    expect(mocks.requestConfirmation).toHaveBeenCalled()
+    expect(mocks.updateProvider).toHaveBeenCalledWith(3, { enabled: false })
+  })
+
+  it('deletes a provider only after a danger confirmation', async () => {
+    const wrapper = await mountView()
+    await switchToVideoTab(wrapper)
+
+    await wrapper.find('[data-test="remove-provider-3"]').trigger('click')
+    await flushPromises()
+    expect(mocks.requestConfirmation).toHaveBeenCalled()
+    expect(mocks.deleteProvider).toHaveBeenCalledWith(3)
   })
 })

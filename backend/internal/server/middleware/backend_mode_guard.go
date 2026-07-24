@@ -101,6 +101,8 @@ var backendModeAllowedAdminRequests = []backendModeRequestRule{
 	{http.MethodDelete, "/api/v1/admin/users/:id"},
 	{http.MethodGet, "/api/v1/admin/users/:id/api-keys"},
 	{http.MethodPost, "/api/v1/admin/users/:id/api-keys"},
+	{http.MethodPost, "/api/v1/admin/users/:id/qcanvas-key-pair"},
+	{http.MethodPost, "/api/v1/admin/users/:id/balance"},
 	{http.MethodPut, "/api/v1/admin/api-keys/:id"},
 	{http.MethodDelete, "/api/v1/admin/api-keys/:id"},
 
@@ -237,6 +239,7 @@ var backendModeAllowedAdminRequests = []backendModeRequestRule{
 	{http.MethodGet, "/api/v1/admin/video/providers"},
 	{http.MethodPost, "/api/v1/admin/video/providers"},
 	{http.MethodPut, "/api/v1/admin/video/providers/:id"},
+	{http.MethodDelete, "/api/v1/admin/video/providers/:id"},
 	{http.MethodGet, "/api/v1/admin/video/tasks"},
 	{http.MethodGet, "/api/v1/admin/video/tasks/:id"},
 	{http.MethodGet, "/api/v1/admin/video/tasks/:id/local-asset"},

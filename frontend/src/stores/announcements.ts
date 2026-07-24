@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { announcementsAPI } from '@/api'
 import type { UserAnnouncement } from '@/types'
+import { useAppStore } from './app'
 
 const THROTTLE_MS = 20 * 60 * 1000 // 20 minutes
 
@@ -23,6 +24,8 @@ export const useAnnouncementStore = defineStore('announcements', () => {
 
   // Actions
   async function fetchAnnouncements(force = false) {
+    // LAN 内网模式：公告端点被 backend-mode guard 拒绝（恒 403），跳过预加载避免每页重发噪音
+    if (useAppStore().lanAdminModeEnabled) return
     const now = Date.now()
     if (!force && lastFetchTime.value > 0 && now - lastFetchTime.value < THROTTLE_MS) {
       return

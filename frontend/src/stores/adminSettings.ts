@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { adminAPI } from '@/api'
 import type { CustomMenuItem } from '@/types'
+import { useAppStore } from './app'
 
 export const useAdminSettingsStore = defineStore('adminSettings', () => {
   const loaded = ref(false)
@@ -54,6 +55,13 @@ export const useAdminSettingsStore = defineStore('adminSettings', () => {
   async function fetch(force = false): Promise<void> {
     if (loaded.value && !force) return
     if (loading.value) return
+
+    // LAN 内网模式：admin settings 端点被 backend-mode guard 拒绝（恒 403），
+    // 跳过预加载并沿用缓存默认值（ops 默认开启，内网控制台需要「系统健康」入口）
+    if (useAppStore().lanAdminModeEnabled) {
+      loaded.value = true
+      return
+    }
 
     loading.value = true
     try {

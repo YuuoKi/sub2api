@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   getBatchApiKeysUsage: vi.fn(),
   groupsGetAll: vi.fn(),
   groupsCreate: vi.fn(),
+  showError: vi.fn(),
+  showSuccess: vi.fn(),
 }))
 
 vi.mock('@/api/admin', () => ({
@@ -37,7 +39,7 @@ vi.mock('@/api/admin', () => ({
 }))
 
 vi.mock('@/stores/app', () => ({
-  useAppStore: () => ({ showSuccess: vi.fn(), showError: vi.fn() }),
+  useAppStore: () => ({ showSuccess: mocks.showSuccess, showError: mocks.showError }),
 }))
 
 const AppLayoutStub = { template: '<div><slot /></div>' }
@@ -57,12 +59,26 @@ describe('StaffView one-shot staff issuance', () => {
     vi.clearAllMocks()
     window.localStorage.clear()
     mocks.usersList.mockResolvedValue({
-      items: [{ id: 1, username: 'QCanvas', email: 'qcanvas@wujie.local', member_type: 'tool', status: 'active', notes: '', allowed_groups: null, subscriptions: [] }],
+      items: [
+        {
+          id: 1,
+          username: 'QCanvas',
+          email: 'qcanvas@wujie.local',
+          role: 'user',
+          member_type: 'tool',
+          status: 'active',
+          notes: '',
+          allowed_groups: null,
+          subscriptions: [],
+        },
+      ],
       total: 1,
     })
     mocks.getBatchUsersUsage.mockResolvedValue({ stats: {} })
     // Real backend truth: admin list-keys endpoints always return an empty `key` (apiKeyDTOWithoutSecret).
-    mocks.getUserApiKeys.mockResolvedValue({ items: [{ id: 10, name: 'card', key: '', status: 'active', quota: 0, quota_used: 0, last_used_at: null }] })
+    mocks.getUserApiKeys.mockResolvedValue({
+      items: [{ id: 10, name: 'card', key: '', status: 'active', quota: 0, quota_used: 0, last_used_at: null }],
+    })
     mocks.getBatchApiKeysUsage.mockResolvedValue({ stats: {} })
     mocks.groupsGetAll.mockResolvedValue([
       { id: 7, name: '默认组', status: 'active', platform: 'openai', is_exclusive: false, subscription_type: 'standard' },
@@ -73,9 +89,59 @@ describe('StaffView one-shot staff issuance', () => {
       media: { id: 13, name: 'QCanvas · media', key: FULL_KEY, status: 'active', quota: 0, quota_used: 0 },
     })
     mocks.usersCreate.mockResolvedValue({
-      user: { id: 2, username: '张三', email: 'zhangsan@wujie.local', member_type: 'tool', status: 'active' },
+      user: { id: 2, username: '张三', email: 'zhangsan@wujie.local', role: 'user', member_type: 'tool', status: 'active' },
       initial_credential: null,
     })
+  })
+
+  it('lists non-admin human and tool employees and shows member type', async () => {
+    mocks.usersList.mockResolvedValue({
+      items: [
+        {
+          id: 1,
+          username: '工具号',
+          email: 'tool@wujie.local',
+          role: 'user',
+          member_type: 'tool',
+          status: 'active',
+          notes: '',
+          allowed_groups: null,
+          subscriptions: [],
+        },
+        {
+          id: 2,
+          username: '张三',
+          email: 'zhangsan@wujie.local',
+          role: 'user',
+          member_type: 'human',
+          status: 'active',
+          notes: '',
+          allowed_groups: null,
+          subscriptions: [],
+        },
+        {
+          id: 9,
+          username: '管理员',
+          email: 'admin@wujie.local',
+          role: 'admin',
+          member_type: 'human',
+          status: 'active',
+          notes: '',
+          allowed_groups: null,
+          subscriptions: [],
+        },
+      ],
+      total: 3,
+    })
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('工具号')
+    expect(wrapper.text()).toContain('张三')
+    expect(wrapper.text()).toContain('工具账号')
+    expect(wrapper.text()).toContain('员工账号')
+    expect(wrapper.text()).not.toContain('admin@wujie.local')
+    expect(wrapper.text()).toContain('共 2 个员工')
   })
 
   it('single modal: creates employee, issues dual keys into the same group, recharges, then shows both plaintext keys once', async () => {
@@ -130,17 +196,17 @@ describe('StaffView one-shot staff issuance', () => {
     }
   })
 
-  it('reuses the existing tool employee on email-conflict 409 and still issues dual keys (补开路径)', async () => {
-    mocks.usersCreate.mockRejectedValue({ response: { status: 409 } })
+  it('reuses the existing active tool employee on flat EMAIL_EXISTS 409 and still issues dual keys', async () => {
+    // Axios interceptor rejects with a FLAT object — not error.response.status.
+    mocks.usersCreate.mockRejectedValue({ status: 409, reason: 'EMAIL_EXISTS', message: 'email already exists' })
     const wrapper = mountView()
     await flushPromises()
 
     await wrapper.find('[data-test="create-service-identity"]').trigger('click')
-    await wrapper.find('[data-test="service-identity-email"]').setValue('qcanvas@wujie.local')
+    await wrapper.find('[data-test="service-identity-email"]').setValue('  QCanvas@wujie.local ')
     await wrapper.find('form[data-test="service-identity-form"]').trigger('submit.prevent')
     await flushPromises()
 
-    // 不再调第二次 users.create；按邮箱查到既有员工（id 1）继续签发
     expect(mocks.usersCreate).toHaveBeenCalledTimes(1)
     expect(mocks.createQCanvasKeyPairForUser).toHaveBeenCalledWith(
       1,
@@ -151,21 +217,158 @@ describe('StaffView one-shot staff issuance', () => {
     expect(wrapper.find('[data-test="wizard-media-key"]').text()).toContain(FULL_KEY)
   })
 
-  it('reports an occupied email instead of issuing when the 409 owner is not a tool employee', async () => {
-    mocks.usersCreate.mockRejectedValue({ response: { status: 409 } })
+  it('reuses an existing active human employee on email conflict without converting member_type', async () => {
+    mocks.usersCreate.mockRejectedValue({ status: 409, reason: 'EMAIL_EXISTS', message: 'email already exists' })
     mocks.usersList.mockResolvedValue({
-      items: [{ id: 3, username: 'admin', email: 'qcanvas@wujie.local', member_type: 'person', status: 'active', notes: '', allowed_groups: null, subscriptions: [] }],
+      items: [
+        {
+          id: 4,
+          username: '李四',
+          email: 'lisi@wujie.local',
+          role: 'user',
+          member_type: 'human',
+          status: 'active',
+          notes: '',
+          allowed_groups: null,
+          subscriptions: [],
+        },
+      ],
       total: 1,
     })
     const wrapper = mountView()
     await flushPromises()
 
     await wrapper.find('[data-test="create-service-identity"]').trigger('click')
-    await wrapper.find('[data-test="service-identity-email"]').setValue('qcanvas@wujie.local')
+    await wrapper.find('[data-test="service-identity-email"]').setValue('lisi@wujie.local')
+    await wrapper.find('form[data-test="service-identity-form"]').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(mocks.usersCreate).toHaveBeenCalledTimes(1)
+    expect(mocks.createQCanvasKeyPairForUser).toHaveBeenCalledWith(
+      4,
+      { video_group_id: 7, media_group_id: 7 },
+      expect.any(String),
+    )
+    // Must not attempt to rewrite human → tool on conflict reuse.
+    expect(mocks.usersCreate).not.toHaveBeenCalledWith(expect.objectContaining({ member_type: 'human' }))
+    expect(wrapper.find('[data-test="wizard-video-key"]').text()).toContain('sk-video-one-time')
+  })
+
+  it('rejects email conflict when the exact owner is an admin', async () => {
+    mocks.usersCreate.mockRejectedValue({ status: 409, reason: 'EMAIL_EXISTS', message: 'email already exists' })
+    mocks.usersList.mockResolvedValue({
+      items: [
+        {
+          id: 3,
+          username: 'admin',
+          email: 'boss@wujie.local',
+          role: 'admin',
+          member_type: 'human',
+          status: 'active',
+          notes: '',
+          allowed_groups: null,
+          subscriptions: [],
+        },
+      ],
+      total: 1,
+    })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('[data-test="create-service-identity"]').trigger('click')
+    await wrapper.find('[data-test="service-identity-email"]').setValue('boss@wujie.local')
     await wrapper.find('form[data-test="service-identity-form"]').trigger('submit.prevent')
     await flushPromises()
 
     expect(mocks.createQCanvasKeyPairForUser).not.toHaveBeenCalled()
+    expect(mocks.showError).toHaveBeenCalledWith(expect.stringMatching(/管理员/))
+  })
+
+  it('rejects email conflict when the exact owner is disabled', async () => {
+    mocks.usersCreate.mockRejectedValue({ status: 409, reason: 'EMAIL_EXISTS', message: 'email already exists' })
+    mocks.usersList.mockResolvedValue({
+      items: [
+        {
+          id: 5,
+          username: '停用员工',
+          email: 'disabled@wujie.local',
+          role: 'user',
+          member_type: 'tool',
+          status: 'disabled',
+          notes: '',
+          allowed_groups: null,
+          subscriptions: [],
+        },
+      ],
+      total: 1,
+    })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('[data-test="create-service-identity"]').trigger('click')
+    await wrapper.find('[data-test="service-identity-email"]').setValue('disabled@wujie.local')
+    await wrapper.find('form[data-test="service-identity-form"]').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(mocks.createQCanvasKeyPairForUser).not.toHaveBeenCalled()
+    expect(mocks.showError).toHaveBeenCalledWith(expect.stringMatching(/停用|禁用/))
+  })
+
+  it('rejects email conflict when no exact non-admin human/tool owner is found', async () => {
+    mocks.usersCreate.mockRejectedValue({ status: 409, reason: 'EMAIL_EXISTS', message: 'email already exists' })
+    mocks.usersList.mockResolvedValue({
+      items: [
+        {
+          id: 6,
+          username: 'other',
+          email: 'other@wujie.local',
+          role: 'user',
+          member_type: 'tool',
+          status: 'active',
+          notes: '',
+          allowed_groups: null,
+          subscriptions: [],
+        },
+      ],
+      total: 1,
+    })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('[data-test="create-service-identity"]').trigger('click')
+    await wrapper.find('[data-test="service-identity-email"]').setValue('missing@wujie.local')
+    await wrapper.find('form[data-test="service-identity-form"]').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(mocks.createQCanvasKeyPairForUser).not.toHaveBeenCalled()
+    expect(mocks.showError).toHaveBeenCalledWith(expect.stringMatching(/找不到|不存在|占用/))
+  })
+
+  it('keeps the created owner when key issuance fails so retry does not create again', async () => {
+    mocks.createQCanvasKeyPairForUser
+      .mockRejectedValueOnce({ status: 500, message: 'key issue failed' })
+      .mockResolvedValueOnce({
+        video: { id: 12, name: 'QCanvas · video', key: 'sk-video-one-time', status: 'active', quota: 0, quota_used: 0 },
+        media: { id: 13, name: 'QCanvas · media', key: FULL_KEY, status: 'active', quota: 0, quota_used: 0 },
+      })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('[data-test="create-service-identity"]').trigger('click')
+    await wrapper.find('[data-test="service-identity-email"]').setValue('zhangsan@wujie.local')
+    await wrapper.find('form[data-test="service-identity-form"]').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(mocks.usersCreate).toHaveBeenCalledTimes(1)
+    expect(mocks.createQCanvasKeyPairForUser).toHaveBeenCalledTimes(1)
+    expect(mocks.showError).toHaveBeenCalled()
+
+    await wrapper.find('form[data-test="service-identity-form"]').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(mocks.usersCreate).toHaveBeenCalledTimes(1)
+    expect(mocks.createQCanvasKeyPairForUser).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[data-test="wizard-video-key"]').text()).toContain('sk-video-one-time')
   })
 
   it('skips recharge when amount is 0', async () => {

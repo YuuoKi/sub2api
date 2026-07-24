@@ -56,7 +56,13 @@
                       <div class="min-w-0">
                         <div class="flex items-center gap-2 font-medium text-gray-900 dark:text-white">
                           {{ staffDisplayName(user.username, user.email) }}
-                          <span v-if="user.role === 'admin'" class="text-xs text-gray-400 dark:text-gray-500">管理员</span>
+                          <span
+                            class="inline-flex rounded-md px-1.5 py-0.5 text-xs font-medium"
+                            :class="memberTypeBadgeClass(user.member_type)"
+                            data-test="member-type-badge"
+                          >
+                            {{ memberTypeLabel(user.member_type) }}
+                          </span>
                         </div>
                         <div class="truncate text-xs text-gray-500 dark:text-gray-400">{{ user.email }}</div>
                       </div>
@@ -334,8 +340,43 @@ const usageMap = ref<Record<number, BatchUserUsageStats>>({})
 // 使用系统默认汇率展示，不臆造动态汇率。
 const usdCnyRate = ref(DEFAULT_USD_CNY_RATE)
 
+function isEmployeeMemberType(memberType: AdminUser['member_type']): boolean {
+  return memberType === 'human' || memberType === 'tool'
+}
+
+function isListableStaff(user: AdminUser): boolean {
+  return user.role !== 'admin' && isEmployeeMemberType(user.member_type)
+}
+
+function memberTypeLabel(memberType: AdminUser['member_type']): string {
+  if (memberType === 'tool') return '工具账号'
+  if (memberType === 'human') return '员工账号'
+  return '未知类型'
+}
+
+function memberTypeBadgeClass(memberType: AdminUser['member_type']): string {
+  if (memberType === 'tool') {
+    return 'bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300'
+  }
+  if (memberType === 'human') {
+    return 'bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300'
+  }
+  return 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-gray-300'
+}
+
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase()
+}
+
+/** Axios interceptor rejects with a flat `{ status, code, reason, message }` — not `error.response.status`. */
+function isEmailConflictError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false
+  const e = err as { status?: number; reason?: string }
+  return e.status === 409 || e.reason === 'EMAIL_EXISTS'
+}
+
 const filteredUsers = computed(() => {
-  return users.value.filter((user) => user.role !== 'admin' && user.member_type === 'tool')
+  return users.value.filter((user) => isListableStaff(user))
 })
 
 // ---- 员工列表 ----
@@ -349,7 +390,7 @@ async function loadStaff() {
       sort_by: 'created_at',
       sort_order: 'asc',
     })
-    users.value = (res.items || []).filter((user) => user.role !== 'admin' && user.member_type === 'tool')
+    users.value = (res.items || []).filter((user) => isListableStaff(user))
     if (users.value.length) {
       const usage = await adminAPI.dashboard.getBatchUsersUsage(users.value.map((user) => user.id))
       const map: Record<number, BatchUserUsageStats> = {}
@@ -491,20 +532,41 @@ async function quickCreateGroup(name: string) {
 }
 
 // 顺序执行：建账号（已建过则跳过，允许失败后原地重试）→ 开双 Key（同组，后端已放开）→ 充值（金额 > 0 时）
-// 邮箱已存在（409）时复用既有员工继续签发：这是「上次签发失败」/「卡被删光」后的唯一补开路径
-async function findStaffByEmail(email: string): Promise<AdminUser | null> {
+// 邮箱已存在（扁平 409 / EMAIL_EXISTS）时：精确匹配后按状态复用或显式失败；禁止自动转换 human↔tool
+async function findAccountByExactEmail(email: string): Promise<AdminUser | null> {
+  const trimmed = email.trim()
+  const normalized = normalizeEmail(trimmed)
   const res = await adminAPI.users.list(1, 100, {
-    search: email,
+    search: trimmed,
     include_subscriptions: false,
     sort_by: 'created_at',
     sort_order: 'asc',
   })
-  const normalized = email.toLowerCase()
   return (
-    (res.items || []).find(
-      (user) => user.email.toLowerCase() === normalized && user.member_type === 'tool' && user.role !== 'admin',
-    ) ?? null
+    (res.items || []).find((user) => normalizeEmail(user.email) === normalized) ?? null
   )
+}
+
+async function resolveConflictOwner(email: string): Promise<AdminUser | null> {
+  const existing = await findAccountByExactEmail(email)
+  if (!existing) {
+    appStore.showError('该邮箱已被占用，但找不到精确匹配的账号，请换一个邮箱或联系管理员')
+    return null
+  }
+  if (existing.role === 'admin') {
+    appStore.showError('该邮箱属于管理员账号，不能用于员工开卡')
+    return null
+  }
+  if (existing.status === 'disabled') {
+    appStore.showError('该邮箱对应账号已停用，无法开卡，请先启用后再试')
+    return null
+  }
+  if (!isEmployeeMemberType(existing.member_type) || existing.status !== 'active') {
+    appStore.showError('该邮箱已被占用，且不是可复用的在职员工/工具账号，请换一个邮箱')
+    return null
+  }
+  // 复用原 owner；不改写 member_type（禁止 human↔tool 自动转换）
+  return existing
 }
 
 async function submitStaff() {
@@ -515,6 +577,7 @@ async function submitStaff() {
   submitting.value = true
   rechargeResult.value = ''
   try {
+    // 创建成功但后续签发失败时保留 wizardUser；重试不得再次 create
     if (!wizardUser.value) {
       try {
         const res = await adminAPI.users.create({
@@ -525,12 +588,9 @@ async function submitStaff() {
         })
         wizardUser.value = res.user
       } catch (createErr) {
-        if ((createErr as { response?: { status?: number } })?.response?.status !== 409) throw createErr
-        const existing = await findStaffByEmail(staffForm.email.trim())
-        if (!existing) {
-          appStore.showError('该邮箱已被占用，且不是可补开的员工账号，请换一个邮箱')
-          return
-        }
+        if (!isEmailConflictError(createErr)) throw createErr
+        const existing = await resolveConflictOwner(staffForm.email)
+        if (!existing) return
         wizardUser.value = existing
       }
     }

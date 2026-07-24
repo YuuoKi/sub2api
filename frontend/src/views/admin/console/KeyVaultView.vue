@@ -344,15 +344,11 @@
               />
             </div>
             <div>
-              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">接口地址（可选）</label>
-              <input
-                v-model="providerForm.baseUrl"
-                class="input"
-                maxlength="500"
-                data-test="provider-base-url"
-                :placeholder="selectedVideoPlatform?.default_base_url || '留空使用官方默认地址'"
-              />
-              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">接中转站时填，官方直连留空。</p>
+              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">接口地址</label>
+              <p class="rounded-md bg-gray-50 px-3 py-2 text-sm text-gray-600 dark:bg-gray-800/60 dark:text-gray-300" data-test="provider-base-url-locked">
+                {{ selectedVideoPlatform?.default_base_url || '官方默认地址' }}
+              </p>
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">当前仅支持官方直连；自定义中转尚未打通授权与调度，暂不可填。</p>
             </div>
             <div class="flex flex-col gap-2">
               <label class="flex min-h-6 items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
@@ -765,7 +761,7 @@ async function saveProvider() {
       display_name: providerForm.name.trim(),
       api_key: providerForm.apiKey.trim(),
       enabled: providerForm.enabled,
-      ...(providerForm.baseUrl.trim() ? { base_url: providerForm.baseUrl.trim() } : {}),
+      // 自定义中转 base_url 尚未打通授权/调度；只允许官方默认（后端亦会拒绝覆盖）
       ...(platform?.default_model ? { default_model: platform.default_model } : {}),
     })
     const wantAuthorize = providerForm.authorizeAfterSave
@@ -778,7 +774,7 @@ async function saveProvider() {
         await loadProviders()
         return
       } catch (authError) {
-        appStore.showError(`通道已保存，但自动授权失败：${extractApiErrorMessage(authError, '可稍后在视频通道页手动授权', CONSOLE_ERROR_ZH)}`)
+        appStore.showError(`通道已保存，但自动授权失败：${extractApiErrorMessage(authError, '可在密钥库「视频通道」中重试授权', CONSOLE_ERROR_ZH)}`)
         return
       }
     }

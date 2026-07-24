@@ -102,6 +102,9 @@ func (s *VideoAdminService) CreateProvider(ctx context.Context, in VideoProvider
 	if in.GroupID <= 0 || strings.TrimSpace(in.DisplayName) == "" || strings.TrimSpace(in.APIKey) == "" {
 		return nil, fmt.Errorf("%w: group, display name and api key are required", ErrVideoAdminInvalidRequest)
 	}
+	if err := rejectUnsupportedVideoEndpointOverride(spec, in.BaseURL, in.DefaultModel); err != nil {
+		return nil, err
+	}
 	encrypted, err := s.encryptor.Encrypt(strings.TrimSpace(in.APIKey))
 	if err != nil {
 		return nil, err
@@ -127,13 +130,23 @@ func (s *VideoAdminService) UpdateProvider(ctx context.Context, id int64, in Vid
 		in.EncryptedAPIKey, in.MaskedKey = &encrypted, &masked
 	}
 	canonical, _ := lookupVideoProvider("seedance")
-	if in.BaseURL != nil && strings.TrimSpace(*in.BaseURL) == "" {
-		baseURL := videoProviderBaseURL(canonical, "")
-		in.BaseURL = &baseURL
+	if in.BaseURL != nil {
+		trimmed := strings.TrimSpace(*in.BaseURL)
+		if trimmed == "" {
+			baseURL := videoProviderBaseURL(canonical, "")
+			in.BaseURL = &baseURL
+		} else if err := rejectUnsupportedVideoEndpointOverride(canonical, trimmed, ""); err != nil {
+			return nil, err
+		}
 	}
-	if in.DefaultModel != nil && strings.TrimSpace(*in.DefaultModel) == "" {
-		model := videoProviderDefaultModel(canonical, "")
-		in.DefaultModel = &model
+	if in.DefaultModel != nil {
+		trimmed := strings.TrimSpace(*in.DefaultModel)
+		if trimmed == "" {
+			model := videoProviderDefaultModel(canonical, "")
+			in.DefaultModel = &model
+		} else if err := rejectUnsupportedVideoEndpointOverride(canonical, "", trimmed); err != nil {
+			return nil, err
+		}
 	}
 	item, err := s.repo.UpdateVideoProvider(ctx, id, in)
 	if err != nil {
@@ -197,6 +210,18 @@ func videoProviderDefaultModel(spec VideoProviderSpec, requested string) string 
 		return trimmed
 	}
 	return spec.DefaultModel
+}
+
+// rejectUnsupportedVideoEndpointOverride blocks custom relay base_url / model until
+// authorize + dispatch + adapter all honor persisted values end-to-end.
+func rejectUnsupportedVideoEndpointOverride(spec VideoProviderSpec, baseURL, defaultModel string) error {
+	if trimmed := strings.TrimSpace(baseURL); trimmed != "" && trimmed != strings.TrimSpace(spec.DefaultBaseURL) {
+		return fmt.Errorf("%w: 自定义接口地址尚未打通授权与调度，请留空使用官方地址", ErrVideoAdminInvalidRequest)
+	}
+	if trimmed := strings.TrimSpace(defaultModel); trimmed != "" && trimmed != strings.TrimSpace(spec.DefaultModel) {
+		return fmt.Errorf("%w: 自定义默认模型尚未打通授权与调度，请留空使用官方模型", ErrVideoAdminInvalidRequest)
+	}
+	return nil
 }
 func maskVideoSecret(value string) string {
 	value = strings.TrimSpace(value)

@@ -103,20 +103,19 @@ func TestVideoAdminServiceRejectsNotReadyProvider(t *testing.T) {
 	require.Empty(t, repo.created.Provider)
 }
 
-func TestVideoAdminServicePassesThroughCustomEndpointAndModel(t *testing.T) {
+func TestVideoAdminServiceRejectsCustomEndpointUntilRelayIsWired(t *testing.T) {
 	repo := &fakeVideoAdminRepo{}
 	svc := NewVideoAdminService(repo, fakeVideoEncryptor{})
 	_, err := svc.CreateProvider(context.Background(), VideoProviderAdminCreate{
 		GroupID: 9, Provider: "seedance", DisplayName: "Seedance 中转", APIKey: "secret", BaseURL: "https://relay.test/v1", DefaultModel: "relay-model",
 	})
-	require.NoError(t, err)
-	require.Equal(t, "https://relay.test/v1", repo.created.BaseURL)
-	require.Equal(t, "relay-model", repo.created.DefaultModel)
+	require.ErrorIs(t, err, ErrVideoAdminInvalidRequest)
+	require.ErrorContains(t, err, "自定义接口地址尚未打通")
+	require.Empty(t, repo.created.Provider)
 
-	_, err = svc.UpdateProvider(context.Background(), 1, VideoProviderAdminUpdate{BaseURL: stringPointer("https://relay.test/v1"), DefaultModel: stringPointer("relay-model")})
-	require.NoError(t, err)
-	require.Equal(t, "https://relay.test/v1", derefString(repo.updated.BaseURL))
-	require.Equal(t, "relay-model", derefString(repo.updated.DefaultModel))
+	_, err = svc.UpdateProvider(context.Background(), 1, VideoProviderAdminUpdate{BaseURL: stringPointer("https://relay.test/v1")})
+	require.ErrorIs(t, err, ErrVideoAdminInvalidRequest)
+	require.ErrorContains(t, err, "自定义接口地址尚未打通")
 }
 
 func TestVideoAdminServiceFallsBackToRegistryDefaults(t *testing.T) {

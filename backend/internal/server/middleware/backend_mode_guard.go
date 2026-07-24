@@ -315,8 +315,6 @@ var backendModeAllowedAdminRequests = []backendModeRequestRule{
 	{http.MethodPut, "/api/v1/admin/ops/settings/metric-thresholds"},
 	{http.MethodPost, "/api/v1/admin/ops/system-logs/cleanup"},
 	{http.MethodGet, "/api/v1/admin/system/version"},
-	{http.MethodGet, "/api/v1/admin/system/check-updates"},
-	{http.MethodGet, "/api/v1/admin/system/rollback-versions"},
 }
 
 var backendModeAllowedUserRequests = map[string]string{

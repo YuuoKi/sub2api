@@ -8,6 +8,7 @@ import (
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/internal/buildinfo"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
@@ -16,11 +17,8 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// BuildInfo contains build information
-type BuildInfo struct {
-	Version   string
-	BuildType string
-}
+// BuildInfo is the process-wide immutable deploy identity (alias of buildinfo.Info).
+type BuildInfo = buildinfo.Info
 
 // ProvidePricingService creates and initializes PricingService
 func ProvidePricingService(cfg *config.Config, remoteClient PricingRemoteClient) (*PricingService, error) {
@@ -32,7 +30,8 @@ func ProvidePricingService(cfg *config.Config, remoteClient PricingRemoteClient)
 	return svc, nil
 }
 
-// ProvideUpdateService creates UpdateService with BuildInfo
+// ProvideUpdateService creates UpdateService with BuildInfo.
+// Self-update HTTP routes are no longer mounted; the service remains for legacy unit tests only.
 func ProvideUpdateService(cache UpdateCache, githubClient GitHubReleaseClient, buildInfo BuildInfo) *UpdateService {
 	return NewUpdateService(cache, githubClient, buildInfo.Version, buildInfo.BuildType)
 }

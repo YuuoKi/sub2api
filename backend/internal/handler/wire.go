@@ -82,14 +82,16 @@ func ProvideAdminHandlers(
 	}
 }
 
-// ProvideSystemHandler creates admin.SystemHandler with UpdateService
-func ProvideSystemHandler(updateService *service.UpdateService, lockService *service.SystemOperationLockService) *admin.SystemHandler {
-	return admin.NewSystemHandler(updateService, lockService)
+// ProvideSystemHandler creates admin.SystemHandler with immutable BuildInfo.
+func ProvideSystemHandler(buildInfo BuildInfo, updateService *service.UpdateService, lockService *service.SystemOperationLockService) *admin.SystemHandler {
+	return admin.NewSystemHandler(buildInfo, updateService, lockService)
 }
 
-// ProvideSettingHandler creates SettingHandler with version from BuildInfo
+// ProvideSettingHandler creates SettingHandler with BuildInfo and wires the same
+// identity into SettingService for HTML injection / public settings.
 func ProvideSettingHandler(settingService *service.SettingService, buildInfo BuildInfo, notificationEmailService *service.NotificationEmailService) *SettingHandler {
-	h := NewSettingHandler(settingService, buildInfo.Version)
+	settingService.SetBuildInfo(buildInfo)
+	h := NewSettingHandler(settingService, buildInfo)
 	h.SetNotificationEmailService(notificationEmailService)
 	return h
 }

@@ -53,7 +53,9 @@ type SettingService struct {
 	proxyRepo                   ProxyRepository // for resolving websearch provider proxy URLs
 	cfg                         *config.Config
 	onUpdate                    func() // Callback when settings are updated (for cache invalidation)
-	version                     string // Application version
+	version                     string // Display label (广州内部版 YYYY.MM.DD-rN)
+	buildCommit                 string
+	buildDate                   string
 	webSearchManagerBuilder     WebSearchManagerBuilder
 	antigravityUAVersionCache   atomic.Value // *cachedAntigravityUserAgentVersion
 	antigravityUAVersionSF      singleflight.Group
@@ -275,9 +277,20 @@ func (s *SettingService) SetOnUpdateCallback(callback func()) {
 	s.onUpdate = callback
 }
 
-// SetVersion sets the application version for injection into public settings
+// SetVersion sets the application version for injection into public settings.
+// Prefer SetBuildInfo so commit/date stay aligned with the display label.
 func (s *SettingService) SetVersion(version string) {
 	s.version = version
+}
+
+// SetBuildInfo wires the immutable deploy identity used by HTML injection.
+func (s *SettingService) SetBuildInfo(info BuildInfo) {
+	if s == nil {
+		return
+	}
+	s.version = info.Version
+	s.buildCommit = info.BuildCommit
+	s.buildDate = info.BuildDate
 }
 
 // getStringOrDefault 获取字符串值或默认值

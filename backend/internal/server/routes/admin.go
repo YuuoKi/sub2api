@@ -582,11 +582,9 @@ func registerBackupRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 func registerSystemRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	system := admin.Group("/system")
 	{
+		// Immutable deploy identity only. Self-update / online rollback removed (Guangzhou hard cutover).
 		system.GET("/version", h.Admin.System.GetVersion)
-		system.GET("/check-updates", h.Admin.System.CheckUpdates)
-		system.GET("/rollback-versions", h.Admin.System.GetRollbackVersions)
-		system.POST("/update", h.Admin.System.PerformUpdate)
-		system.POST("/rollback", h.Admin.System.Rollback)
+		// Restart remains a separate ops action; it is not exposed on the VersionBadge surface.
 		system.POST("/restart", h.Admin.System.RestartService)
 	}
 }

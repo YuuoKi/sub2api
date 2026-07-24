@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"github.com/Wei-Shaw/sub2api/internal/buildinfo"
 	"github.com/Wei-Shaw/sub2api/internal/handler/admin"
 )
 
@@ -66,8 +67,7 @@ type Handlers struct {
 	VideoSimulationAdmin *VideoSimulationAdminHandler
 }
 
-// BuildInfo contains build-time information
-type BuildInfo struct {
-	Version   string
-	BuildType string // "source" for manual builds, "release" for CI builds
-}
+// BuildInfo is the process-wide immutable deploy identity.
+// Prefer constructing via buildinfo.New so HTML injection, public settings,
+// admin GET /version, and CLI --version share one object.
+type BuildInfo = buildinfo.Info

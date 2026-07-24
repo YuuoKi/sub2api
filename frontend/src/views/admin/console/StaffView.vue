@@ -176,8 +176,18 @@
       </section>
 
       <!-- 新增员工：一个弹窗办完（建账号 → 开双 Key → 充值 → 明文展示一次） -->
-      <div v-if="staffModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="closeStaffModal">
-        <div class="w-full max-w-md rounded-lg border border-gray-200 bg-white p-6 shadow-xl dark:border-dark-700 dark:bg-dark-800">
+      <!-- 无损：遮罩/Escape 不关闭；Key 展示后仅「我已安全保存，完成」可关 -->
+      <div
+        v-if="staffModalOpen"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+        data-test="staff-modal-backdrop"
+      >
+        <div
+          class="w-full max-w-md rounded-lg border border-gray-200 bg-white p-6 shadow-xl dark:border-dark-700 dark:bg-dark-800"
+          role="dialog"
+          aria-modal="true"
+          @keydown.escape.prevent.stop
+        >
           <template v-if="!issuedQCanvasPair">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">新增员工</h2>
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -241,7 +251,7 @@
                 </p>
               </div>
               <div class="flex justify-end gap-2 pt-2">
-                <button class="btn btn-outline" type="button" @click="closeStaffModal">取消</button>
+                <button class="btn btn-outline" type="button" data-test="wizard-cancel" @click="cancelStaffModal">取消</button>
                 <button class="btn btn-primary" type="submit" data-test="wizard-submit" :disabled="submitting || groupsLoading || staffForm.groupId <= 0">
                   {{ submitting ? '开通中…' : '开卡' }}
                 </button>
@@ -276,15 +286,24 @@
                 <Icon name="copy" size="sm" />
                 {{ qcanvasPairCopied ? '已复制' : '复制两把 Key' }}
               </button>
-              <button class="btn btn-outline" type="button" data-test="wizard-done" @click="closeStaffModal">完成</button>
+              <button class="btn btn-outline" type="button" data-test="wizard-done" @click="completeStaffModal">我已安全保存，完成</button>
             </div>
           </template>
         </div>
       </div>
 
-      <!-- 行内充值弹窗 -->
-      <div v-if="rechargeModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="rechargeModalOpen = false">
-        <div class="w-full max-w-sm rounded-lg border border-gray-200 bg-white p-6 shadow-xl dark:border-dark-700 dark:bg-dark-800">
+      <!-- 行内充值弹窗：遮罩/Escape 不关闭，避免误清表单 -->
+      <div
+        v-if="rechargeModalOpen"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+        data-test="recharge-modal-backdrop"
+      >
+        <div
+          class="w-full max-w-sm rounded-lg border border-gray-200 bg-white p-6 shadow-xl dark:border-dark-700 dark:bg-dark-800"
+          role="dialog"
+          aria-modal="true"
+          @keydown.escape.prevent.stop
+        >
           <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
             给 {{ staffDisplayName(rechargeTarget?.username, rechargeTarget?.email) }} 充值
           </h2>
@@ -295,7 +314,7 @@
               <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">按 1 美元 ≈ ¥{{ usdCnyRate }} 入账，立即生效。</p>
             </div>
             <div class="flex justify-end gap-2 pt-2">
-              <button class="btn btn-outline" type="button" @click="rechargeModalOpen = false">取消</button>
+              <button class="btn btn-outline" type="button" data-test="recharge-cancel" @click="cancelRechargeModal">取消</button>
               <button class="btn btn-primary" type="submit" data-test="recharge-submit" :disabled="recharging">
                 {{ recharging ? '充值中…' : '确认充值' }}
               </button>
@@ -308,7 +327,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -414,6 +433,8 @@ const staffModalOpen = ref(false)
 const submitting = ref(false)
 const wizardUser = ref<AdminUser | null>(null)
 const rechargeResult = ref('')
+/** Stable for one open session; reused on submit retries until cancel/complete. */
+const staffIdempotencyKey = ref<string | null>(null)
 const staffForm = reactive({
   username: '',
   email: '',
@@ -429,6 +450,50 @@ const activeGroups = ref<AdminGroup[]>([])
 const groupsLoading = ref(true)
 const creatingGroup = ref(false)
 const quickGroupName = ref('')
+
+// Recharge modal state declared early so Escape guard can observe both modals.
+const rechargeModalOpen = ref(false)
+const rechargeTarget = ref<AdminUser | null>(null)
+const rechargeAmount = ref<number>(0)
+const recharging = ref(false)
+
+function hasFilledStaffForm(): boolean {
+  return (
+    staffForm.username.trim().length > 0
+    || staffForm.email.trim().length > 0
+    || Number(staffForm.rechargeAmount) > 0
+    || quickGroupName.value.trim().length > 0
+  )
+}
+
+function resetStaffModalState() {
+  staffModalOpen.value = false
+  wizardUser.value = null
+  rechargeResult.value = ''
+  issuedQCanvasPair.value = null
+  qcanvasPairCopied.value = false
+  staffIdempotencyKey.value = null
+  staffForm.username = ''
+  staffForm.email = ''
+  staffForm.groupId = 0
+  staffForm.rechargeAmount = 0
+  quickGroupName.value = ''
+}
+
+function blockEscapeWhileModalOpen(event: KeyboardEvent) {
+  if (event.key !== 'Escape') return
+  if (!staffModalOpen.value && !rechargeModalOpen.value) return
+  event.preventDefault()
+  event.stopPropagation()
+}
+
+watch([staffModalOpen, rechargeModalOpen], ([staffOpen, rechargeOpen]) => {
+  if (staffOpen || rechargeOpen) {
+    window.addEventListener('keydown', blockEscapeWhileModalOpen, true)
+  } else {
+    window.removeEventListener('keydown', blockEscapeWhileModalOpen, true)
+  }
+})
 
 // 新员工还没有任何专属授权：专属组与订阅组一律不可选（内部 member_type='tool' 照传，界面只用「员工」说法）
 const eligibleGroups = computed(() => {
@@ -463,15 +528,29 @@ function openCreateStaff() {
   issuedQCanvasPair.value = null
   qcanvasPairCopied.value = false
   quickGroupName.value = ''
+  // One UUID per formal open; retries reuse until cancel/complete.
+  staffIdempotencyKey.value = crypto.randomUUID()
   staffModalOpen.value = true
 }
 
-function closeStaffModal() {
-  staffModalOpen.value = false
-  wizardUser.value = null
-  rechargeResult.value = ''
-  issuedQCanvasPair.value = null
-  qcanvasPairCopied.value = false
+async function cancelStaffModal() {
+  // Keys already shown: cancel is not offered; refuse any accidental path.
+  if (issuedQCanvasPair.value) return
+  if (hasFilledStaffForm()) {
+    const confirmed = await requestConfirmation({
+      message: '表单已填写内容，确定取消并清空吗？未提交的开卡信息将丢失。',
+      confirmText: '确定清空',
+      cancelText: '继续填写',
+    })
+    if (!confirmed) return
+  }
+  resetStaffModalState()
+}
+
+function completeStaffModal() {
+  // Only explicit 「我已安全保存，完成」 may close after keys are shown.
+  if (!issuedQCanvasPair.value) return
+  resetStaffModalState()
 }
 
 async function quickCreateGroup(name: string) {
@@ -595,10 +674,14 @@ async function submitStaff() {
       }
     }
     const owner = wizardUser.value
+    if (!staffIdempotencyKey.value) {
+      // openCreateStaff always sets this; refuse silent regenerate mid-session.
+      throw new Error('开卡会话缺少幂等键，请关闭后重新打开弹窗再试')
+    }
     issuedQCanvasPair.value = await adminAPI.apiKeys.createQCanvasKeyPairForUser(
       owner.id,
       { video_group_id: staffForm.groupId, media_group_id: staffForm.groupId },
-      crypto.randomUUID(),
+      staffIdempotencyKey.value,
     )
     const amount = Number(staffForm.rechargeAmount) || 0
     if (amount > 0) {
@@ -621,15 +704,28 @@ async function submitStaff() {
 
 // ---- 行内充值 ----
 
-const rechargeModalOpen = ref(false)
-const rechargeTarget = ref<AdminUser | null>(null)
-const rechargeAmount = ref<number>(0)
-const recharging = ref(false)
-
 function openRecharge(user: AdminUser) {
   rechargeTarget.value = user
   rechargeAmount.value = 0
   rechargeModalOpen.value = true
+}
+
+function closeRechargeModal() {
+  rechargeModalOpen.value = false
+  rechargeTarget.value = null
+  rechargeAmount.value = 0
+}
+
+async function cancelRechargeModal() {
+  if (Number(rechargeAmount.value) > 0) {
+    const confirmed = await requestConfirmation({
+      message: '充值金额已填写，确定取消并清空吗？',
+      confirmText: '确定清空',
+      cancelText: '继续填写',
+    })
+    if (!confirmed) return
+  }
+  closeRechargeModal()
 }
 
 async function submitRecharge() {
@@ -642,8 +738,7 @@ async function submitRecharge() {
   try {
     const updated = await adminAPI.users.updateBalance(rechargeTarget.value.id, amount, 'add', '行内充值')
     appStore.showSuccess(`已充值 $${amount.toFixed(2)}，当前余额 $${Number(updated.balance ?? 0).toFixed(2)}`)
-    rechargeModalOpen.value = false
-    rechargeTarget.value = null
+    closeRechargeModal()
   } catch (err) {
     appStore.showError(extractApiErrorMessage(err, '充值失败', CONSOLE_ERROR_ZH))
   } finally {
@@ -775,5 +870,9 @@ async function copyIssuedQCanvasPair() {
 onMounted(() => {
   void loadStaff()
   void loadActiveGroups()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', blockEscapeWhileModalOpen, true)
 })
 </script>

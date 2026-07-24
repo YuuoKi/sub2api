@@ -14,6 +14,11 @@ const mocks = vi.hoisted(() => ({
   groupsCreate: vi.fn(),
   showError: vi.fn(),
   showSuccess: vi.fn(),
+  requestConfirmation: vi.fn(),
+}))
+
+vi.mock('@/composables/useAppDialog', () => ({
+  requestConfirmation: mocks.requestConfirmation,
 }))
 
 vi.mock('@/api/admin', () => ({
@@ -57,6 +62,7 @@ function mountView() {
 describe('StaffView one-shot staff issuance', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.requestConfirmation.mockResolvedValue(true)
     window.localStorage.clear()
     mocks.usersList.mockResolvedValue({
       items: [
@@ -483,5 +489,181 @@ describe('StaffView one-shot staff issuance', () => {
     expect(wrapper.text()).not.toContain(FULL_KEY.slice(0, 8))
     expect(wrapper.text()).not.toContain(FULL_KEY.slice(-4))
     expect(wrapper.text()).toContain('不再显示')
+  })
+
+  it('does not close the staff modal or clear the form on backdrop click', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('[data-test="create-service-identity"]').trigger('click')
+    await wrapper.find('[data-test="service-identity-email"]').setValue('zhangsan@wujie.local')
+    await wrapper.find('[data-test="wizard-amount"]').setValue(12)
+
+    const backdrop = wrapper.find('[data-test="staff-modal-backdrop"]')
+    expect(backdrop.exists()).toBe(true)
+    await backdrop.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('form[data-test="service-identity-form"]').exists()).toBe(true)
+    expect((wrapper.find('[data-test="service-identity-email"]').element as HTMLInputElement).value).toBe(
+      'zhangsan@wujie.local',
+    )
+    expect((wrapper.find('[data-test="wizard-amount"]').element as HTMLInputElement).value).toBe('12')
+  })
+
+  it('does not close the recharge modal or clear the amount on backdrop click', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('[data-test="row-recharge"]').trigger('click')
+    await wrapper.find('[data-test="recharge-amount"]').setValue(33)
+
+    const backdrop = wrapper.find('[data-test="recharge-modal-backdrop"]')
+    expect(backdrop.exists()).toBe(true)
+    await backdrop.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('form[data-test="recharge-form"]').exists()).toBe(true)
+    expect((wrapper.find('[data-test="recharge-amount"]').element as HTMLInputElement).value).toBe('33')
+  })
+
+  it('does not close or clear the staff modal on Escape', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('[data-test="create-service-identity"]').trigger('click')
+    await wrapper.find('[data-test="service-identity-email"]').setValue('zhangsan@wujie.local')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await flushPromises()
+
+    expect(wrapper.find('form[data-test="service-identity-form"]').exists()).toBe(true)
+    expect((wrapper.find('[data-test="service-identity-email"]').element as HTMLInputElement).value).toBe(
+      'zhangsan@wujie.local',
+    )
+  })
+
+  it('does not close or clear the recharge modal on Escape', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('[data-test="row-recharge"]').trigger('click')
+    await wrapper.find('[data-test="recharge-amount"]').setValue(44)
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await flushPromises()
+
+    expect(wrapper.find('form[data-test="recharge-form"]').exists()).toBe(true)
+    expect((wrapper.find('[data-test="recharge-amount"]').element as HTMLInputElement).value).toBe('44')
+  })
+
+  it('after keys are shown, only 「我已安全保存，完成」 closes the modal; Escape and backdrop do not', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('[data-test="create-service-identity"]').trigger('click')
+    await wrapper.find('[data-test="service-identity-email"]').setValue('zhangsan@wujie.local')
+    await wrapper.find('form[data-test="service-identity-form"]').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="wizard-video-key"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="wizard-done"]').text()).toContain('我已安全保存，完成')
+    expect(wrapper.find('[data-test="wizard-cancel"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="staff-modal-close-x"]').exists()).toBe(false)
+
+    await wrapper.find('[data-test="staff-modal-backdrop"]').trigger('click')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="wizard-video-key"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain(FULL_KEY)
+
+    await wrapper.find('[data-test="wizard-done"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="wizard-video-key"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain(FULL_KEY)
+  })
+
+  it('asks for Chinese confirmation before discarding a filled staff form on Cancel', async () => {
+    mocks.requestConfirmation.mockResolvedValueOnce(false)
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('[data-test="create-service-identity"]').trigger('click')
+    await wrapper.find('[data-test="service-identity-email"]').setValue('zhangsan@wujie.local')
+    await wrapper.find('[data-test="wizard-cancel"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.requestConfirmation).toHaveBeenCalledWith(
+      expect.objectContaining({ message: expect.stringMatching(/清空|取消|未保存|已填写/) }),
+    )
+    expect(wrapper.find('form[data-test="service-identity-form"]').exists()).toBe(true)
+    expect((wrapper.find('[data-test="service-identity-email"]').element as HTMLInputElement).value).toBe(
+      'zhangsan@wujie.local',
+    )
+
+    mocks.requestConfirmation.mockResolvedValueOnce(true)
+    await wrapper.find('[data-test="wizard-cancel"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('form[data-test="service-identity-form"]').exists()).toBe(false)
+  })
+
+  it('reuses one stable idempotency key for all submit retries in the same open session', async () => {
+    const uuidSpy = vi.spyOn(crypto, 'randomUUID')
+      .mockReturnValueOnce('idem-stable-aaa')
+      .mockReturnValueOnce('idem-after-reopen')
+
+    mocks.createQCanvasKeyPairForUser
+      .mockRejectedValueOnce({ status: 500, message: 'key issue failed' })
+      .mockResolvedValueOnce({
+        video: { id: 12, name: 'QCanvas · video', key: 'sk-video-one-time', status: 'active', quota: 0, quota_used: 0 },
+        media: { id: 13, name: 'QCanvas · media', key: FULL_KEY, status: 'active', quota: 0, quota_used: 0 },
+      })
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('[data-test="create-service-identity"]').trigger('click')
+    await wrapper.find('[data-test="service-identity-email"]').setValue('zhangsan@wujie.local')
+    await wrapper.find('form[data-test="service-identity-form"]').trigger('submit.prevent')
+    await flushPromises()
+    await wrapper.find('form[data-test="service-identity-form"]').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(mocks.createQCanvasKeyPairForUser).toHaveBeenNthCalledWith(
+      1,
+      2,
+      { video_group_id: 7, media_group_id: 7 },
+      'idem-stable-aaa',
+    )
+    expect(mocks.createQCanvasKeyPairForUser).toHaveBeenNthCalledWith(
+      2,
+      2,
+      { video_group_id: 7, media_group_id: 7 },
+      'idem-stable-aaa',
+    )
+
+    await wrapper.find('[data-test="wizard-done"]').trigger('click')
+    await wrapper.find('[data-test="create-service-identity"]').trigger('click')
+    await wrapper.find('[data-test="service-identity-email"]').setValue('lisi@wujie.local')
+    mocks.createQCanvasKeyPairForUser.mockResolvedValueOnce({
+      video: { id: 22, name: 'QCanvas · video', key: 'sk-video-2', status: 'active', quota: 0, quota_used: 0 },
+      media: { id: 23, name: 'QCanvas · media', key: 'sk-media-2', status: 'active', quota: 0, quota_used: 0 },
+    })
+    mocks.usersCreate.mockResolvedValueOnce({
+      user: { id: 3, username: '李四', email: 'lisi@wujie.local', role: 'user', member_type: 'tool', status: 'active' },
+      initial_credential: null,
+    })
+    await wrapper.find('form[data-test="service-identity-form"]').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(mocks.createQCanvasKeyPairForUser).toHaveBeenLastCalledWith(
+      3,
+      { video_group_id: 7, media_group_id: 7 },
+      'idem-after-reopen',
+    )
+    uuidSpy.mockRestore()
   })
 })

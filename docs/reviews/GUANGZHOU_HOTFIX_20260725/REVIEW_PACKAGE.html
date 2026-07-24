@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sub2API 广州热修 20260725 — 待复核</title>
+<style>
+  :root { color-scheme: dark; --bg:#0f1720; --panel:#182431; --text:#e5edf5; --muted:#9fb0c0; --line:#334155; --accent:#7dd3bc; --blue:#60a5fa; --green:#86efac; --amber:#fbbf24; --red:#fca5a5; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px; background:var(--bg); color:var(--text); font:15px/1.65 "Segoe UI","Microsoft YaHei",sans-serif; }
+  main { max-width:980px; margin:0 auto; }
+  h1, h2 { color:var(--accent); }
+  h1 { font-size:26px; margin:0 0 8px; }
+  h2 { margin-top:28px; border-bottom:1px solid var(--line); padding-bottom:6px; font-size:18px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { border:1px solid var(--line); padding:8px; vertical-align:top; text-align:left; }
+  code, pre { font-family:Consolas,monospace; background:var(--panel); }
+  pre { padding:12px; overflow:auto; border:1px solid var(--line); border-radius:6px; white-space:pre-wrap; }
+  a { color:var(--blue); }
+  .pass { color:var(--green); }
+  .wait { color:var(--amber); }
+  .blocked { color:var(--red); }
+  .muted { color:var(--muted); }
+  .status { display:inline-block; margin:10px 0; padding:4px 10px; border-radius:999px; background:#422006; color:#fdba74; font-weight:700; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:16px 18px; margin:14px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Sub2API 广州热修 20260725</h1>
+  <p class="muted">执行日期：2026-07-25 ｜ 工作树：<code>.worktrees/sub2-guangzhou-hotfix-20260725-grok</code> ｜ tip：<code>92567101c774dad5fe482df69eecba5a9adb3c7c</code></p>
+  <div class="status">当前状态：待复核 — NOT READY（生产开卡须老板亲自签发）</div>
+
+  <div class="card">
+    <p>员工开卡冲突复用、人机账号列表、无损弹窗、不可变「广州内部版」身份与自更新路由拆除已合入本地 tip。代码门通过。<strong>生产开卡与一次性密钥展示必须由老板完成</strong>；agent 不得捕获密钥。禁止写 READY。</p>
+  </div>
+
+  <h2>1. 目标与边界</h2>
+  <ul>
+    <li>修复广州 Sub2 管理台开卡与版本身份硬伤，硬删除自更新 UI/路由。</li>
+    <li>本轮<strong>未</strong>读取 <code>.env</code>、密钥、token、cookie；未调用真实付费 Provider；未在审查材料中写入一次性卡密。</li>
+    <li>状态固定为<strong>待复核</strong>，直到老板在生产环境完成开卡验收。</li>
+  </ul>
+
+  <h2>2. 提交链</h2>
+  <table>
+    <thead><tr><th>SHA</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td><code>82ec1cc346f9a9c6527e06f0f2f2058ea43316d7</code></td><td>409 flat error 复用既有员工 owner；human+tool 列表与徽章</td></tr>
+      <tr><td><code>ecc10b66828c154c68eb37ee9cf62cf756aadec0</code></td><td>开卡/充值弹窗无损；稳定幂等键；密钥展示后仅「我已安全保存，完成」可关</td></tr>
+      <tr><td><code>92567101c774dad5fe482df69eecba5a9adb3c7c</code></td><td>不可变「广州内部版」构建身份；拆除自更新 UI 与路由</td></tr>
+    </tbody>
+  </table>
+
+  <h2>3. 变更合同</h2>
+  <table>
+    <thead><tr><th>主题</th><th>事实</th></tr></thead>
+    <tbody>
+      <tr><td>409 flat reuse</td><td>拦截器 flat reject：<code>status === 409</code> 或 <code>reason === 'EMAIL_EXISTS'</code>；active human/tool 复用，不做人机身份互转；admin / disabled / not-found 显式中文失败。</td></tr>
+      <tr><td>Human + tool list</td><td>非 admin 的 <code>human</code> / <code>tool</code> 均列出；徽章「员工账号」/「工具账号」。</td></tr>
+      <tr><td>Lossless dialogs</td><td>Backdrop / Escape 不关不清理；密钥展示后仅完成按钮关闭；有内容取消需中文确认；每轮 open 固定 idempotency UUID。</td></tr>
+      <tr><td>Immutable identity</td><td>VersionBadge 只读「当前部署版本」：<code>广州内部版·YYYY.MM.DD-rN</code> + full SHA + build time；不强制给 SHA 加 <code>v</code> 前缀。</td></tr>
+      <tr><td>Self-update removed</td><td><code>check-updates</code> / <code>update</code> / <code>rollback*</code> 路由卸载；前端无自更新/在线回滚控件；<code>GET /version</code> 仍由 <code>buildinfo.Info</code> 提供。</td></tr>
+    </tbody>
+  </table>
+
+  <h2>4. 测试证据（代码门）</h2>
+  <table>
+    <thead><tr><th>门禁</th><th>结果</th></tr></thead>
+    <tbody>
+      <tr><td>StaffView.keyOnce + gate2-remaining-ux-contract</td><td class="pass">32+ PASS</td></tr>
+      <tr><td>Version / immutable identity 相关单测（含 badge、app store、guards 等本轮覆盖合计）</td><td class="pass">72</td></tr>
+      <tr><td>Go（buildinfo / routes / handler unit 等本轮定向）</td><td class="pass">ok</td></tr>
+      <tr><td>生产开卡（老板）</td><td class="wait">未完成 — 阻塞 READY</td></tr>
+    </tbody>
+  </table>
+  <pre>pnpm exec vitest run src/views/admin/console/__tests__/StaffView.keyOnce.spec.ts \
+  src/__tests__/gate2-remaining-ux-contract.spec.ts
+→ 32 passed (Phase 3 GREEN)
+
+pnpm exec vitest run VersionBadge.immutable / app.version.immutable / related
+→ version-related suite total 72 (as reported in Phase 4)
+
+go test ./internal/buildinfo/ ./internal/server/routes/ -count=1
+go test -tags unit ./internal/handler/ ./internal/handler/admin/ ...
+→ ok</pre>
+
+  <h2>5. 老板必做（READY 前置）</h2>
+  <ol>
+    <li>在广州生产 Sub2 控制台亲自执行员工双 Key 开卡。</li>
+    <li>确认冲突复用、人机列表徽章、无损弹窗与「我已安全保存，完成」行为符合预期。</li>
+    <li>确认页面仅显示不可变「广州内部版」身份，无自更新/回滚控件。</li>
+    <li><strong>Agent 不得截取、转发、落盘一次性密钥</strong>；密钥仅老板本地保存。</li>
+  </ol>
+  <p class="blocked">上述未完成前，状态保持 <strong>待复核</strong>，禁止升级为 READY / 生产可演示。</p>
+
+  <h2>6. 风险与回滚</h2>
+  <ul>
+    <li>需要回退时对上述三提交做非破坏性 <code>git revert</code>（由维护者执行）；本链未引入要求删数据的迁移。</li>
+    <li>自更新拆除后，发版路径仅为重建/换镜像；勿期望控制台内「检查更新」。</li>
+    <li>本包不含密码、API key、<code>.env</code>、一次性卡密。</li>
+  </ul>
+
+  <h2>7. 文件索引</h2>
+  <ul>
+    <li><a href="./SUMMARY.md">SUMMARY.md</a></li>
+    <li><a href="../LATEST_REVIEW_PACKAGE.html">LATEST_REVIEW_PACKAGE.html</a></li>
+    <li>高信号实现：<code>frontend/src/views/admin/console/StaffView.vue</code>、<code>VersionBadge.vue</code>、<code>backend/internal/buildinfo/</code>、<code>backend/internal/server/routes/admin.go</code></li>
+  </ul>
+</main>
+</body>
+</html>

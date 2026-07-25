@@ -336,6 +336,8 @@ import type { AdminGroup, AdminUser, ApiKey } from '@/types'
 import type { BatchApiKeyUsageStats, BatchUserUsageStats } from '@/api/admin/dashboard'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
+import { createIdempotencyKey } from '@/utils/idempotencyKey'
+import { useClipboard } from '@/composables/useClipboard'
 import { requestConfirmation } from '@/composables/useAppDialog'
 import { DEFAULT_USD_CNY_RATE } from '@/composables/useDisplayCurrency'
 import {
@@ -558,8 +560,9 @@ function openCreateStaff() {
   issuedQCanvasPair.value = null
   qcanvasPairCopied.value = false
   quickGroupName.value = ''
-  // One UUID per formal open; retries reuse until cancel/complete.
-  staffIdempotencyKey.value = crypto.randomUUID()
+  // One key per formal open; retries reuse until cancel/complete.
+  // Must not use bare crypto.randomUUID — HTTP admin entry is not a secure context.
+  staffIdempotencyKey.value = createIdempotencyKey()
   staffModalOpen.value = true
 }
 
@@ -891,14 +894,14 @@ async function removeKey(key: ApiKey) {
   }
 }
 
+const { copyToClipboard } = useClipboard()
+
 async function copyIssuedQCanvasPair() {
   if (!issuedQCanvasPair.value?.video.key || !issuedQCanvasPair.value.media.key) return
-  try {
-    await navigator.clipboard.writeText(`video=${issuedQCanvasPair.value.video.key}\nmedia=${issuedQCanvasPair.value.media.key}`)
-    qcanvasPairCopied.value = true
-  } catch {
-    appStore.showError('复制失败，请手动复制两把 Key')
-  }
+  const ok = await copyToClipboard(
+    `video=${issuedQCanvasPair.value.video.key}\nmedia=${issuedQCanvasPair.value.media.key}`,
+  )
+  if (ok) qcanvasPairCopied.value = true
 }
 
 onMounted(() => {

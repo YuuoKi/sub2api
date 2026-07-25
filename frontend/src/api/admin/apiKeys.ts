@@ -5,6 +5,7 @@
 
 import { apiClient } from '../client'
 import type { ApiKey } from '@/types'
+import { createIdempotencyKey } from '@/utils/idempotencyKey'
 
 export interface UpdateApiKeyGroupResult {
   api_key: ApiKey
@@ -61,7 +62,7 @@ export interface QCanvasKeyPairResponse {
 export async function createApiKeyForUser(
   userId: number,
   payload: AdminCreateApiKeyPayload,
-  idempotencyKey: string = crypto.randomUUID()
+  idempotencyKey: string = createIdempotencyKey()
 ): Promise<ApiKey> {
   const { data } = await apiClient.post<ApiKey>(`/admin/users/${userId}/api-keys`, payload, {
     headers: { 'Idempotency-Key': idempotencyKey }
@@ -77,7 +78,7 @@ export async function createApiKeyForUser(
 export async function createQCanvasKeyPairForUser(
   userId: number,
   payload: AdminCreateQCanvasKeyPairPayload,
-  idempotencyKey: string = crypto.randomUUID()
+  idempotencyKey: string = createIdempotencyKey()
 ): Promise<QCanvasKeyPairResponse> {
   const { data } = await apiClient.post<QCanvasKeyPairResponse>(`/admin/users/${userId}/qcanvas-key-pair`, payload, {
     headers: { 'Idempotency-Key': idempotencyKey }

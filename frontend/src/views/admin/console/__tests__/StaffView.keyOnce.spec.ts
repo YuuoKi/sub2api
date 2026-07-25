@@ -585,6 +585,29 @@ describe('StaffView one-shot staff issuance', () => {
     expect(wrapper.text()).not.toContain(FULL_KEY)
   })
 
+  it('opens create modal when crypto.randomUUID is unavailable (HTTP / non-secure context)', async () => {
+    const original = crypto.randomUUID
+    Object.defineProperty(crypto, 'randomUUID', {
+      configurable: true,
+      value: undefined,
+    })
+    try {
+      const wrapper = mountView()
+      await flushPromises()
+
+      await wrapper.find('[data-test="create-service-identity"]').trigger('click')
+      await flushPromises()
+
+      expect(wrapper.find('form[data-test="service-identity-form"]').exists()).toBe(true)
+      expect(wrapper.find('[data-test="staff-modal-backdrop"]').exists()).toBe(true)
+    } finally {
+      Object.defineProperty(crypto, 'randomUUID', {
+        configurable: true,
+        value: original,
+      })
+    }
+  })
+
   it('asks for Chinese confirmation before discarding a filled staff form on Cancel', async () => {
     mocks.requestConfirmation.mockResolvedValueOnce(false)
     const wrapper = mountView()

@@ -1,4 +1,5 @@
 import { apiClient } from '../client'
+import { createIdempotencyKey } from '@/utils/idempotencyKey'
 
 export interface VideoProviderAccount {
   id: number; group_id: number; group_name: string; provider: string; display_name: string
@@ -93,7 +94,7 @@ export const startQCanvasAssetHandoffTransfer = (
   if (ticket.trim().length < 20) throw new Error('交接票据格式无效')
   const targetURL = buildQCanvasAssetHandoffTargetURL(qcanvasBaseURL)
   const targetOrigin = new URL(targetURL).origin
-  const nonce = sourceWindow.crypto.randomUUID()
+  const nonce = createIdempotencyKey(sourceWindow.crypto)
   targetWindow.name = buildQCanvasAssetHandoffWindowName(sourceWindow.location.origin, nonce)
   let timeoutId = 0
   const cleanup = (): void => {

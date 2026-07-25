@@ -1567,7 +1567,7 @@ const editKey = (key: ApiKey) => {
   formData.value = {
     name: key.name,
     group_id: key.group_id,
-    status: key.status === 'quota_exhausted' || key.status === 'expired' ? 'inactive' : key.status,
+    status: key.status === 'active' ? 'active' : 'inactive',
     use_custom_key: false,
     custom_key: '',
     enable_ip_restriction: hasIPRestriction,

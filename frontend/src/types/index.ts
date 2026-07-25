@@ -596,7 +596,8 @@ export interface ApiKey {
   key_hint?: string
   name: string
   group_id: number | null
-  status: 'active' | 'inactive' | 'quota_exhausted' | 'expired'
+  // Admin/service use `disabled`; some user-facing forms still treat it as inactive.
+  status: 'active' | 'inactive' | 'disabled' | 'quota_exhausted' | 'expired'
   ip_whitelist: string[]
   ip_blacklist: string[]
   last_used_at: string | null

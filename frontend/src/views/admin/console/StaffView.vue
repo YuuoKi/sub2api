@@ -1129,7 +1129,7 @@ async function toggleKeyStatus(key: ApiKey) {
     return
   }
   // admin 契约只接受 active/disabled（不要发 inactive，后端会 400）
-  const next = key.status === 'active' ? 'disabled' : 'active'
+  const next: 'active' | 'disabled' = key.status === 'active' ? 'disabled' : 'active'
   if (next === 'disabled') {
     const confirmed = await requestConfirmation({
       message: `确定停用卡「${key.name || '未命名'}」？停用后该卡调用会立即失败。`,

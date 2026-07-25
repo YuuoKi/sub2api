@@ -22,7 +22,7 @@
 | SHA | Message |
 |-----|---------|
 | `a195b0831b06598f930dc06090485d20b528f249` | `fix(console): reject blank idempotent key replay and paginate staff list` |
-| _(this commit)_ | `fix(api): reject admin/disabled qcanvas key targets; default observe_only false` |
+| `aa2c2f8e0707b260044fc87cab199ee705cefb09` | `fix(api): reject admin/disabled qcanvas key targets; default observe_only false` |
 
 ## Changes
 

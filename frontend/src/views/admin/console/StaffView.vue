@@ -64,7 +64,7 @@
                           {{ staffDisplayName(user.username, user.email) }}
                           <span
                             class="inline-flex rounded-md px-1.5 py-0.5 text-xs font-medium"
-                            :class="memberTypeBadgeClass(user.member_type)"
+                            :class="memberTypeBadgeClass(user.member_type, user.role)"
                             data-test="member-type-badge"
                           >
                             {{ memberTypeLabel(user.member_type, user.role) }}
@@ -206,13 +206,27 @@
                                   重置额度
                                 </button>
                                 <button
+                                  v-if="canToggleKeyStatus(key)"
                                   class="btn btn-sm btn-outline"
                                   type="button"
+                                  data-test="key-toggle-status"
                                   :disabled="keyActionBusy"
                                   @click="toggleKeyStatus(key)"
                                 >
                                   {{ key.status === 'active' ? '停用' : '启用' }}
                                 </button>
+                                <span
+                                  v-else-if="key.status === 'quota_exhausted'"
+                                  class="text-xs text-amber-600 dark:text-amber-300"
+                                >
+                                  请先重置额度
+                                </span>
+                                <span
+                                  v-else-if="key.status === 'expired'"
+                                  class="text-xs text-red-600 dark:text-red-300"
+                                >
+                                  已过期（需改有效期）
+                                </span>
                                 <button
                                   class="btn btn-sm btn-outline !text-red-600 dark:!text-red-400"
                                   type="button"
@@ -478,7 +492,10 @@ function memberTypeLabel(memberType: AdminUser['member_type'], role?: AdminUser[
   return '未知类型'
 }
 
-function memberTypeBadgeClass(memberType: AdminUser['member_type']): string {
+function memberTypeBadgeClass(memberType: AdminUser['member_type'], role?: AdminUser['role']): string {
+  if (role === 'admin') {
+    return 'bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300'
+  }
   if (memberType === 'tool') {
     return 'bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300'
   }
@@ -960,6 +977,8 @@ async function submitRecharge() {
     const updated = await adminAPI.users.updateBalance(rechargeTarget.value.id, amount, 'add', '行内充值')
     appStore.showSuccess(`已充值 $${amount.toFixed(2)}，当前余额 $${Number(updated.balance ?? 0).toFixed(2)}`)
     closeRechargeModal()
+    // Refresh list so the balance column matches server truth immediately.
+    await loadStaff()
   } catch (err) {
     appStore.showError(extractApiErrorMessage(err, '充值失败', CONSOLE_ERROR_ZH))
   } finally {
@@ -1095,7 +1114,20 @@ function keyStatusClass(status: ApiKey['status']): string {
 
 const keyActionBusy = ref(false)
 
+/** Only active/disabled(/legacy inactive) may toggle; exhausted/expired need dedicated recovery. */
+function canToggleKeyStatus(key: ApiKey): boolean {
+  return key.status === 'active' || key.status === 'disabled' || key.status === 'inactive'
+}
+
 async function toggleKeyStatus(key: ApiKey) {
+  if (!canToggleKeyStatus(key)) {
+    appStore.showError(
+      key.status === 'quota_exhausted'
+        ? '额度用完的卡请先点「重置额度」，不要直接启用'
+        : '已过期的卡不能直接启用，请先延长有效期',
+    )
+    return
+  }
   // admin 契约只接受 active/disabled（不要发 inactive，后端会 400）
   const next = key.status === 'active' ? 'disabled' : 'active'
   if (next === 'disabled') {

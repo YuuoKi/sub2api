@@ -80,6 +80,9 @@ export const CONSOLE_ERROR_ZH: Record<string, string> = {
   ADMIN_COMPLIANCE_ACK_REQUIRED: '需要先在页面上完成管理员合规确认',
   CANNOT_DISABLE_ADMIN_USER: '不能停用管理员账号（避免把自己锁出管理端）',
   CANNOT_DELETE_ADMIN_USER: '不能删除管理员账号（避免把自己锁出管理端）',
+  CANNOT_DEMOTE_LAST_ADMIN: '不能降级最后一个管理员账号（避免锁出管理端）',
+  CANNOT_ACTIVATE_QUOTA_EXHAUSTED: '额度仍用尽，请先重置额度再启用',
+  CANNOT_ACTIVATE_EXPIRED: '密钥已过期，请先延长有效期再启用',
 }
 
 export type QuotaWarningLevel = 'none' | 'warn' | 'critical'

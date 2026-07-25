@@ -875,6 +875,17 @@ func (s *APIKeyService) Update(ctx context.Context, id int64, userID int64, req 
 		apiKey.Window7dStart = nil
 	}
 
+	// Refuse "active" when the key is still unusable by quota or expiry.
+	// UI should recover via reset_quota / expires_at; this is the fail-closed backstop.
+	if apiKey.Status == StatusActive {
+		if apiKey.Quota > 0 && apiKey.QuotaUsed >= apiKey.Quota {
+			return nil, infraerrors.BadRequest("CANNOT_ACTIVATE_QUOTA_EXHAUSTED", "额度仍用尽，请先重置额度再启用")
+		}
+		if apiKey.ExpiresAt != nil && !time.Now().Before(*apiKey.ExpiresAt) {
+			return nil, infraerrors.BadRequest("CANNOT_ACTIVATE_EXPIRED", "密钥已过期，请先延长有效期再启用")
+		}
+	}
+
 	if err := s.apiKeyRepo.Update(ctx, apiKey); err != nil {
 		return nil, fmt.Errorf("update api key: %w", err)
 	}

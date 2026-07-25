@@ -268,7 +268,7 @@ func (s *adminServiceImpl) ensureNotLastAdmin(ctx context.Context) error {
 		return fmt.Errorf("count admin users: %w", err)
 	}
 	if result == nil || result.Total <= 1 {
-		return errors.New("cannot demote the last admin user")
+		return infraerrors.BadRequest("CANNOT_DEMOTE_LAST_ADMIN", "不能降级最后一个管理员账号（避免锁出管理端）")
 	}
 	return nil
 }

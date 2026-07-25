@@ -63,7 +63,7 @@ func TestAPIKeyService_CreateQCanvasKeyPair(t *testing.T) {
 		svc := &APIKeyService{
 			cfg:        &config.Config{},
 			apiKeyRepo: repo,
-			userRepo:   &qcanvasPairUserRepoStub{user: &User{ID: 7}},
+			userRepo:   &qcanvasPairUserRepoStub{user: &User{ID: 7, Role: RoleUser, Status: StatusActive}},
 			groupRepo:  &qcanvasPairGroupRepoStub{groups: map[int64]*Group{11: activeGroup(11), 22: activeGroup(22)}},
 		}
 
@@ -83,7 +83,7 @@ func TestAPIKeyService_CreateQCanvasKeyPair(t *testing.T) {
 		svc := &APIKeyService{
 			cfg:        &config.Config{},
 			apiKeyRepo: repo,
-			userRepo:   &qcanvasPairUserRepoStub{user: &User{ID: 7}},
+			userRepo:   &qcanvasPairUserRepoStub{user: &User{ID: 7, Role: RoleUser, Status: StatusActive}},
 			groupRepo:  &qcanvasPairGroupRepoStub{groups: map[int64]*Group{11: activeGroup(11)}},
 		}
 
@@ -101,7 +101,7 @@ func TestAPIKeyService_CreateQCanvasKeyPair(t *testing.T) {
 		svc := &APIKeyService{
 			cfg:        &config.Config{},
 			apiKeyRepo: repo,
-			userRepo:   &qcanvasPairUserRepoStub{user: &User{ID: 7}},
+			userRepo:   &qcanvasPairUserRepoStub{user: &User{ID: 7, Role: RoleUser, Status: StatusActive}},
 			groupRepo:  &qcanvasPairGroupRepoStub{groups: map[int64]*Group{11: activeGroup(11), 22: {ID: 22, Status: StatusDisabled, SubscriptionType: SubscriptionTypeStandard}}},
 		}
 
@@ -115,12 +115,42 @@ func TestAPIKeyService_CreateQCanvasKeyPair(t *testing.T) {
 		svc := &APIKeyService{
 			cfg:        &config.Config{},
 			apiKeyRepo: repo,
-			userRepo:   &qcanvasPairUserRepoStub{user: &User{ID: 7}},
+			userRepo:   &qcanvasPairUserRepoStub{user: &User{ID: 7, Role: RoleUser, Status: StatusActive}},
 			groupRepo:  &qcanvasPairGroupRepoStub{groups: map[int64]*Group{11: activeGroup(11), 22: activeGroup(22)}},
 		}
 
 		_, err := svc.CreateQCanvasKeyPair(context.Background(), 7, CreateQCanvasKeyPairRequest{VideoGroupID: 11, MediaGroupID: 22})
 		require.Error(t, err)
+		require.Empty(t, repo.persisted)
+	})
+
+	t.Run("rejects admin target before minting keys", func(t *testing.T) {
+		repo := &qcanvasPairAPIKeyRepoStub{}
+		svc := &APIKeyService{
+			cfg:        &config.Config{},
+			apiKeyRepo: repo,
+			userRepo:   &qcanvasPairUserRepoStub{user: &User{ID: 7, Role: RoleAdmin, Status: StatusActive}},
+			groupRepo:  &qcanvasPairGroupRepoStub{groups: map[int64]*Group{11: activeGroup(11), 22: activeGroup(22)}},
+		}
+
+		_, err := svc.CreateQCanvasKeyPair(context.Background(), 7, CreateQCanvasKeyPairRequest{VideoGroupID: 11, MediaGroupID: 22})
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "管理员")
+		require.Empty(t, repo.persisted)
+	})
+
+	t.Run("rejects disabled target before minting keys", func(t *testing.T) {
+		repo := &qcanvasPairAPIKeyRepoStub{}
+		svc := &APIKeyService{
+			cfg:        &config.Config{},
+			apiKeyRepo: repo,
+			userRepo:   &qcanvasPairUserRepoStub{user: &User{ID: 7, Role: RoleUser, Status: StatusDisabled}},
+			groupRepo:  &qcanvasPairGroupRepoStub{groups: map[int64]*Group{11: activeGroup(11), 22: activeGroup(22)}},
+		}
+
+		_, err := svc.CreateQCanvasKeyPair(context.Background(), 7, CreateQCanvasKeyPairRequest{VideoGroupID: 11, MediaGroupID: 22})
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "停用")
 		require.Empty(t, repo.persisted)
 	})
 }

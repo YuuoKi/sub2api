@@ -508,6 +508,12 @@ func (s *APIKeyService) CreateQCanvasKeyPair(ctx context.Context, userID int64, 
 	if err != nil {
 		return nil, fmt.Errorf("get user: %w", err)
 	}
+	if user.Role == RoleAdmin {
+		return nil, infraerrors.BadRequest("QC_KEY_PAIR_TARGET_ADMIN", "不能为管理员账号签发 QCanvas 双 Key")
+	}
+	if user.Status == StatusDisabled {
+		return nil, infraerrors.BadRequest("QC_KEY_PAIR_TARGET_DISABLED", "不能为已停用账号签发 QCanvas 双 Key")
+	}
 
 	validateGroup := func(groupID int64) error {
 		group, groupErr := s.groupRepo.GetByID(ctx, groupID)

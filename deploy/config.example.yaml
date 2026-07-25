@@ -754,7 +754,7 @@ idempotency:
   # Observe-only 模式：
   # true: 观察期，不带 Idempotency-Key 仍放行（但会记录）
   # false: 强制期，不带 Idempotency-Key 直接拒绝（仅对接入幂等保护的接口生效）
-  observe_only: true
+  observe_only: false
   # 关键写接口幂等记录 TTL（秒）
   default_ttl_seconds: 86400
   # 系统操作接口（update/rollback/restart）幂等记录 TTL（秒）

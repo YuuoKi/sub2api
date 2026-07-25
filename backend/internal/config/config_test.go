@@ -343,8 +343,8 @@ func TestLoadDefaultIdempotencyConfig(t *testing.T) {
 		t.Fatalf("Load() error: %v", err)
 	}
 
-	if !cfg.Idempotency.ObserveOnly {
-		t.Fatalf("Idempotency.ObserveOnly = false, want true")
+	if cfg.Idempotency.ObserveOnly {
+		t.Fatalf("Idempotency.ObserveOnly = true, want false")
 	}
 	if cfg.Idempotency.DefaultTTLSeconds != 86400 {
 		t.Fatalf("Idempotency.DefaultTTLSeconds = %d, want 86400", cfg.Idempotency.DefaultTTLSeconds)
@@ -364,15 +364,15 @@ func TestLoadDefaultBatchImageQueueDisabled(t *testing.T) {
 
 func TestLoadIdempotencyConfigFromEnv(t *testing.T) {
 	resetViperWithJWTSecret(t)
-	t.Setenv("IDEMPOTENCY_OBSERVE_ONLY", "false")
+	t.Setenv("IDEMPOTENCY_OBSERVE_ONLY", "true")
 	t.Setenv("IDEMPOTENCY_DEFAULT_TTL_SECONDS", "600")
 
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Load() error: %v", err)
 	}
-	if cfg.Idempotency.ObserveOnly {
-		t.Fatalf("Idempotency.ObserveOnly = true, want false")
+	if !cfg.Idempotency.ObserveOnly {
+		t.Fatalf("Idempotency.ObserveOnly = false, want true (env override)")
 	}
 	if cfg.Idempotency.DefaultTTLSeconds != 600 {
 		t.Fatalf("Idempotency.DefaultTTLSeconds = %d, want 600", cfg.Idempotency.DefaultTTLSeconds)

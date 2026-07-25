@@ -6,15 +6,29 @@ const mocks = vi.hoisted(() => ({
   usersList: vi.fn(),
   usersCreate: vi.fn(),
   usersUpdateBalance: vi.fn(),
+  usersToggleStatus: vi.fn(),
+  usersDelete: vi.fn(),
   getBatchUsersUsage: vi.fn(),
   createQCanvasKeyPairForUser: vi.fn(),
   getUserApiKeys: vi.fn(),
   getBatchApiKeysUsage: vi.fn(),
+  revealApiKey: vi.fn(),
+  updateApiKeyFields: vi.fn(),
+  deleteApiKey: vi.fn(),
   groupsGetAll: vi.fn(),
   groupsCreate: vi.fn(),
   showError: vi.fn(),
   showSuccess: vi.fn(),
   requestConfirmation: vi.fn(),
+  authUser: {
+    id: 99,
+    email: 'admin@wujie.local',
+    username: 'admin',
+    role: 'admin' as const,
+    member_type: 'human' as const,
+    status: 'active' as const,
+    balance: 0,
+  },
 }))
 
 vi.mock('@/composables/useAppDialog', () => ({
@@ -28,6 +42,8 @@ vi.mock('@/api/admin', () => ({
       create: mocks.usersCreate,
       updateBalance: mocks.usersUpdateBalance,
       getUserApiKeys: mocks.getUserApiKeys,
+      toggleStatus: mocks.usersToggleStatus,
+      delete: mocks.usersDelete,
     },
     dashboard: {
       getBatchUsersUsage: mocks.getBatchUsersUsage,
@@ -35,6 +51,9 @@ vi.mock('@/api/admin', () => ({
     },
     apiKeys: {
       createQCanvasKeyPairForUser: mocks.createQCanvasKeyPairForUser,
+      revealApiKey: mocks.revealApiKey,
+      updateApiKeyFields: mocks.updateApiKeyFields,
+      deleteApiKey: mocks.deleteApiKey,
     },
     groups: {
       getAll: mocks.groupsGetAll,
@@ -45,6 +64,10 @@ vi.mock('@/api/admin', () => ({
 
 vi.mock('@/stores/app', () => ({
   useAppStore: () => ({ showSuccess: mocks.showSuccess, showError: mocks.showError }),
+}))
+
+vi.mock('@/stores/auth', () => ({
+  useAuthStore: () => ({ user: mocks.authUser }),
 }))
 
 const AppLayoutStub = { template: '<div><slot /></div>' }
@@ -81,10 +104,11 @@ describe('StaffView one-shot staff issuance', () => {
       total: 1,
     })
     mocks.getBatchUsersUsage.mockResolvedValue({ stats: {} })
-    // Real backend truth: admin list-keys endpoints always return an empty `key` (apiKeyDTOWithoutSecret).
+    // Real backend truth: admin list-keys endpoints always return an empty `key` (+ optional key_hint).
     mocks.getUserApiKeys.mockResolvedValue({
-      items: [{ id: 10, name: 'card', key: '', status: 'active', quota: 0, quota_used: 0, last_used_at: null }],
+      items: [{ id: 10, name: 'card', key: '', key_hint: 'cdef', status: 'active', quota: 0, quota_used: 0, last_used_at: null }],
     })
+    mocks.revealApiKey.mockResolvedValue({ id: 10, name: 'card', key: FULL_KEY, status: 'active', quota: 0, quota_used: 0 })
     mocks.getBatchApiKeysUsage.mockResolvedValue({ stats: {} })
     mocks.groupsGetAll.mockResolvedValue([
       { id: 7, name: '默认组', status: 'active', platform: 'openai', is_exclusive: false, subscription_type: 'standard' },
@@ -170,7 +194,7 @@ describe('StaffView one-shot staff issuance', () => {
     // 后端已放开同组限制：video_group_id 与 media_group_id 传同一个所选组
     expect(mocks.createQCanvasKeyPairForUser).toHaveBeenCalledWith(
       2,
-      { video_group_id: 8, media_group_id: 8 },
+      expect.objectContaining({ video_group_id: 8, media_group_id: 8, allow_admin_target: false }),
       expect.any(String),
     )
     expect(mocks.usersUpdateBalance).toHaveBeenCalledWith(2, 55, 'add', expect.any(String))
@@ -216,7 +240,7 @@ describe('StaffView one-shot staff issuance', () => {
     expect(mocks.usersCreate).toHaveBeenCalledTimes(1)
     expect(mocks.createQCanvasKeyPairForUser).toHaveBeenCalledWith(
       1,
-      { video_group_id: 7, media_group_id: 7 },
+      expect.objectContaining({ video_group_id: 7, media_group_id: 7, allow_admin_target: false }),
       expect.any(String),
     )
     expect(wrapper.find('[data-test="wizard-video-key"]').text()).toContain('sk-video-one-time')
@@ -252,7 +276,7 @@ describe('StaffView one-shot staff issuance', () => {
     expect(mocks.usersCreate).toHaveBeenCalledTimes(1)
     expect(mocks.createQCanvasKeyPairForUser).toHaveBeenCalledWith(
       4,
-      { video_group_id: 7, media_group_id: 7 },
+      expect.objectContaining({ video_group_id: 7, media_group_id: 7, allow_admin_target: false }),
       expect.any(String),
     )
     // Must not attempt to rewrite human → tool on conflict reuse.
@@ -431,7 +455,7 @@ describe('StaffView one-shot staff issuance', () => {
 
     expect(mocks.createQCanvasKeyPairForUser).toHaveBeenCalledWith(
       2,
-      { video_group_id: 9, media_group_id: 9 },
+      expect.objectContaining({ video_group_id: 9, media_group_id: 9, allow_admin_target: false }),
       expect.any(String),
     )
   })
@@ -469,14 +493,15 @@ describe('StaffView one-shot staff issuance', () => {
     await flushPromises()
 
     expect(wrapper.text()).not.toContain(FULL_KEY)
-    expect(wrapper.text()).toContain('不再显示')
+    expect(wrapper.find('[data-test="key-mask"]').text()).toContain('••••cdef')
+    expect(wrapper.find('[data-test="key-reveal"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="key-revealed"]').exists()).toBe(false)
   })
 
-  it('fails closed: even if a list DTO unexpectedly carries a non-empty key, no substring of it is ever rendered', async () => {
-    // Contract says list endpoints always zero out `key`, but the UI must not
-    // trust that and must never render any part of it even if it slips through.
+  it('fails closed: even if a list DTO unexpectedly carries a non-empty key, no substring of it is ever rendered until reveal', async () => {
+    // List endpoints must not trust a leaked `key`; only revealApiKey may show plaintext.
     mocks.getUserApiKeys.mockResolvedValue({
-      items: [{ id: 10, name: 'card', key: FULL_KEY, status: 'active', quota: 0, quota_used: 0, last_used_at: null }],
+      items: [{ id: 10, name: 'card', key: FULL_KEY, key_hint: 'cdef', status: 'active', quota: 0, quota_used: 0, last_used_at: null }],
     })
 
     const wrapper = mountView()
@@ -485,10 +510,64 @@ describe('StaffView one-shot staff issuance', () => {
     await flushPromises()
 
     expect(wrapper.text()).not.toContain(FULL_KEY)
-    // Not even a prefix/suffix slice of the leaked key should leak into the DOM.
     expect(wrapper.text()).not.toContain(FULL_KEY.slice(0, 8))
-    expect(wrapper.text()).not.toContain(FULL_KEY.slice(-4))
-    expect(wrapper.text()).toContain('不再显示')
+    expect(wrapper.find('[data-test="key-revealed"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="key-mask"]').text()).toContain('点击查看')
+  })
+
+  it('reveals plaintext only via revealApiKey and can hide it again', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.find('[data-test="toggle-expand"]').trigger('click')
+    await flushPromises()
+
+    await wrapper.find('[data-test="key-reveal"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.revealApiKey).toHaveBeenCalledWith(10)
+    expect(wrapper.find('[data-test="key-revealed"]').text()).toBe(FULL_KEY)
+
+    await wrapper.find('[data-test="key-hide"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-test="key-revealed"]').exists()).toBe(false)
+  })
+
+  it('wires employee disable and delete actions', async () => {
+    mocks.usersToggleStatus.mockResolvedValue({ id: 1, status: 'disabled' })
+    mocks.usersDelete.mockResolvedValue({ message: 'ok' })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('[data-test="row-toggle-status"]').trigger('click')
+    await flushPromises()
+    expect(mocks.usersToggleStatus).toHaveBeenCalledWith(1, 'disabled')
+
+    await wrapper.find('[data-test="row-delete-user"]').trigger('click')
+    await flushPromises()
+    expect(mocks.usersDelete).toHaveBeenCalledWith(1)
+  })
+
+  it('issues QCanvas keys for the current admin when self-issue is checked', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('[data-test="create-service-identity"]').trigger('click')
+    await wrapper.find('[data-test="admin-self-issue"] input').setValue(true)
+    await wrapper.find('[data-test="wizard-group"]').setValue(7)
+    await wrapper.find('[data-test="wizard-submit"]').trigger('submit')
+    await flushPromises()
+
+    expect(mocks.usersCreate).not.toHaveBeenCalled()
+    expect(mocks.createQCanvasKeyPairForUser).toHaveBeenCalledWith(
+      99,
+      expect.objectContaining({
+        video_group_id: 7,
+        media_group_id: 7,
+        allow_admin_target: true,
+      }),
+      expect.any(String),
+    )
+    expect(wrapper.find('[data-test="wizard-qcanvas-register-tip"]').exists()).toBe(true)
   })
 
   it('does not close the staff modal or clear the form on backdrop click', async () => {
@@ -658,13 +737,13 @@ describe('StaffView one-shot staff issuance', () => {
     expect(mocks.createQCanvasKeyPairForUser).toHaveBeenNthCalledWith(
       1,
       2,
-      { video_group_id: 7, media_group_id: 7 },
+      expect.objectContaining({ video_group_id: 7, media_group_id: 7, allow_admin_target: false }),
       'idem-stable-aaa',
     )
     expect(mocks.createQCanvasKeyPairForUser).toHaveBeenNthCalledWith(
       2,
       2,
-      { video_group_id: 7, media_group_id: 7 },
+      expect.objectContaining({ video_group_id: 7, media_group_id: 7, allow_admin_target: false }),
       'idem-stable-aaa',
     )
 
@@ -684,7 +763,7 @@ describe('StaffView one-shot staff issuance', () => {
 
     expect(mocks.createQCanvasKeyPairForUser).toHaveBeenLastCalledWith(
       3,
-      { video_group_id: 7, media_group_id: 7 },
+      expect.objectContaining({ video_group_id: 7, media_group_id: 7, allow_admin_target: false }),
       'idem-after-reopen',
     )
     uuidSpy.mockRestore()
@@ -842,7 +921,7 @@ describe('StaffView one-shot staff issuance', () => {
 
     expect(mocks.createQCanvasKeyPairForUser).toHaveBeenCalledWith(
       77,
-      { video_group_id: 7, media_group_id: 7 },
+      expect.objectContaining({ video_group_id: 7, media_group_id: 7, allow_admin_target: false }),
       expect.any(String),
     )
     expect(wrapper.find('[data-test="wizard-video-key"]').text()).toContain('sk-video-one-time')

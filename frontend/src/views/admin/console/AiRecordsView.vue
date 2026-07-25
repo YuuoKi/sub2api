@@ -15,14 +15,47 @@
       <!-- 筛选 -->
       <section class="ui-panel p-4">
         <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          <div>
+          <div ref="userSearchRef" class="relative">
             <label class="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">成员</label>
-            <select v-model="filterUserId" class="input" @change="onFilterChanged">
-              <option :value="0">全部成员</option>
-              <option v-for="user in staffOptions" :key="user.id" :value="user.id">
-                {{ staffDisplayName(user.username, user.email) }}（{{ user.email }}）
-              </option>
-            </select>
+            <input
+              v-model="userKeyword"
+              class="input pr-8"
+              type="text"
+              placeholder="输入邮箱搜索成员"
+              data-test="filter-user-search"
+              @input="debounceUserSearch"
+              @focus="showUserDropdown = true"
+            />
+            <button
+              v-if="filterUserId > 0"
+              type="button"
+              class="absolute right-2 top-8 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+              aria-label="清除成员筛选"
+              @click="clearUserFilter"
+            >
+              ✕
+            </button>
+            <div
+              v-if="showUserDropdown && (userResults.length > 0 || (userKeyword.trim() && !userSearchLoading))"
+              class="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg dark:border-dark-600 dark:bg-dark-800"
+            >
+              <button
+                v-for="user in userResults"
+                :key="user.id"
+                type="button"
+                class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-dark-700"
+                @click="selectUser(user)"
+              >
+                <span>{{ user.email }}<span v-if="user.deleted" class="ml-1 text-xs text-gray-400">（已删除）</span></span>
+                <span class="ml-2 text-xs text-gray-400">#{{ user.id }}</span>
+              </button>
+              <div
+                v-if="userKeyword.trim() && !userResults.length && !userSearchLoading"
+                class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400"
+              >
+                没有匹配的成员
+              </div>
+            </div>
           </div>
           <div>
             <label class="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">模型</label>
@@ -211,8 +244,8 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import ContentWall from '@/components/admin/generation-content/ContentWall.vue'
 import { adminAPI } from '@/api/admin'
-import type { AdminUsageLog, AdminUser } from '@/types'
-import type { AdminUsageStatsResponse } from '@/api/admin/usage'
+import type { AdminUsageLog } from '@/types'
+import type { AdminUsageStatsResponse, SimpleUser } from '@/api/admin/usage'
 import type { GenerationContentWeeklyReport, GenerationSample } from '@/api/admin/generation_content'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
@@ -248,14 +281,19 @@ const samplesLive = ref(false)
 const samplesError = ref('')
 const weeklyReport = ref<GenerationContentWeeklyReport | null>(null)
 const weeklyReportError = ref('')
-const staffOptions = ref<AdminUser[]>([])
+const userKeyword = ref('')
+const userResults = ref<SimpleUser[]>([])
+const showUserDropdown = ref(false)
+const userSearchLoading = ref(false)
+const userSearchRef = ref<HTMLElement | null>(null)
 // 默认系统汇率，采集样本响应里若带有真实 usd_cny_rate 会覆盖此值（见 loadSamples）。
 const usdCnyRate = ref(DEFAULT_USD_CNY_RATE)
 
 // reload()/setPage() 共用一个 controller：新请求发出前先取消上一次同族请求，
 // 组件卸载时统一取消，避免竞态更新已卸载组件的状态。
 let reloadAbortController: AbortController | null = null
-let staffAbortController: AbortController | null = null
+let userSearchAbortController: AbortController | null = null
+let userSearchTimeout: ReturnType<typeof setTimeout> | null = null
 
 function isAbortError(e: unknown): boolean {
   return (
@@ -345,15 +383,81 @@ const weeklySummary = computed(() => {
   }
 })
 
-async function loadStaffOptions() {
-  staffAbortController?.abort()
+const selectedUser = ref<SimpleUser | null>(null)
+
+function debounceUserSearch() {
+  if (userSearchTimeout) clearTimeout(userSearchTimeout)
+  userSearchTimeout = setTimeout(() => {
+    void runUserSearch()
+  }, 300)
+}
+
+async function runUserSearch() {
+  const keyword = userKeyword.value.trim()
+  if (filterUserId.value > 0 && selectedUser.value && keyword !== selectedUser.value.email) {
+    filterUserId.value = 0
+    selectedUser.value = null
+  }
+  if (!keyword) {
+    userResults.value = []
+    return
+  }
+  userSearchAbortController?.abort()
   const c = new AbortController()
-  staffAbortController = c
+  userSearchAbortController = c
+  userSearchLoading.value = true
   try {
-    const res = await adminAPI.users.list(1, 100, undefined, { signal: c.signal })
-    staffOptions.value = res.items || []
+    userResults.value = await adminAPI.usage.searchUsers(keyword)
   } catch (err) {
-    if (!isAbortError(err)) staffOptions.value = []
+    if (!isAbortError(err)) userResults.value = []
+  } finally {
+    if (userSearchAbortController === c) userSearchLoading.value = false
+  }
+}
+
+function selectUser(user: SimpleUser) {
+  selectedUser.value = user
+  userKeyword.value = user.email
+  showUserDropdown.value = false
+  filterUserId.value = user.id
+  onFilterChanged()
+}
+
+function clearUserFilter() {
+  selectedUser.value = null
+  userKeyword.value = ''
+  userResults.value = []
+  showUserDropdown.value = false
+  filterUserId.value = 0
+  onFilterChanged()
+}
+
+async function resolveUserFromFilter() {
+  if (filterUserId.value <= 0) {
+    selectedUser.value = null
+    if (!userKeyword.value) userKeyword.value = ''
+    return
+  }
+  if (selectedUser.value?.id === filterUserId.value) {
+    userKeyword.value = selectedUser.value.email
+    return
+  }
+  try {
+    const results = await adminAPI.usage.searchUsers(String(filterUserId.value))
+    const matched = results.find((user) => user.id === filterUserId.value)
+    if (matched) {
+      selectedUser.value = matched
+      userKeyword.value = matched.email
+    }
+  } catch {
+    // 保留 filterUserId，仅无法回显邮箱
+  }
+}
+
+function onDocumentClick(event: MouseEvent) {
+  const target = event.target as Node | null
+  if (userSearchRef.value && target && !userSearchRef.value.contains(target)) {
+    showUserDropdown.value = false
   }
 }
 
@@ -416,6 +520,10 @@ function onFilterChanged() {
 }
 
 function clearFilters() {
+  selectedUser.value = null
+  userKeyword.value = ''
+  userResults.value = []
+  showUserDropdown.value = false
   filterUserId.value = 0
   filterModel.value = ''
   filterStart.value = ''
@@ -442,8 +550,9 @@ async function setPage(next: number) {
 
 onMounted(() => {
   applyRouteQuery()
-  void loadStaffOptions()
+  void resolveUserFromFilter()
   void reload()
+  document.addEventListener('click', onDocumentClick)
 })
 
 // Same-route query drill-downs (e.g. BossOverview → ai-records?user_id=) reuse the component;
@@ -452,6 +561,7 @@ watch(
   () => route.query,
   () => {
     applyRouteQuery()
+    void resolveUserFromFilter()
     page.value = 1
     void reload()
   }
@@ -459,6 +569,8 @@ watch(
 
 onUnmounted(() => {
   reloadAbortController?.abort()
-  staffAbortController?.abort()
+  userSearchAbortController?.abort()
+  if (userSearchTimeout) clearTimeout(userSearchTimeout)
+  document.removeEventListener('click', onDocumentClick)
 })
 </script>

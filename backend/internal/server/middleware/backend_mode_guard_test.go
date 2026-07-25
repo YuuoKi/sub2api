@@ -502,6 +502,7 @@ func TestBackendModeProductSurfaceMethodPolicy(t *testing.T) {
 		{method: http.MethodPost, path: "/api/v1/admin/users/42/api-keys"},
 		{method: http.MethodPost, path: "/api/v1/admin/users/42/qcanvas-key-pair"},
 		{method: http.MethodPost, path: "/api/v1/admin/users/42/balance"},
+		{method: http.MethodGet, path: "/api/v1/admin/api-keys/87/reveal"},
 		{method: http.MethodPut, path: "/api/v1/admin/api-keys/87"},
 		{method: http.MethodDelete, path: "/api/v1/admin/api-keys/87"},
 		{method: http.MethodPost, path: "/api/v1/admin/dashboard/users-usage"},

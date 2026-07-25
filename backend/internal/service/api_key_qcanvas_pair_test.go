@@ -139,6 +139,27 @@ func TestAPIKeyService_CreateQCanvasKeyPair(t *testing.T) {
 		require.Empty(t, repo.persisted)
 	})
 
+	t.Run("allows admin target when explicitly opted in", func(t *testing.T) {
+		repo := &qcanvasPairAPIKeyRepoStub{}
+		svc := &APIKeyService{
+			cfg:        &config.Config{},
+			apiKeyRepo: repo,
+			userRepo:   &qcanvasPairUserRepoStub{user: &User{ID: 7, Role: RoleAdmin, Status: StatusActive}},
+			groupRepo:  &qcanvasPairGroupRepoStub{groups: map[int64]*Group{11: activeGroup(11), 22: activeGroup(22)}},
+		}
+
+		pair, err := svc.CreateQCanvasKeyPair(context.Background(), 7, CreateQCanvasKeyPairRequest{
+			VideoGroupID:     11,
+			MediaGroupID:     22,
+			AllowAdminTarget: true,
+		})
+		require.NoError(t, err)
+		require.NotNil(t, pair)
+		require.NotNil(t, pair.Video)
+		require.NotNil(t, pair.Media)
+		require.Len(t, repo.persisted, 2)
+	})
+
 	t.Run("rejects disabled target before minting keys", func(t *testing.T) {
 		repo := &qcanvasPairAPIKeyRepoStub{}
 		svc := &APIKeyService{
@@ -149,6 +170,25 @@ func TestAPIKeyService_CreateQCanvasKeyPair(t *testing.T) {
 		}
 
 		_, err := svc.CreateQCanvasKeyPair(context.Background(), 7, CreateQCanvasKeyPairRequest{VideoGroupID: 11, MediaGroupID: 22})
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "停用")
+		require.Empty(t, repo.persisted)
+	})
+
+	t.Run("rejects disabled admin even with allow_admin_target", func(t *testing.T) {
+		repo := &qcanvasPairAPIKeyRepoStub{}
+		svc := &APIKeyService{
+			cfg:        &config.Config{},
+			apiKeyRepo: repo,
+			userRepo:   &qcanvasPairUserRepoStub{user: &User{ID: 7, Role: RoleAdmin, Status: StatusDisabled}},
+			groupRepo:  &qcanvasPairGroupRepoStub{groups: map[int64]*Group{11: activeGroup(11), 22: activeGroup(22)}},
+		}
+
+		_, err := svc.CreateQCanvasKeyPair(context.Background(), 7, CreateQCanvasKeyPairRequest{
+			VideoGroupID:     11,
+			MediaGroupID:     22,
+			AllowAdminTarget: true,
+		})
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "停用")
 		require.Empty(t, repo.persisted)

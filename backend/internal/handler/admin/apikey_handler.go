@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"math"
 	"strconv"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
+	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 )
@@ -24,8 +26,9 @@ type apiKeyManager interface {
 }
 
 type AdminCreateQCanvasKeyPairRequest struct {
-	VideoGroupID int64 `json:"video_group_id"`
-	MediaGroupID int64 `json:"media_group_id"`
+	VideoGroupID     int64 `json:"video_group_id"`
+	MediaGroupID     int64 `json:"media_group_id"`
+	AllowAdminTarget bool  `json:"allow_admin_target"`
 }
 
 type adminQCanvasKeyPairResponse struct {
@@ -60,7 +63,11 @@ func (h *AdminAPIKeyHandler) CreateQCanvasKeyPair(c *gin.Context) {
 		Body   AdminCreateQCanvasKeyPairRequest `json:"body"`
 	}{UserID: userID, Body: req}
 	executeAdminIdempotentJSONWithStoredResponseSanitizer(c, "admin.users.qcanvas_key_pair.create", idempotencyPayload, service.DefaultWriteIdempotencyTTL(), sanitizeQCanvasKeyPairForReplay, func(ctx context.Context) (any, error) {
-		pair, createErr := h.apiKeys.CreateQCanvasKeyPair(ctx, userID, service.CreateQCanvasKeyPairRequest{VideoGroupID: req.VideoGroupID, MediaGroupID: req.MediaGroupID})
+		pair, createErr := h.apiKeys.CreateQCanvasKeyPair(ctx, userID, service.CreateQCanvasKeyPairRequest{
+			VideoGroupID:     req.VideoGroupID,
+			MediaGroupID:     req.MediaGroupID,
+			AllowAdminTarget: req.AllowAdminTarget,
+		})
 		if createErr != nil {
 			return nil, createErr
 		}
@@ -314,6 +321,37 @@ func (h *AdminAPIKeyHandler) applyFieldUpdates(ctx context.Context, keyID int64,
 	return h.apiKeys.Update(ctx, keyID, existing.UserID, serviceRequest)
 }
 
+// Reveal returns the full plaintext API key for an administrator and writes an audit log.
+// GET /api/v1/admin/api-keys/:id/reveal
+func (h *AdminAPIKeyHandler) Reveal(c *gin.Context) {
+	keyID, err := parsePositiveAdminID(c.Param("id"))
+	if err != nil {
+		response.BadRequest(c, "Invalid API key ID")
+		return
+	}
+	if h.apiKeys == nil {
+		response.InternalError(c, "API key service not available")
+		return
+	}
+	existing, err := h.apiKeys.GetByID(c.Request.Context(), keyID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	out := dto.APIKeyFromService(existing)
+	subject, _ := middleware.GetAuthSubjectFromContext(c)
+	role, _ := middleware.GetUserRoleFromContext(c)
+	slog.Info("admin.api_key.reveal",
+		"audit", true,
+		"admin_user_id", subject.UserID,
+		"role", role,
+		"api_key_id", existing.ID,
+		"target_user_id", existing.UserID,
+		"client_ip", c.ClientIP(),
+	)
+	response.Success(c, out)
+}
+
 // Delete resolves the true owner before delegating to the audited service deletion path.
 // DELETE /api/v1/admin/api-keys/:id
 func (h *AdminAPIKeyHandler) Delete(c *gin.Context) {
@@ -402,7 +440,19 @@ func parsePositiveAdminID(raw string) (int64, error) {
 func apiKeyDTOWithoutSecret(key *service.APIKey) *dto.APIKey {
 	out := dto.APIKeyFromService(key)
 	if out != nil {
+		out.KeyHint = apiKeyHint(out.Key)
 		out.Key = ""
 	}
 	return out
+}
+
+func apiKeyHint(full string) string {
+	trimmed := strings.TrimSpace(full)
+	if trimmed == "" {
+		return ""
+	}
+	if len(trimmed) <= 4 {
+		return trimmed
+	}
+	return trimmed[len(trimmed)-4:]
 }

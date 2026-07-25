@@ -28,6 +28,7 @@ func TestBudgetAndAPIKeyAdminRoutesRegisteredExactly(t *testing.T) {
 	want := map[string]bool{
 		http.MethodPut + " /api/v1/admin/dashboard/monthly-budget": false,
 		http.MethodPost + " /api/v1/admin/users/:id/api-keys":      false,
+		http.MethodGet + " /api/v1/admin/api-keys/:id/reveal":      false,
 		http.MethodPut + " /api/v1/admin/api-keys/:id":             false,
 		http.MethodDelete + " /api/v1/admin/api-keys/:id":          false,
 	}
@@ -49,6 +50,7 @@ func TestBudgetAndAPIKeyAdminRoutesRequireAdminAuth(t *testing.T) {
 	tests := []struct{ method, path string }{
 		{http.MethodPut, "/api/v1/admin/dashboard/monthly-budget"},
 		{http.MethodPost, "/api/v1/admin/users/42/api-keys"},
+		{http.MethodGet, "/api/v1/admin/api-keys/10/reveal"},
 		{http.MethodPut, "/api/v1/admin/api-keys/10"},
 		{http.MethodDelete, "/api/v1/admin/api-keys/10"},
 	}

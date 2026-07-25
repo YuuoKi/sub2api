@@ -103,6 +103,7 @@ var backendModeAllowedAdminRequests = []backendModeRequestRule{
 	{http.MethodPost, "/api/v1/admin/users/:id/api-keys"},
 	{http.MethodPost, "/api/v1/admin/users/:id/qcanvas-key-pair"},
 	{http.MethodPost, "/api/v1/admin/users/:id/balance"},
+	{http.MethodGet, "/api/v1/admin/api-keys/:id/reveal"},
 	{http.MethodPut, "/api/v1/admin/api-keys/:id"},
 	{http.MethodDelete, "/api/v1/admin/api-keys/:id"},
 

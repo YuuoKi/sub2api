@@ -29,6 +29,11 @@
               placeholder="按姓名或邮箱搜索"
               @keyup.enter="loadStaff"
             />
+            <select v-model="statusFilter" class="input sm:max-w-[9rem]" data-test="staff-status-filter" @change="loadStaff">
+              <option value="all">全部状态</option>
+              <option value="active">在用</option>
+              <option value="disabled">已停用</option>
+            </select>
           </div>
           <div class="text-xs text-gray-500 dark:text-gray-400">共 {{ filteredUsers.length }} 个员工</div>
         </div>
@@ -38,6 +43,7 @@
               <tr>
                 <th class="px-5 py-3 font-medium">成员</th>
                 <th class="px-5 py-3 font-medium">状态</th>
+                <th class="px-5 py-3 font-medium">余额</th>
                 <th class="px-5 py-3 font-medium">今日花费</th>
                 <th class="px-5 py-3 font-medium">累计花费</th>
                 <th class="px-5 py-3 text-right font-medium">操作</th>
@@ -76,16 +82,38 @@
                       {{ user.status === 'active' ? '在用' : '已停用' }}
                     </span>
                   </td>
+                  <td class="px-5 py-3 tabular-nums text-gray-900 dark:text-white" data-test="row-balance">
+                    {{ formatAccountUsd(user.balance ?? 0) }}
+                  </td>
                   <td class="px-5 py-3 tabular-nums text-gray-700 dark:text-gray-200">{{ formatMoney(usageMap[user.id]?.today_actual_cost, usdCnyRate) }}</td>
                   <td class="px-5 py-3 tabular-nums text-gray-900 dark:text-white">{{ formatMoney(usageMap[user.id]?.total_actual_cost, usdCnyRate) }}</td>
                   <td class="px-5 py-3">
-                    <div class="flex justify-end gap-1.5" @click.stop>
+                    <div class="flex flex-wrap justify-end gap-1.5" @click.stop>
                       <button class="btn btn-sm btn-outline" type="button" data-test="row-recharge" @click="openRecharge(user)">
                         充值
                       </button>
                       <RouterLink class="btn btn-sm btn-outline" :to="`/admin/console/ai-records?user_id=${user.id}`" data-test="row-view-spend">
                         查看花费
                       </RouterLink>
+                      <button
+                        class="btn btn-sm btn-outline"
+                        type="button"
+                        data-test="row-toggle-status"
+                        :disabled="userActionBusy"
+                        @click="toggleUserStatus(user)"
+                      >
+                        {{ user.status === 'active' ? '停用' : '启用' }}
+                      </button>
+                      <button
+                        v-if="user.role !== 'admin'"
+                        class="btn btn-sm btn-outline !text-red-600 dark:!text-red-400"
+                        type="button"
+                        data-test="row-delete-user"
+                        :disabled="userActionBusy"
+                        @click="deleteStaffUser(user)"
+                      >
+                        离职删除
+                      </button>
                       <button class="btn btn-sm btn-outline" type="button" @click="toggleExpand(user)">
                         {{ expandedUserId === user.id ? '收起' : '查看卡片' }}
                       </button>
@@ -94,7 +122,7 @@
                 </tr>
                 <!-- 展开：员工的 API 卡 -->
                 <tr v-if="expandedUserId === user.id">
-                  <td colspan="5" class="bg-gray-50/60 px-5 py-4 dark:bg-dark-900/40">
+                  <td colspan="6" class="bg-gray-50/60 px-5 py-4 dark:bg-dark-900/40">
                     <div v-if="keysLoading" class="py-4 text-center text-sm text-gray-500 dark:text-gray-400">加载卡片中…</div>
                     <template v-else>
                       <div v-if="!userKeys.length" class="py-4 text-center text-sm text-gray-500 dark:text-gray-400">
@@ -116,7 +144,26 @@
                         <tbody class="divide-y divide-gray-100 dark:divide-dark-700">
                           <tr v-for="key in userKeys" :key="key.id">
                             <td class="px-3 py-2 font-medium text-gray-900 dark:text-white">{{ key.name || '未命名' }}</td>
-                            <td class="px-3 py-2 font-mono text-xs text-gray-500 dark:text-gray-400">{{ maskKey() }}</td>
+                            <td class="px-3 py-2 font-mono text-xs text-gray-500 dark:text-gray-400">
+                              <div class="flex flex-wrap items-center gap-2">
+                                <span data-test="key-mask">{{ maskKey(key) }}</span>
+                                <template v-if="revealedKeys[key.id]">
+                                  <span class="break-all text-gray-900 dark:text-white" data-test="key-revealed">{{ revealedKeys[key.id] }}</span>
+                                  <button class="btn btn-sm btn-outline" type="button" data-test="key-copy" @click="copyRevealedKey(key.id)">复制</button>
+                                  <button class="btn btn-sm btn-outline" type="button" data-test="key-hide" @click="hideRevealedKey(key.id)">隐藏</button>
+                                </template>
+                                <button
+                                  v-else
+                                  class="btn btn-sm btn-outline"
+                                  type="button"
+                                  data-test="key-reveal"
+                                  :disabled="keyActionBusy"
+                                  @click="revealKey(key)"
+                                >
+                                  查看
+                                </button>
+                              </div>
+                            </td>
                             <td class="px-3 py-2">
                               <span class="inline-flex rounded-md px-2 py-0.5 text-xs font-medium" :class="keyStatusClass(key.status)">
                                 {{ keyStatusLabel(key.status) }}
@@ -138,7 +185,17 @@
                             <td class="px-3 py-2 text-xs tabular-nums text-gray-900 dark:text-white">{{ formatMoney(keyUsageMap[key.id]?.total_actual_cost, usdCnyRate) }}</td>
                             <td class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">{{ formatDateTime(key.last_used_at) }}</td>
                             <td class="px-3 py-2">
-                              <div class="flex justify-end gap-1.5">
+                              <div class="flex flex-wrap justify-end gap-1.5">
+                                <button
+                                  v-if="key.status === 'quota_exhausted' || (key.quota > 0 && (key.quota_used || 0) >= key.quota)"
+                                  class="btn btn-sm btn-outline"
+                                  type="button"
+                                  data-test="key-reset-quota"
+                                  :disabled="keyActionBusy"
+                                  @click="resetKeyQuota(key)"
+                                >
+                                  重置额度
+                                </button>
                                 <button
                                   class="btn btn-sm btn-outline"
                                   type="button"
@@ -166,7 +223,7 @@
                 </tr>
               </template>
               <tr v-if="!loading && !filteredUsers.length">
-                <td colspan="5" class="px-5 py-10 text-center text-sm text-gray-500 dark:text-gray-400">
+                <td colspan="6" class="px-5 py-10 text-center text-sm text-gray-500 dark:text-gray-400">
                   还没有员工。点右上角「新增员工」开第一张卡。
                 </td>
               </tr>
@@ -194,14 +251,28 @@
               提交后自动建好账号、开出视频 / LLM 两把 Key 并按金额充值，明文 Key 只显示一次。
             </p>
             <form class="mt-5 space-y-4" data-test="service-identity-form" @submit.prevent="submitStaff">
-              <div>
-                <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">员工姓名</label>
-                <input v-model="staffForm.username" class="input" maxlength="50" placeholder="例如：张三" />
-              </div>
-              <div>
-                <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">邮箱</label>
-                <input v-model="staffForm.email" class="input" data-test="service-identity-email" type="email" required placeholder="zhangsan@wujie.local（仅作唯一标识）" />
-              </div>
+              <label class="flex items-start gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-dark-700" data-test="admin-self-issue">
+                <input v-model="staffForm.issueForAdminSelf" class="mt-0.5" type="checkbox" />
+                <span>
+                  <span class="font-medium text-gray-900 dark:text-white">给我自己（管理员）开一张 QCanvas 卡</span>
+                  <span class="mt-0.5 block text-xs text-gray-500 dark:text-gray-400">
+                    会给当前管理员账号签发双 Key；拿到后去 QCanvas 注册页粘贴即可。
+                  </span>
+                </span>
+              </label>
+              <template v-if="!staffForm.issueForAdminSelf">
+                <div>
+                  <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">员工姓名</label>
+                  <input v-model="staffForm.username" class="input" maxlength="50" placeholder="例如：张三" />
+                </div>
+                <div>
+                  <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">邮箱</label>
+                  <input v-model="staffForm.email" class="input" data-test="service-identity-email" type="email" required placeholder="zhangsan@wujie.local（仅作唯一标识）" />
+                </div>
+              </template>
+              <p v-else class="rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-600 dark:bg-dark-900 dark:text-gray-300" data-test="admin-self-owner">
+                将开给管理员：{{ authStore.user?.email || authStore.user?.username || `#${authStore.user?.id}` }}
+              </p>
               <div>
                 <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">所在分组</label>
                 <select v-model.number="staffForm.groupId" class="input" data-test="wizard-group" required>
@@ -233,6 +304,9 @@
                   >
                     {{ creatingGroup ? '创建中…' : '创建并选中' }}
                   </button>
+                  <RouterLink class="text-xs text-teal-600 hover:underline dark:text-teal-300" to="/admin/groups" data-test="staff-groups-manage-link">
+                    管理/删除分组
+                  </RouterLink>
                 </div>
               </div>
               <div>
@@ -263,7 +337,7 @@
           <template v-else>
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">开卡成功</h2>
             <p v-if="issuedQCanvasPair.video.key && issuedQCanvasPair.media.key" class="mt-1 text-xs text-amber-600 dark:text-amber-300">
-              两把完整 Key 只显示这一次，请立刻复制并交给员工。关掉后只能看到脱敏元数据。
+              两把完整 Key 请立刻复制。关掉后可在「查看卡片」里点「查看」再次取出（会记审计）。
             </p>
             <p v-else class="mt-1 text-xs text-amber-600 dark:text-amber-300">
               该请求已重放，明文 Key 不再返回；请不要把重试当作重新开卡。
@@ -278,6 +352,15 @@
                 <div class="mt-1 break-all font-mono text-sm text-gray-900 dark:text-white" data-test="wizard-media-key">{{ issuedQCanvasPair.media.key }}</div>
               </div>
             </div>
+            <p
+              v-if="issuedForAdminSelf && issuedQCanvasPair.video.key && issuedQCanvasPair.media.key"
+              class="mt-3 rounded-md border border-teal-200 bg-teal-50 px-3 py-2 text-xs text-teal-800 dark:border-teal-500/30 dark:bg-teal-500/10 dark:text-teal-200"
+              data-test="wizard-qcanvas-register-tip"
+            >
+              用这两把 Key 去
+              <a class="font-medium underline" :href="qcanvasRegisterURL" target="_blank" rel="noopener noreferrer">{{ qcanvasRegisterURL }}</a>
+              注册 QCanvas（手机号 + 密码 + 粘贴双 Key）。
+            </p>
             <p v-if="rechargeResult" class="mt-3 text-xs text-gray-600 dark:text-gray-300" data-test="wizard-recharge-result">
               {{ rechargeResult }}
             </p>
@@ -335,6 +418,7 @@ import { adminAPI } from '@/api/admin'
 import type { AdminGroup, AdminUser, ApiKey } from '@/types'
 import type { BatchApiKeyUsageStats, BatchUserUsageStats } from '@/api/admin/dashboard'
 import { useAppStore } from '@/stores/app'
+import { useAuthStore } from '@/stores/auth'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import { createIdempotencyKey } from '@/utils/idempotencyKey'
 import { useClipboard } from '@/composables/useClipboard'
@@ -352,11 +436,18 @@ import {
 } from './consoleUtils'
 
 const appStore = useAppStore()
+const authStore = useAuthStore()
+
+/** Guangzhou QCanvas public entry (bare-IP HTTPS). */
+const QCANVAS_ORIGIN = 'https://114.132.50.149'
+const qcanvasRegisterURL = `${QCANVAS_ORIGIN}/register`
 
 const loading = ref(false)
 const search = ref('')
+const statusFilter = ref<'all' | 'active' | 'disabled'>('all')
 const users = ref<AdminUser[]>([])
 const usageMap = ref<Record<number, BatchUserUsageStats>>({})
+const userActionBusy = ref(false)
 // 后端 /admin/dashboard/stats 与 /admin/dashboard/users-ranking 均未提供实时汇率字段；
 // 使用系统默认汇率展示，不臆造动态汇率。
 const usdCnyRate = ref(DEFAULT_USD_CNY_RATE)
@@ -366,7 +457,9 @@ function isEmployeeMemberType(memberType: AdminUser['member_type']): boolean {
 }
 
 function isListableStaff(user: AdminUser): boolean {
-  return user.role !== 'admin' && isEmployeeMemberType(user.member_type)
+  if (user.role !== 'admin' && isEmployeeMemberType(user.member_type)) return true
+  // Current admin may manage their own QCanvas dual keys from this page.
+  return user.role === 'admin' && authStore.user?.id === user.id
 }
 
 function memberTypeLabel(memberType: AdminUser['member_type']): string {
@@ -403,6 +496,7 @@ type IssuedQCanvasKeyPair = { video: ApiKey; media: ApiKey }
 
 async function listStaffPages(options: {
   search?: string
+  status?: 'active' | 'disabled'
 }): Promise<{ items: AdminUser[]; total: number }> {
   const merged: AdminUser[] = []
   let page = 1
@@ -410,6 +504,7 @@ async function listStaffPages(options: {
   while (true) {
     const res = await adminAPI.users.list(page, STAFF_PAGE_SIZE, {
       search: options.search,
+      status: options.status,
       include_subscriptions: false,
       sort_by: 'created_at',
       sort_order: 'asc',
@@ -441,6 +536,7 @@ async function loadStaff() {
   try {
     const res = await listStaffPages({
       search: search.value.trim() || undefined,
+      status: statusFilter.value === 'all' ? undefined : statusFilter.value,
     })
     users.value = (res.items || []).filter((user) => isListableStaff(user))
     if (users.value.length) {
@@ -460,6 +556,54 @@ async function loadStaff() {
   }
 }
 
+async function toggleUserStatus(user: AdminUser) {
+  const next = user.status === 'active' ? 'disabled' : 'active'
+  if (next === 'disabled') {
+    const confirmed = await requestConfirmation({
+      message: `确定停用「${staffDisplayName(user.username, user.email)}」？停用后其 API 卡调用会失败，可随时再启用。`,
+      danger: true,
+    })
+    if (!confirmed) return
+  }
+  userActionBusy.value = true
+  try {
+    await adminAPI.users.toggleStatus(user.id, next)
+    appStore.showSuccess(next === 'active' ? '员工已启用' : '员工已停用')
+    await loadStaff()
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, '切换员工状态失败', CONSOLE_ERROR_ZH))
+  } finally {
+    userActionBusy.value = false
+  }
+}
+
+async function deleteStaffUser(user: AdminUser) {
+  if (user.role === 'admin') {
+    appStore.showError('不能删除管理员账号')
+    return
+  }
+  const confirmed = await requestConfirmation({
+    message: `确定离职删除「${staffDisplayName(user.username, user.email)}」？将软删除该账号并吊销其名下全部 API 卡；历史账单与用量仍可查询。`,
+    confirmText: '确认删除',
+    danger: true,
+  })
+  if (!confirmed) return
+  userActionBusy.value = true
+  try {
+    await adminAPI.users.delete(user.id)
+    appStore.showSuccess('员工已删除')
+    if (expandedUserId.value === user.id) {
+      expandedUserId.value = null
+      revealedKeys.value = {}
+    }
+    await loadStaff()
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, '删除员工失败', CONSOLE_ERROR_ZH))
+  } finally {
+    userActionBusy.value = false
+  }
+}
+
 // ---- 新增员工（一个弹窗：建账号 → 开双 Key → 充值 → 明文展示一次） ----
 
 const staffModalOpen = ref(false)
@@ -473,9 +617,11 @@ const staffForm = reactive({
   email: '',
   groupId: 0,
   rechargeAmount: 0,
+  issueForAdminSelf: false,
 })
 
 const issuedQCanvasPair = ref<IssuedQCanvasKeyPair | null>(null)
+const issuedForAdminSelf = ref(false)
 const qcanvasPairCopied = ref(false)
 
 const activeGroups = ref<AdminGroup[]>([])
@@ -503,12 +649,14 @@ function resetStaffModalState() {
   wizardUser.value = null
   rechargeResult.value = ''
   issuedQCanvasPair.value = null
+  issuedForAdminSelf.value = false
   qcanvasPairCopied.value = false
   staffIdempotencyKey.value = null
   staffForm.username = ''
   staffForm.email = ''
   staffForm.groupId = 0
   staffForm.rechargeAmount = 0
+  staffForm.issueForAdminSelf = false
   quickGroupName.value = ''
 }
 
@@ -555,9 +703,11 @@ function openCreateStaff() {
   staffForm.email = ''
   staffForm.groupId = eligibleGroups.value[0]?.id ?? 0
   staffForm.rechargeAmount = 0
+  staffForm.issueForAdminSelf = false
   wizardUser.value = null
   rechargeResult.value = ''
   issuedQCanvasPair.value = null
+  issuedForAdminSelf.value = false
   qcanvasPairCopied.value = false
   quickGroupName.value = ''
   // One key per formal open; retries reuse until cancel/complete.
@@ -682,24 +832,43 @@ async function submitStaff() {
     appStore.showError('请先选择所在分组；没有可用分组时先新建一个')
     return
   }
+  if (staffForm.issueForAdminSelf) {
+    if (!authStore.user?.id || authStore.user.role !== 'admin') {
+      appStore.showError('当前登录不是管理员，无法给自己开卡')
+      return
+    }
+  }
   submitting.value = true
   rechargeResult.value = ''
   try {
     // 创建成功但后续签发失败时保留 wizardUser；重试不得再次 create
     if (!wizardUser.value) {
-      try {
-        const res = await adminAPI.users.create({
-          email: staffForm.email.trim(),
-          username: staffForm.username.trim() || undefined,
-          member_type: 'tool',
-          role: 'user',
-        })
-        wizardUser.value = res.user
-      } catch (createErr) {
-        if (!isEmailConflictError(createErr)) throw createErr
-        const existing = await resolveConflictOwner(staffForm.email)
-        if (!existing) return
-        wizardUser.value = existing
+      if (staffForm.issueForAdminSelf) {
+        const me = authStore.user!
+        wizardUser.value = {
+          id: me.id,
+          email: me.email,
+          username: me.username,
+          role: 'admin',
+          member_type: 'human',
+          status: me.status === 'disabled' ? 'disabled' : 'active',
+          balance: me.balance ?? 0,
+        } as AdminUser
+      } else {
+        try {
+          const res = await adminAPI.users.create({
+            email: staffForm.email.trim(),
+            username: staffForm.username.trim() || undefined,
+            member_type: 'tool',
+            role: 'user',
+          })
+          wizardUser.value = res.user
+        } catch (createErr) {
+          if (!isEmailConflictError(createErr)) throw createErr
+          const existing = await resolveConflictOwner(staffForm.email)
+          if (!existing) return
+          wizardUser.value = existing
+        }
       }
     }
     const owner = wizardUser.value
@@ -709,7 +878,11 @@ async function submitStaff() {
     }
     const pair = await adminAPI.apiKeys.createQCanvasKeyPairForUser(
       owner.id,
-      { video_group_id: staffForm.groupId, media_group_id: staffForm.groupId },
+      {
+        video_group_id: staffForm.groupId,
+        media_group_id: staffForm.groupId,
+        allow_admin_target: staffForm.issueForAdminSelf || owner.role === 'admin',
+      },
       staffIdempotencyKey.value,
     )
     // Blank idempotent replay must never enter Done-as-success UI.
@@ -720,6 +893,7 @@ async function submitStaff() {
       return
     }
     issuedQCanvasPair.value = pair
+    issuedForAdminSelf.value = staffForm.issueForAdminSelf || owner.role === 'admin'
     const amount = Number(staffForm.rechargeAmount) || 0
     if (amount > 0) {
       try {
@@ -793,8 +967,10 @@ const keyUsageMap = ref<Record<number, BatchApiKeyUsageStats>>({})
 async function toggleExpand(user: AdminUser) {
   if (expandedUserId.value === user.id) {
     expandedUserId.value = null
+    revealedKeys.value = {}
     return
   }
+  revealedKeys.value = {}
   expandedUserId.value = user.id
   await loadUserKeys(user.id)
 }
@@ -821,11 +997,66 @@ async function loadUserKeys(userId: number) {
   }
 }
 
-// 管理员列表/详情接口约定不会回显明文或部分明文（apiKeyDTOWithoutSecret 直接清空 key），
-// 但这里绝不能"失败开放"：即便后端某天意外携带了非空 key，也只显示统一占位符，
-// 不对其做任何 slice/展示。完整 Key 只能来自开卡响应弹窗（issuedQCanvasPair）。
-function maskKey(): string {
-  return '已发放·不再显示'
+// List endpoints never return the full secret. Show a non-secret hint + reveal button.
+// Even if a DTO unexpectedly leaks `key`, never render any substring of it here.
+function maskKey(key: ApiKey): string {
+  if (typeof key.key === 'string' && key.key.trim().length > 0) {
+    return '已发放·点击查看'
+  }
+  const hint = typeof key.key_hint === 'string' ? key.key_hint.trim() : ''
+  if (hint.length > 0) {
+    return `••••${hint}`
+  }
+  return '已发放·点击查看'
+}
+
+const revealedKeys = ref<Record<number, string>>({})
+
+async function revealKey(key: ApiKey) {
+  keyActionBusy.value = true
+  try {
+    const full = await adminAPI.apiKeys.revealApiKey(key.id)
+    const secret = typeof full.key === 'string' ? full.key.trim() : ''
+    if (!secret) {
+      appStore.showError('未取到明文 Key，请稍后重试')
+      return
+    }
+    revealedKeys.value = { ...revealedKeys.value, [key.id]: secret }
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, '查看 Key 失败', CONSOLE_ERROR_ZH))
+  } finally {
+    keyActionBusy.value = false
+  }
+}
+
+function hideRevealedKey(keyId: number) {
+  const next = { ...revealedKeys.value }
+  delete next[keyId]
+  revealedKeys.value = next
+}
+
+async function copyRevealedKey(keyId: number) {
+  const secret = revealedKeys.value[keyId]
+  if (!secret) return
+  const ok = await copyToClipboard(secret)
+  if (ok) appStore.showSuccess('已复制 Key')
+}
+
+async function resetKeyQuota(key: ApiKey) {
+  const confirmed = await requestConfirmation({
+    message: `确定重置卡「${key.name || '未命名'}」的已用额度？重置后可继续调用。`,
+  })
+  if (!confirmed) return
+  keyActionBusy.value = true
+  try {
+    await adminAPI.apiKeys.updateApiKeyFields(key.id, { reset_quota: true })
+    appStore.showSuccess('额度已重置')
+    if (expandedUserId.value) await loadUserKeys(expandedUserId.value)
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, '重置额度失败', CONSOLE_ERROR_ZH))
+  } finally {
+    keyActionBusy.value = false
+  }
 }
 
 function keyStatusLabel(status: ApiKey['status']): string {

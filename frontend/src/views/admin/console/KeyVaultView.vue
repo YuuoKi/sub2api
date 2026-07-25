@@ -71,7 +71,25 @@
                   {{ account.notes || '—' }}
                 </td>
                 <td class="px-5 py-3">
-                  <div class="flex justify-end gap-1.5">
+                  <div class="flex flex-wrap justify-end gap-1.5">
+                    <template v-if="account.status === 'error'">
+                      <button
+                        class="btn btn-sm btn-outline"
+                        type="button"
+                        :disabled="accountActionId === account.id"
+                        @click="testAccountConnectivity(account)"
+                      >
+                        测试连通
+                      </button>
+                      <button
+                        class="btn btn-sm btn-outline"
+                        type="button"
+                        :disabled="accountActionId === account.id"
+                        @click="clearAccountError(account)"
+                      >
+                        清除异常
+                      </button>
+                    </template>
                     <button class="btn btn-sm btn-outline" type="button" @click="openEditAccount(account)">
                       <Icon name="edit" size="sm" />
                       编辑
@@ -136,7 +154,26 @@
                 </td>
                 <td class="px-5 py-3 text-xs text-gray-500 dark:text-gray-400">{{ formatDateTime(provider.tiny_real_consumed_at) }}</td>
                 <td class="px-5 py-3">
-                  <div class="flex justify-end gap-1.5">
+                  <div class="flex flex-wrap justify-end gap-1.5">
+                    <button
+                      class="btn btn-sm btn-outline"
+                      type="button"
+                      :data-test="`edit-provider-${provider.id}`"
+                      @click="openEditProvider(provider)"
+                    >
+                      <Icon name="edit" size="sm" />
+                      编辑
+                    </button>
+                    <button
+                      v-if="needsVideoAuth(provider)"
+                      class="btn btn-sm btn-outline"
+                      type="button"
+                      :disabled="providerActionId === provider.id"
+                      :data-test="`retry-auth-provider-${provider.id}`"
+                      @click="retryProviderAuth(provider)"
+                    >
+                      重试授权
+                    </button>
                     <button
                       class="btn btn-sm btn-outline"
                       type="button"
@@ -230,6 +267,7 @@
                   >
                     {{ creatingGroup ? '创建中…' : '创建并选中' }}
                   </button>
+                  <RouterLink class="btn btn-sm btn-outline" to="/admin/groups">管理/删除分组</RouterLink>
                 </div>
               </div>
             </div>
@@ -327,6 +365,7 @@
                   >
                     {{ creatingGroup ? '创建中…' : '创建并选中' }}
                   </button>
+                  <RouterLink class="btn btn-sm btn-outline" to="/admin/groups">管理/删除分组</RouterLink>
                 </div>
               </div>
             </div>
@@ -371,13 +410,61 @@
           </form>
         </div>
       </div>
+
+      <!-- 视频通道 编辑弹窗 -->
+      <div v-if="editProviderModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="closeEditProviderModal">
+        <div class="w-full max-w-lg rounded-lg border border-gray-200 bg-white p-6 shadow-xl dark:border-dark-700 dark:bg-dark-800">
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-white">编辑视频通道</h2>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            密钥留空表示保留当前密钥；平台不可更改。
+          </p>
+          <form class="mt-5 space-y-4" data-test="edit-provider-form" @submit.prevent="saveEditProvider">
+            <div>
+              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">名称</label>
+              <input v-model="editProviderForm.displayName" class="input" maxlength="100" required />
+            </div>
+            <div>
+              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">分组</label>
+              <select v-model="editProviderForm.groupId" class="input" required>
+                <option v-for="group in groups" :key="group.id" :value="group.id">{{ group.name }}</option>
+              </select>
+            </div>
+            <div>
+              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">API Key</label>
+              <input
+                v-model="editProviderForm.apiKey"
+                class="input"
+                type="password"
+                autocomplete="off"
+                maxlength="4000"
+                placeholder="留空表示保留当前密钥"
+              />
+            </div>
+            <div>
+              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">接口地址</label>
+              <input v-model="editProviderForm.baseUrl" class="input" maxlength="500" placeholder="留空使用官方默认地址" />
+            </div>
+            <div>
+              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">默认模型</label>
+              <input v-model="editProviderForm.defaultModel" class="input" maxlength="200" placeholder="留空使用平台默认" />
+            </div>
+            <div class="flex justify-end gap-2 pt-2">
+              <button class="btn btn-outline" type="button" data-test="cancel-edit-provider" @click="closeEditProviderModal">取消</button>
+              <button class="btn btn-primary" type="submit" data-test="save-edit-provider" :disabled="savingEditProvider">
+                <Icon name="check" size="sm" />
+                保存
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
     </div>
   </AppLayout>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import GroupSelector from '@/components/common/GroupSelector.vue'
@@ -405,6 +492,8 @@ const accounts = ref<Account[]>([])
 const accountsTotal = ref(0)
 const providers = ref<VideoProviderAccount[]>([])
 const groups = ref<AdminGroup[]>([])
+const accountActionId = ref<number | null>(null)
+const providerActionId = ref<number | null>(null)
 
 // ---- 通用 AI 账号 ----
 
@@ -654,6 +743,44 @@ async function removeAccount(account: Account) {
   }
 }
 
+async function testAccountConnectivity(account: Account) {
+  accountActionId.value = account.id
+  try {
+    const result = await adminAPI.accounts.testAccount(account.id)
+    if (result.success) {
+      const latency = typeof result.latency_ms === 'number' ? `（${result.latency_ms}ms）` : ''
+      appStore.showSuccess(result.message || `连通测试成功${latency}`)
+    } else {
+      appStore.showError(result.message || '连通测试失败')
+    }
+    await loadAccounts()
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, '连通测试失败', CONSOLE_ERROR_ZH))
+  } finally {
+    accountActionId.value = null
+  }
+}
+
+async function clearAccountError(account: Account) {
+  accountActionId.value = account.id
+  try {
+    let updated = await adminAPI.accounts.clearError(account.id)
+    if (updated.status === 'error') {
+      updated = await adminAPI.accounts.recoverState(account.id)
+    }
+    if (updated.status === 'error') {
+      appStore.showError('已尝试清除异常，但账号仍处于异常状态，请检查密钥或上游连通性')
+    } else {
+      appStore.showSuccess('异常状态已清除')
+    }
+    await loadAccounts()
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, '清除异常失败', CONSOLE_ERROR_ZH))
+  } finally {
+    accountActionId.value = null
+  }
+}
+
 async function loadAccounts() {
   const res = await adminAPI.accounts.list(1, 100)
   accounts.value = res.items || []
@@ -670,7 +797,18 @@ const VIDEO_GROUP_PLATFORM: GroupPlatform = 'openai'
 
 const providerModalOpen = ref(false)
 const savingProvider = ref(false)
+const editProviderModalOpen = ref(false)
+const savingEditProvider = ref(false)
+const editingProvider = ref<VideoProviderAccount | null>(null)
 const videoContract = ref<VideoProviderContract | null>(null)
+
+const editProviderForm = reactive({
+  displayName: '',
+  apiKey: '',
+  baseUrl: '',
+  defaultModel: '',
+  groupId: 0,
+})
 
 const providerForm = reactive({
   provider: 'seedance',
@@ -783,6 +921,77 @@ async function saveProvider() {
     appStore.showError(extractApiErrorMessage(err, '保存视频通道失败', CONSOLE_ERROR_ZH))
   } finally {
     savingProvider.value = false
+  }
+}
+
+function needsVideoAuth(provider: VideoProviderAccount): boolean {
+  return provider.enabled && provider.api_key_configured && !provider.tiny_real_authorized_at && !provider.tiny_real_consumed_at
+}
+
+function openEditProvider(provider: VideoProviderAccount) {
+  editingProvider.value = provider
+  editProviderForm.displayName = provider.display_name
+  editProviderForm.apiKey = ''
+  editProviderForm.baseUrl = provider.base_url || ''
+  editProviderForm.defaultModel = provider.default_model || ''
+  editProviderForm.groupId = provider.group_id
+  editProviderModalOpen.value = true
+}
+
+function clearEditProviderSecrets() {
+  editProviderForm.apiKey = ''
+}
+
+function closeEditProviderModal() {
+  editProviderModalOpen.value = false
+  editingProvider.value = null
+  clearEditProviderSecrets()
+}
+
+async function saveEditProvider() {
+  if (!editingProvider.value) return
+  if (!editProviderForm.groupId) {
+    appStore.showError('请选择一个分组')
+    return
+  }
+  savingEditProvider.value = true
+  try {
+    const payload: {
+      display_name: string
+      group_id: number
+      base_url?: string
+      default_model?: string
+      api_key?: string
+    } = {
+      display_name: editProviderForm.displayName.trim(),
+      group_id: editProviderForm.groupId,
+    }
+    const baseUrl = editProviderForm.baseUrl.trim()
+    if (baseUrl) payload.base_url = baseUrl
+    const defaultModel = editProviderForm.defaultModel.trim()
+    if (defaultModel) payload.default_model = defaultModel
+    if (editProviderForm.apiKey.trim()) payload.api_key = editProviderForm.apiKey.trim()
+    await adminAPI.video.updateProvider(editingProvider.value.id, payload)
+    appStore.showSuccess('通道已更新')
+    closeEditProviderModal()
+    await loadProviders()
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, '更新视频通道失败', CONSOLE_ERROR_ZH))
+  } finally {
+    savingEditProvider.value = false
+  }
+}
+
+async function retryProviderAuth(provider: VideoProviderAccount) {
+  providerActionId.value = provider.id
+  try {
+    await adminAPI.video.authorizeTinyReal(provider.id)
+    appStore.showSuccess('已记录单次授权；等第一次真实出片后通道永久可用')
+    await loadProviders()
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, '重试授权失败', CONSOLE_ERROR_ZH))
+  } finally {
+    providerActionId.value = null
   }
 }
 

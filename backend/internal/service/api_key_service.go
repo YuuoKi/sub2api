@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"html"
+	"log/slog"
 	"sort"
 	"strconv"
 	"strings"
@@ -177,9 +178,12 @@ type CreateAPIKeyRequest struct {
 // CreateQCanvasKeyPairRequest expresses the two logical credentials QCanvas
 // needs. The group IDs are administrator-selected routing/billing groups; the
 // video/media meanings are deliberately not inferred from group names.
+// AllowAdminTarget must be explicitly true to mint keys for an admin user;
+// disabled users are always rejected.
 type CreateQCanvasKeyPairRequest struct {
-	VideoGroupID int64 `json:"video_group_id"`
-	MediaGroupID int64 `json:"media_group_id"`
+	VideoGroupID     int64 `json:"video_group_id"`
+	MediaGroupID     int64 `json:"media_group_id"`
+	AllowAdminTarget bool  `json:"allow_admin_target"`
 }
 
 // QCanvasKeyPair is returned only by the initial dual-key issuance response.
@@ -508,11 +512,19 @@ func (s *APIKeyService) CreateQCanvasKeyPair(ctx context.Context, userID int64, 
 	if err != nil {
 		return nil, fmt.Errorf("get user: %w", err)
 	}
-	if user.Role == RoleAdmin {
-		return nil, infraerrors.BadRequest("QC_KEY_PAIR_TARGET_ADMIN", "不能为管理员账号签发 QCanvas 双 Key")
-	}
 	if user.Status == StatusDisabled {
 		return nil, infraerrors.BadRequest("QC_KEY_PAIR_TARGET_DISABLED", "不能为已停用账号签发 QCanvas 双 Key")
+	}
+	if user.Role == RoleAdmin && !req.AllowAdminTarget {
+		return nil, infraerrors.BadRequest("QC_KEY_PAIR_TARGET_ADMIN", "不能为管理员账号签发 QCanvas 双 Key")
+	}
+	if user.Role == RoleAdmin && req.AllowAdminTarget {
+		slog.Info("admin.qcanvas_key_pair.allow_admin_target",
+			"audit", true,
+			"target_user_id", userID,
+			"video_group_id", req.VideoGroupID,
+			"media_group_id", req.MediaGroupID,
+		)
 	}
 
 	validateGroup := func(groupID int64) error {

@@ -592,6 +592,8 @@ export interface ApiKey {
   id: number
   user_id: number
   key: string
+  /** Non-secret last-4 hint from admin list endpoints (never the full secret). */
+  key_hint?: string
   name: string
   group_id: number | null
   status: 'active' | 'inactive' | 'quota_exhausted' | 'expired'

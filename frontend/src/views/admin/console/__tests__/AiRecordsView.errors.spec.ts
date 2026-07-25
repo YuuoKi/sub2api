@@ -5,9 +5,9 @@ import AiRecordsView from '../AiRecordsView.vue'
 const mocks = vi.hoisted(() => ({
   usageList: vi.fn(),
   usageGetStats: vi.fn(),
+  searchUsers: vi.fn(),
   getSamples: vi.fn(),
   getWeeklyReport: vi.fn(),
-  usersList: vi.fn(),
   showError: vi.fn(),
   showSuccess: vi.fn(),
 }))
@@ -17,13 +17,11 @@ vi.mock('@/api/admin', () => ({
     usage: {
       list: mocks.usageList,
       getStats: mocks.usageGetStats,
+      searchUsers: mocks.searchUsers,
     },
     generationContent: {
       getSamples: mocks.getSamples,
       getWeeklyReport: mocks.getWeeklyReport,
-    },
-    users: {
-      list: mocks.usersList,
     },
   },
 }))
@@ -82,7 +80,7 @@ describe('AiRecordsView error surfacing', () => {
     mocks.usageGetStats.mockResolvedValue(resolvedStats())
     mocks.getSamples.mockResolvedValue({ samples: [], is_live: true })
     mocks.getWeeklyReport.mockResolvedValue(null)
-    mocks.usersList.mockResolvedValue({ items: [], total: 0 })
+    mocks.searchUsers.mockResolvedValue([])
   })
 
   it('shows an inline error banner (not the empty state) when loadSamples rejects', async () => {
@@ -162,7 +160,7 @@ describe('AiRecordsView weekly report summary', () => {
     mocks.usageList.mockResolvedValue(resolvedLogsPage())
     mocks.usageGetStats.mockResolvedValue(resolvedStats())
     mocks.getSamples.mockResolvedValue({ samples: [], is_live: true })
-    mocks.usersList.mockResolvedValue({ items: [], total: 0 })
+    mocks.searchUsers.mockResolvedValue([])
   })
 
   it('renders structured Chinese fields instead of the raw English ledger markdown', async () => {
@@ -215,7 +213,7 @@ describe('AiRecordsView AbortSignal wiring', () => {
     mocks.usageGetStats.mockResolvedValue(resolvedStats())
     mocks.getSamples.mockResolvedValue({ samples: [], is_live: true })
     mocks.getWeeklyReport.mockResolvedValue(null)
-    mocks.usersList.mockResolvedValue({ items: [], total: 0 })
+    mocks.searchUsers.mockResolvedValue([])
   })
 
   it('passes an AbortSignal into every concurrently-loaded request', async () => {
@@ -226,7 +224,7 @@ describe('AiRecordsView AbortSignal wiring', () => {
     expect(mocks.usageGetStats.mock.calls[0][1]?.signal).toBeInstanceOf(AbortSignal)
     expect(mocks.getSamples.mock.calls[0][0]?.signal).toBeInstanceOf(AbortSignal)
     expect(mocks.getWeeklyReport.mock.calls[0][0]?.signal).toBeInstanceOf(AbortSignal)
-    expect(mocks.usersList.mock.calls[0][3]?.signal).toBeInstanceOf(AbortSignal)
+    // Staff filter is on-demand searchUsers; not part of the initial reload family.
 
     wrapper.unmount()
   })
@@ -236,14 +234,14 @@ describe('AiRecordsView AbortSignal wiring', () => {
     await flushPromises()
 
     const logsSignal: AbortSignal = mocks.usageList.mock.calls[0][1].signal
-    const staffSignal: AbortSignal = mocks.usersList.mock.calls[0][3].signal
+    const statsSignal: AbortSignal = mocks.usageGetStats.mock.calls[0][1].signal
     expect(logsSignal.aborted).toBe(false)
-    expect(staffSignal.aborted).toBe(false)
+    expect(statsSignal.aborted).toBe(false)
 
     wrapper.unmount()
 
     expect(logsSignal.aborted).toBe(true)
-    expect(staffSignal.aborted).toBe(true)
+    expect(statsSignal.aborted).toBe(true)
   })
 
   it('aborts the previous reload family in-flight request when a new reload starts', async () => {

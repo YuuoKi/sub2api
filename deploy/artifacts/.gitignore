@@ -1,0 +1,4 @@
+﻿# Local image export artifacts — do not commit
+*.tar
+*.tar.gz
+*.img

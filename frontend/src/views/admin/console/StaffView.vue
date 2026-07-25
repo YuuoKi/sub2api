@@ -67,7 +67,7 @@
                             :class="memberTypeBadgeClass(user.member_type)"
                             data-test="member-type-badge"
                           >
-                            {{ memberTypeLabel(user.member_type) }}
+                            {{ memberTypeLabel(user.member_type, user.role) }}
                           </span>
                         </div>
                         <div class="truncate text-xs text-gray-500 dark:text-gray-400">{{ user.email }}</div>
@@ -96,6 +96,7 @@
                         查看花费
                       </RouterLink>
                       <button
+                        v-if="user.role !== 'admin'"
                         class="btn btn-sm btn-outline"
                         type="button"
                         data-test="row-toggle-status"
@@ -104,6 +105,14 @@
                       >
                         {{ user.status === 'active' ? '停用' : '启用' }}
                       </button>
+                      <span
+                        v-else
+                        class="inline-flex items-center rounded-md px-2 py-1 text-xs text-gray-500 dark:text-gray-400"
+                        data-test="row-admin-protected"
+                        title="管理员账号不能停用或删除，避免锁出管理端"
+                      >
+                        管理员（不可停用/删除）
+                      </span>
                       <button
                         v-if="user.role !== 'admin'"
                         class="btn btn-sm btn-outline !text-red-600 dark:!text-red-400"
@@ -462,7 +471,8 @@ function isListableStaff(user: AdminUser): boolean {
   return user.role === 'admin' && authStore.user?.id === user.id
 }
 
-function memberTypeLabel(memberType: AdminUser['member_type']): string {
+function memberTypeLabel(memberType: AdminUser['member_type'], role?: AdminUser['role']): string {
+  if (role === 'admin') return '管理员'
   if (memberType === 'tool') return '工具账号'
   if (memberType === 'human') return '员工账号'
   return '未知类型'

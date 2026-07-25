@@ -78,6 +78,8 @@ export const CONSOLE_ERROR_ZH: Record<string, string> = {
   probe_invalid_baseurl: '此接口地址不支持简易连通测试，请直接使用或改用完整「上游账号」页诊断',
   internal_error: '服务器内部错误，请稍后重试；反复出现请去「系统」页看健康检查',
   ADMIN_COMPLIANCE_ACK_REQUIRED: '需要先在页面上完成管理员合规确认',
+  CANNOT_DISABLE_ADMIN_USER: '不能停用管理员账号（避免把自己锁出管理端）',
+  CANNOT_DELETE_ADMIN_USER: '不能删除管理员账号（避免把自己锁出管理端）',
 }
 
 export type QuotaWarningLevel = 'none' | 'warn' | 'critical'

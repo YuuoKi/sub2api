@@ -666,4 +666,162 @@ describe('StaffView one-shot staff issuance', () => {
     )
     uuidSpy.mockRestore()
   })
+
+  it('guards double-submit with single-flight so pair issuance is called at most once', async () => {
+    let releasePair!: (value: {
+      video: { id: number; name: string; key: string; status: string; quota: number; quota_used: number }
+      media: { id: number; name: string; key: string; status: string; quota: number; quota_used: number }
+    }) => void
+    const pairGate = new Promise<Parameters<typeof releasePair>[0]>((resolve) => {
+      releasePair = resolve
+    })
+    mocks.createQCanvasKeyPairForUser.mockImplementation(() => pairGate)
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('[data-test="create-service-identity"]').trigger('click')
+    await wrapper.find('[data-test="service-identity-email"]').setValue('zhangsan@wujie.local')
+    const form = wrapper.find('form[data-test="service-identity-form"]')
+    await form.trigger('submit.prevent')
+    await form.trigger('submit.prevent')
+    await flushPromises()
+
+    expect(mocks.createQCanvasKeyPairForUser).toHaveBeenCalledTimes(1)
+
+    releasePair({
+      video: { id: 12, name: 'QCanvas · video', key: 'sk-video-one-time', status: 'active', quota: 0, quota_used: 0 },
+      media: { id: 13, name: 'QCanvas · media', key: FULL_KEY, status: 'active', quota: 0, quota_used: 0 },
+    })
+    await flushPromises()
+    expect(mocks.createQCanvasKeyPairForUser).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('[data-test="wizard-video-key"]').text()).toContain('sk-video-one-time')
+  })
+
+  it('treats blank idempotent key replay as hard failure, not closable success', async () => {
+    mocks.createQCanvasKeyPairForUser.mockResolvedValue({
+      video: { id: 12, name: 'QCanvas · video', key: '', status: 'active', quota: 0, quota_used: 0 },
+      media: { id: 13, name: 'QCanvas · media', key: '', status: 'active', quota: 0, quota_used: 0 },
+    })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('[data-test="create-service-identity"]').trigger('click')
+    await wrapper.find('[data-test="service-identity-email"]').setValue('zhangsan@wujie.local')
+    await wrapper.find('form[data-test="service-identity-form"]').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="wizard-done"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="wizard-video-key"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('开卡成功')
+    expect(mocks.showError).toHaveBeenCalledWith(expect.stringMatching(/明文|重放|失败|不能|不可/))
+    // wizardUser kept: retry must not create again
+    expect(wrapper.find('form[data-test="service-identity-form"]').exists()).toBe(true)
+    mocks.createQCanvasKeyPairForUser.mockResolvedValueOnce({
+      video: { id: 12, name: 'QCanvas · video', key: 'sk-video-one-time', status: 'active', quota: 0, quota_used: 0 },
+      media: { id: 13, name: 'QCanvas · media', key: FULL_KEY, status: 'active', quota: 0, quota_used: 0 },
+    })
+    await wrapper.find('form[data-test="service-identity-form"]').trigger('submit.prevent')
+    await flushPromises()
+    expect(mocks.usersCreate).toHaveBeenCalledTimes(1)
+    expect(mocks.createQCanvasKeyPairForUser).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not treat bare gateway 409 without EMAIL_EXISTS as email conflict reuse', async () => {
+    mocks.usersCreate.mockRejectedValue({ status: 409, message: 'conflict from gateway' })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('[data-test="create-service-identity"]').trigger('click')
+    await wrapper.find('[data-test="service-identity-email"]').setValue('qcanvas@wujie.local')
+    await wrapper.find('form[data-test="service-identity-form"]').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(mocks.createQCanvasKeyPairForUser).not.toHaveBeenCalled()
+    expect(mocks.showError).toHaveBeenCalled()
+    // Must not have entered the EMAIL_EXISTS resolve path that lists for reuse.
+    const listCallsAfterMount = mocks.usersList.mock.calls.slice(1)
+    expect(listCallsAfterMount.every((call) => call[2]?.search == null)).toBe(true)
+  })
+
+  it('paginates staff list until exhausted so page-2 owners are not truncated', async () => {
+    const page1 = Array.from({ length: 100 }, (_, i) => ({
+      id: i + 1,
+      username: `u${i + 1}`,
+      email: `u${i + 1}@wujie.local`,
+      role: 'user' as const,
+      member_type: 'tool' as const,
+      status: 'active' as const,
+      notes: '',
+      allowed_groups: null,
+      subscriptions: [],
+    }))
+    const page2Owner = {
+      id: 101,
+      username: '页二员工',
+      email: 'page2@wujie.local',
+      role: 'user' as const,
+      member_type: 'human' as const,
+      status: 'active' as const,
+      notes: '',
+      allowed_groups: null,
+      subscriptions: [],
+    }
+    mocks.usersList
+      .mockResolvedValueOnce({ items: page1, total: 101 })
+      .mockResolvedValueOnce({ items: [page2Owner], total: 101 })
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(mocks.usersList).toHaveBeenCalledWith(1, 100, expect.any(Object))
+    expect(mocks.usersList).toHaveBeenCalledWith(2, 100, expect.any(Object))
+    expect(wrapper.text()).toContain('页二员工')
+    expect(wrapper.text()).toContain('page2@wujie.local')
+  })
+
+  it('paginates email conflict search so an exact owner beyond page 1 can be reused', async () => {
+    mocks.usersCreate.mockRejectedValue({ status: 409, reason: 'EMAIL_EXISTS', message: 'email already exists' })
+    const page1Noise = Array.from({ length: 100 }, (_, i) => ({
+      id: 200 + i,
+      username: `noise${i}`,
+      email: `noise${i}@wujie.local`,
+      role: 'user' as const,
+      member_type: 'tool' as const,
+      status: 'active' as const,
+      notes: '',
+      allowed_groups: null,
+      subscriptions: [],
+    }))
+    const deepOwner = {
+      id: 77,
+      username: '深页员工',
+      email: 'deep@wujie.local',
+      role: 'user' as const,
+      member_type: 'tool' as const,
+      status: 'active' as const,
+      notes: '',
+      allowed_groups: null,
+      subscriptions: [],
+    }
+    mocks.usersList
+      .mockResolvedValueOnce({ items: [], total: 0 }) // mount loadStaff
+      .mockResolvedValueOnce({ items: page1Noise, total: 101 }) // conflict search page 1
+      .mockResolvedValueOnce({ items: [deepOwner], total: 101 }) // conflict search page 2
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('[data-test="create-service-identity"]').trigger('click')
+    await wrapper.find('[data-test="service-identity-email"]').setValue('deep@wujie.local')
+    await wrapper.find('form[data-test="service-identity-form"]').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(mocks.createQCanvasKeyPairForUser).toHaveBeenCalledWith(
+      77,
+      { video_group_id: 7, media_group_id: 7 },
+      expect.any(String),
+    )
+    expect(wrapper.find('[data-test="wizard-video-key"]').text()).toContain('sk-video-one-time')
+  })
 })

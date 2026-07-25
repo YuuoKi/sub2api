@@ -391,7 +391,41 @@ function normalizeEmail(email: string): string {
 function isEmailConflictError(err: unknown): boolean {
   if (!err || typeof err !== 'object') return false
   const e = err as { status?: number; reason?: string }
-  return e.status === 409 || e.reason === 'EMAIL_EXISTS'
+  // Prefer EMAIL_EXISTS; do not treat bare gateway 409 without reason as email conflict.
+  return e.reason === 'EMAIL_EXISTS'
+}
+
+const STAFF_PAGE_SIZE = 100
+
+type IssuedQCanvasKeyPair = { video: ApiKey; media: ApiKey }
+
+async function listStaffPages(options: {
+  search?: string
+}): Promise<{ items: AdminUser[]; total: number }> {
+  const merged: AdminUser[] = []
+  let page = 1
+  let total = 0
+  while (true) {
+    const res = await adminAPI.users.list(page, STAFF_PAGE_SIZE, {
+      search: options.search,
+      include_subscriptions: false,
+      sort_by: 'created_at',
+      sort_order: 'asc',
+    })
+    const items = res.items || []
+    total = typeof res.total === 'number' ? res.total : merged.length + items.length
+    merged.push(...items)
+    if (items.length < STAFF_PAGE_SIZE || merged.length >= total) break
+    page += 1
+  }
+  return { items: merged, total }
+}
+
+function hasUsableQCanvasPairKeys(pair: IssuedQCanvasKeyPair | null | undefined): boolean {
+  if (!pair) return false
+  const videoKey = typeof pair.video?.key === 'string' ? pair.video.key.trim() : ''
+  const mediaKey = typeof pair.media?.key === 'string' ? pair.media.key.trim() : ''
+  return videoKey.length > 0 && mediaKey.length > 0
 }
 
 const filteredUsers = computed(() => {
@@ -403,11 +437,8 @@ const filteredUsers = computed(() => {
 async function loadStaff() {
   loading.value = true
   try {
-    const res = await adminAPI.users.list(1, 100, {
+    const res = await listStaffPages({
       search: search.value.trim() || undefined,
-      include_subscriptions: false,
-      sort_by: 'created_at',
-      sort_order: 'asc',
     })
     users.value = (res.items || []).filter((user) => isListableStaff(user))
     if (users.value.length) {
@@ -442,7 +473,6 @@ const staffForm = reactive({
   rechargeAmount: 0,
 })
 
-type IssuedQCanvasKeyPair = { video: ApiKey; media: ApiKey }
 const issuedQCanvasPair = ref<IssuedQCanvasKeyPair | null>(null)
 const qcanvasPairCopied = ref(false)
 
@@ -611,16 +641,11 @@ async function quickCreateGroup(name: string) {
 }
 
 // 顺序执行：建账号（已建过则跳过，允许失败后原地重试）→ 开双 Key（同组，后端已放开）→ 充值（金额 > 0 时）
-// 邮箱已存在（扁平 409 / EMAIL_EXISTS）时：精确匹配后按状态复用或显式失败；禁止自动转换 human↔tool
+// 邮箱已存在（EMAIL_EXISTS）时：精确匹配后按状态复用或显式失败；禁止自动转换 human↔tool
 async function findAccountByExactEmail(email: string): Promise<AdminUser | null> {
   const trimmed = email.trim()
   const normalized = normalizeEmail(trimmed)
-  const res = await adminAPI.users.list(1, 100, {
-    search: trimmed,
-    include_subscriptions: false,
-    sort_by: 'created_at',
-    sort_order: 'asc',
-  })
+  const res = await listStaffPages({ search: trimmed })
   return (
     (res.items || []).find((user) => normalizeEmail(user.email) === normalized) ?? null
   )
@@ -649,6 +674,7 @@ async function resolveConflictOwner(email: string): Promise<AdminUser | null> {
 }
 
 async function submitStaff() {
+  if (submitting.value) return
   if (!eligibleGroups.value.some((group) => group.id === staffForm.groupId)) {
     appStore.showError('请先选择所在分组；没有可用分组时先新建一个')
     return
@@ -678,11 +704,19 @@ async function submitStaff() {
       // openCreateStaff always sets this; refuse silent regenerate mid-session.
       throw new Error('开卡会话缺少幂等键，请关闭后重新打开弹窗再试')
     }
-    issuedQCanvasPair.value = await adminAPI.apiKeys.createQCanvasKeyPairForUser(
+    const pair = await adminAPI.apiKeys.createQCanvasKeyPairForUser(
       owner.id,
       { video_group_id: staffForm.groupId, media_group_id: staffForm.groupId },
       staffIdempotencyKey.value,
     )
+    // Blank idempotent replay must never enter Done-as-success UI.
+    if (!hasUsableQCanvasPairKeys(pair)) {
+      appStore.showError(
+        '开卡失败：幂等重放未返回明文 Key，不能当作开卡成功。请保留此账号信息后联系管理员确认是否已开出，或关闭后换会话重试。',
+      )
+      return
+    }
+    issuedQCanvasPair.value = pair
     const amount = Number(staffForm.rechargeAmount) || 0
     if (amount > 0) {
       try {

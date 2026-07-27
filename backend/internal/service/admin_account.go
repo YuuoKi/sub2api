@@ -100,6 +100,19 @@ func (s *adminServiceImpl) normalizeLANAdminAccountExtra(extra map[string]any) m
 }
 
 func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccountInput) (*Account, error) {
+	if input == nil {
+		return nil, infraerrors.BadRequest("INVALID_ACCOUNT", "account input is required")
+	}
+	if input.Platform == PlatformHCAtom {
+		if input.Type != AccountTypeAPIKey {
+			return nil, infraerrors.BadRequest("HC_ATOM_ACCOUNT_TYPE_INVALID", "HC-ATOM accounts require apikey type")
+		}
+		protected, err := s.protectHCAtomAdminCredentials(nil, input.Credentials)
+		if err != nil {
+			return nil, err
+		}
+		input.Credentials = protected
+	}
 	// 绑定分组
 	groupIDs := input.GroupIDs
 	// 如果没有指定分组,自动绑定对应平台的默认分组
@@ -210,9 +223,24 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 }
 
 func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *UpdateAccountInput) (*Account, error) {
+	if input == nil {
+		return nil, infraerrors.BadRequest("INVALID_ACCOUNT", "account input is required")
+	}
 	account, err := s.accountRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
+	}
+	if account.Platform == PlatformHCAtom {
+		if input.Type != "" && input.Type != AccountTypeAPIKey {
+			return nil, infraerrors.BadRequest("HC_ATOM_ACCOUNT_TYPE_INVALID", "HC-ATOM accounts require apikey type")
+		}
+		if input.Credentials != nil {
+			protected, protectErr := s.protectHCAtomAdminCredentials(account.Credentials, input.Credentials)
+			if protectErr != nil {
+				return nil, protectErr
+			}
+			input.Credentials = protected
+		}
 	}
 	// 安全/身份不变量(影子账号):通用更新路径被 edit/re-auth/refresh/batch 共用,
 	// 必须在此守住,否则仅在创建时的保证可被这些路径绕过。
@@ -384,6 +412,21 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 
 // UpdateAccountExtra 仅对 Extra JSONB 做 key 级合并，避免覆盖其它运行态键
 // （如 model_rate_limits / passive_usage_* 等）。
+func (s *adminServiceImpl) protectHCAtomAdminCredentials(existing, incoming map[string]any) (map[string]any, error) {
+	protected, err := ProtectHCAtomAccountCredentials(existing, incoming, s.hcAtomCredentialCipher)
+	if err == nil {
+		return protected, nil
+	}
+	if errors.Is(err, ErrHCAtomCredentialKeyUnavailable) {
+		return nil, infraerrors.New(http.StatusServiceUnavailable, "HC_ATOM_CREDENTIAL_ENCRYPTION_UNAVAILABLE",
+			"HC-ATOM credential encryption is not configured")
+	}
+	if errors.Is(err, ErrHCAtomCredentialMissing) {
+		return nil, infraerrors.BadRequest("HC_ATOM_API_KEY_REQUIRED", "HC-ATOM account API key is required")
+	}
+	return nil, infraerrors.BadRequest("HC_ATOM_CREDENTIAL_INVALID", "HC-ATOM account credential is invalid")
+}
+
 func (s *adminServiceImpl) UpdateAccountExtra(ctx context.Context, id int64, updates map[string]any) error {
 	updates = s.normalizeLANAdminAccountExtra(updates)
 	if len(updates) == 0 {

@@ -371,6 +371,38 @@ func TestLoadDefaultBatchImageQueueDisabled(t *testing.T) {
 	require.False(t, cfg.BatchImage.QueueEnabled)
 }
 
+func TestLoadHCAtomImageCredentialDomainDefaultsDenied(t *testing.T) {
+	resetViperWithJWTSecret(t)
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.False(t, cfg.BatchImage.HCAtomEnabled)
+	require.Empty(t, cfg.BatchImage.HCAtomEncryptionKey)
+}
+
+func TestLoadHCAtomImageCredentialDomainUsesDedicatedEnvironmentKey(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("VIDEO_GATEWAY_ENCRYPTION_KEY", strings.Repeat("a", 64))
+	t.Setenv("BATCH_IMAGE_HC_ATOM_ENABLED", "true")
+	t.Setenv("BATCH_IMAGE_HC_ATOM_ENCRYPTION_KEY", strings.Repeat("b", 64))
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.True(t, cfg.BatchImage.HCAtomEnabled)
+	require.Equal(t, strings.Repeat("b", 64), cfg.BatchImage.HCAtomEncryptionKey)
+	require.NotEqual(t, cfg.VideoGateway.EncryptionKey, cfg.BatchImage.HCAtomEncryptionKey)
+	require.NotEqual(t, cfg.JWT.Secret, cfg.BatchImage.HCAtomEncryptionKey)
+}
+
+func TestLoadHCAtomImageCredentialDomainRejectsMissingDedicatedKey(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("BATCH_IMAGE_HC_ATOM_ENABLED", "true")
+	t.Setenv("BATCH_IMAGE_HC_ATOM_ENCRYPTION_KEY", "")
+
+	_, err := Load()
+	require.ErrorContains(t, err, "batch_image.hc_atom_encryption_key")
+}
+
 func TestLoadIdempotencyConfigFromEnv(t *testing.T) {
 	resetViperWithJWTSecret(t)
 	t.Setenv("IDEMPOTENCY_OBSERVE_ONLY", "false")

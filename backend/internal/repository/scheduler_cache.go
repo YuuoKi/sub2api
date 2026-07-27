@@ -262,7 +262,7 @@ func (c *schedulerCache) UpdateLastUsed(ctx context.Context, updates map[int64]t
 			return err
 		}
 		account.LastUsedAt = ptrTime(updates[ids[i]])
-		updated, err := json.Marshal(account)
+		updated, err := json.Marshal(buildSchedulerCacheAccount(*account))
 		if err != nil {
 			return err
 		}
@@ -379,7 +379,7 @@ func (c *schedulerCache) writeAccounts(ctx context.Context, accounts []service.A
 	}
 
 	for _, account := range accounts {
-		fullPayload, err := json.Marshal(account)
+		fullPayload, err := json.Marshal(buildSchedulerCacheAccount(account))
 		if err != nil {
 			return err
 		}
@@ -453,9 +453,46 @@ func buildSchedulerMetadataAccount(account service.Account) service.Account {
 		QuotaDimension:          account.QuotaDimension,
 		AccountGroups:           filterSchedulerAccountGroups(account.AccountGroups),
 		GroupIDs:                filterSchedulerGroupIDs(account.GroupIDs, account.AccountGroups),
-		Credentials:             filterSchedulerCredentials(account.Credentials),
+		Credentials:             filterSchedulerCredentialsForAccount(account),
 		Extra:                   filterSchedulerExtra(account.Extra),
 	}
+}
+
+func buildSchedulerCacheAccount(account service.Account) service.Account {
+	if account.Platform != service.PlatformHCAtom {
+		return account
+	}
+	account.Credentials = filterHCAtomSchedulerCredentials(account.Credentials)
+	return account
+}
+
+func filterSchedulerCredentialsForAccount(account service.Account) map[string]any {
+	if account.Platform == service.PlatformHCAtom {
+		return filterHCAtomSchedulerCredentials(account.Credentials)
+	}
+	return filterSchedulerCredentials(account.Credentials)
+}
+
+func filterHCAtomSchedulerCredentials(credentials map[string]any) map[string]any {
+	if len(credentials) == 0 {
+		return nil
+	}
+	keys := []string{
+		"model_mapping",
+		service.HCAtomAPIKeyCiphertextField,
+		service.HCAtomAPIKeyMaskedField,
+		service.HCAtomAPIKeyConfiguredField,
+	}
+	filtered := make(map[string]any, len(keys))
+	for _, key := range keys {
+		if value, ok := credentials[key]; ok && value != nil {
+			filtered[key] = value
+		}
+	}
+	if len(filtered) == 0 {
+		return nil
+	}
+	return filtered
 }
 
 func filterSchedulerAccountGroups(accountGroups []service.AccountGroup) []service.AccountGroup {

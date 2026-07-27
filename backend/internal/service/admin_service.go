@@ -575,24 +575,25 @@ var ErrRPMStatusUnavailable = infraerrors.New(http.StatusNotImplemented, "RPM_ST
 
 // adminServiceImpl implements AdminService
 type adminServiceImpl struct {
-	userRepo             UserRepository
-	groupRepo            GroupRepository
-	accountRepo          AccountRepository
-	proxyRepo            ProxyRepository
-	apiKeyRepo           APIKeyRepository
-	redeemCodeRepo       RedeemCodeRepository
-	userGroupRateRepo    UserGroupRateRepository
-	userRPMCache         UserRPMCache
-	billingCacheService  *BillingCacheService
-	proxyProber          ProxyExitInfoProber
-	proxyLatencyCache    ProxyLatencyCache
-	authCacheInvalidator APIKeyAuthCacheInvalidator
-	entClient            *dbent.Client // 用于开启数据库事务
-	settingService       *SettingService
-	defaultSubAssigner   DefaultSubscriptionAssigner
-	userSubRepo          UserSubscriptionRepository
-	privacyClientFactory PrivacyClientFactory
-	runtimeBlocker       AccountRuntimeBlocker
+	userRepo               UserRepository
+	groupRepo              GroupRepository
+	accountRepo            AccountRepository
+	proxyRepo              ProxyRepository
+	apiKeyRepo             APIKeyRepository
+	redeemCodeRepo         RedeemCodeRepository
+	userGroupRateRepo      UserGroupRateRepository
+	userRPMCache           UserRPMCache
+	billingCacheService    *BillingCacheService
+	proxyProber            ProxyExitInfoProber
+	proxyLatencyCache      ProxyLatencyCache
+	authCacheInvalidator   APIKeyAuthCacheInvalidator
+	entClient              *dbent.Client // 用于开启数据库事务
+	settingService         *SettingService
+	defaultSubAssigner     DefaultSubscriptionAssigner
+	userSubRepo            UserSubscriptionRepository
+	privacyClientFactory   PrivacyClientFactory
+	runtimeBlocker         AccountRuntimeBlocker
+	hcAtomCredentialCipher HCAtomCredentialCipher
 }
 
 type userGroupRateBatchReader interface {
@@ -640,4 +641,49 @@ func NewAdminService(
 		privacyClientFactory: privacyClientFactory,
 		runtimeBlocker:       runtimeBlocker,
 	}
+}
+
+func ProvideAdminService(
+	userRepo UserRepository,
+	groupRepo GroupRepository,
+	accountRepo AccountRepository,
+	proxyRepo ProxyRepository,
+	apiKeyRepo APIKeyRepository,
+	redeemCodeRepo RedeemCodeRepository,
+	userGroupRateRepo UserGroupRateRepository,
+	userRPMCache UserRPMCache,
+	billingCacheService *BillingCacheService,
+	proxyProber ProxyExitInfoProber,
+	proxyLatencyCache ProxyLatencyCache,
+	authCacheInvalidator APIKeyAuthCacheInvalidator,
+	entClient *dbent.Client,
+	settingService *SettingService,
+	defaultSubAssigner DefaultSubscriptionAssigner,
+	userSubRepo UserSubscriptionRepository,
+	privacyClientFactory PrivacyClientFactory,
+	runtimeBlocker AccountRuntimeBlocker,
+	hcAtomCredentialCipher HCAtomCredentialCipher,
+) AdminService {
+	svc := NewAdminService(
+		userRepo,
+		groupRepo,
+		accountRepo,
+		proxyRepo,
+		apiKeyRepo,
+		redeemCodeRepo,
+		userGroupRateRepo,
+		userRPMCache,
+		billingCacheService,
+		proxyProber,
+		proxyLatencyCache,
+		authCacheInvalidator,
+		entClient,
+		settingService,
+		defaultSubAssigner,
+		userSubRepo,
+		privacyClientFactory,
+		runtimeBlocker,
+	)
+	svc.(*adminServiceImpl).hcAtomCredentialCipher = hcAtomCredentialCipher
+	return svc
 }

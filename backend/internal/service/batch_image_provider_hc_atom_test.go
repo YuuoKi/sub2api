@@ -31,15 +31,10 @@ func TestHCAtomBatchProvider_SubmitUsesFixedAsyncContract(t *testing.T) {
 
 		return hcAtomHTTPResponse(http.StatusOK, `{"code":0,"msg":"ok","data":{"taskId":"hc-task-1","status":"PENDING"}}`), nil
 	})
-	provider := NewHCAtomBatchImageProvider(NewHCAtomBatchHTTPClient(&http.Client{Transport: transport}))
+	cipher, account := hcAtomBatchTestAccount(t, "hc-test-key")
+	provider := NewHCAtomBatchImageProviderWithCredentialCipher(NewHCAtomBatchHTTPClient(&http.Client{Transport: transport}), cipher)
 
-	got, err := provider.Submit(context.Background(), &BatchImageJob{BatchID: "imgbatch_123", Model: "seedream-5.0"}, &Account{
-		Platform: PlatformHCAtom,
-		Type:     AccountTypeAPIKey,
-		Credentials: map[string]any{
-			"hc_atom_api_key": "hc-test-key",
-		},
-	}, BatchImageInput{
+	got, err := provider.Submit(context.Background(), &BatchImageJob{BatchID: "imgbatch_123", Model: "seedream-5.0"}, account, BatchImageInput{
 		BatchID:          "imgbatch_123",
 		Model:            "seedream-5.0",
 		ResponseMimeType: "image/png",
@@ -70,17 +65,16 @@ func TestHCAtomBatchProvider_OpenResultArchivesValidatedImageAsJSONL(t *testing.
 	resultTransport := hcAtomRoundTripFunc(func(req *http.Request) (*http.Response, error) {
 		require.Equal(t, "https", req.URL.Scheme)
 		require.Equal(t, "8.8.8.8", req.URL.Hostname())
-		response := hcAtomHTTPResponse(http.StatusOK, "\x89PNG\r\n\x1a\nvalid-test-image")
+		response := hcAtomHTTPResponse(http.StatusOK, "\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01")
 		response.Header.Set("Content-Type", "image/png")
 		return response, nil
 	})
-	provider := NewHCAtomBatchImageProviderWithResultClient(&fakeHCAtomBatchClient{task: &HCAtomBatchTask{
+	cipher, account := hcAtomBatchTestAccount(t, "test")
+	provider := NewHCAtomBatchImageProviderWithResultClientAndCredentialCipher(&fakeHCAtomBatchClient{task: &HCAtomBatchTask{
 		TaskID: "hc-task-1", Status: "SUCCESS", ResultURL: "https://8.8.8.8/result.png",
-	}}, &http.Client{Transport: resultTransport})
+	}}, &http.Client{Transport: resultTransport}, cipher)
 	jobName, customID := "hc-task-1", "item_000001"
-	r, contentType, err := provider.OpenResult(context.Background(), &BatchImageJob{ProviderJobName: &jobName, ProviderInputRef: &customID}, &Account{
-		Platform: PlatformHCAtom, Type: AccountTypeAPIKey, Credentials: map[string]any{"hc_atom_api_key": "test"},
-	})
+	r, contentType, err := provider.OpenResult(context.Background(), &BatchImageJob{ProviderJobName: &jobName, ProviderInputRef: &customID}, account)
 	require.NoError(t, err)
 	defer r.Close()
 	require.Equal(t, "application/jsonl", contentType)
@@ -188,6 +182,15 @@ func (r *hcAtomBatchGroupRepo) GetByIDLite(_ context.Context, id int64) (*Group,
 }
 
 type fakeHCAtomBatchClient struct{ task *HCAtomBatchTask }
+
+func hcAtomBatchTestAccount(t *testing.T, apiKey string) (HCAtomCredentialCipher, *Account) {
+	t.Helper()
+	cipher, err := NewHCAtomCredentialCipher(strings.Repeat("77", 32))
+	require.NoError(t, err)
+	credentials, err := ProtectHCAtomAccountCredentials(nil, map[string]any{"api_key": apiKey}, cipher)
+	require.NoError(t, err)
+	return cipher, &Account{Platform: PlatformHCAtom, Type: AccountTypeAPIKey, Credentials: credentials}
+}
 
 func (f *fakeHCAtomBatchClient) Create(context.Context, string, string, HCAtomBatchCreateRequest) (*HCAtomBatchTask, error) {
 	return f.task, nil

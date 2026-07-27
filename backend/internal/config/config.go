@@ -197,6 +197,8 @@ type IdempotencyConfig struct {
 
 type BatchImageConfig struct {
 	Enabled                           bool   `mapstructure:"enabled"`
+	HCAtomEnabled                     bool   `mapstructure:"hc_atom_enabled"`
+	HCAtomEncryptionKey               string `mapstructure:"hc_atom_encryption_key"`
 	MaxItemsPerJobDefault             int    `mapstructure:"max_items_per_job_default"`
 	MaxItemsPerJobTrial               int    `mapstructure:"max_items_per_job_trial"`
 	MaxOutputImagesPerJob             int    `mapstructure:"max_output_images_per_job"`
@@ -1864,6 +1866,8 @@ func setDefaults() {
 
 	// Batch Image queue
 	viper.SetDefault("batch_image.enabled", false)
+	viper.SetDefault("batch_image.hc_atom_enabled", false)
+	viper.SetDefault("batch_image.hc_atom_encryption_key", "")
 	viper.SetDefault("batch_image.max_items_per_job_default", 200)
 	viper.SetDefault("batch_image.max_items_per_job_trial", 50)
 	viper.SetDefault("batch_image.max_output_images_per_job", 200)
@@ -2540,6 +2544,22 @@ func (c *Config) Validate() error {
 		}
 		if c.BatchImage.RecoverLimit <= 0 {
 			return fmt.Errorf("batch_image.recover_limit must be positive")
+		}
+	}
+	if c.BatchImage.HCAtomEnabled {
+		keyHex := strings.TrimSpace(c.BatchImage.HCAtomEncryptionKey)
+		if keyHex == "" {
+			return fmt.Errorf("batch_image.hc_atom_encryption_key is required when hc_atom is enabled")
+		}
+		key, err := hex.DecodeString(keyHex)
+		if err != nil || len(key) != 32 {
+			return fmt.Errorf("batch_image.hc_atom_encryption_key must be a 32-byte hex key")
+		}
+		if strings.EqualFold(keyHex, strings.TrimSpace(c.VideoGateway.EncryptionKey)) {
+			return fmt.Errorf("batch_image.hc_atom_encryption_key must not reuse video_gateway.encryption_key")
+		}
+		if strings.EqualFold(keyHex, strings.TrimSpace(c.JWT.Secret)) {
+			return fmt.Errorf("batch_image.hc_atom_encryption_key must not reuse jwt.secret")
 		}
 	}
 	if c.BatchImage.VertexEnabled {

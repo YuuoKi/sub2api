@@ -21,7 +21,6 @@ const (
 	hcAtomBatchOrigin       = "https://api-aigc.fzyinghe.com"
 	hcAtomBatchCreatePath   = "/image/generation/tasks"
 	hcAtomBatchTaskPath     = "/image/generation/tasks/"
-	hcAtomBatchAPIKeyField  = "hc_atom_api_key"
 	hcAtomBatchRequeueAfter = 30 * time.Second
 )
 
@@ -55,28 +54,42 @@ type HCAtomBatchTask struct {
 }
 
 type HCAtomBatchImageProvider struct {
-	client       HCAtomBatchClient
-	resultClient *http.Client
+	client           HCAtomBatchClient
+	resultClient     *http.Client
+	credentialCipher HCAtomCredentialCipher
 }
 
 func NewHCAtomBatchImageProvider(client HCAtomBatchClient) *HCAtomBatchImageProvider {
-	return NewHCAtomBatchImageProviderWithResultClient(client, nil)
+	return newHCAtomBatchImageProvider(client, nil, nil)
+}
+
+func NewHCAtomBatchImageProviderWithCredentialCipher(client HCAtomBatchClient, credentialCipher HCAtomCredentialCipher) *HCAtomBatchImageProvider {
+	return newHCAtomBatchImageProvider(client, nil, credentialCipher)
 }
 
 func NewHCAtomBatchImageProviderWithResultClient(client HCAtomBatchClient, resultClient *http.Client) *HCAtomBatchImageProvider {
+	return newHCAtomBatchImageProvider(client, resultClient, nil)
+}
+
+func NewHCAtomBatchImageProviderWithResultClientAndCredentialCipher(client HCAtomBatchClient, resultClient *http.Client, credentialCipher HCAtomCredentialCipher) *HCAtomBatchImageProvider {
+	return newHCAtomBatchImageProvider(client, resultClient, credentialCipher)
+}
+
+func newHCAtomBatchImageProvider(client HCAtomBatchClient, resultClient *http.Client, credentialCipher HCAtomCredentialCipher) *HCAtomBatchImageProvider {
 	if client == nil {
 		client = NewHCAtomBatchHTTPClient(nil)
 	}
 	if resultClient == nil {
 		resultClient = newPublicAssetHTTPClient(2 * time.Minute)
 	}
-	return &HCAtomBatchImageProvider{client: client, resultClient: resultClient}
+	return &HCAtomBatchImageProvider{client: client, resultClient: resultClient, credentialCipher: credentialCipher}
 }
 
 func (p *HCAtomBatchImageProvider) Name() string { return BatchImageProviderHCAtom }
 
 func (p *HCAtomBatchImageProvider) SupportsAccount(account *Account) bool {
-	return account != nil && account.Platform == PlatformHCAtom && account.Type == AccountTypeAPIKey && hcAtomBatchAPIKey(account) != ""
+	return p != nil && p.credentialCipher != nil && account != nil && account.Platform == PlatformHCAtom &&
+		account.Type == AccountTypeAPIKey && credentialString(account.Credentials, HCAtomAPIKeyCiphertextField) != ""
 }
 
 func (p *HCAtomBatchImageProvider) Submit(ctx context.Context, job *BatchImageJob, account *Account, input BatchImageInput) (*BatchProviderJob, error) {
@@ -85,6 +98,10 @@ func (p *HCAtomBatchImageProvider) Submit(ctx context.Context, job *BatchImageJo
 			return nil, ErrBatchImageProviderMissingAPIKey
 		}
 		return nil, ErrBatchImageProviderUnsupportedAccount
+	}
+	apiKey, err := p.resolveAPIKey(account)
+	if err != nil {
+		return nil, err
 	}
 	if input.BatchID == "" && job != nil {
 		input.BatchID = job.BatchID
@@ -105,7 +122,7 @@ func (p *HCAtomBatchImageProvider) Submit(ctx context.Context, job *BatchImageJo
 	if len(item.ReferenceImages) != 0 {
 		return nil, hcAtomBatchError("HC_ATOM_REFERENCE_IMAGES_UNSUPPORTED", "HC-ATOM batch image reference images are not enabled", nil)
 	}
-	created, err := p.client.Create(ctx, hcAtomBatchAPIKey(account), hcAtomBatchIdempotencyKey(input.BatchID), HCAtomBatchCreateRequest{
+	created, err := p.client.Create(ctx, apiKey, hcAtomBatchIdempotencyKey(input.BatchID), HCAtomBatchCreateRequest{
 		Model:      input.Model,
 		Input:      map[string]any{"prompt": item.Prompt},
 		Parameters: map[string]any{"response_mime_type": input.ResponseMimeType, "aspect_ratio": input.AspectRatio, "image_size": input.ImageSize},
@@ -127,7 +144,11 @@ func (p *HCAtomBatchImageProvider) Get(ctx context.Context, job *BatchImageJob, 
 	if taskID == "" {
 		return nil, ErrBatchImageProviderMissingJobName
 	}
-	task, err := p.client.Get(ctx, hcAtomBatchAPIKey(account), taskID)
+	apiKey, err := p.resolveAPIKey(account)
+	if err != nil {
+		return nil, err
+	}
+	task, err := p.client.Get(ctx, apiKey, taskID)
 	if err != nil {
 		return nil, mapHCAtomBatchError(err)
 	}
@@ -145,7 +166,11 @@ func (p *HCAtomBatchImageProvider) Cancel(ctx context.Context, job *BatchImageJo
 	if taskID == "" {
 		return ErrBatchImageProviderMissingJobName
 	}
-	return mapHCAtomBatchError(p.client.Delete(ctx, hcAtomBatchAPIKey(account), taskID))
+	apiKey, err := p.resolveAPIKey(account)
+	if err != nil {
+		return err
+	}
+	return mapHCAtomBatchError(p.client.Delete(ctx, apiKey, taskID))
 }
 
 func (p *HCAtomBatchImageProvider) OpenResult(ctx context.Context, job *BatchImageJob, account *Account) (io.ReadCloser, string, error) {
@@ -157,7 +182,11 @@ func (p *HCAtomBatchImageProvider) OpenResult(ctx context.Context, job *BatchIma
 	if taskID == "" || customID == "" || p.resultClient == nil {
 		return nil, "", ErrBatchImageProviderMissingResultRef
 	}
-	task, err := p.client.Get(ctx, hcAtomBatchAPIKey(account), taskID)
+	apiKey, err := p.resolveAPIKey(account)
+	if err != nil {
+		return nil, "", err
+	}
+	task, err := p.client.Get(ctx, apiKey, taskID)
 	if err != nil {
 		return nil, "", mapHCAtomBatchError(err)
 	}
@@ -244,11 +273,12 @@ func (p *HCAtomBatchImageProvider) Cleanup(context.Context, *BatchImageJob, *Acc
 	return nil
 }
 
-func hcAtomBatchAPIKey(account *Account) string {
-	if account == nil {
-		return ""
+func (p *HCAtomBatchImageProvider) resolveAPIKey(account *Account) (string, error) {
+	apiKey, err := ResolveHCAtomAPIKey(account, p.credentialCipher)
+	if err != nil {
+		return "", hcAtomBatchError("HC_ATOM_CREDENTIAL_UNAVAILABLE", "HC-ATOM account credential is unavailable", nil)
 	}
-	return strings.TrimSpace(account.GetCredential(hcAtomBatchAPIKeyField))
+	return apiKey, nil
 }
 
 func hcAtomBatchIdempotencyKey(batchID string) string {

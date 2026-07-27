@@ -263,6 +263,34 @@ func TestHCAtomBatchImagePipeline_FakeEndToEndOwnedResult(t *testing.T) {
 	require.Len(t, billing.captures, 1, "repeat polling must not bill a completed HC batch again")
 }
 
+func TestHCAtomBatchPublicSubmit_UncertainCreateDoesNotReplaySameIntent(t *testing.T) {
+	ctx := context.Background()
+	cipher, account := hcAtomBatchTestAccount(t, "hc-fake-key")
+	account.ID, account.Status, account.Schedulable = 303, StatusActive, true
+	client := &hcAtomPipelineClient{createErr: context.DeadlineExceeded}
+	provider := NewHCAtomBatchImageProviderWithCredentialCipher(client, cipher)
+	repo, billing := newFakeBatchImageRepository(), &fakeBatchImageBillingRepo{}
+	svc := &BatchImagePublicService{
+		Repo: repo, AccountRepo: &publicBatchImageAccountRepo{accounts: []Account{*account}},
+		ProviderRegistry: NewBatchImageProviderRegistry(provider), Pricing: &fakeBatchImagePricingResolver{unitPrice: 0.25}, BillingRepo: billing,
+		Config: &config.Config{BatchImage: config.BatchImageConfig{Enabled: true, MaxItemsPerJobDefault: 1, MaxPromptCharsPerItem: 8000, DefaultResponseMimeType: "image/png", DefaultImageSize: "1K"}},
+	}
+	req := validBatchImageSubmitRequest()
+	req.Provider, req.Model, req.Items = BatchImageProviderHCAtom, "seedream-5.0", req.Items[:1]
+
+	_, err := svc.Submit(ctx, testBatchImageOwner(), req, "hc-uncertain-intent")
+	require.ErrorIs(t, err, ErrBatchImageProviderSubmitFailed)
+	require.Equal(t, 1, client.createCount)
+	require.Len(t, billing.reserves, 1)
+	require.Len(t, billing.releases, 1)
+
+	again, err := svc.Submit(ctx, testBatchImageOwner(), req, "hc-uncertain-intent")
+	require.NoError(t, err)
+	require.Equal(t, "failed", again.Status)
+	require.Equal(t, 1, client.createCount, "uncertain HC create is never automatically replayed")
+	require.Len(t, billing.releases, 1)
+}
+
 var hcAtomPipelinePNG = []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01")
 
 type hcAtomPipelineClient struct {
@@ -270,12 +298,16 @@ type hcAtomPipelineClient struct {
 	getCount       int
 	idempotencyKey string
 	createRequest  HCAtomBatchCreateRequest
+	createErr      error
 }
 
 func (c *hcAtomPipelineClient) Create(_ context.Context, _ string, idempotencyKey string, req HCAtomBatchCreateRequest) (*HCAtomBatchTask, error) {
 	c.createCount++
 	c.idempotencyKey = idempotencyKey
 	c.createRequest = req
+	if c.createErr != nil {
+		return nil, c.createErr
+	}
 	return &HCAtomBatchTask{TaskID: "hc-task-e2e", Status: "PENDING"}, nil
 }
 

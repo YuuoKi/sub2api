@@ -90,3 +90,45 @@ Status: GREEN for the dedicated HC account credential boundary.
 
 No real API call, no real secret read, no frontend/video/docs change, no push,
 deploy, merge, reset, clean, or rebase.
+
+## Pipeline closeout (Task2 integration)
+
+Status: GREEN for the fake HC public-batch path; no production provider call was made.
+
+### RED evidence
+
+1. `TestBatchImagePublicSubmit_HCAtomRejectsGeminiOnlyGroupBeforeAccountSelection`
+   initially received `nil`: a Gemini-platform group could submit an explicit
+   `hc_atom` request because the group gate accepted either platform without
+   matching the requested provider.
+2. `TestHCAtomBatchHTTPClient_DeleteRejectsBusinessFailure` initially received
+   `nil` for HTTP 200 with `code:40001`: DELETE treated an HC business failure
+   as confirmed cancellation.
+
+### GREEN evidence
+
+- Focused HC pipeline suite (group, DELETE, cancel hold, disabled Dola,
+  result URL/usage, fake E2E, and uncertain-submit no replay): PASS.
+- `go test -tags unit ./internal/service -count=1`: PASS (105.968s).
+- `go test ./internal/config ./internal/repository ./internal/handler/dto -count=1`: PASS.
+- `git diff --check`: PASS before commit `95fcbf5`.
+
+### Landed pipeline changes
+
+- Commit `95fcbf5` binds an explicit provider to its media-group platform;
+  HC cannot enter a Gemini group, and account selection is never reached.
+- HC DELETE now accepts 204/empty success but validates a non-empty 2xx
+  business envelope. A rejected DELETE remains submitted, emits no cancel
+  event, and does not release the hold.
+- Fake end-to-end coverage uses the real HC provider with fake HTTP transports:
+  public create, HC account selection, hold, one Submit, GET SUCCESS,
+  validated owned JSONL/base64 archival, index, settle, and repeated settlement
+  with one capture only.
+- Additional coverage verifies Dola stays disabled, one-item enforcement,
+  deterministic URL deduplication, missing `usage.imageCount` does not invent
+  a count, and uncertain Create is not replayed for the same local intent.
+
+### Remaining risk
+
+The tests prove the local fake pipeline only. Real HC credentials, paid calls,
+deployment, push, merge, frontend, and video were not used or performed.

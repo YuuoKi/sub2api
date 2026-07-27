@@ -296,7 +296,7 @@ func (a *HCAtomV3Adapter) doTask(ctx context.Context, method, endpoint string, b
 	if strings.TrimSpace(parsed.ID) == "" {
 		return nil, errors.New("hc atom response missing task id")
 	}
-	status, err := normalizeSeedanceStatus(parsed.Status)
+	status, err := normalizeHCAtomV3Status(parsed.Status)
 	if err != nil {
 		return nil, errors.New("hc atom returned unknown task status")
 	}
@@ -314,6 +314,23 @@ func (a *HCAtomV3Adapter) doTask(ctx context.Context, method, endpoint string, b
 		usage = nil
 	}
 	return &VideoProviderTask{UpstreamTaskID: parsed.ID, Status: status, ResultURL: parsed.Content.VideoURL, LastFrameURL: parsed.Content.LastFrameURL, CompletionTokens: usage, ErrorCode: sanitizeProviderCode(parsed.Error.Code), ErrorMessage: sanitizeProviderMessage(parsed.Error.Message)}, nil
+}
+
+func normalizeHCAtomV3Status(value string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "queued", "pending":
+		return VideoStatusSubmitted, nil
+	case "running":
+		return VideoStatusRunning, nil
+	case "succeeded":
+		return VideoStatusSucceeded, nil
+	case "failed":
+		return VideoStatusFailed, nil
+	case "cancelled", "canceled":
+		return VideoStatusCancelled, nil
+	default:
+		return "", errors.New("hc atom returned unknown task status")
+	}
 }
 
 type VideoProviderTask struct {

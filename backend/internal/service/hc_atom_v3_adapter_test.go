@@ -93,6 +93,13 @@ func TestHCAtomV3IsAnEnabledFixedVideoProvider(t *testing.T) {
 	}
 }
 
+func TestHCAtomV3StatusDoesNotAcceptArkOnlyAliases(t *testing.T) {
+	_, err := normalizeHCAtomV3Status("processing")
+	if err == nil {
+		t.Fatal("processing must be a protocol error for HC V3")
+	}
+}
+
 func TestHCAtomV3CreateContractKeepsLegacyPromptAndAllowsV3Fields(t *testing.T) {
 	repo := &workerRepoStub{provider: VideoProviderAccount{ID: 10, GroupID: 9, Provider: HCAtomSeedanceV3Provider, Enabled: true, DefaultModel: HCAtomSeedanceV3PublicModel}}
 	cfg := &config.Config{VideoGateway: config.VideoGatewayConfig{WorkerEnabled: true, HCAtomV3DispatchEnabled: true, SeedanceCNYPerMillionTokens: 2, USDCNYExchangeRate: 7, TinyRealEstimateCNY: .7, TinyRealMaximumCNY: 1.4}}

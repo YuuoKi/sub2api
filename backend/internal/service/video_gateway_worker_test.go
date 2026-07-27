@@ -222,6 +222,9 @@ func (r *workerRepoStub) BeginRealDispatch(context.Context, int64, int64) (bool,
 	r.beginCalls++
 	return r.begin, nil
 }
+func (r *workerRepoStub) BeginHCAtomV3Dispatch(context.Context, int64, int64) (bool, error) {
+	return r.begin, nil
+}
 func (r *workerRepoStub) MarkVideoSubmitted(context.Context, int64, int64, string) error { return nil }
 func (r *workerRepoStub) MarkVideoDispatchUncertain(_ context.Context, _ int64, _ int64, _ string) error {
 	r.task.Status = VideoStatusReviewRequired

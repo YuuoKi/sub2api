@@ -111,6 +111,14 @@ func (w *VideoGatewayWorker) RunOnce(ctx context.Context) error {
 		return ErrVideoRealDispatchDenied
 	}
 	started, err := w.repo.BeginRealDispatch(ctx, task.ID, task.Version)
+	if provider.Provider == HCAtomSeedanceV3Provider {
+		if !w.cfg.VideoGateway.HCAtomV3DispatchEnabled {
+			started = false
+			err = nil
+		} else {
+			started, err = w.repo.BeginHCAtomV3Dispatch(ctx, task.ID, task.Version)
+		}
+	}
 	if err != nil {
 		return err
 	}

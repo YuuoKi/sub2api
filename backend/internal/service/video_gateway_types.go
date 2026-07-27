@@ -209,6 +209,7 @@ type VideoGatewayRuntimeRepository interface {
 	ListEnabledVideoProviders(context.Context, int64) ([]VideoProviderAccount, error)
 	GetVideoProvider(context.Context, int64, int64) (*VideoProviderAccount, error)
 	BeginRealDispatch(context.Context, int64, int64) (bool, error)
+	BeginHCAtomV3Dispatch(context.Context, int64, int64) (bool, error)
 	MarkVideoSubmitted(context.Context, int64, int64, string) error
 	MarkVideoDispatchUncertain(context.Context, int64, int64, string) error
 	UpdateVideoProgress(context.Context, int64, int64, string) error

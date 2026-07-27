@@ -101,6 +101,9 @@ func (s *VideoGatewayService) CreateTask(ctx context.Context, cmd VideoTaskCreat
 	if !provider.Enabled || (provider.Provider != "seedance" && provider.Provider != HCAtomSeedanceV3Provider) {
 		return nil, ErrVideoProviderNotFound
 	}
+	if provider.Provider == HCAtomSeedanceV3Provider && !s.cfg.VideoGateway.HCAtomV3DispatchEnabled {
+		return nil, ErrVideoRealDispatchDenied
+	}
 	input := VideoCreateRequest{Model: cmd.Model, Prompt: cmd.Prompt, Content: cmd.Content, Ratio: cmd.Ratio, GenerateAudio: cmd.GenerateAudio, ReturnLastFrame: cmd.ReturnLastFrame, Watermark: cmd.Watermark, Duration: cmd.Duration, Resolution: cmd.Resolution}
 	if provider.Provider == "seedance" {
 		if err := ValidateTinyRealContract(input); err != nil {

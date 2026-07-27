@@ -112,6 +112,7 @@ type VideoGatewayConfig struct {
 	USDCNYExchangeRate          float64 `mapstructure:"usd_cny_exchange_rate"`
 	TinyRealEstimateCNY         float64 `mapstructure:"tiny_real_estimate_cny"`
 	TinyRealMaximumCNY          float64 `mapstructure:"tiny_real_maximum_cny"`
+	HCAtomV3DispatchEnabled     bool    `mapstructure:"hc_atom_v3_dispatch_enabled"`
 }
 
 type LogConfig struct {

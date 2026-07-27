@@ -16,6 +16,7 @@ describe("groups image pricing platform support", () => {
   it("includes Grok image groups", () => {
     expect(supportsImagePricingPlatform("grok")).toBe(true);
     expect(imagePricingPlatforms.has("grok")).toBe(true);
+    expect(imagePricingPlatforms.has("hc_atom")).toBe(true);
   });
 
   it("enables video pricing controls for Grok only", () => {

@@ -8,16 +8,33 @@
 
       <section v-if="contract" class="video-contract ui-panel p-5" aria-labelledby="video-contract-title">
         <h2 id="video-contract-title" class="video-contract-title text-base font-semibold">当前固定契约</h2>
-        <dl class="video-contract-grid mt-3 grid gap-3 text-sm sm:grid-cols-2">
-          <div class="video-contract-field"><dt class="text-gray-500">模型</dt><dd class="break-all">{{ contract.default_model }}</dd></div>
-          <div class="video-contract-field"><dt class="text-gray-500">固定规格</dt><dd>{{ contract.duration_seconds }} 秒 / {{ contract.resolution }}</dd></div>
-          <div class="video-contract-field sm:col-span-2"><dt class="text-gray-500">上游地址</dt><dd class="break-all">{{ contract.base_url }}</dd></div>
-        </dl>
+        <div class="mt-3 grid gap-3 text-sm lg:grid-cols-2">
+          <article v-for="platform in readyPlatforms" :key="platform.provider" class="rounded-lg border border-gray-200 p-3 dark:border-dark-600">
+            <div class="flex items-center justify-between gap-3">
+              <strong>{{ platform.display_name }}</strong>
+              <span class="text-xs text-gray-500">{{ platform.provider }}</span>
+            </div>
+            <dl class="mt-2 grid gap-2">
+              <div><dt class="text-gray-500">固定模型</dt><dd class="break-all">{{ platform.default_model }}</dd></div>
+              <div><dt class="text-gray-500">固定域名</dt><dd class="break-all">{{ platform.default_base_url }}</dd></div>
+            </dl>
+          </article>
+        </div>
+        <p class="mt-3 text-xs text-gray-500">固定规格：{{ contract.duration_seconds }} 秒 / {{ contract.resolution }}。HC-ATOM V3 不接受自定义中转地址。</p>
       </section>
 
       <section class="video-provider-form ui-panel p-5" aria-labelledby="video-provider-form-title">
         <h2 id="video-provider-form-title" class="video-provider-form-title text-base font-semibold">{{ editingId ? '编辑通道' : '新增通道' }}</h2>
         <form class="video-provider-form-grid mt-4 grid gap-4 md:grid-cols-2" @submit.prevent="save">
+          <div class="video-provider-form-field">
+            <label for="video-provider-kind" class="mb-1 block text-sm font-medium">供应商</label>
+            <select id="video-provider-kind" v-model="form.provider" class="input w-full" :disabled="!!editingId" required>
+              <option v-for="platform in readyPlatforms" :key="platform.provider" :value="platform.provider">
+                {{ platform.display_name }}
+              </option>
+            </select>
+            <p class="mt-1 text-xs text-gray-500">{{ selectedPlatform?.default_base_url || '固定域名由后端契约提供' }}</p>
+          </div>
           <div class="video-provider-form-field">
             <label for="video-provider-name" class="mb-1 block text-sm font-medium">通道名称</label>
             <input id="video-provider-name" v-model="form.display_name" class="input video-provider-name w-full" required autocomplete="off" />
@@ -40,11 +57,11 @@
               <input v-model="form.enabled" type="checkbox" />
               保存后启用
             </label>
-            <label class="video-provider-authorize flex min-h-6 items-center gap-2 text-sm" data-test="authorize-after-save">
+            <label v-if="form.provider === 'seedance'" class="video-provider-authorize flex min-h-6 items-center gap-2 text-sm" data-test="authorize-after-save">
               <input v-model="form.authorize_after_save" type="checkbox" />
               保存后自动授权一次最小真实调用
             </label>
-            <p class="text-xs text-gray-500">{{ AUTHORIZE_HINT }}</p>
+            <p class="text-xs text-gray-500">{{ form.provider === 'seedance' ? AUTHORIZE_HINT : HC_ATOM_HINT }}</p>
           </div>
           <div class="video-provider-actions flex flex-col gap-2 sm:flex-row md:col-span-2">
             <button class="btn btn-primary" :disabled="saving || !contract">{{ saving ? '正在保存…' : '保存' }}</button>
@@ -66,13 +83,16 @@
           <dl class="video-provider-evidence mt-2 grid gap-3 text-sm sm:grid-cols-2">
             <div class="video-provider-secret-state"><dt class="text-gray-500">密钥</dt><dd class="break-all">{{ provider.masked_key || '未配置' }}</dd></div>
             <div class="video-provider-group-state"><dt class="text-gray-500">员工组</dt><dd>{{ provider.group_name || '后端未提供' }}</dd></div>
-            <div class="video-provider-contract-state"><dt class="text-gray-500">固定规格</dt><dd>{{ contract ? `${contract.duration_seconds} 秒 / ${contract.resolution}` : '加载失败' }}</dd></div>
-            <div class="video-provider-grant-state"><dt class="text-gray-500">授权状态</dt><dd>{{ authLabel(provider) }}</dd></div>
+            <div class="video-provider-contract-state"><dt class="text-gray-500">供应商</dt><dd>{{ providerLabel(provider.provider) }}</dd></div>
+            <div class="video-provider-contract-state"><dt class="text-gray-500">固定域名</dt><dd class="break-all">{{ providerBaseURL(provider.provider) }}</dd></div>
+            <div class="video-provider-grant-state"><dt class="text-gray-500">授权状态</dt><dd>{{ provider.provider === 'seedance' ? authLabel(provider) : '配置启用后仍需真实链路单独授权验收' }}</dd></div>
+            <div class="sm:col-span-2"><dt class="text-gray-500">最近错误</dt><dd class="break-words">{{ latestProviderError(provider.id) }}</dd></div>
           </dl>
           <div class="video-provider-card-actions mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             <button type="button" class="btn btn-secondary" @click="startEdit(provider)">编辑</button>
             <button type="button" class="btn btn-secondary" @click="toggle(provider)">{{ provider.enabled ? '停用' : '启用' }}</button>
             <button
+              v-if="provider.provider === 'seedance'"
               type="button"
               class="btn btn-primary"
               :data-testid="`authorize-provider-${provider.id}`"
@@ -83,7 +103,7 @@
               授权一次最小真实调用
             </button>
           </div>
-          <p :id="`video-auth-reason-${provider.id}`" class="mt-2 text-xs text-gray-500" aria-live="polite">
+          <p v-if="provider.provider === 'seedance'" :id="`video-auth-reason-${provider.id}`" class="mt-2 text-xs text-gray-500" aria-live="polite">
             {{ authorizationDisabledReason(provider) || '授权前会再次展示模型、规格、预算门禁与影响范围。' }}
           </p>
         </article>
@@ -110,17 +130,18 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import AnimatedEmptyState from '@/components/common/AnimatedEmptyState.vue'
 import { adminAPI } from '@/api/admin'
-import type { VideoProviderAccount, VideoProviderContract } from '@/api/admin/video'
+import type { VideoPlatformContract, VideoProviderAccount, VideoProviderContract, VideoTaskAdmin } from '@/api/admin/video'
 import { useAppStore } from '@/stores'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import SeedanceAuthorizationDialog from './SeedanceAuthorizationDialog.vue'
 
 const app = useAppStore()
 const providers = ref<VideoProviderAccount[]>([])
+const recentTasks = ref<VideoTaskAdmin[]>([])
 const groups = ref<Array<{ id: number; name: string }>>([])
 const contract = ref<VideoProviderContract>()
 const saving = ref(false)
@@ -128,21 +149,26 @@ const authorizing = ref(false)
 const editingId = ref<number | null>(null)
 const authorizationOpen = ref(false)
 const selectedProvider = ref<VideoProviderAccount>()
-const form = reactive({ group_id: 0, display_name: 'Seedance 2.0', api_key: '', enabled: true, authorize_after_save: true })
+const form = reactive({ group_id: 0, provider: 'hc_atom_seedance_v3', display_name: 'HC-ATOM Seedance 2.0 V3', api_key: '', enabled: true, authorize_after_save: false })
 // 保存后自动完成一次性授权（后端门禁语义不变：授权只是记账，第一次真实出片才消费）
 const AUTHORIZE_HINT = '保存后自动授权一次最小真实调用：这只是记账，不会马上扣费；等第一次真实出片后通道永久可用。'
+const HC_ATOM_HINT = '仅保存加密配置，不发起真实调用；真实 V3 验收必须再次授权。'
 const onlyStandardGroup = '仅显示受控标准员工组。'
+const readyPlatforms = computed(() => (contract.value?.platforms || []).filter((platform) => platform.adapter_ready))
+const selectedPlatform = computed<VideoPlatformContract | undefined>(() => readyPlatforms.value.find((platform) => platform.provider === form.provider))
 
 async function load() {
   try {
-    const [contractData, providerData, groupData] = await Promise.all([
+    const [contractData, providerData, groupData, taskData] = await Promise.all([
       adminAPI.video.contract(),
       adminAPI.video.listProviders(),
-      adminAPI.groups.getAll()
+      adminAPI.groups.getAll(),
+      adminAPI.video.listTasks(1, 100).catch(() => ({ items: [], total: 0, page: 1, page_size: 100, pages: 0 }))
     ])
     contract.value = contractData
     providers.value = providerData.items
     groups.value = groupData.filter(group => group.subscription_type === 'standard')
+    recentTasks.value = taskData.items
   } catch (error) {
     app.showError(extractApiErrorMessage(error, '加载视频通道失败'))
   }
@@ -150,12 +176,12 @@ async function load() {
 
 function resetForm() {
   editingId.value = null
-  Object.assign(form, { group_id: 0, display_name: 'Seedance 2.0', api_key: '', enabled: true, authorize_after_save: true })
+  Object.assign(form, { group_id: 0, provider: 'hc_atom_seedance_v3', display_name: 'HC-ATOM Seedance 2.0 V3', api_key: '', enabled: true, authorize_after_save: false })
 }
 
 function startEdit(provider: VideoProviderAccount) {
   editingId.value = provider.id
-  Object.assign(form, { group_id: provider.group_id, display_name: provider.display_name, api_key: '', enabled: provider.enabled, authorize_after_save: true })
+  Object.assign(form, { group_id: provider.group_id, provider: provider.provider, display_name: provider.display_name, api_key: '', enabled: provider.enabled, authorize_after_save: provider.provider === 'seedance' })
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
@@ -178,11 +204,11 @@ async function save() {
         display_name: form.display_name,
         enabled: form.enabled,
         api_key: form.api_key,
-        provider: 'seedance'
+        provider: form.provider
       })
       savedId = created.id
     }
-    const wantAuthorize = form.authorize_after_save
+    const wantAuthorize = form.provider === 'seedance' && form.authorize_after_save
     resetForm()
     await load()
     if (wantAuthorize) {
@@ -257,6 +283,29 @@ function authLabel(provider: VideoProviderAccount): string {
   if (provider.tiny_real_authorized_at) return '待消费 = 等第一次真实出片，之后通道永久可用'
   return '未授权'
 }
+
+function providerContract(provider: string): VideoPlatformContract | undefined {
+  return readyPlatforms.value.find((platform) => platform.provider === provider)
+}
+
+function providerLabel(provider: string): string {
+  return providerContract(provider)?.display_name || provider
+}
+
+function providerBaseURL(provider: string): string {
+  return providerContract(provider)?.default_base_url || '后端未提供'
+}
+
+function latestProviderError(providerID: number): string {
+  const task = recentTasks.value.find((item) => item.provider_account_id === providerID && (item.provider_error_message || item.error_message))
+  return task?.provider_error_message || task?.error_message || '暂无'
+}
+
+watch(() => form.provider, (provider) => {
+  if (editingId.value) return
+  form.authorize_after_save = provider === 'seedance'
+  form.display_name = provider === 'hc_atom_seedance_v3' ? 'HC-ATOM Seedance 2.0 V3' : 'Seedance 2.0'
+})
 
 onMounted(load)
 </script>

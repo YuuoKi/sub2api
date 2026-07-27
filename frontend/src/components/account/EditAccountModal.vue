@@ -50,11 +50,14 @@
             v-model="editBaseUrl"
             type="text"
             class="input"
+            :readonly="account.platform === 'hc_atom'"
             :placeholder="
               account.platform === 'openai'
                 ? 'https://api.openai.com'
                 : account.platform === 'antigravity'
                   ? 'https://cloudcode-pa.googleapis.com'
+                  : account.platform === 'hc_atom'
+                    ? HC_ATOM_IMAGE_BASE_URL
                   : 'https://api.anthropic.com'
             "
           />
@@ -75,6 +78,8 @@
                 ? 'sk-proj-...'
                 : account.platform === 'antigravity'
                   ? 'sk-...'
+                  : account.platform === 'hc_atom'
+                    ? '留空表示保留现有 HC-ATOM Key'
                   : 'sk-ant-...'
             "
           />
@@ -83,7 +88,17 @@
         </template>
 
         <!-- Model Restriction Section (不适用于 Antigravity) -->
-        <div v-if="account.platform !== 'antigravity'" class="border-t border-gray-200 pt-4 dark:border-dark-600">
+        <div v-if="account.platform === 'hc_atom'" class="rounded-lg border border-cyan-200 bg-cyan-50 p-4 text-sm dark:border-cyan-900 dark:bg-cyan-950/30">
+          <p class="font-medium text-cyan-900 dark:text-cyan-200">固定图片模型目录</p>
+          <ul class="mt-2 list-disc pl-5 text-cyan-800 dark:text-cyan-300">
+            <li v-for="model in HC_ATOM_IMAGE_ENABLED_MODELS" :key="model">{{ model }}</li>
+          </ul>
+          <p class="mt-2 text-xs text-amber-700 dark:text-amber-300">dola-seedream-5.0-pro 暂不启用。</p>
+          <p class="mt-2 text-xs text-gray-600 dark:text-gray-400">
+            密钥：{{ accountCredentials.hc_atom_api_key_masked || (hasExistingApiKey ? '已配置' : '未配置') }}
+          </p>
+        </div>
+        <div v-else-if="account.platform !== 'antigravity'" class="border-t border-gray-200 pt-4 dark:border-dark-600">
           <label class="input-label">{{ t('admin.accounts.modelRestriction') }}</label>
 
           <div
@@ -2598,6 +2613,11 @@ import {
   splitModelMappingObject,
   isValidWildcardPattern
 } from '@/composables/useModelWhitelist'
+import {
+  HC_ATOM_IMAGE_BASE_URL,
+  HC_ATOM_IMAGE_ENABLED_MODELS,
+  buildHCAtomImageCredentials
+} from './hcAtomAdminContract'
 
 interface Props {
   show: boolean
@@ -2623,6 +2643,7 @@ const isSparkShadow = computed(() => props.account?.parent_account_id != null)
 // Platform-specific hint for Base URL
 const baseUrlHint = computed(() => {
   if (!props.account) return t('admin.accounts.baseUrlHint')
+  if (props.account.platform === 'hc_atom') return '固定 HC-ATOM 域名，不允许自定义中转地址'
   if (props.account.platform === 'openai') return t('admin.accounts.openai.baseUrlHint')
   if (props.account.platform === 'gemini') return t('admin.accounts.gemini.baseUrlHint')
   return t('admin.accounts.baseUrlHint')
@@ -2663,7 +2684,9 @@ const accountCredentials = computed<Record<string, unknown>>(() =>
   (props.account?.credentials as Record<string, unknown> | undefined) || {}
 )
 const hasExistingApiKey = computed(() =>
-  props.account?.credentials_status?.has_api_key ?? Boolean(accountCredentials.value.api_key)
+  props.account?.platform === 'hc_atom'
+    ? Boolean(accountCredentials.value.hc_atom_api_key_configured)
+    : (props.account?.credentials_status?.has_api_key ?? Boolean(accountCredentials.value.api_key))
 )
 const hasExistingServiceAccountJson = computed(() => {
   const status = props.account?.credentials_status
@@ -3088,6 +3111,7 @@ const tempUnschedPresets = computed(() => [
 
 // Computed: default base URL based on platform
 const defaultBaseUrl = computed(() => {
+  if (props.account?.platform === 'hc_atom') return HC_ATOM_IMAGE_BASE_URL
   if (props.account?.platform === 'openai') return 'https://api.openai.com'
   if (props.account?.platform === 'gemini') return 'https://generativelanguage.googleapis.com'
   return 'https://api.anthropic.com'
@@ -3383,6 +3407,8 @@ const syncFormFromAccount = (newAccount: Account | null) => {
         ? 'https://api.openai.com'
         : newAccount.platform === 'gemini'
           ? 'https://generativelanguage.googleapis.com'
+          : newAccount.platform === 'hc_atom'
+            ? HC_ATOM_IMAGE_BASE_URL
           : 'https://api.anthropic.com'
     editBaseUrl.value = (credentials.base_url as string) || platformDefaultUrl
 
@@ -4029,6 +4055,21 @@ const handleSubmit = async () => {
     // For apikey type, handle credentials update
     if (props.account.type === 'apikey') {
       const currentCredentials = (props.account.credentials as Record<string, unknown>) || {}
+      if (props.account.platform === 'hc_atom') {
+        const configured = Boolean(currentCredentials.hc_atom_api_key_configured)
+        if (!editApiKey.value.trim() && !configured) {
+          appStore.showError(t('admin.accounts.apiKeyIsRequired'))
+          return
+        }
+        updatePayload.credentials = editApiKey.value.trim()
+          ? buildHCAtomImageCredentials(editApiKey.value)
+          : {
+              protocol: 'hc_atom',
+              model_mapping: Object.fromEntries(
+                HC_ATOM_IMAGE_ENABLED_MODELS.map((model) => [model, model]),
+              ),
+            }
+      } else {
       const newBaseUrl = editBaseUrl.value.trim() || defaultBaseUrl.value
       const shouldApplyModelMapping = !(props.account.platform === 'openai' && openaiPassthroughEnabled.value)
 
@@ -4117,6 +4158,7 @@ const handleSubmit = async () => {
       }
 
       updatePayload.credentials = newCredentials
+      }
     } else if (props.account.type === 'upstream') {
       const currentCredentials = (props.account.credentials as Record<string, unknown>) || {}
       const newCredentials: Record<string, unknown> = { ...currentCredentials }

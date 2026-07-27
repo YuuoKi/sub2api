@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -187,7 +188,7 @@ func (p *HCAtomBatchImageProvider) OpenResult(ctx context.Context, job *BatchIma
 
 func (p *HCAtomBatchImageProvider) archiveResultURL(ctx context.Context, rawURL string) (string, string, error) {
 	parsed, err := url.Parse(strings.TrimSpace(rawURL))
-	if err != nil || parsed == nil || parsed.Scheme != "https" || validateAssetSourceURL(parsed) != nil {
+	if err != nil || parsed == nil || parsed.Fragment != "" || (parsed.Port() != "" && parsed.Port() != "443") || validatePublicHTTPSAssetURL(strings.TrimSpace(rawURL)) != nil || validateAssetSourceURL(parsed) != nil {
 		return "", "", hcAtomBatchError("HC_ATOM_RESULT_URL_UNSAFE", "HC-ATOM result URL is unsafe", nil)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, parsed.String(), nil)
@@ -207,10 +208,23 @@ func (p *HCAtomBatchImageProvider) archiveResultURL(ctx context.Context, rawURL 
 		return "", "", hcAtomBatchError("HC_ATOM_RESULT_MIME_INVALID", "HC-ATOM result is not an allowed image", nil)
 	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 20<<20+1))
-	if err != nil || len(data) == 0 || len(data) > 20<<20 || !hcAtomImageSignatureMatches(mimeType, data) {
+	if err != nil || len(data) == 0 || len(data) > 20<<20 || !hcAtomImageSignatureMatches(mimeType, data) || !hcAtomImageDimensionsAllowed(mimeType, data) {
 		return "", "", hcAtomBatchError("HC_ATOM_RESULT_CONTENT_INVALID", "HC-ATOM result image is invalid", nil)
 	}
 	return base64.StdEncoding.EncodeToString(data), mimeType, nil
+}
+
+func hcAtomImageDimensionsAllowed(mimeType string, data []byte) bool {
+	// PNG dimensions live in the fixed IHDR header, so this check rejects image
+	// bombs before invoking a decoder that may allocate based on those values.
+	if mimeType != "image/png" {
+		return true
+	}
+	if len(data) < 24 || string(data[12:16]) != "IHDR" {
+		return false
+	}
+	width, height := binary.BigEndian.Uint32(data[16:20]), binary.BigEndian.Uint32(data[20:24])
+	return width > 0 && height > 0 && width <= 10000 && height <= 10000 && uint64(width)*uint64(height) <= 40_000_000
 }
 
 func hcAtomImageSignatureMatches(mimeType string, data []byte) bool {

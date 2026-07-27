@@ -128,6 +128,44 @@ func TestHCAtomBatchProvider_StrictStatusAndBusinessEnvelopeMapping(t *testing.T
 	require.Equal(t, "HC_ATOM_BUSINESS_ERROR", infraerrors.Reason(mapHCAtomBatchError(err)))
 }
 
+// Regression target: every HC result URL must stay inside the public HTTPS
+// archive boundary before the client can consume even one response byte.
+func TestHCAtomBatchProvider_ArchiveRejectsUnsafeURLFormsBeforeDownload(t *testing.T) {
+	for _, rawURL := range []string{
+		"https://user:pass@8.8.8.8/result.png",
+		"https://8.8.8.8/result.png#fragment",
+		"https://8.8.8.8:8443/result.png",
+		"https://127.0.0.1/result.png",
+		"https://0177.0.0.1/result.png",
+	} {
+		t.Run(rawURL, func(t *testing.T) {
+			calls := 0
+			provider := NewHCAtomBatchImageProviderWithResultClient(&fakeHCAtomBatchClient{}, &http.Client{Transport: hcAtomRoundTripFunc(func(*http.Request) (*http.Response, error) {
+				calls++
+				response := hcAtomHTTPResponse(http.StatusOK, "\x89PNG\r\n\x1a\nvalid-test-image")
+				response.Header.Set("Content-Type", "image/png")
+				return response, nil
+			})})
+			_, _, err := provider.archiveResultURL(context.Background(), rawURL)
+			require.Error(t, err)
+			require.Zero(t, calls)
+		})
+	}
+}
+
+func TestHCAtomBatchProvider_ArchiveRejectsOversizedPNGDimensions(t *testing.T) {
+	// PNG signature + IHDR declares a 100001 x 1 image. It is deliberately not
+	// a full PNG: dimensions must be rejected before any decoder allocation.
+	oversized := append([]byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"), []byte{0x00, 0x01, 0x86, 0xa1, 0x00, 0x00, 0x00, 0x01}...)
+	provider := NewHCAtomBatchImageProviderWithResultClient(&fakeHCAtomBatchClient{}, &http.Client{Transport: hcAtomRoundTripFunc(func(*http.Request) (*http.Response, error) {
+		response := hcAtomHTTPResponse(http.StatusOK, string(oversized))
+		response.Header.Set("Content-Type", "image/png")
+		return response, nil
+	})})
+	_, _, err := provider.archiveResultURL(context.Background(), "https://8.8.8.8/oversized.png")
+	require.Error(t, err)
+}
+
 type hcAtomRoundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f hcAtomRoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }

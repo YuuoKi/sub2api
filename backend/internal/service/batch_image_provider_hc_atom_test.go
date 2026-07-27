@@ -96,6 +96,19 @@ func TestHCAtomBatchHTTPClient_DeleteAcceptsNoContent(t *testing.T) {
 	require.NoError(t, client.Delete(context.Background(), "synthetic-key", "hc-task-1"))
 }
 
+// Regression target: a 2xx transport response is not cancellation confirmation
+// when HC's business envelope rejects the DELETE.
+func TestHCAtomBatchHTTPClient_DeleteRejectsBusinessFailure(t *testing.T) {
+	client := NewHCAtomBatchHTTPClient(&http.Client{Transport: hcAtomRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		require.Equal(t, http.MethodDelete, req.Method)
+		return hcAtomHTTPResponse(http.StatusOK, `{"code":40001,"msg":"not cancelled","data":{}}`), nil
+	})})
+
+	err := client.Delete(context.Background(), "synthetic-key", "hc-task-1")
+	require.Error(t, err)
+	require.Equal(t, "HC_ATOM_BUSINESS_ERROR", infraerrors.Reason(mapHCAtomBatchError(err)))
+}
+
 func TestHCAtomBatchProvider_StrictStatusAndBusinessEnvelopeMapping(t *testing.T) {
 	for _, tt := range []struct {
 		state string
@@ -120,6 +133,44 @@ func TestHCAtomBatchProvider_StrictStatusAndBusinessEnvelopeMapping(t *testing.T
 	_, err = client.Get(context.Background(), "synthetic-key", "hc-task-1")
 	require.Error(t, err)
 	require.Equal(t, "HC_ATOM_BUSINESS_ERROR", infraerrors.Reason(mapHCAtomBatchError(err)))
+}
+
+func TestHCAtomBatchProvider_RejectsDisabledDolaAndMultipleItemsBeforeCreate(t *testing.T) {
+	calls := 0
+	client := NewHCAtomBatchHTTPClient(&http.Client{Transport: hcAtomRoundTripFunc(func(*http.Request) (*http.Response, error) {
+		calls++
+		return hcAtomHTTPResponse(http.StatusOK, `{"code":0,"data":{"taskId":"unexpected","status":"PENDING"}}`), nil
+	})})
+	cipher, account := hcAtomBatchTestAccount(t, "test")
+	provider := NewHCAtomBatchImageProviderWithCredentialCipher(client, cipher)
+	job := &BatchImageJob{BatchID: "imgbatch_validate"}
+
+	_, err := provider.Submit(context.Background(), job, account, BatchImageInput{
+		BatchID: "imgbatch_validate", Model: "dola-seedream-5.0-pro", Items: []BatchImageInputItem{{CustomID: "one", Prompt: "hero"}},
+	})
+	require.Error(t, err)
+	require.Equal(t, "HC_ATOM_MODEL_UNSUPPORTED", infraerrors.Reason(err))
+
+	_, err = provider.Submit(context.Background(), job, account, BatchImageInput{
+		BatchID: "imgbatch_validate", Model: "seedream-5.0", Items: []BatchImageInputItem{{CustomID: "one", Prompt: "hero"}, {CustomID: "two", Prompt: "other"}},
+	})
+	require.Error(t, err)
+	require.Equal(t, "HC_ATOM_SINGLE_ITEM_REQUIRED", infraerrors.Reason(err))
+	require.Zero(t, calls)
+}
+
+func TestHCAtomBatchHTTPClient_ResultURLsDeduplicateAndMissingUsageDoesNotInventCount(t *testing.T) {
+	client := NewHCAtomBatchHTTPClient(&http.Client{Transport: hcAtomRoundTripFunc(func(*http.Request) (*http.Response, error) {
+		return hcAtomHTTPResponse(http.StatusOK, `{"code":0,"data":{"taskId":"hc-task-urls","status":"SUCCESS","resultUrls":["https://8.8.8.8/a.png","https://8.8.8.8/a.png"],"resultUrl":"https://8.8.8.8/a.png"}}`), nil
+	})})
+
+	task, err := client.Get(context.Background(), "synthetic-key", "hc-task-urls")
+	require.NoError(t, err)
+	require.Equal(t, 0, task.ImageCount)
+	require.Equal(t, []string{"https://8.8.8.8/a.png"}, hcAtomBatchResultURLs(task))
+	status, err := mapHCAtomBatchState(task)
+	require.NoError(t, err)
+	require.Equal(t, BatchProviderStateSucceeded, status.InternalState)
 }
 
 // Regression target: every HC result URL must stay inside the public HTTPS

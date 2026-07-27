@@ -206,7 +206,7 @@ func (s *BatchImagePublicService) Submit(ctx context.Context, owner BatchImageOw
 	}
 	// 与 ListModels 使用同一鉴权谓词（AllowBatchImageGeneration + Platform==Gemini），
 	// 避免两个入口校验口径不一致留下防御纵深缺口。
-	if err := s.ensureGroupAllowsBatchImage(ctx, owner.GroupID); err != nil {
+	if err := s.ensureGroupAllowsBatchImageForProvider(ctx, owner.GroupID, normalized.Provider); err != nil {
 		return nil, err
 	}
 	requestHash := HashBatchImageSubmitRequest(normalized)
@@ -975,6 +975,10 @@ func (s *BatchImagePublicService) listCandidateAccounts(ctx context.Context, gro
 }
 
 func (s *BatchImagePublicService) ensureGroupAllowsBatchImage(ctx context.Context, groupID *int64) error {
+	return s.ensureGroupAllowsBatchImageForProvider(ctx, groupID, "")
+}
+
+func (s *BatchImagePublicService) ensureGroupAllowsBatchImageForProvider(ctx context.Context, groupID *int64, requestedProvider string) error {
 	if groupID == nil || *groupID <= 0 {
 		return nil
 	}
@@ -989,6 +993,9 @@ func (s *BatchImagePublicService) ensureGroupAllowsBatchImage(ctx context.Contex
 		return ErrBatchImageGroupDisabled
 	}
 	if group.Platform != PlatformGemini && group.Platform != PlatformHCAtom {
+		return ErrBatchImageGroupDisabled
+	}
+	if requestedProvider = strings.TrimSpace(requestedProvider); requestedProvider != "" && group.Platform != batchImageProviderPlatform(requestedProvider) {
 		return ErrBatchImageGroupDisabled
 	}
 	return nil

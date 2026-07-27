@@ -396,6 +396,22 @@ func (c *HCAtomBatchHTTPClient) Delete(ctx context.Context, apiKey, taskID strin
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		return &HCAtomBatchAPIError{StatusCode: resp.StatusCode}
 	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	if len(bytes.TrimSpace(body)) == 0 {
+		return nil
+	}
+	var envelope struct {
+		Code any `json:"code"`
+	}
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		return err
+	}
+	if !hcAtomBatchBusinessSuccess(envelope.Code) {
+		return &HCAtomBatchAPIError{Code: "HC_ATOM_BUSINESS_ERROR"}
+	}
 	return nil
 }
 

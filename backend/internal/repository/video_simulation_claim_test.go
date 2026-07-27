@@ -20,7 +20,7 @@ func TestClaimRunnableTasksSQLExcludesMockProvider(t *testing.T) {
 	mock.ExpectQuery(`(?is)provider\s*(<>|!=)\s*'mock'|provider\s*=\s*'seedance'`).
 		WithArgs(2, 90).
 		WillReturnRows(videoTaskRows(now).AddRow(
-			int64(4), int64(21), int64(22), int64(2), "seedance", "doubao-seedance-2-0-260128", "text_to_video", "prompt", "queued",
+			int64(4), int64(21), int64(22), int64(2), "seedance", "doubao-seedance-2-0-260128", "text_to_video", "prompt", "{}", "queued",
 			"", "", "", 4, "720p", nil, 0, "USD", nil, nil, nil, nil, nil, 0, "", "", "", "claim-4", int64(1), "pending", int64(13),
 			now, now, nil, 0.2, "reserved", now, now, now, now, 0, nil, nil, nil, nil, nil, nil, 10.0, nil, nil, nil, nil, nil, nil,
 		))
@@ -42,7 +42,7 @@ func TestClaimMockRunnableTasksSQLRequiresMockProvider(t *testing.T) {
 	mock.ExpectQuery(`(?is)provider\s*=\s*\$4`).
 		WithArgs(2, 90, mockSucceededContentReclaimSeconds, "mock").
 		WillReturnRows(videoTaskRows(now).AddRow(
-			int64(5), int64(21), int64(22), int64(2), "mock", "mock-video-v1", "text_to_video", "prompt", "queued",
+			int64(5), int64(21), int64(22), int64(2), "mock", "mock-video-v1", "text_to_video", "prompt", "{}", "queued",
 			"", "", "", 4, "720p", nil, 0, "USD", "internal_simulation", "simulation-v1", nil, nil, nil, 0, "", "", "", "claim-mock-5", int64(1), "pending", int64(13),
 			now, now, nil, 0, "none", nil, nil, nil, nil, 0, nil, nil, nil, nil, nil, nil, 0, nil, nil, nil, nil, nil, nil,
 		))
@@ -67,7 +67,7 @@ func TestClaimMockRunnableTasksSQLIncludesSucceededWithoutContent(t *testing.T) 
 	mock.ExpectQuery(`(?is)status\s*=\s*'succeeded'[\s\S]*ai_generation_content|ai_generation_content[\s\S]*status\s*=\s*'succeeded'`).
 		WithArgs(1, 30, mockSucceededContentReclaimSeconds, "mock").
 		WillReturnRows(videoTaskRows(now).AddRow(
-			int64(6), int64(21), int64(22), int64(2), "mock", "mock-video-v1", "text_to_video", "prompt", "succeeded",
+			int64(6), int64(21), int64(22), int64(2), "mock", "mock-video-v1", "text_to_video", "prompt", "{}", "succeeded",
 			"", "", "", 4, "720p", nil, 0, "USD", "internal_simulation", "simulation-v1", nil, nil, nil, 0, "", "", "", "claim-mock-6", int64(3), "pending", int64(13),
 			now, now, completed, 0, "none", nil, nil, nil, nil, 0, nil, nil, nil, nil, nil, nil, 0, nil, nil, nil, nil, nil, nil,
 		))

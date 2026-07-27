@@ -566,7 +566,7 @@ func validatePublicHTTPSAssetURL(raw string) error {
 	if strings.Contains(host, "%") || host == "localhost" || strings.HasSuffix(host, ".localhost") {
 		return errors.New("asset URL host is private")
 	}
-	if numericLikeHostPattern.MatchString(host) || (strings.HasPrefix(host, "0") && strings.Contains(host, ".")) {
+	if numericLikeHostPattern.MatchString(host) || (numericDottedHostPattern.MatchString(host) && net.ParseIP(host) == nil) || (strings.HasPrefix(host, "0") && strings.Contains(host, ".")) {
 		return errors.New("asset URL host is private")
 	}
 	if ip := net.ParseIP(host); ip != nil && (!ip.IsGlobalUnicast() || ip.IsPrivate() || ip.IsLoopback() || ip.IsUnspecified() || ip.IsLinkLocalUnicast() || (ip.To4() != nil && ip.To4()[0] == 100 && ip.To4()[1] >= 64 && ip.To4()[1] <= 127)) {
@@ -577,6 +577,7 @@ func validatePublicHTTPSAssetURL(raw string) error {
 
 var assetIdentifierPattern = regexp.MustCompile(`^asset-[A-Za-z0-9_-]+$`)
 var numericLikeHostPattern = regexp.MustCompile(`^(0x[0-9a-f]+|0[0-7]+|[0-9]+)$`)
+var numericDottedHostPattern = regexp.MustCompile(`^[0-9.]+$`)
 
 func sanitizeProviderCode(value string) string {
 	value = strings.ToLower(strings.TrimSpace(value))

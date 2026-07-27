@@ -101,7 +101,7 @@ func TestHCAtomV3StatusDoesNotAcceptArkOnlyAliases(t *testing.T) {
 }
 
 func TestHCAtomV3RejectsCanonicalPrivateURLVariantsAndBadAssetIDs(t *testing.T) {
-	for _, raw := range []string{"https://localhost./x", "https://127.0.0.1./x", "https://100.64.0.1/x", "https://[fe80::1%25eth0]/x", "https://2130706433/x", "https://0177.0.0.1/x", "https://0x7f000001/x", "asset://asset-", "asset://asset-a/b"} {
+	for _, raw := range []string{"https://localhost./x", "https://127.0.0.1./x", "https://127.1/x", "https://127.0.1/x", "https://100.64.0.1/x", "https://[fe80::1%25eth0]/x", "https://2130706433/x", "https://0177.0.0.1/x", "https://0x7f000001/x", "asset://asset-", "asset://asset-a/b"} {
 		if err := validateHCAtomMediaURL(raw); err == nil {
 			t.Fatalf("accepted %q", raw)
 		}

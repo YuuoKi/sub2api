@@ -82,8 +82,8 @@ func TestLookupVideoProvider(t *testing.T) {
 	require.False(t, ok)
 
 	registry := VideoProviderRegistry()
-	require.Len(t, registry, 4)
-	for _, provider := range []string{"seedance", "jimeng", "veo", "kling"} {
+	require.Len(t, registry, 5)
+	for _, provider := range []string{"seedance", HCAtomSeedanceV3Provider, "jimeng", "veo", "kling"} {
 		_, found := lookupVideoProvider(provider)
 		require.True(t, found, provider)
 	}

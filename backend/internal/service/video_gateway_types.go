@@ -161,6 +161,7 @@ type VideoTask struct {
 	AuthorizationConsumedBy              *int64
 	LocalAssetPath                       string
 	LocalAssetSavedAt                    *time.Time
+	CancelOutcome                        string
 }
 
 type VideoTaskFinalization struct {

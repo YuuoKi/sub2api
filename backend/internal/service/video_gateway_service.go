@@ -180,10 +180,12 @@ func (s *VideoGatewayService) CancelTask(ctx context.Context, id int64, scope Vi
 			return nil, err
 		}
 		current.Status = VideoStatusCancelled
+		current.CancelOutcome = "upstream_confirmed"
 		return current, invalidateVideoCaches(ctx, s.authCache, s.billingCache, scope.UserID, scope.APIKeyID)
 	}
 	task, err := s.repo.CancelTaskForScope(ctx, id, scope)
 	if err == nil {
+		task.CancelOutcome = "local_pre_dispatch"
 		err = invalidateVideoCaches(ctx, s.authCache, s.billingCache, scope.UserID, scope.APIKeyID)
 	}
 	return task, err

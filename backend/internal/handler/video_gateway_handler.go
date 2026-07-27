@@ -149,11 +149,7 @@ func (h *VideoGatewayHandler) withTask(c *gin.Context, cancel bool) {
 	}
 	payload := videoTaskResponse(task)
 	if cancel {
-		if task.Provider == service.HCAtomSeedanceV3Provider && task.Status == service.VideoStatusCancelled {
-			payload["cancel_outcome"] = "upstream_confirmed"
-		} else {
-			payload["cancel_outcome"] = "local_pre_dispatch"
-		}
+		payload["cancel_outcome"] = task.CancelOutcome
 	}
 	response.Success(c, payload)
 }

@@ -246,6 +246,22 @@ func TestVideoGatewayRepositoryCancelRejectsDispatchedTask(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestVideoGatewayRepositoryBeginHCAtomV3DispatchRequiresFixedEnabledProvider(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+	repo := NewVideoGatewayRuntimeRepository(db)
+	mock.ExpectExec("UPDATE video_tasks task SET real_dispatch_count=1").WithArgs(int64(7), int64(3), service.HCAtomSeedanceV3Provider, service.HCAtomSeedanceV3BaseURL, service.HCAtomSeedanceV3PublicModel).WillReturnResult(sqlmock.NewResult(0, 1))
+	ok, err := repo.BeginHCAtomV3Dispatch(context.Background(), 7, 3)
+	require.NoError(t, err)
+	require.True(t, ok)
+	mock.ExpectExec("UPDATE video_tasks task SET real_dispatch_count=1").WithArgs(int64(8), int64(3), service.HCAtomSeedanceV3Provider, service.HCAtomSeedanceV3BaseURL, service.HCAtomSeedanceV3PublicModel).WillReturnResult(sqlmock.NewResult(0, 0))
+	ok, err = repo.BeginHCAtomV3Dispatch(context.Background(), 8, 3)
+	require.NoError(t, err)
+	require.False(t, ok)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestValidateVideoSettlementRejectsMismatchedActualCost(t *testing.T) {
 	tokens := int64(10)
 	task := &service.VideoTask{ReservedCostUSD: 0.2, ReservationState: service.VideoReservationReserved}

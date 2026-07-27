@@ -76,21 +76,22 @@ func TestAccountFromServiceShallow_NilCredentialsOmitsStatus(t *testing.T) {
 }
 
 func TestAccountFromServiceShallow_HCAtomUsesStrictPublicAllowlistRecursively(t *testing.T) {
-	sentinel := strings.Join([]string{"hc-review", "dto", "secret"}, "-")
+	sentinel := strings.Join([]string{"hc-sentinel", "DO-NOT-PERSIST", "7x9Q"}, "-")
+	liveLike := strings.Join([]string{"sk", "live", "abc123"}, "-")
 	src := &service.Account{
 		ID:       43,
 		Name:     "hc-atom",
 		Platform: service.PlatformHCAtom,
 		Type:     service.AccountTypeAPIKey,
 		Credentials: map[string]any{
-			"protocol":                          "hc-atom",
+			"protocol":                          sentinel,
 			service.HCAtomAPIKeyCiphertextField: "hc1:synthetic-ciphertext",
 			service.HCAtomAPIKeyMaskedField:     "********7x9Q",
 			service.HCAtomAPIKeyConfiguredField: true,
 			"Authorization":                     "Bearer " + sentinel,
-			"metadata":                          []any{map[string]any{"token": sentinel}},
+			"metadata":                          []any{map[string]any{"token": liveLike}},
 			"model_mapping": map[string]any{
-				"seedream-5.0": map[string]any{"api_key": sentinel},
+				"seedream-5.0": liveLike,
 			},
 		},
 	}
@@ -99,10 +100,35 @@ func TestAccountFromServiceShallow_HCAtomUsesStrictPublicAllowlistRecursively(t 
 	raw, err := json.Marshal(got)
 	require.NoError(t, err)
 	require.NotContains(t, string(raw), sentinel)
-	require.Equal(t, "hc-atom", got.Credentials["protocol"])
+	require.NotContains(t, string(raw), liveLike)
+	require.NotContains(t, got.Credentials, "protocol")
 	require.NotContains(t, got.Credentials, "Authorization")
 	require.NotContains(t, got.Credentials, "metadata")
 	require.NotContains(t, got.Credentials, "model_mapping")
+	require.NotContains(t, got.Credentials, service.HCAtomAPIKeyCiphertextField)
+	require.True(t, got.CredentialsStatus["has_"+service.HCAtomAPIKeyCiphertextField])
+}
+
+func TestAccountFromServiceShallow_HCAtomKeepsOnlyPublicCatalogConfiguration(t *testing.T) {
+	src := &service.Account{
+		Platform: service.PlatformHCAtom,
+		Credentials: map[string]any{
+			"protocol":                          "hc_atom",
+			service.HCAtomAPIKeyCiphertextField: "hc1:synthetic-ciphertext",
+			service.HCAtomAPIKeyMaskedField:     "********7x9Q",
+			service.HCAtomAPIKeyConfiguredField: true,
+			"model_mapping": map[string]any{
+				"seedream-5.0":          "seedream-5.0",
+				"dola-seedream-5.0-pro": "dola-seedream-5.0-pro",
+			},
+		},
+	}
+	got := AccountFromServiceShallow(src)
+	require.Equal(t, "hc_atom", got.Credentials["protocol"])
+	require.Equal(t, map[string]any{
+		"seedream-5.0":          "seedream-5.0",
+		"dola-seedream-5.0-pro": "dola-seedream-5.0-pro",
+	}, got.Credentials["model_mapping"])
 	require.NotContains(t, got.Credentials, service.HCAtomAPIKeyCiphertextField)
 	require.True(t, got.CredentialsStatus["has_"+service.HCAtomAPIKeyCiphertextField])
 }

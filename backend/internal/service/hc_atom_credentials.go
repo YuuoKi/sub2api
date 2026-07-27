@@ -127,7 +127,7 @@ func ProtectHCAtomAccountCredentials(existing, incoming map[string]any, cipher H
 	if rawProtocol, ok := incoming["protocol"]; ok {
 		protocol, ok := rawProtocol.(string)
 		protocol = strings.TrimSpace(protocol)
-		if !ok || !isHCAtomSafeIdentifier(protocol) {
+		if !ok || protocol != PlatformHCAtom {
 			return nil, ErrHCAtomCredentialInvalid
 		}
 		out["protocol"] = protocol
@@ -189,7 +189,7 @@ func FilterHCAtomPersistedAccountCredentials(credentials map[string]any) map[str
 	out := make(map[string]any, 5)
 	if protocol, ok := credentials["protocol"].(string); ok {
 		protocol = strings.TrimSpace(protocol)
-		if isHCAtomSafeIdentifier(protocol) {
+		if protocol == PlatformHCAtom {
 			out["protocol"] = protocol
 		}
 	}
@@ -226,17 +226,19 @@ func normalizeHCAtomModelMapping(raw any) (map[string]any, error) {
 	case map[string]any:
 		for alias, rawModel := range mapping {
 			model, ok := rawModel.(string)
-			if !ok || !isHCAtomSafeIdentifier(alias) || !isHCAtomSafeIdentifier(model) {
+			alias, model = strings.TrimSpace(alias), strings.TrimSpace(model)
+			if !ok || !isHCAtomCatalogModel(alias) || !isHCAtomCatalogModel(model) {
 				return nil, ErrHCAtomCredentialInvalid
 			}
-			out[strings.TrimSpace(alias)] = strings.TrimSpace(model)
+			out[alias] = model
 		}
 	case map[string]string:
 		for alias, model := range mapping {
-			if !isHCAtomSafeIdentifier(alias) || !isHCAtomSafeIdentifier(model) {
+			alias, model = strings.TrimSpace(alias), strings.TrimSpace(model)
+			if !isHCAtomCatalogModel(alias) || !isHCAtomCatalogModel(model) {
 				return nil, ErrHCAtomCredentialInvalid
 			}
-			out[strings.TrimSpace(alias)] = strings.TrimSpace(model)
+			out[alias] = model
 		}
 	default:
 		return nil, ErrHCAtomCredentialInvalid
@@ -244,28 +246,9 @@ func normalizeHCAtomModelMapping(raw any) (map[string]any, error) {
 	return out, nil
 }
 
-func isHCAtomSafeIdentifier(value string) bool {
-	value = strings.TrimSpace(value)
-	if value == "" || len(value) > 200 {
-		return false
-	}
-	lower := strings.ToLower(value)
-	for _, marker := range []string{"authorization", "bearer", "token", "secret", "password", "credential", "api_key", "apikey", "signed"} {
-		if strings.Contains(lower, marker) {
-			return false
-		}
-	}
-	for _, r := range value {
-		switch {
-		case r >= 'a' && r <= 'z',
-			r >= 'A' && r <= 'Z',
-			r >= '0' && r <= '9',
-			r == '.', r == '_', r == '-', r == '*', r == ':', r == '/':
-		default:
-			return false
-		}
-	}
-	return !strings.Contains(value, "://")
+func isHCAtomCatalogModel(value string) bool {
+	_, ok := hcAtomBatchModelCatalog[value]
+	return ok
 }
 
 // ResolveHCAtomAPIKey decrypts only after the dedicated HC account was chosen.

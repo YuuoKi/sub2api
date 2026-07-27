@@ -267,6 +267,53 @@ Status: GREEN for the requested local secret-boundary scope.
 - Rollback is the single focused secret-remediation commit. The unrelated
   pre-existing frontend lockfile and untracked worktree files remain excluded.
 
+## Review remediation (secret value-domain allowlist)
+
+Status: GREEN for the final local secret P1.
+
+### RED evidence
+
+- `protocol` accepted the supplied persistence sentinel, a live-key-shaped
+  fixture, and the near-miss `hc-atom`.
+- `model_mapping` accepted both fixtures as a key or value because it only
+  checked identifier syntax.
+- Admin Create reached the repository for invalid allowed-field values.
+
+### Landed remediation
+
+- `protocol` is now omitted or exactly `hc_atom`; every other supplied value is
+  rejected before repository access.
+- `model_mapping` is normalized to a string-to-string mapping whose keys and
+  values must both belong to the fixed HC catalog:
+  `seedream-5.0`, `doubao-seedream-5.0-pro`, or
+  `dola-seedream-5.0-pro`.
+- Dola mapping may be persisted as reserved configuration, while its catalog
+  enablement remains false and the existing ListModels gate does not advertise
+  it.
+- Incoming ciphertext/masked/configured values remain ignored. Protect creates
+  them from the transient API key or preserves validated existing values during
+  Update.
+- Admin repository input, scheduler/Redis snapshots, and DTO serialization
+  recursively verify that both supplied fixtures are absent.
+
+### Fresh GREEN gates
+
+- Focused protocol/catalog/repository-boundary tests: PASS.
+- Focused scheduler/Redis and DTO value-domain tests: PASS.
+- `go test -tags unit ./internal/service -count=1`: PASS (106.369s).
+- `go test ./internal/service ./internal/config ./internal/repository
+  ./internal/handler/dto ./cmd/server -count=1`: PASS (82.5s).
+- `go build -o C:\tmp\hc-task2-value-domain-server.exe ./cmd/server`: PASS;
+  the exact temporary binary was removed.
+- `git diff --check`: PASS before the focused commit.
+
+### Boundaries and rollback
+
+- No real credential/API/provider call, frontend/video change, deployment,
+  push, merge, reset, clean, or rebase was performed.
+- Rollback is the focused value-domain commit only. Existing unrelated
+  worktree dirt remains excluded.
+
 ## Owned-result lifecycle review remediation
 
 ## 结论

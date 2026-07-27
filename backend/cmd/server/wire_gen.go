@@ -280,7 +280,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	batchImageHandler := handler.NewBatchImageHandler(batchImagePublicService, batchImageDownloadService, batchImageCleanupService)
 	videoGatewayRuntimeRepository := repository.NewVideoGatewayRuntimeRepository(db)
 	singleSmokeAuthorization := service.ProvideVideoSingleSmokeAuthorization()
-	videoGatewayService := service.ProvideVideoGatewayService(videoGatewayRuntimeRepository, singleSmokeAuthorization, configConfig, apiKeyService, billingCacheService, videoAssetStore)
+	videoGatewayService := service.ProvideVideoGatewayService(videoGatewayRuntimeRepository, videoKeyEncryptor, singleSmokeAuthorization, configConfig, apiKeyService, billingCacheService, videoAssetStore)
 	videoGatewayHandler := handler.NewVideoGatewayHandler(videoGatewayService)
 	videoSimulationRepository := repository.ProvideVideoSimulationRepository(videoGatewayRuntimeRepository)
 	videoSimulationService := service.ProvideVideoSimulationService(videoSimulationRepository, apiKeyService)

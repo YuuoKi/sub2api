@@ -101,3 +101,54 @@ func TestHCAtomV3CreateContractKeepsLegacyPromptAndAllowsV3Fields(t *testing.T) 
 		t.Fatalf("created=%#v err=%v", created, err)
 	}
 }
+
+type hcAtomClientStub struct {
+	cancel  *VideoProviderTask
+	err     error
+	creates int
+}
+
+func (s *hcAtomClientStub) Create(context.Context, VideoCreateRequest) (*VideoProviderTask, error) {
+	s.creates++
+	return nil, s.err
+}
+func (s *hcAtomClientStub) Poll(context.Context, string) (*VideoProviderTask, error) { return nil, nil }
+func (s *hcAtomClientStub) Cancel(context.Context, string) (*VideoProviderTask, error) {
+	return s.cancel, s.err
+}
+
+func TestHCAtomDispatchedCancelFinalizesOnlyAfterConfirmedUpstreamCancel(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		client        *hcAtomClientStub
+		wantFinalized int
+	}{
+		{"confirmed", &hcAtomClientStub{cancel: &VideoProviderTask{Status: VideoStatusCancelled}}, 1},
+		{"delete_failure", &hcAtomClientStub{err: errors.New("timeout")}, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := &workerRepoStub{task: &VideoTask{ID: 7, APIKeyID: 2, GroupID: 9, ProviderAccountID: 10, Provider: HCAtomSeedanceV3Provider, Status: VideoStatusSubmitted, UpstreamTaskID: "hc-7", Version: 3, CreatedBy: 1, ReservationState: VideoReservationReserved, ReservedCostUSD: .2}, provider: VideoProviderAccount{ID: 10, GroupID: 9, Provider: HCAtomSeedanceV3Provider, BaseURL: HCAtomSeedanceV3BaseURL, EncryptedAPIKey: "cipher"}}
+			svc := NewVideoGatewayService(repo, nil, &config.Config{}, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{})
+			svc.ConfigureProviderClientFactory(keyDecryptStub{}, func(string, string, string) VideoProviderClient { return tc.client })
+			_, _ = svc.CancelTask(context.Background(), 7, VideoTaskScope{UserID: 1, APIKeyID: 2, GroupID: 9})
+			if len(repo.finalized) != tc.wantFinalized {
+				t.Fatalf("finalized=%#v", repo.finalized)
+			}
+			if tc.wantFinalized == 1 && repo.finalized[0].Settlement != VideoSettlementRelease {
+				t.Fatalf("finalization=%#v", repo.finalized[0])
+			}
+		})
+	}
+}
+
+func TestVideoWorkerTransportFailureDoesNotInventIDOrRetry(t *testing.T) {
+	repo := &workerRepoStub{begin: true, task: &VideoTask{ID: 7, GroupID: 9, ProviderAccountID: 10, Provider: HCAtomSeedanceV3Provider, Status: VideoStatusQueued, Version: 1, CreatedBy: 1, ReservationState: VideoReservationReserved, ReservedCostUSD: .2}, provider: VideoProviderAccount{ID: 10, GroupID: 9, Provider: HCAtomSeedanceV3Provider, BaseURL: HCAtomSeedanceV3BaseURL, EncryptedAPIKey: "cipher"}}
+	client := &hcAtomClientStub{err: errors.New("connection reset")}
+	w := NewVideoGatewayWorker(repo, keyDecryptStub{}, func(string, string, string) VideoProviderClient { return client }, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}, &config.Config{}, NewSingleSmokeAuthorization(true))
+	if err := w.RunOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if client.creates != 1 || len(repo.finalized) != 1 || repo.finalized[0].Status != VideoStatusFailed || repo.task.UpstreamTaskID != "" {
+		t.Fatalf("creates=%d finalized=%#v task=%#v", client.creates, repo.finalized, repo.task)
+	}
+}

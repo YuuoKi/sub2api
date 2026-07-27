@@ -1675,6 +1675,7 @@ func setDefaults() {
 	// explicitly provide the dedicated key, pricing and both runtime gates.
 	viper.SetDefault("video_gateway.encryption_key", "")
 	viper.SetDefault("video_gateway.worker_enabled", false)
+	viper.SetDefault("video_gateway.hc_atom_v3_dispatch_enabled", false)
 	viper.SetDefault("video_gateway.worker_interval_seconds", 5)
 	viper.SetDefault("video_gateway.http_timeout_seconds", 30)
 	viper.SetDefault("video_gateway.seedance_cny_per_million_tokens", 0)

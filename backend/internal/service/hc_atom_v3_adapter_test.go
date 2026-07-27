@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/stretchr/testify/require"
 )
 
 func TestHCAtomV3CreateUsesFixedEndpointBearerAndV3Payload(t *testing.T) {
@@ -211,4 +212,16 @@ func TestVideoWorkerTransportFailureDoesNotInventIDOrRetry(t *testing.T) {
 	if client.creates != 1 || len(repo.finalized) != 0 || repo.task.Status != VideoStatusReviewRequired || repo.task.UpstreamTaskID != "" {
 		t.Fatalf("creates=%d finalized=%#v task=%#v", client.creates, repo.finalized, repo.task)
 	}
+}
+
+func TestVideoWorkerUnknownStatusWithIDHoldsReviewAndDoesNotReplay(t *testing.T) {
+	repo := &workerRepoStub{begin: true, task: &VideoTask{ID: 8, GroupID: 9, ProviderAccountID: 10, Provider: HCAtomSeedanceV3Provider, Status: VideoStatusQueued, Version: 1, CreatedBy: 1, ReservationState: VideoReservationReserved, ReservedCostUSD: .2}, provider: VideoProviderAccount{ID: 10, GroupID: 9, Provider: HCAtomSeedanceV3Provider, BaseURL: HCAtomSeedanceV3BaseURL, EncryptedAPIKey: "cipher"}}
+	client := &hcAtomClientStub{err: &VideoProviderTransportError{err: errors.New("unknown status"), UpstreamTaskID: "hc-known"}}
+	w := NewVideoGatewayWorker(repo, keyDecryptStub{}, func(string, string, string) VideoProviderClient { return client }, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}, &config.Config{VideoGateway: config.VideoGatewayConfig{HCAtomV3DispatchEnabled: true}}, NewSingleSmokeAuthorization(true))
+	require.NoError(t, w.RunOnce(context.Background()))
+	require.Equal(t, VideoStatusReviewRequired, repo.task.Status)
+	require.Equal(t, "hc-known", repo.task.UpstreamTaskID)
+	require.Empty(t, repo.finalized)
+	require.NoError(t, w.RunOnce(context.Background()))
+	require.Equal(t, 1, client.creates)
 }

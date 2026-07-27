@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -63,6 +64,70 @@ func TestHCAtomBatchProvider_UsesDedicatedPlatformAndMediaGroupGate(t *testing.T
 	require.NoError(t, service.ensureGroupAllowsBatchImage(context.Background(), &groupID))
 }
 
+// Regression target: completion must consume validated image bytes through the
+// existing JSONL/base64 index boundary, never persist or return the provider URL.
+func TestHCAtomBatchProvider_OpenResultArchivesValidatedImageAsJSONL(t *testing.T) {
+	resultTransport := hcAtomRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		require.Equal(t, "https", req.URL.Scheme)
+		require.Equal(t, "8.8.8.8", req.URL.Hostname())
+		response := hcAtomHTTPResponse(http.StatusOK, "\x89PNG\r\n\x1a\nvalid-test-image")
+		response.Header.Set("Content-Type", "image/png")
+		return response, nil
+	})
+	provider := NewHCAtomBatchImageProviderWithResultClient(&fakeHCAtomBatchClient{task: &HCAtomBatchTask{
+		TaskID: "hc-task-1", Status: "SUCCESS", ResultURL: "https://8.8.8.8/result.png",
+	}}, &http.Client{Transport: resultTransport})
+	jobName, customID := "hc-task-1", "item_000001"
+	r, contentType, err := provider.OpenResult(context.Background(), &BatchImageJob{ProviderJobName: &jobName, ProviderInputRef: &customID}, &Account{
+		Platform: PlatformHCAtom, Type: AccountTypeAPIKey, Credentials: map[string]any{"hc_atom_api_key": "test"},
+	})
+	require.NoError(t, err)
+	defer r.Close()
+	require.Equal(t, "application/jsonl", contentType)
+	line, err := io.ReadAll(r)
+	require.NoError(t, err)
+	require.Contains(t, string(line), `"custom_id":"item_000001"`)
+	require.Contains(t, string(line), `"mimeType":"image/png"`)
+	require.NotContains(t, string(line), "https://8.8.8.8")
+}
+
+// Regression target: a confirmed upstream DELETE is allowed to return HTTP 204
+// with no envelope; treating it as a JSON protocol error would strand holds.
+func TestHCAtomBatchHTTPClient_DeleteAcceptsNoContent(t *testing.T) {
+	client := NewHCAtomBatchHTTPClient(&http.Client{Transport: hcAtomRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		require.Equal(t, http.MethodDelete, req.Method)
+		require.Equal(t, "/image/generation/tasks/hc-task-1", req.URL.Path)
+		return hcAtomHTTPResponse(http.StatusNoContent, ""), nil
+	})})
+	require.NoError(t, client.Delete(context.Background(), "synthetic-key", "hc-task-1"))
+}
+
+func TestHCAtomBatchProvider_StrictStatusAndBusinessEnvelopeMapping(t *testing.T) {
+	for _, tt := range []struct {
+		state string
+		want  BatchProviderInternalState
+	}{
+		{"PENDING", BatchProviderStateQueued}, {"RUNNING", BatchProviderStateRunning},
+		{"FAILED", BatchProviderStateFailed}, {"CANCELLED", BatchProviderStateCancelled},
+	} {
+		t.Run(tt.state, func(t *testing.T) {
+			got, err := mapHCAtomBatchState(&HCAtomBatchTask{Status: tt.state, ResultURL: "https://result.example/image.png"})
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got.InternalState)
+		})
+	}
+	_, err := mapHCAtomBatchState(&HCAtomBatchTask{Status: "MYSTERY"})
+	require.Error(t, err)
+	require.Equal(t, "HC_ATOM_PROTOCOL_ERROR", infraerrors.Reason(err))
+
+	client := NewHCAtomBatchHTTPClient(&http.Client{Transport: hcAtomRoundTripFunc(func(*http.Request) (*http.Response, error) {
+		return hcAtomHTTPResponse(http.StatusOK, `{"code":40101,"msg":"hidden upstream detail","data":{}}`), nil
+	})})
+	_, err = client.Get(context.Background(), "synthetic-key", "hc-task-1")
+	require.Error(t, err)
+	require.Equal(t, "HC_ATOM_BUSINESS_ERROR", infraerrors.Reason(mapHCAtomBatchError(err)))
+}
+
 type hcAtomRoundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f hcAtomRoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
@@ -83,3 +148,13 @@ func (r *hcAtomBatchGroupRepo) GetByIDLite(_ context.Context, id int64) (*Group,
 	}
 	return nil, ErrGroupNotFound
 }
+
+type fakeHCAtomBatchClient struct{ task *HCAtomBatchTask }
+
+func (f *fakeHCAtomBatchClient) Create(context.Context, string, string, HCAtomBatchCreateRequest) (*HCAtomBatchTask, error) {
+	return f.task, nil
+}
+func (f *fakeHCAtomBatchClient) Get(context.Context, string, string) (*HCAtomBatchTask, error) {
+	return f.task, nil
+}
+func (f *fakeHCAtomBatchClient) Delete(context.Context, string, string) error { return nil }

@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -52,13 +53,23 @@ type HCAtomBatchTask struct {
 	ErrorMsg   string
 }
 
-type HCAtomBatchImageProvider struct{ client HCAtomBatchClient }
+type HCAtomBatchImageProvider struct {
+	client       HCAtomBatchClient
+	resultClient *http.Client
+}
 
 func NewHCAtomBatchImageProvider(client HCAtomBatchClient) *HCAtomBatchImageProvider {
+	return NewHCAtomBatchImageProviderWithResultClient(client, nil)
+}
+
+func NewHCAtomBatchImageProviderWithResultClient(client HCAtomBatchClient, resultClient *http.Client) *HCAtomBatchImageProvider {
 	if client == nil {
 		client = NewHCAtomBatchHTTPClient(nil)
 	}
-	return &HCAtomBatchImageProvider{client: client}
+	if resultClient == nil {
+		resultClient = newPublicAssetHTTPClient(2 * time.Minute)
+	}
+	return &HCAtomBatchImageProvider{client: client, resultClient: resultClient}
 }
 
 func (p *HCAtomBatchImageProvider) Name() string { return BatchImageProviderHCAtom }
@@ -104,7 +115,7 @@ func (p *HCAtomBatchImageProvider) Submit(ctx context.Context, job *BatchImageJo
 	if created == nil || strings.TrimSpace(created.TaskID) == "" {
 		return nil, hcAtomBatchError("HC_ATOM_INVALID_RESPONSE", "HC-ATOM create response is missing task id", nil)
 	}
-	return &BatchProviderJob{ProviderJobName: strings.TrimSpace(created.TaskID), RawState: strings.TrimSpace(created.Status)}, nil
+	return &BatchProviderJob{ProviderJobName: strings.TrimSpace(created.TaskID), ProviderInputRef: strings.TrimSpace(item.CustomID), RawState: strings.TrimSpace(created.Status)}, nil
 }
 
 func (p *HCAtomBatchImageProvider) Get(ctx context.Context, job *BatchImageJob, account *Account) (*BatchProviderStatus, error) {
@@ -136,8 +147,83 @@ func (p *HCAtomBatchImageProvider) Cancel(ctx context.Context, job *BatchImageJo
 	return mapHCAtomBatchError(p.client.Delete(ctx, hcAtomBatchAPIKey(account), taskID))
 }
 
-func (p *HCAtomBatchImageProvider) OpenResult(context.Context, *BatchImageJob, *Account) (io.ReadCloser, string, error) {
-	return nil, "", hcAtomBatchError("HC_ATOM_ARCHIVE_REQUIRED", "HC-ATOM result must be archived before it can be opened", nil)
+func (p *HCAtomBatchImageProvider) OpenResult(ctx context.Context, job *BatchImageJob, account *Account) (io.ReadCloser, string, error) {
+	if !p.SupportsAccount(account) {
+		return nil, "", ErrBatchImageProviderUnsupportedAccount
+	}
+	taskID := batchImageProviderJobName(job)
+	customID := batchImageProviderInputRef(job)
+	if taskID == "" || customID == "" || p.resultClient == nil {
+		return nil, "", ErrBatchImageProviderMissingResultRef
+	}
+	task, err := p.client.Get(ctx, hcAtomBatchAPIKey(account), taskID)
+	if err != nil {
+		return nil, "", mapHCAtomBatchError(err)
+	}
+	status, err := mapHCAtomBatchState(task)
+	if err != nil || status.InternalState != BatchProviderStateSucceeded {
+		if err != nil {
+			return nil, "", err
+		}
+		return nil, "", hcAtomBatchError("HC_ATOM_RESULT_NOT_READY", "HC-ATOM result is not ready for archival", nil)
+	}
+	urls := hcAtomBatchResultURLs(task)
+	if len(urls) == 0 {
+		return nil, "", hcAtomBatchError("HC_ATOM_RESULT_MISSING", "HC-ATOM success response is missing result URLs", nil)
+	}
+	var lines bytes.Buffer
+	for _, rawURL := range urls {
+		encoded, mimeType, err := p.archiveResultURL(ctx, rawURL)
+		if err != nil {
+			return nil, "", err
+		}
+		line := map[string]any{"custom_id": customID, "response": map[string]any{"candidates": []any{map[string]any{"content": map[string]any{"parts": []any{map[string]any{"inlineData": map[string]any{"mimeType": mimeType, "data": encoded}}}}}}}}
+		if err := json.NewEncoder(&lines).Encode(line); err != nil {
+			return nil, "", err
+		}
+	}
+	return io.NopCloser(bytes.NewReader(lines.Bytes())), "application/jsonl", nil
+}
+
+func (p *HCAtomBatchImageProvider) archiveResultURL(ctx context.Context, rawURL string) (string, string, error) {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || parsed == nil || parsed.Scheme != "https" || validateAssetSourceURL(parsed) != nil {
+		return "", "", hcAtomBatchError("HC_ATOM_RESULT_URL_UNSAFE", "HC-ATOM result URL is unsafe", nil)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, parsed.String(), nil)
+	if err != nil {
+		return "", "", hcAtomBatchError("HC_ATOM_RESULT_DOWNLOAD_FAILED", "HC-ATOM result download failed", nil)
+	}
+	resp, err := p.resultClient.Do(req)
+	if err != nil {
+		return "", "", hcAtomBatchError("HC_ATOM_RESULT_DOWNLOAD_FAILED", "HC-ATOM result download failed", nil)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || resp.ContentLength > 20<<20 {
+		return "", "", hcAtomBatchError("HC_ATOM_RESULT_DOWNLOAD_FAILED", "HC-ATOM result download failed", nil)
+	}
+	mimeType := strings.ToLower(strings.TrimSpace(strings.Split(resp.Header.Get("Content-Type"), ";")[0]))
+	if mimeType != "image/png" && mimeType != "image/jpeg" && mimeType != "image/webp" {
+		return "", "", hcAtomBatchError("HC_ATOM_RESULT_MIME_INVALID", "HC-ATOM result is not an allowed image", nil)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 20<<20+1))
+	if err != nil || len(data) == 0 || len(data) > 20<<20 || !hcAtomImageSignatureMatches(mimeType, data) {
+		return "", "", hcAtomBatchError("HC_ATOM_RESULT_CONTENT_INVALID", "HC-ATOM result image is invalid", nil)
+	}
+	return base64.StdEncoding.EncodeToString(data), mimeType, nil
+}
+
+func hcAtomImageSignatureMatches(mimeType string, data []byte) bool {
+	switch mimeType {
+	case "image/png":
+		return len(data) >= 8 && bytes.Equal(data[:8], []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'})
+	case "image/jpeg":
+		return len(data) >= 3 && data[0] == 0xff && data[1] == 0xd8 && data[2] == 0xff
+	case "image/webp":
+		return len(data) >= 12 && string(data[:4]) == "RIFF" && string(data[8:12]) == "WEBP"
+	default:
+		return false
+	}
 }
 
 func (p *HCAtomBatchImageProvider) Cleanup(context.Context, *BatchImageJob, *Account, CleanupTarget) error {
@@ -258,8 +344,15 @@ func (c *HCAtomBatchHTTPClient) Delete(ctx context.Context, apiKey, taskID strin
 	if err != nil {
 		return err
 	}
-	_, err = c.doTask(req)
-	return err
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return &HCAtomBatchAPIError{StatusCode: resp.StatusCode}
+	}
+	return nil
 }
 
 func (c *HCAtomBatchHTTPClient) newRequest(ctx context.Context, method, path, apiKey string, body io.Reader) (*http.Request, error) {

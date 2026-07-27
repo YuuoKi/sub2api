@@ -1,6 +1,6 @@
 # Task 2 report - HC-ATOM async image provider
 
-Status: PARTIAL / blocked from completion by the existing batch-result persistence contract.
+Status: LOCAL CODE/MOCK GREEN; real provider and production deployment remain unverified.
 
 ## RED evidence
 
@@ -133,10 +133,9 @@ Status: GREEN for the fake HC public-batch path; no production provider call was
 The tests prove the local fake pipeline only. Real HC credentials, paid calls,
 deployment, push, merge, frontend, and video were not used or performed.
 
-## Review remediation (partial)
+## Review remediation (non-secret hardening)
 
-Status: P0 owned-result persistence and the HC admin-group gate are GREEN;
-the remaining P1/P2 review items are not yet closed.
+Status: GREEN for the requested local non-secret hardening scope.
 
 - `039401208 fix(images): persist HC owned batch results`: HC archives a
   successful remote result once into a configured, deterministic owned JSONL
@@ -146,3 +145,65 @@ the remaining P1/P2 review items are not yet closed.
   now preserves batch-image enablement for `PlatformHCAtom` when image generation
   is allowed.
 - RED/GREEN: restart-owned-result and HC group-create focused tests passed.
+- `6d09dec56 fix(images): bound HC atom HTTP protocol`: only explicit business
+  `code=0` succeeds; the HC API has a dedicated 30-second overall timeout plus
+  bounded dial/TLS/header phases, rejects API redirects, and caps JSON bodies at
+  1 MiB. Tests cover 401/403/429/5xx, timeout, body-read failure, oversized JSON,
+  and missing business code.
+- `707e02cea fix(images): validate HC atom result archives`: every result redirect
+  hop repeats the HTTPS/443/no-credentials/no-fragment/public-address policy;
+  the production transport still validates every DNS answer before dialing.
+  JPEG/WebP containers and dimensions are validated, including a 40 MP pixel
+  ceiling. Raw images are capped at 11 MiB, the final owned JSONL line must stay
+  below the shared 16 MiB index/download scanner boundary, and WebP requires an
+  actual complete VP8/VP8L image chunk.
+- `5caeead77 fix(images): align HC atom result contracts`: all camel/snake,
+  plural/singular result URL aliases aggregate deterministically into one
+  `custom_id` JSONL line with multiple `inlineData` parts. A positive
+  `usage.imageCount` must match the distinct URL count. Dola remains explicitly
+  disabled and is not returned by `ListModels`. Usage logs select the upstream
+  endpoint from `job.Provider`; HC records the fixed
+  `https://api-aigc.fzyinghe.com/image/generation/tasks` endpoint, not Vertex.
+- `a3d5ee3ef fix(images): persist only newly archived output refs`: the full
+  service gate exposed a regression from `039401208`; ordinary pre-existing
+  output refs were being mistaken for newly archived refs. The indexer now
+  persists an output ref only when `OpenResult` changes it, preserving HC owned
+  refs without breaking existing providers.
+
+### Additional RED evidence
+
+1. Missing business `code` returned success.
+2. The default HC API client had no overall timeout, and an oversized but
+   syntactically valid JSON envelope was accepted.
+3. Unsafe redirect targets were followed to a second hop; truncated JPEG/WebP,
+   a 10001-pixel JPEG axis, a 48 MP JPEG, and a 12 MiB raw image were accepted.
+4. `result_url` was dropped when `resultUrl` was also present, and a positive
+   usage count could disagree with distinct result URLs.
+5. Dola appeared in `ListModels`, while HC usage was logged as
+   `vertex:batchPredictionJobs`.
+6. The first full service run failed
+   `TestBatchImageResultIndexer_WritesCountsAndReplacesItems` and
+   `TestBatchImageResultIndexer_ReconcilesMissingAndUnknownCustomIDs` with
+   `BATCH_IMAGE_JOB_NOT_FOUND`; the focused reproduction passed after
+   `a3d5ee3ef`.
+
+### Fresh GREEN gates
+
+- `go test ./internal/service -run '^TestHCAtomBatch' -count=1` - PASS.
+- Focused unit ListModels, settlement, and result-indexer tests - PASS.
+- `go test -tags unit ./internal/service -count=1` - PASS (116.8s).
+- `go test ./internal/config ./internal/repository ./internal/handler/... -count=1`
+  - PASS (46.6s).
+- `go build -o D:\sub2api-trunk\.tmp-hc-task2-server.exe ./cmd/server`
+  - PASS (24.4s); the temporary binary was removed.
+
+### Remaining boundaries
+
+- No real HC credential was read, no paid/provider call was made, and no
+  production deployment or browser path was exercised. These tests prove local
+  fake transports, persistence, indexing, settlement, and build behavior only.
+- Dola remains disabled until a vendor endpoint and acceptance evidence exist.
+- This remediation did not modify the separately owned secret allowlist or error
+  sanitizer work.
+- No frontend or video code was changed. No push, deploy, merge, reset, clean,
+  rebase, or destructive repository cleanup occurred.

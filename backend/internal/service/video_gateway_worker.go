@@ -137,6 +137,9 @@ func (w *VideoGatewayWorker) RunOnce(ctx context.Context) error {
 	}
 	created, err := w.clientFactory(provider.Provider, provider.BaseURL, key).Create(ctx, request)
 	if err != nil {
+		if errors.Is(err, ErrHCAtomMediaURLUnreachable) {
+			return w.finalize(ctx, task, VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version + 1, Status: VideoStatusFailed, ErrorMessage: "media URL is not safely accessible", ProviderErrorCode: "invalid_media_url", ProviderErrorMessage: "media URL is not safely accessible", Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()})
+		}
 		var transportErr *VideoProviderTransportError
 		if errors.As(err, &transportErr) {
 			return w.repo.MarkVideoDispatchUncertain(ctx, task.ID, task.Version+1, "provider_dispatch_uncertain", transportErr.UpstreamTaskID)

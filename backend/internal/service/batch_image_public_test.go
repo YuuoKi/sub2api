@@ -797,6 +797,17 @@ func validBatchImageSubmitRequest() BatchImageSubmitRequest {
 	}
 }
 
+func TestBatchImageProviderSelectionOrder_DoesNotSilentlyFallbackToHCAtom(t *testing.T) {
+	require.Equal(t,
+		[]string{BatchImageProviderGeminiAPI, BatchImageProviderVertex},
+		batchImageProviderSelectionOrder(""),
+	)
+	require.Equal(t,
+		[]string{BatchImageProviderHCAtom},
+		batchImageProviderSelectionOrder(BatchImageProviderHCAtom),
+	)
+}
+
 func TestBatchImagePublicSubmit_HCAtomRejectsGeminiOnlyGroupBeforeAccountSelection(t *testing.T) {
 	svc, repo, _, gemini, _ := newTestBatchImagePublicService(true)
 	hc := &publicBatchImageProvider{name: BatchImageProviderHCAtom}

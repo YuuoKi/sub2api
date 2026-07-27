@@ -5,11 +5,39 @@ import (
 	"database/sql"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/stretchr/testify/require"
 )
+
+func TestListVideoProvidersReturnsLatestSanitizedProviderError(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	repo := &videoAdminRepository{db: db}
+	latestAt := time.Date(2026, 7, 27, 1, 2, 3, 0, time.UTC)
+	mock.ExpectQuery(`SELECT[\s\S]+provider_error_message[\s\S]+FROM video_provider_accounts`).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "group_id", "group_name", "provider", "display_name", "enabled",
+			"encrypted_api_key", "masked_key", "base_url", "default_model",
+			"tiny_real_authorized_at", "tiny_real_authorized_by", "tiny_real_consumed_at",
+			"latest_error_message", "latest_error_at",
+		}).AddRow(
+			int64(7), int64(9), "视频组", service.HCAtomSeedanceV3Provider, "HC V3", true,
+			"", "hc-a…7z", service.HCAtomSeedanceV3BaseURL, service.HCAtomSeedanceV3PublicModel,
+			nil, int64(0), nil, "upstream provider dispatch failed", latestAt,
+		))
+
+	items, err := repo.ListVideoProviders(context.Background())
+
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	require.Equal(t, "upstream provider dispatch failed", items[0].LatestErrorMessage)
+	require.Equal(t, latestAt, *items[0].LatestErrorAt)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
 
 func TestCreateVideoProviderDetectsConflictOnCustomModel(t *testing.T) {
 	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))

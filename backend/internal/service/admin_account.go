@@ -481,6 +481,14 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 				return nil, infraerrors.Newf(http.StatusBadRequest, "SPARK_SHADOW_NO_CREDENTIALS",
 					"spark shadow account %d cannot hold credentials; manage credentials on the parent account", acc.ID)
 			}
+			if acc != nil && acc.Platform == PlatformHCAtom {
+				// HC credentials require per-account encryption and preservation
+				// of the existing ciphertext. A single bulk JSON merge cannot
+				// safely provide those semantics, so fail closed and require the
+				// dedicated single-account update path.
+				return nil, infraerrors.Newf(http.StatusBadRequest, "HC_ATOM_BULK_CREDENTIAL_UPDATE_FORBIDDEN",
+					"HC-ATOM account %d credentials cannot be updated in bulk; update the account individually", acc.ID)
+			}
 		}
 	}
 

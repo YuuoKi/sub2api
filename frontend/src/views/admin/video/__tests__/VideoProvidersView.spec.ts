@@ -183,16 +183,12 @@ describe('VideoProvidersView', () => {
   })
 
   it('shows the latest sanitized task error for the matching provider account', async () => {
-    mocks.listTasks.mockResolvedValue({
+    mocks.listProviders.mockResolvedValue({
       items: [{
-        provider_account_id: 7,
-        provider_error_message: 'upstream provider operation failed',
-        error_message: '',
+        ...provider,
+        latest_error_message: 'upstream provider operation failed',
+        latest_error_at: '2026-07-27T01:02:03Z',
       }],
-      total: 1,
-      page: 1,
-      page_size: 100,
-      pages: 1,
     })
 
     const wrapper = mount(VideoProvidersView, {
@@ -202,5 +198,6 @@ describe('VideoProvidersView', () => {
 
     expect(wrapper.text()).toContain('最近错误')
     expect(wrapper.text()).toContain('upstream provider operation failed')
+    expect(mocks.listTasks).not.toHaveBeenCalled()
   })
 })

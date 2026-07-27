@@ -31,6 +31,7 @@ const (
 var (
 	ErrVideoRealDispatchDenied   = errors.New("real video dispatch denied: single_smoke_authorized is required")
 	ErrVideoRealDispatchConsumed = errors.New("real video dispatch denied: single_smoke_authorized was already consumed")
+	ErrHCAtomMediaURLUnreachable = errors.New("hc atom media URL is not safely accessible")
 )
 
 type VideoProviderTransportError struct {
@@ -129,6 +130,7 @@ func (a *SeedanceAdapter) Cancel(context.Context, string) (*VideoProviderTask, e
 
 type HCAtomV3Adapter struct {
 	client          *http.Client
+	assetClient     *http.Client
 	baseURL, apiKey string
 }
 
@@ -136,7 +138,23 @@ func NewHCAtomV3Adapter(client *http.Client, baseURL, apiKey string) *HCAtomV3Ad
 	if client == nil {
 		client = &http.Client{Timeout: 30 * time.Second}
 	}
-	return &HCAtomV3Adapter{client: client, baseURL: strings.TrimRight(strings.TrimSpace(baseURL), "/"), apiKey: apiKey}
+	assetClient := newPublicAssetHTTPClient(10 * time.Second)
+	previousRedirectCheck := assetClient.CheckRedirect
+	assetClient.CheckRedirect = func(request *http.Request, via []*http.Request) error {
+		if err := validatePublicHTTPSAssetURL(request.URL.String()); err != nil {
+			return errors.New("unsafe HC-ATOM media redirect")
+		}
+		if previousRedirectCheck != nil {
+			return previousRedirectCheck(request, via)
+		}
+		return nil
+	}
+	return &HCAtomV3Adapter{
+		client:      client,
+		assetClient: assetClient,
+		baseURL:     strings.TrimRight(strings.TrimSpace(baseURL), "/"),
+		apiKey:      apiKey,
+	}
 }
 
 func validateHCAtomV3BaseURL(raw string) (*url.URL, error) {
@@ -217,6 +235,9 @@ func (a *HCAtomV3Adapter) Create(ctx context.Context, input VideoCreateRequest) 
 	if err != nil {
 		return nil, err
 	}
+	if err := a.probeRemoteMediaURLs(ctx, content); err != nil {
+		return nil, err
+	}
 	payload := struct {
 		Model           string             `json:"model"`
 		Content         []VideoContentItem `json:"content"`
@@ -232,6 +253,72 @@ func (a *HCAtomV3Adapter) Create(ctx context.Context, input VideoCreateRequest) 
 		return nil, err
 	}
 	return a.doTask(ctx, http.MethodPost, endpoint, body)
+}
+
+func (a *HCAtomV3Adapter) probeRemoteMediaURLs(ctx context.Context, content []VideoContentItem) error {
+	client := a.assetClient
+	if client == nil {
+		return ErrHCAtomMediaURLUnreachable
+	}
+	for _, item := range content {
+		var raw string
+		switch item.Type {
+		case "image_url":
+			if item.ImageURL != nil {
+				raw = item.ImageURL.URL
+			}
+		case "video_url":
+			if item.VideoURL != nil {
+				raw = item.VideoURL.URL
+			}
+		case "audio_url":
+			if item.AudioURL != nil {
+				raw = item.AudioURL.URL
+			}
+		}
+		raw = strings.TrimSpace(raw)
+		if raw == "" || strings.HasPrefix(raw, "asset://") {
+			continue
+		}
+		if err := probeHCAtomRemoteMediaURL(ctx, client, raw); err != nil {
+			return ErrHCAtomMediaURLUnreachable
+		}
+	}
+	return nil
+}
+
+func probeHCAtomRemoteMediaURL(ctx context.Context, client *http.Client, raw string) error {
+	request, err := http.NewRequestWithContext(ctx, http.MethodHead, raw, nil)
+	if err != nil {
+		return err
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode >= http.StatusOK && response.StatusCode < http.StatusMultipleChoices {
+		return nil
+	}
+	if response.StatusCode != http.StatusMethodNotAllowed {
+		return fmt.Errorf("media probe returned HTTP %d", response.StatusCode)
+	}
+
+	getRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, raw, nil)
+	if err != nil {
+		return err
+	}
+	getRequest.Header.Set("Range", "bytes=0-0")
+	getResponse, err := client.Do(getRequest)
+	if err != nil {
+		return err
+	}
+	defer getResponse.Body.Close()
+	if getResponse.StatusCode < http.StatusOK || getResponse.StatusCode >= http.StatusMultipleChoices {
+		return fmt.Errorf("media probe returned HTTP %d", getResponse.StatusCode)
+	}
+	_, _ = io.Copy(io.Discard, io.LimitReader(getResponse.Body, 1))
+	return nil
 }
 
 func (a *HCAtomV3Adapter) Poll(ctx context.Context, id string) (*VideoProviderTask, error) {

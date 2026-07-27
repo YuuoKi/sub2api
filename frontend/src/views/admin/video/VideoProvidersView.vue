@@ -134,14 +134,13 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import AnimatedEmptyState from '@/components/common/AnimatedEmptyState.vue'
 import { adminAPI } from '@/api/admin'
-import type { VideoPlatformContract, VideoProviderAccount, VideoProviderContract, VideoTaskAdmin } from '@/api/admin/video'
+import type { VideoPlatformContract, VideoProviderAccount, VideoProviderContract } from '@/api/admin/video'
 import { useAppStore } from '@/stores'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import SeedanceAuthorizationDialog from './SeedanceAuthorizationDialog.vue'
 
 const app = useAppStore()
 const providers = ref<VideoProviderAccount[]>([])
-const recentTasks = ref<VideoTaskAdmin[]>([])
 const groups = ref<Array<{ id: number; name: string }>>([])
 const contract = ref<VideoProviderContract>()
 const saving = ref(false)
@@ -159,16 +158,14 @@ const selectedPlatform = computed<VideoPlatformContract | undefined>(() => ready
 
 async function load() {
   try {
-    const [contractData, providerData, groupData, taskData] = await Promise.all([
+    const [contractData, providerData, groupData] = await Promise.all([
       adminAPI.video.contract(),
       adminAPI.video.listProviders(),
-      adminAPI.groups.getAll(),
-      adminAPI.video.listTasks(1, 100).catch(() => ({ items: [], total: 0, page: 1, page_size: 100, pages: 0 }))
+      adminAPI.groups.getAll()
     ])
     contract.value = contractData
     providers.value = providerData.items
     groups.value = groupData.filter(group => group.subscription_type === 'standard')
-    recentTasks.value = taskData.items
   } catch (error) {
     app.showError(extractApiErrorMessage(error, '加载视频通道失败'))
   }
@@ -297,8 +294,7 @@ function providerBaseURL(provider: string): string {
 }
 
 function latestProviderError(providerID: number): string {
-  const task = recentTasks.value.find((item) => item.provider_account_id === providerID && (item.provider_error_message || item.error_message))
-  return task?.provider_error_message || task?.error_message || '暂无'
+  return providers.value.find((item) => item.id === providerID)?.latest_error_message || '暂无'
 }
 
 watch(() => form.provider, (provider) => {

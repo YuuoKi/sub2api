@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/stretchr/testify/require"
@@ -29,6 +31,12 @@ func TestHCAtomV3CreateUsesFixedEndpointBearerAndV3Payload(t *testing.T) {
 		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"id":"hc-1","status":"queued"}`)), Header: make(http.Header)}, nil
 	})}
 	adapter := NewHCAtomV3Adapter(client, HCAtomSeedanceV3BaseURL, secret)
+	adapter.assetClient = &http.Client{Transport: videoRoundTripperFunc(func(r *http.Request) (*http.Response, error) {
+		if r.Method != http.MethodHead || r.URL.String() != "https://assets.example.test/boat.png" {
+			t.Fatalf("asset probe=%s %s", r.Method, r.URL)
+		}
+		return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody, Header: make(http.Header)}, nil
+	})}
 	created, err := adapter.Create(context.Background(), VideoCreateRequest{
 		Model: HCAtomSeedanceV3PublicModel, Content: []VideoContentItem{{Type: "text", Text: "a paper boat"}, {Type: "image_url", ImageURL: &VideoContentURL{URL: "https://assets.example.test/boat.png"}}},
 		Ratio: "16:9", GenerateAudio: true, ReturnLastFrame: true, Watermark: false, Duration: 8, Resolution: "1080p",
@@ -36,6 +44,61 @@ func TestHCAtomV3CreateUsesFixedEndpointBearerAndV3Payload(t *testing.T) {
 	if err != nil || created.UpstreamTaskID != "hc-1" || created.Status != VideoStatusSubmitted {
 		t.Fatalf("created=%#v err=%v", created, err)
 	}
+}
+
+func TestHCAtomV3CreateFailsClosedWhenRemoteMediaCannotBeSafelyProbed(t *testing.T) {
+	upstreamCalls := 0
+	adapter := NewHCAtomV3Adapter(&http.Client{Transport: videoRoundTripperFunc(func(*http.Request) (*http.Response, error) {
+		upstreamCalls++
+		return nil, errors.New("upstream must not be called")
+	})}, HCAtomSeedanceV3BaseURL, "secret")
+	adapter.assetClient = &http.Client{Transport: videoRoundTripperFunc(func(*http.Request) (*http.Response, error) {
+		return nil, errors.New("asset host resolves to a non-public address")
+	})}
+
+	_, err := adapter.Create(context.Background(), VideoCreateRequest{
+		Content: []VideoContentItem{{Type: "image_url", ImageURL: &VideoContentURL{URL: "https://assets.example.test/private-redirect.png"}}},
+	})
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "safely accessible")
+	require.Equal(t, 0, upstreamCalls)
+}
+
+func TestHCAtomV3DefaultAssetProbeRejectsPrivateRedirectHop(t *testing.T) {
+	adapter := NewHCAtomV3Adapter(nil, HCAtomSeedanceV3BaseURL, "secret")
+	require.NotNil(t, adapter.assetClient)
+	require.NotNil(t, adapter.assetClient.CheckRedirect)
+	request, err := http.NewRequest(http.MethodHead, "https://127.0.0.1/hidden.png", nil)
+	require.NoError(t, err)
+	require.Error(t, adapter.assetClient.CheckRedirect(request, nil))
+}
+
+func TestHCAtomV3AssetProbeRejectsHostnameResolvingToPrivateAddressBeforeDial(t *testing.T) {
+	upstreamCalls := 0
+	dialCalls := 0
+	adapter := NewHCAtomV3Adapter(&http.Client{Transport: videoRoundTripperFunc(func(*http.Request) (*http.Response, error) {
+		upstreamCalls++
+		return nil, errors.New("upstream must not be called")
+	})}, HCAtomSeedanceV3BaseURL, "secret")
+	adapter.assetClient = newPublicAssetHTTPClientWithNetwork(
+		time.Second,
+		func(context.Context, string) ([]net.IPAddr, error) {
+			return []net.IPAddr{{IP: net.ParseIP("127.0.0.1")}}, nil
+		},
+		func(context.Context, string, string) (net.Conn, error) {
+			dialCalls++
+			return nil, errors.New("dial must not be called")
+		},
+	)
+
+	_, err := adapter.Create(context.Background(), VideoCreateRequest{
+		Content: []VideoContentItem{{Type: "image_url", ImageURL: &VideoContentURL{URL: "https://assets.example.test/private-dns.png"}}},
+	})
+
+	require.ErrorIs(t, err, ErrHCAtomMediaURLUnreachable)
+	require.Equal(t, 0, upstreamCalls)
+	require.Equal(t, 0, dialCalls)
 }
 
 func TestHCAtomV3PollCancelAndRejectUnsafeInputs(t *testing.T) {

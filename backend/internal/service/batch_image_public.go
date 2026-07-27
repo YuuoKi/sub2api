@@ -624,7 +624,7 @@ func (s *BatchImagePublicService) ListModels(ctx context.Context, owner BatchIma
 	}
 
 	modelsByProvider := make(map[string]map[string]struct{})
-	for _, providerName := range batchImageProviderSelectionOrder("") {
+	for _, providerName := range batchImageProviderCatalogOrder() {
 		provider, ok := s.ProviderRegistry.Get(providerName)
 		if !ok || provider == nil {
 			continue
@@ -657,7 +657,7 @@ func (s *BatchImagePublicService) ListModels(ctx context.Context, owner BatchIma
 	}
 
 	out := make([]BatchImagePublicModel, 0)
-	for _, providerName := range batchImageProviderSelectionOrder("") {
+	for _, providerName := range batchImageProviderCatalogOrder() {
 		models := make([]string, 0, len(modelsByProvider[providerName]))
 		for model := range modelsByProvider[providerName] {
 			models = append(models, model)
@@ -1279,6 +1279,13 @@ func batchImageProviderSelectionOrder(requestedProvider string) []string {
 	if strings.TrimSpace(requestedProvider) != "" {
 		return []string{strings.TrimSpace(requestedProvider)}
 	}
+	// HC-ATOM is an explicitly selected provider. Keeping it out of the
+	// legacy default order prevents an omitted provider from silently crossing
+	// from Gemini/Vertex to the relay.
+	return []string{BatchImageProviderGeminiAPI, BatchImageProviderVertex}
+}
+
+func batchImageProviderCatalogOrder() []string {
 	return []string{BatchImageProviderGeminiAPI, BatchImageProviderVertex, BatchImageProviderHCAtom}
 }
 

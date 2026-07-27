@@ -50,6 +50,13 @@ func (r *hcAtomSecretBoundaryRepo) GetByID(_ context.Context, _ int64) (*Account
 	return r.account, nil
 }
 
+func (r *hcAtomSecretBoundaryRepo) GetByIDs(_ context.Context, _ []int64) ([]*Account, error) {
+	if r.account == nil {
+		return nil, nil
+	}
+	return []*Account{r.account}, nil
+}
+
 func (r *hcAtomSecretBoundaryRepo) Update(_ context.Context, account *Account) error {
 	r.updateCalls++
 	r.account = account
@@ -120,6 +127,31 @@ func TestHCAtomSecretBoundary_UpdateWithoutNewKeyRetainsCiphertext(t *testing.T)
 	require.NotContains(t, repo.account.Credentials, "api_key")
 	raw, err := json.Marshal(repo.account.Credentials)
 	require.NoError(t, err)
+	require.NotContains(t, string(raw), hcAtomSecretSentinel)
+}
+
+func TestHCAtomSecretBoundary_BulkCredentialUpdateFailsClosed(t *testing.T) {
+	cipher, err := NewHCAtomCredentialCipher(strings.Repeat("13", 32))
+	require.NoError(t, err)
+	existing, err := ProtectHCAtomAccountCredentials(nil, map[string]any{"api_key": "existing-synthetic-key"}, cipher)
+	require.NoError(t, err)
+	repo := &hcAtomSecretBoundaryRepo{account: &Account{
+		ID: 903, Platform: PlatformHCAtom, Type: AccountTypeAPIKey, Status: StatusActive, Credentials: existing,
+	}}
+	svc := &adminServiceImpl{accountRepo: repo, hcAtomCredentialCipher: cipher}
+
+	_, err = svc.BulkUpdateAccounts(context.Background(), &BulkUpdateAccountsInput{
+		AccountIDs: []int64{903},
+		Credentials: map[string]any{
+			"api_key": hcAtomSecretSentinel,
+		},
+	})
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "HC-ATOM")
+	require.Equal(t, 0, repo.updateCalls)
+	raw, marshalErr := json.Marshal(repo.account.Credentials)
+	require.NoError(t, marshalErr)
 	require.NotContains(t, string(raw), hcAtomSecretSentinel)
 }
 

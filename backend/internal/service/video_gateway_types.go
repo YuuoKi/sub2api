@@ -104,6 +104,8 @@ type VideoProviderAccount struct {
 	TinyRealAuthorizedAt *time.Time `json:"tiny_real_authorized_at,omitempty"`
 	TinyRealAuthorizedBy int64      `json:"tiny_real_authorized_by,omitempty"`
 	TinyRealConsumedAt   *time.Time `json:"tiny_real_consumed_at,omitempty"`
+	LatestErrorMessage   string     `json:"latest_error_message,omitempty"`
+	LatestErrorAt        *time.Time `json:"latest_error_at,omitempty"`
 }
 
 type VideoTask struct {

@@ -566,7 +566,7 @@ func validatePublicHTTPSAssetURL(raw string) error {
 	if strings.Contains(host, "%") || host == "localhost" || strings.HasSuffix(host, ".localhost") {
 		return errors.New("asset URL host is private")
 	}
-	if numericLikeHostPattern.MatchString(host) || (numericDottedHostPattern.MatchString(host) && net.ParseIP(host) == nil) || (strings.HasPrefix(host, "0") && strings.Contains(host, ".")) {
+	if numericLikeHostPattern.MatchString(host) || (net.ParseIP(host) == nil && isNonCanonicalNumericIPv4(host)) {
 		return errors.New("asset URL host is private")
 	}
 	if ip := net.ParseIP(host); ip != nil && (!ip.IsGlobalUnicast() || ip.IsPrivate() || ip.IsLoopback() || ip.IsUnspecified() || ip.IsLinkLocalUnicast() || (ip.To4() != nil && ip.To4()[0] == 100 && ip.To4()[1] >= 64 && ip.To4()[1] <= 127)) {
@@ -577,7 +577,26 @@ func validatePublicHTTPSAssetURL(raw string) error {
 
 var assetIdentifierPattern = regexp.MustCompile(`^asset-[A-Za-z0-9_-]+$`)
 var numericLikeHostPattern = regexp.MustCompile(`^(0x[0-9a-f]+|0[0-7]+|[0-9]+)$`)
-var numericDottedHostPattern = regexp.MustCompile(`^[0-9.]+$`)
+
+func isNonCanonicalNumericIPv4(host string) bool {
+	labels := strings.Split(host, ".")
+	if len(labels) < 1 || len(labels) > 4 {
+		return false
+	}
+	for _, label := range labels {
+		if label == "" {
+			return false
+		}
+		if _, err := strconv.ParseUint(label, 10, 32); err == nil {
+			continue
+		}
+		if _, err := strconv.ParseUint(label, 0, 32); err == nil {
+			continue
+		}
+		return false
+	}
+	return true
+}
 
 func sanitizeProviderCode(value string) string {
 	value = strings.ToLower(strings.TrimSpace(value))

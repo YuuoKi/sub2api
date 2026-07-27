@@ -22,11 +22,10 @@ import (
 )
 
 const (
-	defaultBatchImageZipMaxItems          = 200
-	defaultBatchImageZipMaxBytes          = 512 * 1024 * 1024
-	defaultBatchImageDownloadDuration     = 10 * time.Minute
-	defaultBatchImageDownloadConcurrency  = 1
-	batchImageDownloadScannerMaxLineBytes = 16 * 1024 * 1024
+	defaultBatchImageZipMaxItems         = 200
+	defaultBatchImageZipMaxBytes         = 512 * 1024 * 1024
+	defaultBatchImageDownloadDuration    = 10 * time.Minute
+	defaultBatchImageDownloadConcurrency = 1
 )
 
 var errBatchImageDownloadSizeExceeded = errors.New("batch image download size limit exceeded")
@@ -281,7 +280,7 @@ func (s *BatchImageDownloadService) writeZipImages(ctx context.Context, zipWrite
 		missing[item.CustomID] = struct{}{}
 	}
 	scanner := bufio.NewScanner(resultReader)
-	scanner.Buffer(make([]byte, 0, 64*1024), batchImageDownloadScannerMaxLineBytes)
+	scanner.Buffer(make([]byte, 0, 64*1024), batchImageJSONLMaxLineBytes)
 
 	result := &BatchImageZipResult{}
 	var manifestFiles []batchImageZipManifestFile
@@ -495,7 +494,7 @@ func extractBatchImageInlineImages(raw any) []BatchImageInlineImage {
 
 func findBatchImageLineImages(r io.Reader, customID string) (*BatchImageLineImages, error) {
 	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 0, 64*1024), batchImageDownloadScannerMaxLineBytes)
+	scanner.Buffer(make([]byte, 0, 64*1024), batchImageJSONLMaxLineBytes)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" {

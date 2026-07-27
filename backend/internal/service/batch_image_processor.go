@@ -307,7 +307,7 @@ func (i *BatchImageResultIndexer) Index(ctx context.Context, job *BatchImageJob,
 	}
 
 	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
+	scanner.Buffer(make([]byte, 0, 64*1024), batchImageJSONLMaxLineBytes)
 
 	seen := make(map[string]int)
 	unknownCount := 0

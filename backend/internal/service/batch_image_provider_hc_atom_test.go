@@ -1,9 +1,14 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"image"
+	"image/jpeg"
 	"io"
 	"net/http"
 	"strings"
@@ -324,6 +329,148 @@ func TestHCAtomBatchProvider_ArchiveRejectsOversizedPNGDimensions(t *testing.T) 
 	require.Error(t, err)
 }
 
+// Regression target: validation applies to every redirect target, not just the
+// provider-supplied first URL.
+func TestHCAtomBatchProvider_ArchiveRejectsUnsafeRedirectTargetBeforeSecondHop(t *testing.T) {
+	for _, target := range []string{
+		"http://8.8.8.8/result.png",
+		"https://user:pass@8.8.8.8/result.png",
+		"https://8.8.8.8:8443/result.png",
+		"https://127.0.0.1/result.png",
+		"https://0x08080808/result.png",
+		"https://8.8.8.8/result.png#fragment",
+	} {
+		t.Run(target, func(t *testing.T) {
+			calls := 0
+			client := &http.Client{Transport: hcAtomRoundTripFunc(func(*http.Request) (*http.Response, error) {
+				calls++
+				if calls == 1 {
+					response := hcAtomHTTPResponse(http.StatusFound, "")
+					response.Header.Set("Location", target)
+					return response, nil
+				}
+				response := hcAtomHTTPResponse(http.StatusOK, "\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01")
+				response.Header.Set("Content-Type", "image/png")
+				return response, nil
+			})}
+			provider := NewHCAtomBatchImageProviderWithResultClient(&fakeHCAtomBatchClient{}, client)
+
+			_, _, err := provider.archiveResultURL(context.Background(), "https://8.8.8.8/start.png")
+			require.Error(t, err)
+			require.Equal(t, 1, calls, "unsafe redirect must fail before the next transport hop")
+		})
+	}
+}
+
+// Regression target: matching three JPEG bytes or a RIFF/WEBP prefix is not a
+// complete image validation boundary.
+func TestHCAtomBatchProvider_ArchiveRejectsTruncatedJPEGAndWebP(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		mimeType string
+		body     string
+	}{
+		{name: "jpeg", mimeType: "image/jpeg", body: string([]byte{0xff, 0xd8, 0xff, 0xe0})},
+		{name: "webp", mimeType: "image/webp", body: "RIFF\x04\x00\x00\x00WEBP"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			provider := NewHCAtomBatchImageProviderWithResultClient(&fakeHCAtomBatchClient{}, &http.Client{Transport: hcAtomRoundTripFunc(func(*http.Request) (*http.Response, error) {
+				response := hcAtomHTTPResponse(http.StatusOK, tt.body)
+				response.Header.Set("Content-Type", tt.mimeType)
+				return response, nil
+			})})
+			_, _, err := provider.archiveResultURL(context.Background(), "https://8.8.8.8/result")
+			require.Error(t, err)
+		})
+	}
+}
+
+// Regression target: JPEG dimensions must be bounded even when the compressed
+// payload itself is small.
+func TestHCAtomBatchProvider_ArchiveRejectsOversizedJPEGDimensions(t *testing.T) {
+	var encoded bytes.Buffer
+	require.NoError(t, jpeg.Encode(&encoded, image.NewRGBA(image.Rect(0, 0, 1, 1)), nil))
+	for _, dimensions := range []struct {
+		name          string
+		width, height uint16
+	}{
+		{name: "axis_limit", width: 10001, height: 1},
+		{name: "pixel_limit", width: 8000, height: 6000},
+	} {
+		t.Run(dimensions.name, func(t *testing.T) {
+			oversized := hcAtomTestJPEGWithDimensions(t, encoded.Bytes(), dimensions.width, dimensions.height)
+			provider := NewHCAtomBatchImageProviderWithResultClient(&fakeHCAtomBatchClient{}, &http.Client{Transport: hcAtomRoundTripFunc(func(*http.Request) (*http.Response, error) {
+				response := hcAtomHTTPResponse(http.StatusOK, string(oversized))
+				response.Header.Set("Content-Type", "image/jpeg")
+				return response, nil
+			})})
+
+			_, _, err := provider.archiveResultURL(context.Background(), "https://8.8.8.8/oversized.jpg")
+			require.Error(t, err)
+		})
+	}
+}
+
+// Regression target: a VP8X canvas header without an actual VP8/VP8L image
+// chunk is metadata, not an archivable WebP image.
+func TestHCAtomBatchProvider_ArchiveRejectsHeaderOnlyWebP(t *testing.T) {
+	headerOnly := hcAtomTestWebPVP8X(t, nil, 1, 1)
+	provider := NewHCAtomBatchImageProviderWithResultClient(&fakeHCAtomBatchClient{}, &http.Client{Transport: hcAtomRoundTripFunc(func(*http.Request) (*http.Response, error) {
+		response := hcAtomHTTPResponse(http.StatusOK, string(headerOnly))
+		response.Header.Set("Content-Type", "image/webp")
+		return response, nil
+	})})
+
+	_, _, err := provider.archiveResultURL(context.Background(), "https://8.8.8.8/header-only.webp")
+	require.Error(t, err)
+}
+
+func TestHCAtomBatchProvider_ArchiveAcceptsCompleteBoundedJPEGAndWebP(t *testing.T) {
+	var jpegBytes bytes.Buffer
+	require.NoError(t, jpeg.Encode(&jpegBytes, image.NewRGBA(image.Rect(0, 0, 1, 1)), nil))
+	for _, tt := range []struct {
+		name     string
+		mimeType string
+		data     []byte
+	}{
+		{name: "jpeg", mimeType: "image/jpeg", data: jpegBytes.Bytes()},
+		{name: "webp", mimeType: "image/webp", data: hcAtomTestValidWebP(t)},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			provider := NewHCAtomBatchImageProviderWithResultClient(&fakeHCAtomBatchClient{}, &http.Client{Transport: hcAtomRoundTripFunc(func(*http.Request) (*http.Response, error) {
+				response := hcAtomHTTPResponse(http.StatusOK, string(tt.data))
+				response.Header.Set("Content-Type", tt.mimeType)
+				return response, nil
+			})})
+
+			encoded, mimeType, err := provider.archiveResultURL(context.Background(), "https://8.8.8.8/result")
+			require.NoError(t, err)
+			require.NotEmpty(t, encoded)
+			require.Equal(t, tt.mimeType, mimeType)
+		})
+	}
+}
+
+// Regression target: provider-owned JSONL must never exceed the 16 MiB scanner
+// boundary after raw bytes expand to base64.
+func TestHCAtomBatchProvider_OpenResultRejectsRawImageThatCannotFitJSONLScanner(t *testing.T) {
+	oversized := make([]byte, 12<<20)
+	copy(oversized, []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"))
+	resultTransport := hcAtomRoundTripFunc(func(*http.Request) (*http.Response, error) {
+		response := hcAtomHTTPResponse(http.StatusOK, string(oversized))
+		response.Header.Set("Content-Type", "image/png")
+		return response, nil
+	})
+	cipher, account := hcAtomBatchTestAccount(t, "test")
+	provider := NewHCAtomBatchImageProviderWithResultClientAndCredentialCipher(&fakeHCAtomBatchClient{task: &HCAtomBatchTask{
+		TaskID: "hc-task-large-result", Status: "SUCCESS", ResultURL: "https://8.8.8.8/large.png",
+	}}, &http.Client{Transport: resultTransport}, cipher)
+	taskID, customID := "hc-task-large-result", "item_000001"
+
+	_, _, err := provider.OpenResult(context.Background(), &BatchImageJob{ProviderJobName: &taskID, ProviderInputRef: &customID}, account)
+	require.Error(t, err)
+}
+
 type hcAtomRoundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f hcAtomRoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
@@ -341,6 +488,48 @@ func hcAtomHTTPResponse(status int, body string) *http.Response {
 		Header:     make(http.Header),
 		Body:       io.NopCloser(strings.NewReader(body)),
 	}
+}
+
+func hcAtomTestJPEGWithDimensions(t *testing.T, source []byte, width, height uint16) []byte {
+	t.Helper()
+	out := append([]byte(nil), source...)
+	for i := 0; i+9 < len(out); i++ {
+		if out[i] != 0xff || (out[i+1] != 0xc0 && out[i+1] != 0xc2) {
+			continue
+		}
+		out[i+5], out[i+6] = byte(height>>8), byte(height)
+		out[i+7], out[i+8] = byte(width>>8), byte(width)
+		return out
+	}
+	t.Fatal("JPEG SOF marker not found")
+	return nil
+}
+
+func hcAtomTestWebPVP8X(t *testing.T, imageChunks []byte, width, height uint32) []byte {
+	t.Helper()
+	require.Greater(t, width, uint32(0))
+	require.Greater(t, height, uint32(0))
+	var out bytes.Buffer
+	out.WriteString("RIFF")
+	out.Write(make([]byte, 4))
+	out.WriteString("WEBP")
+	out.WriteString("VP8X")
+	require.NoError(t, binary.Write(&out, binary.LittleEndian, uint32(10)))
+	out.Write([]byte{0, 0, 0, 0})
+	for _, value := range []uint32{width - 1, height - 1} {
+		out.Write([]byte{byte(value), byte(value >> 8), byte(value >> 16)})
+	}
+	out.Write(imageChunks)
+	data := out.Bytes()
+	binary.LittleEndian.PutUint32(data[4:8], uint32(len(data)-8))
+	return data
+}
+
+func hcAtomTestValidWebP(t *testing.T) []byte {
+	t.Helper()
+	data, err := base64.StdEncoding.DecodeString("UklGRrIBAABXRUJQVlA4TKUBAAAvSsAYAA8w//M///MfeJAkbXvaSG7m8Q3GfYSBJekwQztm/IcZlgwnmWImn2BK7aFmBtnVir6q//8VOkFE/xm4baTIu8c48ArEo6+B3zFKYln3pqClSCKX0begFTAXFOLXHSyF8cCNcZEG4OywuA4KVVfJCiArU7GAgJI8+lJP/OKMT/fBAjevg1cYB7YVkFuWga2lyPi5I0HFy5YTpWIHg0RZpkniRVW9odHAKOwosWuOGdxIyn2OvaCDvhg/we6TwadPBPbqBV58MsLmMJ8yZnOWk8SRz4N+QoyPL+MnamzMvcE1rHNEr91F9GKZPVUcS9w7PhhH36suB9qPeYb/oLk6cuTiJ0wOK3m5h1cKjW6EVZCYMK7dxcKCBdgP9HkKr9gkAO2P8GKZGWVdIAatQa+1IDpt6qyorVwdy01xdW8Jkfk6xjEXmVQQ+HQdFr6OKhIN34dXWq0+0qr6EJSCeeVLH9+gvGTLyqM65PQ44ihzlTXxQKjKbAvshXgir7Lil9w4L2bvMycmjQcqXaMCO6BlY28i+FOLzbfI1vEqxAhotocAAA==")
+	require.NoError(t, err)
+	return data
 }
 
 type hcAtomBatchGroupRepo struct{ groups map[int64]*Group }

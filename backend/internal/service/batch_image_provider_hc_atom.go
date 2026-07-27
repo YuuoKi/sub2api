@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
+	_ "image/jpeg"
 	"io"
 	"net"
 	"net/http"
@@ -18,15 +20,17 @@ import (
 	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	_ "golang.org/x/image/webp"
 )
 
 const (
-	hcAtomBatchOrigin           = "https://api-aigc.fzyinghe.com"
-	hcAtomBatchCreatePath       = "/image/generation/tasks"
-	hcAtomBatchTaskPath         = "/image/generation/tasks/"
-	hcAtomBatchRequeueAfter     = 30 * time.Second
-	hcAtomBatchMaxResponseBytes = 1 << 20
-	hcAtomBatchOverallTimeout   = 30 * time.Second
+	hcAtomBatchOrigin            = "https://api-aigc.fzyinghe.com"
+	hcAtomBatchCreatePath        = "/image/generation/tasks"
+	hcAtomBatchTaskPath          = "/image/generation/tasks/"
+	hcAtomBatchRequeueAfter      = 30 * time.Second
+	hcAtomBatchMaxResponseBytes  = 1 << 20
+	hcAtomBatchOverallTimeout    = 30 * time.Second
+	hcAtomResultMaxRawImageBytes = 11 << 20
 )
 
 var hcAtomBatchEnabledModels = map[string]struct{}{
@@ -101,7 +105,29 @@ func newHCAtomBatchImageProvider(client HCAtomBatchClient, resultClient *http.Cl
 	if resultClient == nil {
 		resultClient = newPublicAssetHTTPClient(2 * time.Minute)
 	}
+	resultClient = newHCAtomResultHTTPClient(resultClient)
 	return &HCAtomBatchImageProvider{client: client, resultClient: resultClient, credentialCipher: credentialCipher}
+}
+
+func newHCAtomResultHTTPClient(base *http.Client) *http.Client {
+	if base == nil {
+		base = newPublicAssetHTTPClient(2 * time.Minute)
+	}
+	client := *base
+	previousRedirectCheck := base.CheckRedirect
+	client.CheckRedirect = func(request *http.Request, via []*http.Request) error {
+		if len(via) >= 5 {
+			return errors.New("too many HC-ATOM result redirects")
+		}
+		if request == nil || validateHCAtomResultURL(request.URL) != nil {
+			return errors.New("unsafe HC-ATOM result redirect")
+		}
+		if previousRedirectCheck != nil {
+			return previousRedirectCheck(request, via)
+		}
+		return nil
+	}
+	return &client
 }
 
 func (p *HCAtomBatchImageProvider) Name() string { return BatchImageProviderHCAtom }
@@ -238,6 +264,9 @@ func (p *HCAtomBatchImageProvider) OpenResult(ctx context.Context, job *BatchIma
 	if err := json.NewEncoder(&lines).Encode(line); err != nil {
 		return nil, "", err
 	}
+	if lines.Len() >= batchImageJSONLMaxLineBytes {
+		return nil, "", hcAtomBatchError("HC_ATOM_RESULT_TOO_LARGE", "HC-ATOM result cannot fit the owned JSONL boundary", nil)
+	}
 	if strings.TrimSpace(p.ownedResultDir) == "" {
 		return io.NopCloser(bytes.NewReader(lines.Bytes())), "application/jsonl", nil
 	}
@@ -249,7 +278,7 @@ func (p *HCAtomBatchImageProvider) OpenResult(ctx context.Context, job *BatchIma
 
 func (p *HCAtomBatchImageProvider) archiveResultURL(ctx context.Context, rawURL string) (string, string, error) {
 	parsed, err := url.Parse(strings.TrimSpace(rawURL))
-	if err != nil || parsed == nil || parsed.Fragment != "" || (parsed.Port() != "" && parsed.Port() != "443") || validatePublicHTTPSAssetURL(strings.TrimSpace(rawURL)) != nil || validateAssetSourceURL(parsed) != nil {
+	if err != nil || validateHCAtomResultURL(parsed) != nil {
 		return "", "", hcAtomBatchError("HC_ATOM_RESULT_URL_UNSAFE", "HC-ATOM result URL is unsafe", nil)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, parsed.String(), nil)
@@ -261,31 +290,49 @@ func (p *HCAtomBatchImageProvider) archiveResultURL(ctx context.Context, rawURL 
 		return "", "", hcAtomBatchError("HC_ATOM_RESULT_DOWNLOAD_FAILED", "HC-ATOM result download failed", nil)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK || resp.ContentLength > 20<<20 {
+	if resp.StatusCode != http.StatusOK || resp.ContentLength > hcAtomResultMaxRawImageBytes {
 		return "", "", hcAtomBatchError("HC_ATOM_RESULT_DOWNLOAD_FAILED", "HC-ATOM result download failed", nil)
 	}
 	mimeType := strings.ToLower(strings.TrimSpace(strings.Split(resp.Header.Get("Content-Type"), ";")[0]))
 	if mimeType != "image/png" && mimeType != "image/jpeg" && mimeType != "image/webp" {
 		return "", "", hcAtomBatchError("HC_ATOM_RESULT_MIME_INVALID", "HC-ATOM result is not an allowed image", nil)
 	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 20<<20+1))
-	if err != nil || len(data) == 0 || len(data) > 20<<20 || !hcAtomImageSignatureMatches(mimeType, data) || !hcAtomImageDimensionsAllowed(mimeType, data) {
+	data, err := io.ReadAll(io.LimitReader(resp.Body, hcAtomResultMaxRawImageBytes+1))
+	if err != nil || len(data) == 0 || len(data) > hcAtomResultMaxRawImageBytes || !hcAtomImageSignatureMatches(mimeType, data) || !hcAtomImageDimensionsAllowed(mimeType, data) {
 		return "", "", hcAtomBatchError("HC_ATOM_RESULT_CONTENT_INVALID", "HC-ATOM result image is invalid", nil)
 	}
 	return base64.StdEncoding.EncodeToString(data), mimeType, nil
 }
 
+func validateHCAtomResultURL(parsed *url.URL) error {
+	if parsed == nil || parsed.Fragment != "" || (parsed.Port() != "" && parsed.Port() != "443") {
+		return errors.New("HC-ATOM result URL is unsafe")
+	}
+	if err := validatePublicHTTPSAssetURL(parsed.String()); err != nil {
+		return err
+	}
+	return validateAssetSourceURL(parsed)
+}
+
 func hcAtomImageDimensionsAllowed(mimeType string, data []byte) bool {
 	// PNG dimensions live in the fixed IHDR header, so this check rejects image
 	// bombs before invoking a decoder that may allocate based on those values.
-	if mimeType != "image/png" {
-		return true
+	if mimeType == "image/png" {
+		if len(data) < 24 || string(data[12:16]) != "IHDR" {
+			return false
+		}
+		width, height := binary.BigEndian.Uint32(data[16:20]), binary.BigEndian.Uint32(data[20:24])
+		return hcAtomImageDimensionsWithinLimit(uint64(width), uint64(height))
 	}
-	if len(data) < 24 || string(data[12:16]) != "IHDR" {
+	config, format, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil || (mimeType == "image/jpeg" && format != "jpeg") || (mimeType == "image/webp" && format != "webp") {
 		return false
 	}
-	width, height := binary.BigEndian.Uint32(data[16:20]), binary.BigEndian.Uint32(data[20:24])
-	return width > 0 && height > 0 && width <= 10000 && height <= 10000 && uint64(width)*uint64(height) <= 40_000_000
+	return hcAtomImageDimensionsWithinLimit(uint64(config.Width), uint64(config.Height))
+}
+
+func hcAtomImageDimensionsWithinLimit(width, height uint64) bool {
+	return width > 0 && height > 0 && width <= 10000 && height <= 10000 && width*height <= 40_000_000
 }
 
 func hcAtomImageSignatureMatches(mimeType string, data []byte) bool {
@@ -293,12 +340,40 @@ func hcAtomImageSignatureMatches(mimeType string, data []byte) bool {
 	case "image/png":
 		return len(data) >= 8 && bytes.Equal(data[:8], []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'})
 	case "image/jpeg":
-		return len(data) >= 3 && data[0] == 0xff && data[1] == 0xd8 && data[2] == 0xff
+		return len(data) >= 4 && data[0] == 0xff && data[1] == 0xd8 && data[2] == 0xff &&
+			data[len(data)-2] == 0xff && data[len(data)-1] == 0xd9
 	case "image/webp":
-		return len(data) >= 12 && string(data[:4]) == "RIFF" && string(data[8:12]) == "WEBP"
+		if len(data) < 20 || string(data[:4]) != "RIFF" || string(data[8:12]) != "WEBP" ||
+			uint64(binary.LittleEndian.Uint32(data[4:8]))+8 != uint64(len(data)) {
+			return false
+		}
+		return hcAtomWebPHasCompleteImageChunk(data)
 	default:
 		return false
 	}
+}
+
+func hcAtomWebPHasCompleteImageChunk(data []byte) bool {
+	hasImageChunk := false
+	for offset := 12; offset < len(data); {
+		if offset+8 > len(data) {
+			return false
+		}
+		kind := string(data[offset : offset+4])
+		size := uint64(binary.LittleEndian.Uint32(data[offset+4 : offset+8]))
+		end := uint64(offset+8) + size
+		if end > uint64(len(data)) {
+			return false
+		}
+		if kind == "VP8 " || kind == "VP8L" {
+			hasImageChunk = true
+		}
+		offset = int(end + size%2)
+		if offset > len(data) {
+			return false
+		}
+	}
+	return hasImageChunk
 }
 
 func (p *HCAtomBatchImageProvider) Cleanup(_ context.Context, job *BatchImageJob, _ *Account, target CleanupTarget) error {

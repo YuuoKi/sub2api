@@ -14,6 +14,7 @@ const (
 	BatchImageProviderGeminiAPI = "gemini_api"
 	BatchImageProviderVertex    = "vertex"
 	BatchImageProviderHCAtom    = "hc_atom"
+	batchImageJSONLMaxLineBytes = 16 * 1024 * 1024
 )
 
 const (

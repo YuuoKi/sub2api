@@ -111,6 +111,17 @@ func TestHCAtomV3RejectsCanonicalPrivateURLVariantsAndBadAssetIDs(t *testing.T) 
 	}
 }
 
+func TestHCAtomV3CreateAcceptedButInvalidBodyIsTransportUncertain(t *testing.T) {
+	adapter := NewHCAtomV3Adapter(&http.Client{Transport: videoRoundTripperFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("{")), Header: make(http.Header)}, nil
+	})}, HCAtomSeedanceV3BaseURL, "secret")
+	_, err := adapter.Create(context.Background(), VideoCreateRequest{Prompt: "x"})
+	var uncertain *VideoProviderTransportError
+	if !errors.As(err, &uncertain) {
+		t.Fatalf("err=%v", err)
+	}
+}
+
 func TestHCAtomV3CreateContractKeepsLegacyPromptAndAllowsV3Fields(t *testing.T) {
 	repo := &workerRepoStub{provider: VideoProviderAccount{ID: 10, GroupID: 9, Provider: HCAtomSeedanceV3Provider, Enabled: true, DefaultModel: HCAtomSeedanceV3PublicModel}}
 	cfg := &config.Config{VideoGateway: config.VideoGatewayConfig{WorkerEnabled: true, HCAtomV3DispatchEnabled: true, SeedanceCNYPerMillionTokens: 2, USDCNYExchangeRate: 7, TinyRealEstimateCNY: .7, TinyRealMaximumCNY: 1.4}}

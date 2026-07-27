@@ -267,6 +267,9 @@ func (a *HCAtomV3Adapter) doTask(ctx context.Context, method, endpoint string, b
 	defer resp.Body.Close()
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
+		if method == http.MethodPost {
+			return nil, &VideoProviderTransportError{errors.New("hc atom create response read failed")}
+		}
 		return nil, errors.New("hc atom response read failed")
 	}
 	if a.apiKey != "" && strings.Contains(string(data), a.apiKey) {
@@ -292,9 +295,15 @@ func (a *HCAtomV3Adapter) doTask(ctx context.Context, method, endpoint string, b
 		} `json:"error"`
 	}
 	if err := json.Unmarshal(data, &parsed); err != nil {
+		if method == http.MethodPost {
+			return nil, &VideoProviderTransportError{errors.New("hc atom create response is invalid")}
+		}
 		return nil, errors.New("hc atom response is invalid")
 	}
 	if strings.TrimSpace(parsed.ID) == "" {
+		if method == http.MethodPost {
+			return nil, &VideoProviderTransportError{errors.New("hc atom create response missing task id")}
+		}
 		return nil, errors.New("hc atom response missing task id")
 	}
 	status, err := normalizeHCAtomV3Status(parsed.Status)

@@ -122,6 +122,17 @@ func TestHCAtomV3CreateAcceptedButInvalidBodyIsTransportUncertain(t *testing.T) 
 	}
 }
 
+func TestHCAtomV3CreateUnknownStatusRetainsUpstreamIDAsUncertain(t *testing.T) {
+	adapter := NewHCAtomV3Adapter(&http.Client{Transport: videoRoundTripperFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"id":"hc-known","status":"processing"}`)), Header: make(http.Header)}, nil
+	})}, HCAtomSeedanceV3BaseURL, "secret")
+	_, err := adapter.Create(context.Background(), VideoCreateRequest{Prompt: "x"})
+	var uncertain *VideoProviderTransportError
+	if !errors.As(err, &uncertain) || uncertain.UpstreamTaskID != "hc-known" {
+		t.Fatalf("err=%v", err)
+	}
+}
+
 func TestHCAtomV3CreateContractKeepsLegacyPromptAndAllowsV3Fields(t *testing.T) {
 	repo := &workerRepoStub{provider: VideoProviderAccount{ID: 10, GroupID: 9, Provider: HCAtomSeedanceV3Provider, Enabled: true, DefaultModel: HCAtomSeedanceV3PublicModel}}
 	cfg := &config.Config{VideoGateway: config.VideoGatewayConfig{WorkerEnabled: true, HCAtomV3DispatchEnabled: true, SeedanceCNYPerMillionTokens: 2, USDCNYExchangeRate: 7, TinyRealEstimateCNY: .7, TinyRealMaximumCNY: 1.4}}
@@ -175,7 +186,18 @@ func TestHCAtomDispatchedCancelFinalizesOnlyAfterConfirmedUpstreamCancel(t *test
 			if tc.wantFinalized == 1 && repo.finalized[0].Settlement != VideoSettlementRelease {
 				t.Fatalf("finalization=%#v", repo.finalized[0])
 			}
+			if tc.wantFinalized == 1 && repo.task.CancelOutcome != "upstream_confirmed" {
+				t.Fatalf("outcome=%q", repo.task.CancelOutcome)
+			}
 		})
+	}
+}
+
+func TestHCAtomQueuedCancelReportsLocalPreDispatch(t *testing.T) {
+	repo := &workerRepoStub{task: &VideoTask{ID: 7, APIKeyID: 2, GroupID: 9, Provider: HCAtomSeedanceV3Provider, Status: VideoStatusQueued, CreatedBy: 1}}
+	task, err := NewVideoGatewayService(repo, nil, nil, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}).CancelTask(context.Background(), 7, VideoTaskScope{UserID: 1, APIKeyID: 2, GroupID: 9})
+	if err != nil || task.CancelOutcome != "local_pre_dispatch" {
+		t.Fatalf("task=%#v err=%v", task, err)
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/stretchr/testify/require"
@@ -169,6 +170,84 @@ func TestHCAtomBatchProvider_StrictStatusAndBusinessEnvelopeMapping(t *testing.T
 	require.Equal(t, "HC_ATOM_BUSINESS_ERROR", infraerrors.Reason(mapHCAtomBatchError(err)))
 }
 
+// Regression target: an HTTP 200 response is not an HC business success unless
+// the envelope explicitly carries code=0.
+func TestHCAtomBatchHTTPClient_RejectsMissingBusinessCode(t *testing.T) {
+	client := NewHCAtomBatchHTTPClient(&http.Client{Transport: hcAtomRoundTripFunc(func(*http.Request) (*http.Response, error) {
+		return hcAtomHTTPResponse(http.StatusOK, `{"msg":"ok","data":{"taskId":"hc-task-missing-code","status":"PENDING"}}`), nil
+	})})
+
+	_, err := client.Get(context.Background(), "synthetic-key", "hc-task-missing-code")
+	require.Error(t, err)
+	require.Equal(t, "HC_ATOM_BUSINESS_ERROR", infraerrors.Reason(mapHCAtomBatchError(err)))
+}
+
+// Regression target: the HC API must not inherit the streaming batch client,
+// whose unbounded overall timeout can leave a worker stuck reading a response.
+func TestHCAtomBatchHTTPClient_DefaultProductionClientHasOverallAndPhaseTimeouts(t *testing.T) {
+	client := NewHCAtomBatchHTTPClient(nil).client
+	require.NotNil(t, client)
+	require.Equal(t, 30*time.Second, client.Timeout)
+	transport, ok := client.Transport.(*http.Transport)
+	require.True(t, ok)
+	require.Equal(t, 10*time.Second, transport.TLSHandshakeTimeout)
+	require.Equal(t, 15*time.Second, transport.ResponseHeaderTimeout)
+	require.NotNil(t, client.CheckRedirect)
+}
+
+// Regression target: a syntactically valid envelope plus unbounded trailing
+// bytes must be rejected instead of making the worker read/retain arbitrary JSON.
+func TestHCAtomBatchHTTPClient_RejectsOversizedJSONBody(t *testing.T) {
+	body := `{"code":0,"data":{"taskId":"hc-task-large","status":"PENDING"}}` +
+		strings.Repeat(" ", 1<<20)
+	client := NewHCAtomBatchHTTPClient(&http.Client{Transport: hcAtomRoundTripFunc(func(*http.Request) (*http.Response, error) {
+		return hcAtomHTTPResponse(http.StatusOK, body), nil
+	})})
+
+	_, err := client.Get(context.Background(), "synthetic-key", "hc-task-large")
+	require.Error(t, err)
+}
+
+func TestHCAtomBatchHTTPClient_MapsHTTPAndReadFailureMatrix(t *testing.T) {
+	for _, tt := range []struct {
+		name       string
+		statusCode int
+		wantReason string
+	}{
+		{name: "unauthorized", statusCode: http.StatusUnauthorized, wantReason: "HC_ATOM_AUTH_FAILED"},
+		{name: "forbidden", statusCode: http.StatusForbidden, wantReason: "HC_ATOM_AUTH_FAILED"},
+		{name: "rate_limited", statusCode: http.StatusTooManyRequests, wantReason: "HC_ATOM_RATE_LIMITED"},
+		{name: "server_error", statusCode: http.StatusInternalServerError, wantReason: "HC_ATOM_UPSTREAM_ERROR"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			client := NewHCAtomBatchHTTPClient(&http.Client{Transport: hcAtomRoundTripFunc(func(*http.Request) (*http.Response, error) {
+				return hcAtomHTTPResponse(tt.statusCode, `{"code":0,"data":{}}`), nil
+			})})
+			_, err := client.Get(context.Background(), "synthetic-key", "hc-task-errors")
+			require.Error(t, err)
+			require.Equal(t, tt.wantReason, infraerrors.Reason(mapHCAtomBatchError(err)))
+		})
+	}
+
+	t.Run("body_read_failure", func(t *testing.T) {
+		client := NewHCAtomBatchHTTPClient(&http.Client{Transport: hcAtomRoundTripFunc(func(*http.Request) (*http.Response, error) {
+			return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: hcAtomFailingReadCloser{}}, nil
+		})})
+		_, err := client.Get(context.Background(), "synthetic-key", "hc-task-errors")
+		require.Error(t, err)
+		require.Equal(t, "HC_ATOM_UPSTREAM_ERROR", infraerrors.Reason(mapHCAtomBatchError(err)))
+	})
+
+	t.Run("request_timeout", func(t *testing.T) {
+		client := NewHCAtomBatchHTTPClient(&http.Client{Transport: hcAtomRoundTripFunc(func(*http.Request) (*http.Response, error) {
+			return nil, context.DeadlineExceeded
+		})})
+		_, err := client.Get(context.Background(), "synthetic-key", "hc-task-errors")
+		require.Error(t, err)
+		require.Equal(t, "HC_ATOM_UPSTREAM_ERROR", infraerrors.Reason(mapHCAtomBatchError(err)))
+	})
+}
+
 func TestHCAtomBatchProvider_RejectsDisabledDolaAndMultipleItemsBeforeCreate(t *testing.T) {
 	calls := 0
 	client := NewHCAtomBatchHTTPClient(&http.Client{Transport: hcAtomRoundTripFunc(func(*http.Request) (*http.Response, error) {
@@ -248,6 +327,13 @@ func TestHCAtomBatchProvider_ArchiveRejectsOversizedPNGDimensions(t *testing.T) 
 type hcAtomRoundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f hcAtomRoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
+
+type hcAtomFailingReadCloser struct{}
+
+func (hcAtomFailingReadCloser) Read([]byte) (int, error) {
+	return 0, errors.New("synthetic HC body read failure")
+}
+func (hcAtomFailingReadCloser) Close() error { return nil }
 
 func hcAtomHTTPResponse(status int, body string) *http.Response {
 	return &http.Response{

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -20,10 +21,12 @@ import (
 )
 
 const (
-	hcAtomBatchOrigin       = "https://api-aigc.fzyinghe.com"
-	hcAtomBatchCreatePath   = "/image/generation/tasks"
-	hcAtomBatchTaskPath     = "/image/generation/tasks/"
-	hcAtomBatchRequeueAfter = 30 * time.Second
+	hcAtomBatchOrigin           = "https://api-aigc.fzyinghe.com"
+	hcAtomBatchCreatePath       = "/image/generation/tasks"
+	hcAtomBatchTaskPath         = "/image/generation/tasks/"
+	hcAtomBatchRequeueAfter     = 30 * time.Second
+	hcAtomBatchMaxResponseBytes = 1 << 20
+	hcAtomBatchOverallTimeout   = 30 * time.Second
 )
 
 var hcAtomBatchEnabledModels = map[string]struct{}{
@@ -498,9 +501,27 @@ type HCAtomBatchHTTPClient struct{ client *http.Client }
 
 func NewHCAtomBatchHTTPClient(client *http.Client) *HCAtomBatchHTTPClient {
 	if client == nil {
-		client = batchImageDefaultHTTPClient()
+		client = newHCAtomBatchProductionHTTPClient()
 	}
 	return &HCAtomBatchHTTPClient{client: client}
+}
+
+func newHCAtomBatchProductionHTTPClient() *http.Client {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = nil
+	transport.DialContext = (&net.Dialer{
+		Timeout:   5 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}).DialContext
+	transport.TLSHandshakeTimeout = 10 * time.Second
+	transport.ResponseHeaderTimeout = 15 * time.Second
+	return &http.Client{
+		Transport: transport,
+		Timeout:   hcAtomBatchOverallTimeout,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 }
 
 func (c *HCAtomBatchHTTPClient) Create(ctx context.Context, apiKey, idempotencyKey string, body HCAtomBatchCreateRequest) (*HCAtomBatchTask, error) {
@@ -537,7 +558,7 @@ func (c *HCAtomBatchHTTPClient) Delete(ctx context.Context, apiKey, taskID strin
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		return &HCAtomBatchAPIError{StatusCode: resp.StatusCode}
 	}
-	body, err := io.ReadAll(resp.Body)
+	body, err := readHCAtomBatchResponseBody(resp)
 	if err != nil {
 		return err
 	}
@@ -579,7 +600,11 @@ func (c *HCAtomBatchHTTPClient) doTask(req *http.Request) (*HCAtomBatchTask, err
 		Msg  string          `json:"msg"`
 		Data json.RawMessage `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
+	body, err := readHCAtomBatchResponseBody(resp)
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(body, &envelope); err != nil {
 		return nil, err
 	}
 	if !hcAtomBatchBusinessSuccess(envelope.Code) {
@@ -605,6 +630,23 @@ func (c *HCAtomBatchHTTPClient) doTask(req *http.Request) (*HCAtomBatchTask, err
 	return &HCAtomBatchTask{TaskID: firstHCAtomString(data.TaskID, data.TaskIDSnake), Status: data.Status, ResultURLs: append(data.ResultURLs, data.ResultURLsSnake...), ResultURL: firstHCAtomString(data.ResultURL, data.ResultURLSnake), ImageCount: data.Usage.ImageCount, ErrorCode: data.ErrorCode, ErrorMsg: data.ErrorMsg}, nil
 }
 
+func readHCAtomBatchResponseBody(resp *http.Response) ([]byte, error) {
+	if resp == nil || resp.Body == nil {
+		return nil, errors.New("HC-ATOM response body is missing")
+	}
+	if resp.ContentLength > hcAtomBatchMaxResponseBytes {
+		return nil, errors.New("HC-ATOM response body exceeds limit")
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, hcAtomBatchMaxResponseBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(body) > hcAtomBatchMaxResponseBytes {
+		return nil, errors.New("HC-ATOM response body exceeds limit")
+	}
+	return body, nil
+}
+
 func firstHCAtomString(values ...string) string {
 	for _, value := range values {
 		if strings.TrimSpace(value) != "" {
@@ -615,12 +657,10 @@ func firstHCAtomString(values ...string) string {
 }
 func hcAtomBatchBusinessSuccess(code any) bool {
 	switch value := code.(type) {
-	case nil:
-		return true
 	case float64:
 		return value == 0
 	case string:
-		return strings.TrimSpace(value) == "" || strings.TrimSpace(value) == "0"
+		return strings.TrimSpace(value) == "0"
 	default:
 		return false
 	}

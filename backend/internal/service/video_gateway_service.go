@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 )
@@ -36,12 +37,22 @@ type VideoTaskCreateCommand struct {
 }
 
 type VideoGatewayService struct {
-	repo         VideoGatewayRuntimeRepository
-	gate         *SingleSmokeAuthorization
-	cfg          *config.Config
-	authCache    VideoAuthCacheInvalidator
-	billingCache VideoBillingCacheInvalidator
-	assetStore   *VideoAssetStore
+	repo          VideoGatewayRuntimeRepository
+	gate          *SingleSmokeAuthorization
+	cfg           *config.Config
+	authCache     VideoAuthCacheInvalidator
+	billingCache  VideoBillingCacheInvalidator
+	assetStore    *VideoAssetStore
+	encryptor     VideoKeyEncryptor
+	clientFactory func(string, string, string) VideoProviderClient
+}
+
+// ConfigureProviderClientFactory wires dispatched HC cancellation without
+// changing the existing constructor used by legacy callers.
+func (s *VideoGatewayService) ConfigureProviderClientFactory(encryptor VideoKeyEncryptor, factory func(string, string, string) VideoProviderClient) {
+	if s != nil {
+		s.encryptor, s.clientFactory = encryptor, factory
+	}
 }
 
 func videoMaximumUSD(cfg *config.Config) (float64, error) {
@@ -134,6 +145,36 @@ func (s *VideoGatewayService) GetTask(ctx context.Context, id int64, scope Video
 }
 
 func (s *VideoGatewayService) CancelTask(ctx context.Context, id int64, scope VideoTaskScope) (*VideoTask, error) {
+	current, err := s.repo.GetTaskForScope(ctx, id, scope)
+	if err != nil {
+		return nil, err
+	}
+	if (current.Status == VideoStatusSubmitted || current.Status == VideoStatusRunning) && current.Provider == HCAtomSeedanceV3Provider {
+		if s.encryptor == nil || s.clientFactory == nil {
+			return nil, ErrVideoCancelConflict
+		}
+		provider, err := s.repo.GetVideoProvider(ctx, current.ProviderAccountID, current.GroupID)
+		if err != nil {
+			return nil, err
+		}
+		key, err := s.encryptor.Decrypt(provider.EncryptedAPIKey)
+		if err != nil {
+			return nil, errors.New("video provider credential decryption failed")
+		}
+		cancelled, err := s.clientFactory(provider.Provider, provider.BaseURL, key).Cancel(ctx, current.UpstreamTaskID)
+		if err != nil {
+			return nil, err
+		}
+		if cancelled == nil || cancelled.Status != VideoStatusCancelled {
+			return nil, ErrVideoCancelConflict
+		}
+		_, err = s.repo.FinalizeTask(ctx, VideoTaskFinalization{TaskID: current.ID, ExpectedVersion: current.Version, Status: VideoStatusCancelled, ProviderErrorCode: "cancelled", ProviderErrorMessage: "cancelled by employee", ErrorMessage: "cancelled by employee", Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()})
+		if err != nil {
+			return nil, err
+		}
+		current.Status = VideoStatusCancelled
+		return current, invalidateVideoCaches(ctx, s.authCache, s.billingCache, scope.UserID, scope.APIKeyID)
+	}
 	task, err := s.repo.CancelTaskForScope(ctx, id, scope)
 	if err == nil {
 		err = invalidateVideoCaches(ctx, s.authCache, s.billingCache, scope.UserID, scope.APIKeyID)

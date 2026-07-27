@@ -132,3 +132,17 @@ Status: GREEN for the fake HC public-batch path; no production provider call was
 
 The tests prove the local fake pipeline only. Real HC credentials, paid calls,
 deployment, push, merge, frontend, and video were not used or performed.
+
+## Review remediation (partial)
+
+Status: P0 owned-result persistence and the HC admin-group gate are GREEN;
+the remaining P1/P2 review items are not yet closed.
+
+- `039401208 fix(images): persist HC owned batch results`: HC archives a
+  successful remote result once into a configured, deterministic owned JSONL
+  path using restrictive permissions and atomic rename. Later provider instances
+  read the opaque owned ref without upstream GET; output cleanup removes it.
+- `8aa5406fd fix(groups): allow HC atom batch image groups`: Admin Create/Update
+  now preserves batch-image enablement for `PlatformHCAtom` when image generation
+  is allowed.
+- RED/GREEN: restart-owned-result and HC group-create focused tests passed.

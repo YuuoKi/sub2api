@@ -27,11 +27,17 @@ func NewVideoGatewayHandler(s *service.VideoGatewayService) *VideoGatewayHandler
 }
 
 type videoCreateBody struct {
-	ProviderAccountID int64  `json:"provider_account_id" binding:"required"`
-	Prompt            string `json:"prompt" binding:"required"`
-	Duration          int    `json:"duration" binding:"required"`
-	Resolution        string `json:"resolution" binding:"required"`
-	CreationKey       string `json:"creation_key"`
+	ProviderAccountID int64                      `json:"provider_account_id" binding:"required"`
+	Model             string                     `json:"model"`
+	Prompt            string                     `json:"prompt"`
+	Content           []service.VideoContentItem `json:"content"`
+	Ratio             string                     `json:"ratio"`
+	GenerateAudio     bool                       `json:"generate_audio"`
+	ReturnLastFrame   bool                       `json:"return_last_frame"`
+	Watermark         bool                       `json:"watermark"`
+	Duration          int                        `json:"duration"`
+	Resolution        string                     `json:"resolution"`
+	CreationKey       string                     `json:"creation_key"`
 }
 
 func videoScope(c *gin.Context) (service.VideoTaskScope, bool) {
@@ -67,7 +73,8 @@ func (h *VideoGatewayHandler) Create(c *gin.Context) {
 		return
 	}
 	task, err := h.service.CreateTask(c.Request.Context(), service.VideoTaskCreateCommand{Scope: scope, ProviderAccountID: body.ProviderAccountID,
-		Prompt: body.Prompt, Duration: body.Duration, Resolution: body.Resolution,
+		Model: body.Model, Prompt: body.Prompt, Content: body.Content, Ratio: body.Ratio, GenerateAudio: body.GenerateAudio,
+		ReturnLastFrame: body.ReturnLastFrame, Watermark: body.Watermark, Duration: body.Duration, Resolution: body.Resolution,
 		CreationKey: body.CreationKey})
 	if err != nil {
 		writeVideoError(c, err)

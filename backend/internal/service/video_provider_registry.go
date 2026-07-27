@@ -15,6 +15,7 @@ type VideoProviderSpec struct {
 
 var videoProviderRegistry = []VideoProviderSpec{
 	{Provider: "seedance", DisplayName: "Seedance 2.0", DefaultBaseURL: SeedanceBaseURL, DefaultModel: SeedanceModel, AdapterReady: true},
+	{Provider: HCAtomSeedanceV3Provider, DisplayName: "HC-ATOM Seedance V3", DefaultBaseURL: HCAtomSeedanceV3BaseURL, DefaultModel: HCAtomSeedanceV3PublicModel, AdapterReady: true},
 	{Provider: "jimeng", DisplayName: "即梦", AdapterReady: false},
 	{Provider: "veo", DisplayName: "Veo 3.1", AdapterReady: false},
 	{Provider: "kling", DisplayName: "快乐小马", AdapterReady: false},

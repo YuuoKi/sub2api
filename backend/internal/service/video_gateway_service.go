@@ -24,6 +24,12 @@ type VideoTaskCreateCommand struct {
 	Scope             VideoTaskScope
 	ProviderAccountID int64
 	Prompt            string
+	Model             string
+	Content           []VideoContentItem
+	Ratio             string
+	GenerateAudio     bool
+	ReturnLastFrame   bool
+	Watermark         bool
 	Duration          int
 	Resolution        string
 	CreationKey       string
@@ -71,10 +77,6 @@ func (s *VideoGatewayService) CreateTask(ctx context.Context, cmd VideoTaskCreat
 	if s == nil || s.repo == nil {
 		return nil, errors.New("video gateway repository is required")
 	}
-	input := VideoCreateRequest{Prompt: cmd.Prompt, Duration: cmd.Duration, Resolution: cmd.Resolution}
-	if err := ValidateTinyRealContract(input); err != nil {
-		return nil, err
-	}
 	if cmd.Scope.UserID <= 0 || cmd.Scope.APIKeyID <= 0 || cmd.Scope.GroupID <= 0 {
 		return nil, errors.New("complete employee video scope is required")
 	}
@@ -85,8 +87,20 @@ func (s *VideoGatewayService) CreateTask(ctx context.Context, cmd VideoTaskCreat
 	if err != nil {
 		return nil, err
 	}
-	if !provider.Enabled || provider.Provider != "seedance" {
+	if !provider.Enabled || (provider.Provider != "seedance" && provider.Provider != HCAtomSeedanceV3Provider) {
 		return nil, ErrVideoProviderNotFound
+	}
+	input := VideoCreateRequest{Model: cmd.Model, Prompt: cmd.Prompt, Content: cmd.Content, Ratio: cmd.Ratio, GenerateAudio: cmd.GenerateAudio, ReturnLastFrame: cmd.ReturnLastFrame, Watermark: cmd.Watermark, Duration: cmd.Duration, Resolution: cmd.Resolution}
+	if provider.Provider == "seedance" {
+		if err := ValidateTinyRealContract(input); err != nil {
+			return nil, err
+		}
+	} else {
+		content, err := normalizeHCAtomV3Content(input)
+		if err != nil {
+			return nil, err
+		}
+		input.Content = content
 	}
 	maximumUSD, err := videoMaximumUSD(s.cfg)
 	if err != nil {
@@ -96,12 +110,16 @@ func (s *VideoGatewayService) CreateTask(ctx context.Context, cmd VideoTaskCreat
 	usdCNYExchangeRate := s.cfg.VideoGateway.USDCNYExchangeRate
 	maximumCNY := s.cfg.VideoGateway.TinyRealMaximumCNY
 	task := &VideoTask{APIKeyID: cmd.Scope.APIKeyID, GroupID: cmd.Scope.GroupID, ProviderAccountID: provider.ID,
-		Provider: provider.Provider, Model: SeedanceModel, TaskType: "text_to_video", Prompt: strings.TrimSpace(cmd.Prompt),
+		Provider: provider.Provider, Model: SeedanceModel, TaskType: "text_to_video", Prompt: strings.TrimSpace(cmd.Prompt), CreateRequest: input,
 		Status: VideoStatusQueued, CreationKey: strings.TrimSpace(cmd.CreationKey), CreatedBy: cmd.Scope.UserID,
 		DurationSeconds: 4, Resolution: "720p", Currency: "USD", ReservedCostUSD: maximumUSD, ReservationState: VideoReservationReserved,
 		PricingSource: VideoPricingSourceConfig, PricingVersion: VideoPricingVersionSeedanceCompletionTokensUSDV1,
 		PricingCNYPerMillionCompletionTokens: &priceCNYPerMillionCompletionTokens,
 		PricingUSDCNYExchangeRate:            &usdCNYExchangeRate, PricingMaximumCNY: &maximumCNY}
+	if provider.Provider == HCAtomSeedanceV3Provider {
+		task.Model = HCAtomSeedanceV3PublicModel
+		task.DurationSeconds, task.Resolution = cmd.Duration, cmd.Resolution
+	}
 	if err := s.repo.ReserveAndCreateTask(ctx, task, maximumUSD); err != nil {
 		return nil, err
 	}

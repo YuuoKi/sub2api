@@ -211,6 +211,6 @@ type VideoGatewayRuntimeRepository interface {
 	BeginRealDispatch(context.Context, int64, int64) (bool, error)
 	BeginHCAtomV3Dispatch(context.Context, int64, int64) (bool, error)
 	MarkVideoSubmitted(context.Context, int64, int64, string) error
-	MarkVideoDispatchUncertain(context.Context, int64, int64, string) error
+	MarkVideoDispatchUncertain(context.Context, int64, int64, string, string) error
 	UpdateVideoProgress(context.Context, int64, int64, string) error
 }

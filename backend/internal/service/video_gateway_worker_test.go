@@ -229,8 +229,9 @@ func (r *workerRepoStub) BeginHCAtomV3Dispatch(context.Context, int64, int64) (b
 	return r.begin, nil
 }
 func (r *workerRepoStub) MarkVideoSubmitted(context.Context, int64, int64, string) error { return nil }
-func (r *workerRepoStub) MarkVideoDispatchUncertain(_ context.Context, _ int64, _ int64, _ string) error {
+func (r *workerRepoStub) MarkVideoDispatchUncertain(_ context.Context, _ int64, _ int64, _ string, upstreamTaskID string) error {
 	r.task.Status = VideoStatusReviewRequired
+	r.task.UpstreamTaskID = upstreamTaskID
 	return nil
 }
 func (r *workerRepoStub) UpdateVideoProgress(_ context.Context, _ int64, _ int64, status string) error {

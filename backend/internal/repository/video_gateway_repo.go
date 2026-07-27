@@ -149,12 +149,12 @@ func (r *videoGatewayRepository) MarkVideoSubmitted(ctx context.Context, id, ver
 	return nil
 }
 
-func (r *videoGatewayRepository) MarkVideoDispatchUncertain(ctx context.Context, id, version int64, code string) error {
+func (r *videoGatewayRepository) MarkVideoDispatchUncertain(ctx context.Context, id, version int64, code, upstreamTaskID string) error {
 	db, err := r.requireDB()
 	if err != nil {
 		return err
 	}
-	result, err := db.ExecContext(ctx, `UPDATE video_tasks SET status='review_required', dispatch_state='uncertain', provider_error_code=$3, provider_error_message='provider dispatch outcome requires review', error_message='provider dispatch outcome requires review', version=version+1, worker_claimed_at=NULL, worker_claimed_until=NULL, updated_at=NOW() WHERE id=$1 AND version=$2 AND status='queued' AND real_dispatch_count=1`, id, version, code)
+	result, err := db.ExecContext(ctx, `UPDATE video_tasks SET status='review_required', dispatch_state='uncertain', upstream_task_id=CASE WHEN $4 <> '' THEN $4 ELSE upstream_task_id END, provider_error_code=$3, provider_error_message='provider dispatch outcome requires review', error_message='provider dispatch outcome requires review', version=version+1, worker_claimed_at=NULL, worker_claimed_until=NULL, updated_at=NOW() WHERE id=$1 AND version=$2 AND status='queued' AND real_dispatch_count=1`, id, version, code, upstreamTaskID)
 	if err != nil {
 		return err
 	}

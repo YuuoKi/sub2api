@@ -121,7 +121,7 @@ func (r *videoGatewayRepository) BeginHCAtomV3Dispatch(ctx context.Context, id, 
 	if err != nil {
 		return false, err
 	}
-	result, err := db.ExecContext(ctx, `UPDATE video_tasks task SET real_dispatch_count=1, dispatch_state='dispatching', version=task.version+1, updated_at=NOW() FROM video_provider_accounts provider WHERE task.id=$1 AND task.version=$2 AND task.status='queued' AND task.real_dispatch_count=0 AND provider.id=task.provider_account_id AND provider.enabled=TRUE AND provider.provider=$3 AND provider.base_url=$4 AND provider.default_model=$5`, id, version, service.HCAtomSeedanceV3Provider, service.HCAtomSeedanceV3BaseURL, service.HCAtomSeedanceV3PublicModel)
+	result, err := db.ExecContext(ctx, `UPDATE video_tasks task SET real_dispatch_count=1, dispatch_state='dispatching', version=task.version+1, updated_at=NOW() FROM video_provider_accounts provider, groups candidate WHERE task.id=$1 AND task.version=$2 AND task.status='queued' AND task.real_dispatch_count=0 AND provider.id=task.provider_account_id AND provider.group_id=task.group_id AND candidate.id=task.group_id AND candidate.status='active' AND candidate.subscription_type='standard' AND candidate.deleted_at IS NULL AND provider.enabled=TRUE AND provider.provider=$3 AND provider.base_url=$4 AND provider.default_model=$5`, id, version, service.HCAtomSeedanceV3Provider, service.HCAtomSeedanceV3BaseURL, service.HCAtomSeedanceV3PublicModel)
 	if err != nil {
 		return false, err
 	}

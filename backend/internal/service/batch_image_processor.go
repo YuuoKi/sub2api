@@ -292,12 +292,13 @@ func (i *BatchImageResultIndexer) Index(ctx context.Context, job *BatchImageJob,
 		return nil, err
 	}
 
+	outputRefBeforeOpen := batchImageDerefString(job.ProviderOutputRef)
 	r, _, err := provider.OpenResult(ctx, job, account)
 	if err != nil {
 		return nil, ErrBatchImageIndexOutputMissing.WithCause(err)
 	}
 	defer func() { _ = r.Close() }()
-	if ref := batchImageDerefString(job.ProviderOutputRef); ref != "" && ref != batchImageDerefString(job.ProviderJobName) {
+	if ref := batchImageDerefString(job.ProviderOutputRef); ref != "" && ref != outputRefBeforeOpen {
 		if err := i.Repo.UpdateBatchImageJobProviderOutputRef(ctx, job.BatchID, ref); err != nil {
 			return nil, err
 		}

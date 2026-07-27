@@ -474,25 +474,7 @@ func filterSchedulerCredentialsForAccount(account service.Account) map[string]an
 }
 
 func filterHCAtomSchedulerCredentials(credentials map[string]any) map[string]any {
-	if len(credentials) == 0 {
-		return nil
-	}
-	keys := []string{
-		"model_mapping",
-		service.HCAtomAPIKeyCiphertextField,
-		service.HCAtomAPIKeyMaskedField,
-		service.HCAtomAPIKeyConfiguredField,
-	}
-	filtered := make(map[string]any, len(keys))
-	for _, key := range keys {
-		if value, ok := credentials[key]; ok && value != nil {
-			filtered[key] = value
-		}
-	}
-	if len(filtered) == 0 {
-		return nil
-	}
-	return filtered
+	return service.FilterHCAtomPersistedAccountCredentials(credentials)
 }
 
 func filterSchedulerAccountGroups(accountGroups []service.AccountGroup) []service.AccountGroup {

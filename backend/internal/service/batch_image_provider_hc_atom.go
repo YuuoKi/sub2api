@@ -539,14 +539,10 @@ func mapHCAtomBatchState(task *HCAtomBatchTask) (*BatchProviderStatus, error) {
 }
 
 func hcAtomBatchFailure(task *HCAtomBatchTask) (string, string) {
-	code, msg := strings.TrimSpace(task.ErrorCode), strings.TrimSpace(task.ErrorMsg)
-	if code == "" {
-		code = "HC_ATOM_TASK_FAILED"
-	}
-	if msg == "" {
-		msg = "HC-ATOM task failed"
-	}
-	return code, msg
+	// HC errorCode/errorMsg are provider-controlled strings and are never
+	// persisted verbatim. A provider can echo Authorization headers, API keys,
+	// or signed result URLs in either field.
+	return "HC_ATOM_TASK_FAILED", "HC-ATOM task failed"
 }
 
 func hcAtomBatchResultURLs(task *HCAtomBatchTask) []string {

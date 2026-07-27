@@ -207,3 +207,62 @@ Status: GREEN for the requested local non-secret hardening scope.
   sanitizer work.
 - No frontend or video code was changed. No push, deploy, merge, reset, clean,
   rebase, or destructive repository cleanup occurred.
+
+## Review remediation (secret allowlist and failure sanitization)
+
+Status: GREEN for the requested local secret-boundary scope.
+
+### RED evidence
+
+1. The strict credential test showed that `Authorization`, case aliases,
+   arbitrary metadata, nested maps, and slices were copied into the
+   repository-safe credentials result. A nested object under `model_mapping`
+   was also accepted instead of returning `ErrHCAtomCredentialInvalid`.
+2. An HC `FAILED` task copied provider-controlled `errorCode` and `errorMsg`
+   into `BatchProviderStatus`, including an authorization header and signed URL
+   query. The processor would persist those strings unchanged.
+3. Scheduler/Redis snapshots and the account DTO retained a nested secret
+   fixture hidden under an invalid `model_mapping`.
+
+### Landed remediation
+
+- `ProtectHCAtomAccountCredentials` now constructs credentials from an exact
+  allowlist only: safe `protocol`, string-to-string `model_mapping`, and the
+  generated ciphertext/masked/configured fields. Unknown fields and
+  case-variant aliases are dropped; invalid protocol or nested/non-string
+  model mappings fail closed without echoing the rejected value.
+- Repository cache snapshots and HC account DTO mapping reuse the same
+  allowlist filter. Ciphertext remains available only to the internal
+  scheduler snapshot and is redacted from the DTO.
+- HC provider-controlled failure code/message are never persisted verbatim.
+  HC task failures use fixed safe values, and the processor applies an
+  additional secret-marker/signed-query guard before DB and event persistence.
+- Recursive sentinel coverage now spans admin repository input,
+  top-level aliases, nested maps/slices, scheduler/Redis serialization, DTO
+  serialization, provider status mapping, and the real HC provider through
+  processor persistence.
+
+### Fresh GREEN gates
+
+- Focused allowlist/model-mapping tests: PASS.
+- Focused HC failure sanitizer and provider-to-processor persistence tests:
+  PASS.
+- Focused repository/Redis and DTO recursive sentinel tests: PASS.
+- `go test -tags unit ./internal/service -count=1`: PASS (105.456s).
+- `go test ./internal/service ./internal/config ./internal/repository
+  ./internal/handler/dto ./cmd/server -count=1`: PASS (69s).
+- `go build -o C:\tmp\hc-task2-secret-server.exe ./cmd/server`: PASS; the
+  exact temporary binary was removed afterwards.
+- `git diff --check`: PASS before the focused commit.
+- Secret fixture scan across this report and non-test changed implementation
+  files: no review-sentinel match.
+
+### Boundaries and rollback
+
+- No real credential/API/provider call, frontend/video change, deployment,
+  push, merge, reset, clean, or rebase was performed.
+- These gates prove local encryption, filtering, serialization, error
+  persistence, and compilation only; they do not prove a paid HC production
+  path.
+- Rollback is the single focused secret-remediation commit. The unrelated
+  pre-existing frontend lockfile and untracked worktree files remain excluded.

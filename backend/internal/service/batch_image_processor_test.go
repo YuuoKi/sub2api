@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -293,6 +294,62 @@ func TestBatchImageProviderProcessor_StatusFlow(t *testing.T) {
 		require.True(t, got.Terminal)
 		require.Equal(t, BatchImageJobStatusFailed, repo.jobs["imgbatch_flow"].Status)
 		require.Equal(t, "BAD_PROMPT", batchImageDerefString(repo.jobs["imgbatch_flow"].LastErrorCode))
+	})
+
+	t.Run("failed provider secret echo is sanitized before persistence", func(t *testing.T) {
+		sentinel := strings.Join([]string{"hc-review", "processor", "secret"}, "-")
+		repo := newFakeBatchImageRepository()
+		repo.jobs["imgbatch_flow"] = newJob(BatchImageJobStatusRunning)
+		provider := &fakeProcessorProvider{status: &BatchProviderStatus{
+			InternalState: BatchProviderStateFailed,
+			RawState:      "FAILED",
+			ErrorCode:     "TOKEN_" + sentinel,
+			ErrorMessage:  "Bearer " + sentinel + " https://assets.example/out.png?token=" + sentinel,
+		}}
+
+		got, err := newTestBatchImageProcessor(repo, provider).Process(ctx, "imgbatch_flow")
+		require.NoError(t, err)
+		require.True(t, got.Terminal)
+		raw, err := json.Marshal(repo.jobs["imgbatch_flow"])
+		require.NoError(t, err)
+		require.NotContains(t, string(raw), sentinel)
+		require.Equal(t, "PROVIDER_BATCH_FAILED", batchImageDerefString(repo.jobs["imgbatch_flow"].LastErrorCode))
+		require.Equal(t, "provider batch failed", batchImageDerefString(repo.jobs["imgbatch_flow"].LastErrorMessage))
+	})
+
+	t.Run("HC failed provider echo is sanitized end to end before persistence", func(t *testing.T) {
+		sentinel := strings.Join([]string{"hc-review", "processor", "provider", "secret"}, "-")
+		cipher, account := hcAtomBatchTestAccount(t, "synthetic-key")
+		provider := NewHCAtomBatchImageProviderWithCredentialCipher(&fakeHCAtomBatchClient{task: &HCAtomBatchTask{
+			TaskID:    "hc-secret-failure",
+			Status:    "FAILED",
+			ErrorCode: "TOKEN_" + sentinel,
+			ErrorMsg: "Authorization: Bearer " + sentinel +
+				" result=https://assets.example/out.png?X-Amz-Signature=" + sentinel,
+		}}, cipher)
+		repo := newFakeBatchImageRepository()
+		repo.jobs["imgbatch_flow"] = &BatchImageJob{
+			BatchID:         "imgbatch_flow",
+			Status:          BatchImageJobStatusRunning,
+			Provider:        provider.Name(),
+			AccountID:       &accountID,
+			ProviderJobName: &providerJob,
+		}
+		processor := &BatchImageProviderProcessor{
+			Repo:             repo,
+			ProviderRegistry: NewBatchImageProviderRegistry(provider),
+			AccountResolver:  &fakeBatchImageAccountResolver{account: account},
+			Indexer:          &BatchImageResultIndexer{Repo: repo},
+		}
+
+		got, err := processor.Process(ctx, "imgbatch_flow")
+		require.NoError(t, err)
+		require.True(t, got.Terminal)
+		raw, err := json.Marshal(repo.jobs["imgbatch_flow"])
+		require.NoError(t, err)
+		require.NotContains(t, string(raw), sentinel)
+		require.Equal(t, "HC_ATOM_TASK_FAILED", batchImageDerefString(repo.jobs["imgbatch_flow"].LastErrorCode))
+		require.Equal(t, "HC-ATOM task failed", batchImageDerefString(repo.jobs["imgbatch_flow"].LastErrorMessage))
 	})
 
 	t.Run("cancelled provider marks job cancelled", func(t *testing.T) {

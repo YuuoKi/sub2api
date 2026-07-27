@@ -145,6 +145,7 @@ func (p *BatchImageProviderProcessor) Process(ctx context.Context, batchID strin
 			code = "PROVIDER_BATCH_FAILED"
 		}
 		msg := truncateBatchImageMessage(status.ErrorMessage, batchImageMaxErrorMessageLength)
+		code, msg = sanitizeBatchImageProviderFailure(code, msg, "PROVIDER_BATCH_FAILED", "provider batch failed")
 		if err := p.Repo.TransitionBatchImageJobStatus(ctx, job.BatchID, BatchImageJobStatusFailed, BatchImageTransitionOptions{
 			EventType:    "job_failed",
 			EventPayload: map[string]any{"provider_state": status.RawState, "error_code": code},

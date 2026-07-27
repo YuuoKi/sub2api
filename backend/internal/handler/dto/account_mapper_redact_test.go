@@ -2,6 +2,7 @@ package dto
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -72,4 +73,36 @@ func TestAccountFromServiceShallow_NilCredentialsOmitsStatus(t *testing.T) {
 	require.NotNil(t, got)
 	require.Nil(t, got.Credentials)
 	require.Nil(t, got.CredentialsStatus)
+}
+
+func TestAccountFromServiceShallow_HCAtomUsesStrictPublicAllowlistRecursively(t *testing.T) {
+	sentinel := strings.Join([]string{"hc-review", "dto", "secret"}, "-")
+	src := &service.Account{
+		ID:       43,
+		Name:     "hc-atom",
+		Platform: service.PlatformHCAtom,
+		Type:     service.AccountTypeAPIKey,
+		Credentials: map[string]any{
+			"protocol":                          "hc-atom",
+			service.HCAtomAPIKeyCiphertextField: "hc1:synthetic-ciphertext",
+			service.HCAtomAPIKeyMaskedField:     "********7x9Q",
+			service.HCAtomAPIKeyConfiguredField: true,
+			"Authorization":                     "Bearer " + sentinel,
+			"metadata":                          []any{map[string]any{"token": sentinel}},
+			"model_mapping": map[string]any{
+				"seedream-5.0": map[string]any{"api_key": sentinel},
+			},
+		},
+	}
+
+	got := AccountFromServiceShallow(src)
+	raw, err := json.Marshal(got)
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), sentinel)
+	require.Equal(t, "hc-atom", got.Credentials["protocol"])
+	require.NotContains(t, got.Credentials, "Authorization")
+	require.NotContains(t, got.Credentials, "metadata")
+	require.NotContains(t, got.Credentials, "model_mapping")
+	require.NotContains(t, got.Credentials, service.HCAtomAPIKeyCiphertextField)
+	require.True(t, got.CredentialsStatus["has_"+service.HCAtomAPIKeyCiphertextField])
 }

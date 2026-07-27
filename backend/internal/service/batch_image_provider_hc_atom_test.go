@@ -175,6 +175,27 @@ func TestHCAtomBatchProvider_StrictStatusAndBusinessEnvelopeMapping(t *testing.T
 	require.Equal(t, "HC_ATOM_BUSINESS_ERROR", infraerrors.Reason(mapHCAtomBatchError(err)))
 }
 
+func TestHCAtomBatchProvider_FailedStateSanitizesUpstreamSecretEcho(t *testing.T) {
+	sentinel := strings.Join([]string{"hc-review", "failed", "secret"}, "-")
+	status, err := mapHCAtomBatchState(&HCAtomBatchTask{
+		Status:    "FAILED",
+		ErrorCode: "TOKEN_" + sentinel,
+		ErrorMsg: "Authorization: Bearer " + sentinel +
+			" result=https://assets.example/out.png?X-Amz-Signature=" + sentinel + "&token=" + sentinel,
+	})
+	require.NoError(t, err)
+	require.Equal(t, BatchProviderStateFailed, status.InternalState)
+
+	raw, err := json.Marshal(status)
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), sentinel)
+	require.NotContains(t, strings.ToLower(string(raw)), "bearer")
+	require.NotContains(t, strings.ToLower(string(raw)), "x-amz-signature")
+	require.NotContains(t, strings.ToLower(string(raw)), "token=")
+	require.Equal(t, "HC_ATOM_TASK_FAILED", status.ErrorCode)
+	require.Equal(t, "HC-ATOM task failed", status.ErrorMessage)
+}
+
 // Regression target: an HTTP 200 response is not an HC business success unless
 // the envelope explicitly carries code=0.
 func TestHCAtomBatchHTTPClient_RejectsMissingBusinessCode(t *testing.T) {

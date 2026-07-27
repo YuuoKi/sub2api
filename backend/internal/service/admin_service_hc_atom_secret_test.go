@@ -55,6 +55,7 @@ func (r *hcAtomSecretBoundaryRepo) Update(_ context.Context, account *Account) e
 func TestHCAtomSecretBoundary_CreateEncryptsSentinelBeforeRepository(t *testing.T) {
 	cipher, err := NewHCAtomCredentialCipher(strings.Repeat("11", 32))
 	require.NoError(t, err)
+	nestedSentinel := strings.Join([]string{"hc-review", "repo", "secret"}, "-")
 	repo := &hcAtomSecretBoundaryRepo{}
 	svc := &adminServiceImpl{
 		accountRepo:            repo,
@@ -62,10 +63,16 @@ func TestHCAtomSecretBoundary_CreateEncryptsSentinelBeforeRepository(t *testing.
 	}
 
 	created, err := svc.CreateAccount(context.Background(), &CreateAccountInput{
-		Name:                 "hc-secret-boundary",
-		Platform:             PlatformHCAtom,
-		Type:                 AccountTypeAPIKey,
-		Credentials:          map[string]any{"api_key": hcAtomSecretSentinel},
+		Name:     "hc-secret-boundary",
+		Platform: PlatformHCAtom,
+		Type:     AccountTypeAPIKey,
+		Credentials: map[string]any{
+			"api_key":       hcAtomSecretSentinel,
+			"protocol":      "hc-atom",
+			"Authorization": "Bearer " + nestedSentinel,
+			"metadata":      []any{map[string]any{"token": nestedSentinel}},
+			"model_mapping": map[string]any{"seedream-5.0": "seedream-5.0"},
+		},
 		SkipDefaultGroupBind: true,
 	})
 	require.NoError(t, err)
@@ -75,8 +82,13 @@ func TestHCAtomSecretBoundary_CreateEncryptsSentinelBeforeRepository(t *testing.
 	persisted, err := json.Marshal(repo.account.Credentials)
 	require.NoError(t, err)
 	require.NotContains(t, string(persisted), hcAtomSecretSentinel)
+	require.NotContains(t, string(persisted), nestedSentinel)
 	require.NotContains(t, repo.account.Credentials, "api_key")
 	require.NotContains(t, repo.account.Credentials, "hc_atom_api_key")
+	require.NotContains(t, repo.account.Credentials, "Authorization")
+	require.NotContains(t, repo.account.Credentials, "metadata")
+	require.Equal(t, "hc-atom", repo.account.Credentials["protocol"])
+	require.Equal(t, map[string]any{"seedream-5.0": "seedream-5.0"}, repo.account.Credentials["model_mapping"])
 	require.NotEmpty(t, repo.account.Credentials[HCAtomAPIKeyCiphertextField])
 	require.Equal(t, "********7x9Q", repo.account.Credentials[HCAtomAPIKeyMaskedField])
 	require.Equal(t, true, repo.account.Credentials[HCAtomAPIKeyConfiguredField])
@@ -126,6 +138,56 @@ func TestProtectHCAtomAccountCredentials_EncryptsTransientAPIKeyAndResolvesOnDem
 	require.Equal(t, hcAtomSecretSentinel, resolved)
 }
 
+func TestProtectHCAtomAccountCredentials_StrictAllowlistDropsAliasesAndNestedSecrets(t *testing.T) {
+	cipher, err := NewHCAtomCredentialCipher(strings.Repeat("23", 32))
+	require.NoError(t, err)
+	nestedSentinel := strings.Join([]string{"hc-review", "nested", "secret"}, "-")
+
+	protected, err := ProtectHCAtomAccountCredentials(nil, map[string]any{
+		"api_key":       hcAtomSecretSentinel,
+		"protocol":      "hc-atom",
+		"Authorization": "Bearer " + nestedSentinel,
+		"TOKEN":         nestedSentinel,
+		"metadata": map[string]any{
+			"token": nestedSentinel,
+			"items": []any{map[string]any{"api_key": nestedSentinel}},
+		},
+		"arbitrary": []any{nestedSentinel},
+		"model_mapping": map[string]any{
+			"seedream-5.0": "seedream-5.0",
+		},
+	}, cipher)
+	require.NoError(t, err)
+
+	raw, err := json.Marshal(protected)
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), nestedSentinel)
+	require.Equal(t, "hc-atom", protected["protocol"])
+	require.Equal(t, map[string]any{"seedream-5.0": "seedream-5.0"}, protected["model_mapping"])
+	require.ElementsMatch(t, []string{
+		"protocol",
+		"model_mapping",
+		HCAtomAPIKeyCiphertextField,
+		HCAtomAPIKeyMaskedField,
+		HCAtomAPIKeyConfiguredField,
+	}, mapKeys(protected))
+}
+
+func TestProtectHCAtomAccountCredentials_RejectsNestedModelMappingMetadata(t *testing.T) {
+	cipher, err := NewHCAtomCredentialCipher(strings.Repeat("24", 32))
+	require.NoError(t, err)
+	nestedSentinel := strings.Join([]string{"hc-review", "mapping", "secret"}, "-")
+
+	_, err = ProtectHCAtomAccountCredentials(nil, map[string]any{
+		"api_key": hcAtomSecretSentinel,
+		"model_mapping": map[string]any{
+			"seedream-5.0": map[string]any{"token": nestedSentinel},
+		},
+	}, cipher)
+	require.ErrorIs(t, err, ErrHCAtomCredentialInvalid)
+	require.NotContains(t, err.Error(), nestedSentinel)
+}
+
 func TestProtectHCAtomAccountCredentials_UpdateWithoutNewKeyRetainsCiphertext(t *testing.T) {
 	cipher, err := NewHCAtomCredentialCipher(strings.Repeat("33", 32))
 	require.NoError(t, err)
@@ -140,6 +202,14 @@ func TestProtectHCAtomAccountCredentials_UpdateWithoutNewKeyRetainsCiphertext(t 
 	require.Equal(t, oldCiphertext, protected[HCAtomAPIKeyCiphertextField])
 	require.Equal(t, true, protected[HCAtomAPIKeyConfiguredField])
 	require.NotContains(t, protected, "api_key")
+}
+
+func mapKeys(values map[string]any) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	return keys
 }
 
 func TestResolveHCAtomAPIKey_WrongKeyFailsWithoutSecretOrCiphertext(t *testing.T) {

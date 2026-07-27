@@ -123,19 +123,26 @@ func (c *hcAtomAESGCMCredentialCipher) Decrypt(ciphertext string) (string, error
 // ProtectHCAtomAccountCredentials accepts api_key only as transient input. The
 // returned map is safe to pass to repository persistence.
 func ProtectHCAtomAccountCredentials(existing, incoming map[string]any, cipher HCAtomCredentialCipher) (map[string]any, error) {
-	out := make(map[string]any, len(incoming)+3)
-	for key, value := range incoming {
-		switch key {
-		case hcAtomAPIKeyInputField, hcAtomLegacyAPIKeyInputField,
-			HCAtomAPIKeyCiphertextField, HCAtomAPIKeyMaskedField, HCAtomAPIKeyConfiguredField:
-			continue
-		default:
-			out[key] = value
+	out := make(map[string]any, 5)
+	if rawProtocol, ok := incoming["protocol"]; ok {
+		protocol, ok := rawProtocol.(string)
+		protocol = strings.TrimSpace(protocol)
+		if !ok || !isHCAtomSafeIdentifier(protocol) {
+			return nil, ErrHCAtomCredentialInvalid
 		}
+		out["protocol"] = protocol
+	}
+	if rawMapping, ok := incoming["model_mapping"]; ok {
+		mapping, err := normalizeHCAtomModelMapping(rawMapping)
+		if err != nil {
+			return nil, err
+		}
+		out["model_mapping"] = mapping
 	}
 
-	existingCiphertext := credentialString(existing, HCAtomAPIKeyCiphertextField)
-	existingMasked := credentialString(existing, HCAtomAPIKeyMaskedField)
+	safeExisting := FilterHCAtomPersistedAccountCredentials(existing)
+	existingCiphertext := credentialString(safeExisting, HCAtomAPIKeyCiphertextField)
+	existingMasked := credentialString(safeExisting, HCAtomAPIKeyMaskedField)
 	rawAPIKey, provided := incoming[hcAtomAPIKeyInputField]
 	apiKey := ""
 	if provided {
@@ -171,6 +178,94 @@ func ProtectHCAtomAccountCredentials(existing, incoming map[string]any, cipher H
 	out[HCAtomAPIKeyMaskedField] = existingMasked
 	out[HCAtomAPIKeyConfiguredField] = true
 	return out, nil
+}
+
+// FilterHCAtomPersistedAccountCredentials applies the same exact allowlist at
+// repository/cache/DTO boundaries. Invalid values are dropped fail-closed.
+func FilterHCAtomPersistedAccountCredentials(credentials map[string]any) map[string]any {
+	if len(credentials) == 0 {
+		return nil
+	}
+	out := make(map[string]any, 5)
+	if protocol, ok := credentials["protocol"].(string); ok {
+		protocol = strings.TrimSpace(protocol)
+		if isHCAtomSafeIdentifier(protocol) {
+			out["protocol"] = protocol
+		}
+	}
+	if mapping, err := normalizeHCAtomModelMapping(credentials["model_mapping"]); err == nil && len(mapping) > 0 {
+		out["model_mapping"] = mapping
+	}
+	if ciphertext, ok := credentials[HCAtomAPIKeyCiphertextField].(string); ok {
+		ciphertext = strings.TrimSpace(ciphertext)
+		if strings.HasPrefix(ciphertext, hcAtomCiphertextPrefix) {
+			out[HCAtomAPIKeyCiphertextField] = ciphertext
+		}
+	}
+	if masked, ok := credentials[HCAtomAPIKeyMaskedField].(string); ok {
+		masked = strings.TrimSpace(masked)
+		if strings.HasPrefix(masked, "********") && len([]rune(masked)) <= 12 {
+			out[HCAtomAPIKeyMaskedField] = masked
+		}
+	}
+	if configured, ok := credentials[HCAtomAPIKeyConfiguredField].(bool); ok {
+		out[HCAtomAPIKeyConfiguredField] = configured
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func normalizeHCAtomModelMapping(raw any) (map[string]any, error) {
+	if raw == nil {
+		return nil, nil
+	}
+	out := make(map[string]any)
+	switch mapping := raw.(type) {
+	case map[string]any:
+		for alias, rawModel := range mapping {
+			model, ok := rawModel.(string)
+			if !ok || !isHCAtomSafeIdentifier(alias) || !isHCAtomSafeIdentifier(model) {
+				return nil, ErrHCAtomCredentialInvalid
+			}
+			out[strings.TrimSpace(alias)] = strings.TrimSpace(model)
+		}
+	case map[string]string:
+		for alias, model := range mapping {
+			if !isHCAtomSafeIdentifier(alias) || !isHCAtomSafeIdentifier(model) {
+				return nil, ErrHCAtomCredentialInvalid
+			}
+			out[strings.TrimSpace(alias)] = strings.TrimSpace(model)
+		}
+	default:
+		return nil, ErrHCAtomCredentialInvalid
+	}
+	return out, nil
+}
+
+func isHCAtomSafeIdentifier(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" || len(value) > 200 {
+		return false
+	}
+	lower := strings.ToLower(value)
+	for _, marker := range []string{"authorization", "bearer", "token", "secret", "password", "credential", "api_key", "apikey", "signed"} {
+		if strings.Contains(lower, marker) {
+			return false
+		}
+	}
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z',
+			r >= 'A' && r <= 'Z',
+			r >= '0' && r <= '9',
+			r == '.', r == '_', r == '-', r == '*', r == ':', r == '/':
+		default:
+			return false
+		}
+	}
+	return !strings.Contains(value, "://")
 }
 
 // ResolveHCAtomAPIKey decrypts only after the dedicated HC account was chosen.

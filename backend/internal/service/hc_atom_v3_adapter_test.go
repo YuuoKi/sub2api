@@ -109,6 +109,15 @@ func TestHCAtomV3CreateContractKeepsLegacyPromptAndAllowsV3Fields(t *testing.T) 
 	}
 }
 
+func TestHCAtomV3CreateRejectsNonPublicModelAlias(t *testing.T) {
+	repo := &workerRepoStub{provider: VideoProviderAccount{ID: 10, GroupID: 9, Provider: HCAtomSeedanceV3Provider, Enabled: true}}
+	cfg := &config.Config{VideoGateway: config.VideoGatewayConfig{WorkerEnabled: true, HCAtomV3DispatchEnabled: true, SeedanceCNYPerMillionTokens: 2, USDCNYExchangeRate: 7, TinyRealEstimateCNY: .7, TinyRealMaximumCNY: 1.4}}
+	_, err := NewVideoGatewayService(repo, NewSingleSmokeAuthorization(true), cfg, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}).CreateTask(context.Background(), VideoTaskCreateCommand{Scope: VideoTaskScope{UserID: 1, APIKeyID: 2, GroupID: 9}, ProviderAccountID: 10, Model: "unapproved-model", Prompt: "x", Duration: 8, Resolution: "720p"})
+	if !errors.Is(err, ErrVideoProviderNotFound) {
+		t.Fatalf("err=%v", err)
+	}
+}
+
 type hcAtomClientStub struct {
 	cancel  *VideoProviderTask
 	err     error

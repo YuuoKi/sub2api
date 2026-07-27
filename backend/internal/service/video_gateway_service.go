@@ -106,6 +106,7 @@ func (s *VideoGatewayService) CreateTask(ctx context.Context, cmd VideoTaskCreat
 	}
 	input := VideoCreateRequest{Model: cmd.Model, Prompt: cmd.Prompt, Content: cmd.Content, Ratio: cmd.Ratio, GenerateAudio: cmd.GenerateAudio, ReturnLastFrame: cmd.ReturnLastFrame, Watermark: cmd.Watermark, Duration: cmd.Duration, Resolution: cmd.Resolution}
 	if provider.Provider == "seedance" {
+		input.ReturnLastFrame = true
 		if err := ValidateTinyRealContract(input); err != nil {
 			return nil, err
 		}

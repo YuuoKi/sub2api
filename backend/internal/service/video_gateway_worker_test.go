@@ -153,6 +153,9 @@ func TestVideoGatewayCreateRequiresWorkerAndReservesServerMaximum(t *testing.T) 
 	if err != nil || task == nil || task.DurationSeconds != 4 || task.Resolution != "720p" {
 		t.Fatalf("task=%#v err=%v", task, err)
 	}
+	if !task.CreateRequest.ReturnLastFrame {
+		t.Fatal("official Seedance task must request last frame")
+	}
 	if repo.reserved != 0.2 || task.ReservedCostUSD != 0.2 || task.ReservationState != VideoReservationReserved {
 		t.Fatalf("reserved=%v task=%#v", repo.reserved, task)
 	}

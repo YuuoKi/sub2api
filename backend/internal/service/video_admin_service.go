@@ -129,7 +129,24 @@ func (s *VideoAdminService) UpdateProvider(ctx context.Context, id int64, in Vid
 		masked := maskVideoSecret(*in.APIKey)
 		in.EncryptedAPIKey, in.MaskedKey = &encrypted, &masked
 	}
-	canonical, _ := lookupVideoProvider("seedance")
+	providers, err := s.repo.ListVideoProviders(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var current *VideoProviderAccount
+	for i := range providers {
+		if providers[i].ID == id {
+			current = &providers[i]
+			break
+		}
+	}
+	if current == nil {
+		return nil, ErrVideoProviderNotFound
+	}
+	canonical, ok := lookupVideoProvider(current.Provider)
+	if !ok {
+		return nil, ErrVideoAdminInvalidRequest
+	}
 	if in.BaseURL != nil {
 		trimmed := strings.TrimSpace(*in.BaseURL)
 		if trimmed == "" {

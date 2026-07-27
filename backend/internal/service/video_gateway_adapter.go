@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -189,7 +190,7 @@ func validateHCAtomMediaURL(raw string) error {
 	}
 	if strings.HasPrefix(raw, "asset://") {
 		identifier := strings.TrimPrefix(raw, "asset://")
-		if strings.HasPrefix(identifier, "asset-") && !strings.ContainsAny(identifier, "?#/ ") {
+		if assetIdentifierPattern.MatchString(identifier) {
 			return nil
 		}
 		return errors.New("asset URL is invalid")
@@ -546,15 +547,17 @@ func validatePublicHTTPSAssetURL(raw string) error {
 	if err != nil || u.Scheme != "https" || u.User != nil || u.Hostname() == "" {
 		return errors.New("asset URL must be HTTPS")
 	}
-	host := strings.ToLower(u.Hostname())
-	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
+	host := strings.ToLower(strings.TrimSuffix(u.Hostname(), "."))
+	if strings.Contains(host, "%") || host == "localhost" || strings.HasSuffix(host, ".localhost") {
 		return errors.New("asset URL host is private")
 	}
-	if ip := net.ParseIP(host); ip != nil && (ip.IsLoopback() || ip.IsPrivate() || ip.IsUnspecified() || ip.IsLinkLocalUnicast()) {
+	if ip := net.ParseIP(host); ip != nil && (!ip.IsGlobalUnicast() || ip.IsPrivate() || ip.IsLoopback() || ip.IsUnspecified() || ip.IsLinkLocalUnicast() || (ip.To4() != nil && ip.To4()[0] == 100 && ip.To4()[1] >= 64 && ip.To4()[1] <= 127)) {
 		return errors.New("asset URL host is private")
 	}
 	return nil
 }
+
+var assetIdentifierPattern = regexp.MustCompile(`^asset-[A-Za-z0-9_-]+$`)
 
 func sanitizeProviderCode(value string) string {
 	value = strings.ToLower(strings.TrimSpace(value))

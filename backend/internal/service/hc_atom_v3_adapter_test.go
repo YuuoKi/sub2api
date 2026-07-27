@@ -100,6 +100,17 @@ func TestHCAtomV3StatusDoesNotAcceptArkOnlyAliases(t *testing.T) {
 	}
 }
 
+func TestHCAtomV3RejectsCanonicalPrivateURLVariantsAndBadAssetIDs(t *testing.T) {
+	for _, raw := range []string{"https://localhost./x", "https://127.0.0.1./x", "https://100.64.0.1/x", "https://[fe80::1%25eth0]/x", "asset://asset-", "asset://asset-a/b"} {
+		if err := validateHCAtomMediaURL(raw); err == nil {
+			t.Fatalf("accepted %q", raw)
+		}
+	}
+	if err := validateHCAtomMediaURL("asset://asset_a"); err == nil {
+		t.Fatal("bad prefix accepted")
+	}
+}
+
 func TestHCAtomV3CreateContractKeepsLegacyPromptAndAllowsV3Fields(t *testing.T) {
 	repo := &workerRepoStub{provider: VideoProviderAccount{ID: 10, GroupID: 9, Provider: HCAtomSeedanceV3Provider, Enabled: true, DefaultModel: HCAtomSeedanceV3PublicModel}}
 	cfg := &config.Config{VideoGateway: config.VideoGatewayConfig{WorkerEnabled: true, HCAtomV3DispatchEnabled: true, SeedanceCNYPerMillionTokens: 2, USDCNYExchangeRate: 7, TinyRealEstimateCNY: .7, TinyRealMaximumCNY: 1.4}}

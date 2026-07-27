@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -83,6 +84,39 @@ func TestHCAtomBatchProvider_OpenResultArchivesValidatedImageAsJSONL(t *testing.
 	require.Contains(t, string(line), `"custom_id":"item_000001"`)
 	require.Contains(t, string(line), `"mimeType":"image/png"`)
 	require.NotContains(t, string(line), "https://8.8.8.8")
+}
+
+// Regression target: HC URLs are one-time archival inputs, never a durable
+// download dependency. A restarted provider must read the owned JSONL file.
+func TestHCAtomBatchProvider_OpenResultPersistsOwnedJSONLForRestartedDownloads(t *testing.T) {
+	resultTransport := hcAtomRoundTripFunc(func(*http.Request) (*http.Response, error) {
+		response := hcAtomHTTPResponse(http.StatusOK, "\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01")
+		response.Header.Set("Content-Type", "image/png")
+		return response, nil
+	})
+	cipher, account := hcAtomBatchTestAccount(t, "test")
+	firstClient := &fakeHCAtomBatchClient{task: &HCAtomBatchTask{TaskID: "hc-owned-1", Status: "SUCCESS", ResultURL: "https://8.8.8.8/result.png"}}
+	first := NewHCAtomBatchImageProviderWithOwnedResultStore(firstClient, &http.Client{Transport: resultTransport}, cipher, t.TempDir())
+	taskID, customID := "hc-owned-1", "item_000001"
+	job := &BatchImageJob{BatchID: "imgbatch_owned_1", ProviderJobName: &taskID, ProviderInputRef: &customID}
+
+	r, _, err := first.OpenResult(context.Background(), job, account)
+	require.NoError(t, err)
+	owned, err := io.ReadAll(r)
+	require.NoError(t, err)
+	require.NoError(t, r.Close())
+	require.NotEmpty(t, owned)
+	require.NotNil(t, job.ProviderOutputRef)
+	require.True(t, strings.HasPrefix(*job.ProviderOutputRef, "hc_atom_owned:"))
+
+	restarted := NewHCAtomBatchImageProviderWithOwnedResultStore(&fakeHCAtomBatchClient{err: errors.New("provider URL expired")}, &http.Client{Transport: resultTransport}, cipher, first.OwnedResultDir())
+	r, _, err = restarted.OpenResult(context.Background(), job, account)
+	require.NoError(t, err)
+	got, err := io.ReadAll(r)
+	require.NoError(t, err)
+	require.NoError(t, r.Close())
+	require.Equal(t, owned, got)
+	require.NoError(t, restarted.Cleanup(context.Background(), job, account, CleanupTargetOutput))
 }
 
 // Regression target: a confirmed upstream DELETE is allowed to return HTTP 204
@@ -232,7 +266,10 @@ func (r *hcAtomBatchGroupRepo) GetByIDLite(_ context.Context, id int64) (*Group,
 	return nil, ErrGroupNotFound
 }
 
-type fakeHCAtomBatchClient struct{ task *HCAtomBatchTask }
+type fakeHCAtomBatchClient struct {
+	task *HCAtomBatchTask
+	err  error
+}
 
 func hcAtomBatchTestAccount(t *testing.T, apiKey string) (HCAtomCredentialCipher, *Account) {
 	t.Helper()
@@ -244,9 +281,15 @@ func hcAtomBatchTestAccount(t *testing.T, apiKey string) (HCAtomCredentialCipher
 }
 
 func (f *fakeHCAtomBatchClient) Create(context.Context, string, string, HCAtomBatchCreateRequest) (*HCAtomBatchTask, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
 	return f.task, nil
 }
 func (f *fakeHCAtomBatchClient) Get(context.Context, string, string) (*HCAtomBatchTask, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
 	return f.task, nil
 }
 func (f *fakeHCAtomBatchClient) Delete(context.Context, string, string) error { return nil }

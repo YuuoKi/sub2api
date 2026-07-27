@@ -11,6 +11,8 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -57,6 +59,7 @@ type HCAtomBatchImageProvider struct {
 	client           HCAtomBatchClient
 	resultClient     *http.Client
 	credentialCipher HCAtomCredentialCipher
+	ownedResultDir   string
 }
 
 func NewHCAtomBatchImageProvider(client HCAtomBatchClient) *HCAtomBatchImageProvider {
@@ -73,6 +76,19 @@ func NewHCAtomBatchImageProviderWithResultClient(client HCAtomBatchClient, resul
 
 func NewHCAtomBatchImageProviderWithResultClientAndCredentialCipher(client HCAtomBatchClient, resultClient *http.Client, credentialCipher HCAtomCredentialCipher) *HCAtomBatchImageProvider {
 	return newHCAtomBatchImageProvider(client, resultClient, credentialCipher)
+}
+
+func NewHCAtomBatchImageProviderWithOwnedResultStore(client HCAtomBatchClient, resultClient *http.Client, credentialCipher HCAtomCredentialCipher, ownedResultDir string) *HCAtomBatchImageProvider {
+	p := newHCAtomBatchImageProvider(client, resultClient, credentialCipher)
+	p.ownedResultDir = strings.TrimSpace(ownedResultDir)
+	return p
+}
+
+func (p *HCAtomBatchImageProvider) OwnedResultDir() string {
+	if p == nil {
+		return ""
+	}
+	return p.ownedResultDir
 }
 
 func newHCAtomBatchImageProvider(client HCAtomBatchClient, resultClient *http.Client, credentialCipher HCAtomCredentialCipher) *HCAtomBatchImageProvider {
@@ -177,6 +193,11 @@ func (p *HCAtomBatchImageProvider) OpenResult(ctx context.Context, job *BatchIma
 	if !p.SupportsAccount(account) {
 		return nil, "", ErrBatchImageProviderUnsupportedAccount
 	}
+	if r, ok, err := p.openOwnedResult(job); err != nil {
+		return nil, "", err
+	} else if ok {
+		return r, "application/jsonl", nil
+	}
 	taskID := batchImageProviderJobName(job)
 	customID := batchImageProviderInputRef(job)
 	if taskID == "" || customID == "" || p.resultClient == nil {
@@ -201,18 +222,26 @@ func (p *HCAtomBatchImageProvider) OpenResult(ctx context.Context, job *BatchIma
 	if len(urls) == 0 {
 		return nil, "", hcAtomBatchError("HC_ATOM_RESULT_MISSING", "HC-ATOM success response is missing result URLs", nil)
 	}
-	var lines bytes.Buffer
+	parts := make([]any, 0, len(urls))
 	for _, rawURL := range urls {
 		encoded, mimeType, err := p.archiveResultURL(ctx, rawURL)
 		if err != nil {
 			return nil, "", err
 		}
-		line := map[string]any{"custom_id": customID, "response": map[string]any{"candidates": []any{map[string]any{"content": map[string]any{"parts": []any{map[string]any{"inlineData": map[string]any{"mimeType": mimeType, "data": encoded}}}}}}}}
-		if err := json.NewEncoder(&lines).Encode(line); err != nil {
-			return nil, "", err
-		}
+		parts = append(parts, map[string]any{"inlineData": map[string]any{"mimeType": mimeType, "data": encoded}})
 	}
-	return io.NopCloser(bytes.NewReader(lines.Bytes())), "application/jsonl", nil
+	line := map[string]any{"custom_id": customID, "response": map[string]any{"candidates": []any{map[string]any{"content": map[string]any{"parts": parts}}}}}
+	var lines bytes.Buffer
+	if err := json.NewEncoder(&lines).Encode(line); err != nil {
+		return nil, "", err
+	}
+	if strings.TrimSpace(p.ownedResultDir) == "" {
+		return io.NopCloser(bytes.NewReader(lines.Bytes())), "application/jsonl", nil
+	}
+	if err := p.writeOwnedResult(job, lines.Bytes()); err != nil {
+		return nil, "", err
+	}
+	return p.openOwnedResultAfterWrite(job)
 }
 
 func (p *HCAtomBatchImageProvider) archiveResultURL(ctx context.Context, rawURL string) (string, string, error) {
@@ -269,8 +298,120 @@ func hcAtomImageSignatureMatches(mimeType string, data []byte) bool {
 	}
 }
 
-func (p *HCAtomBatchImageProvider) Cleanup(context.Context, *BatchImageJob, *Account, CleanupTarget) error {
+func (p *HCAtomBatchImageProvider) Cleanup(_ context.Context, job *BatchImageJob, _ *Account, target CleanupTarget) error {
+	if target != CleanupTargetOutput || strings.TrimSpace(p.ownedResultDir) == "" {
+		return nil
+	}
+	path, err := p.ownedResultPath(job)
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return hcAtomBatchError("HC_ATOM_OWNED_RESULT_CLEANUP_FAILED", "HC-ATOM owned result cleanup failed", nil)
+	}
 	return nil
+}
+
+func (p *HCAtomBatchImageProvider) openOwnedResult(job *BatchImageJob) (io.ReadCloser, bool, error) {
+	if p == nil || strings.TrimSpace(p.ownedResultDir) == "" || job == nil || job.ProviderOutputRef == nil || strings.TrimSpace(*job.ProviderOutputRef) == "" {
+		return nil, false, nil
+	}
+	if strings.TrimSpace(*job.ProviderOutputRef) != hcAtomOwnedResultRef(job.BatchID) {
+		return nil, false, hcAtomBatchError("HC_ATOM_OWNED_RESULT_REF_INVALID", "HC-ATOM owned result reference is invalid", nil)
+	}
+	path, err := p.ownedResultPath(job)
+	if err != nil {
+		return nil, false, err
+	}
+	r, err := os.Open(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, hcAtomBatchError("HC_ATOM_OWNED_RESULT_OPEN_FAILED", "HC-ATOM owned result is unavailable", nil)
+	}
+	return r, true, nil
+}
+
+func (p *HCAtomBatchImageProvider) openOwnedResultAfterWrite(job *BatchImageJob) (io.ReadCloser, string, error) {
+	r, ok, err := p.openOwnedResult(job)
+	if err != nil || !ok {
+		if err == nil {
+			err = hcAtomBatchError("HC_ATOM_OWNED_RESULT_OPEN_FAILED", "HC-ATOM owned result is unavailable", nil)
+		}
+		return nil, "", err
+	}
+	return r, "application/jsonl", nil
+}
+
+func (p *HCAtomBatchImageProvider) writeOwnedResult(job *BatchImageJob, data []byte) error {
+	path, err := p.ownedResultPath(job)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return hcAtomBatchError("HC_ATOM_OWNED_RESULT_WRITE_FAILED", "HC-ATOM owned result archival failed", nil)
+	}
+	if err := os.Chmod(filepath.Dir(path), 0o700); err != nil {
+		return hcAtomBatchError("HC_ATOM_OWNED_RESULT_WRITE_FAILED", "HC-ATOM owned result archival failed", nil)
+	}
+	if _, err := os.Stat(path); err == nil {
+		ref := hcAtomOwnedResultRef(job.BatchID)
+		job.ProviderOutputRef = &ref
+		return nil
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".hc-atom-*.tmp")
+	if err != nil {
+		return hcAtomBatchError("HC_ATOM_OWNED_RESULT_WRITE_FAILED", "HC-ATOM owned result archival failed", nil)
+	}
+	tmpName := tmp.Name()
+	defer func() { _ = os.Remove(tmpName) }()
+	if err := tmp.Chmod(0o600); err != nil {
+		_ = tmp.Close()
+		return hcAtomBatchError("HC_ATOM_OWNED_RESULT_WRITE_FAILED", "HC-ATOM owned result archival failed", nil)
+	}
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return hcAtomBatchError("HC_ATOM_OWNED_RESULT_WRITE_FAILED", "HC-ATOM owned result archival failed", nil)
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return hcAtomBatchError("HC_ATOM_OWNED_RESULT_WRITE_FAILED", "HC-ATOM owned result archival failed", nil)
+	}
+	if err := tmp.Close(); err != nil {
+		return hcAtomBatchError("HC_ATOM_OWNED_RESULT_WRITE_FAILED", "HC-ATOM owned result archival failed", nil)
+	}
+	if err := os.Rename(tmpName, path); err != nil && !errors.Is(err, os.ErrExist) {
+		return hcAtomBatchError("HC_ATOM_OWNED_RESULT_WRITE_FAILED", "HC-ATOM owned result archival failed", nil)
+	}
+	ref := hcAtomOwnedResultRef(job.BatchID)
+	job.ProviderOutputRef = &ref
+	return nil
+}
+
+func (p *HCAtomBatchImageProvider) ownedResultPath(job *BatchImageJob) (string, error) {
+	if p == nil || strings.TrimSpace(p.ownedResultDir) == "" || job == nil || !hcAtomSafeOwnedResultID(job.BatchID) {
+		return "", hcAtomBatchError("HC_ATOM_OWNED_RESULT_PATH_INVALID", "HC-ATOM owned result path is invalid", nil)
+	}
+	root, err := filepath.Abs(p.ownedResultDir)
+	if err != nil {
+		return "", hcAtomBatchError("HC_ATOM_OWNED_RESULT_PATH_INVALID", "HC-ATOM owned result path is invalid", nil)
+	}
+	return filepath.Join(root, "hc_atom", job.BatchID+".jsonl"), nil
+}
+
+func hcAtomOwnedResultRef(batchID string) string { return "hc_atom_owned:" + batchID }
+
+func hcAtomSafeOwnedResultID(value string) bool {
+	if strings.TrimSpace(value) == "" || len(value) > 128 {
+		return false
+	}
+	for _, r := range value {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-') {
+			return false
+		}
+	}
+	return true
 }
 
 func (p *HCAtomBatchImageProvider) resolveAPIKey(account *Account) (string, error) {

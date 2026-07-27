@@ -297,6 +297,14 @@ func (i *BatchImageResultIndexer) Index(ctx context.Context, job *BatchImageJob,
 		return nil, ErrBatchImageIndexOutputMissing.WithCause(err)
 	}
 	defer func() { _ = r.Close() }()
+	if ref := batchImageDerefString(job.ProviderOutputRef); ref != "" && ref != batchImageDerefString(job.ProviderJobName) {
+		if err := i.Repo.UpdateBatchImageJobProviderOutputRef(ctx, job.BatchID, ref); err != nil {
+			return nil, err
+		}
+		if err := i.Repo.AppendBatchImageEvent(ctx, job.BatchID, "provider_output_archived", map[string]any{"provider_output_ref": ref}); err != nil {
+			return nil, err
+		}
+	}
 
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)

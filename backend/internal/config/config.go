@@ -199,6 +199,7 @@ type BatchImageConfig struct {
 	Enabled                           bool   `mapstructure:"enabled"`
 	HCAtomEnabled                     bool   `mapstructure:"hc_atom_enabled"`
 	HCAtomEncryptionKey               string `mapstructure:"hc_atom_encryption_key"`
+	HCAtomOwnedResultDir              string `mapstructure:"hc_atom_owned_result_dir"`
 	MaxItemsPerJobDefault             int    `mapstructure:"max_items_per_job_default"`
 	MaxItemsPerJobTrial               int    `mapstructure:"max_items_per_job_trial"`
 	MaxOutputImagesPerJob             int    `mapstructure:"max_output_images_per_job"`
@@ -1868,6 +1869,7 @@ func setDefaults() {
 	viper.SetDefault("batch_image.enabled", false)
 	viper.SetDefault("batch_image.hc_atom_enabled", false)
 	viper.SetDefault("batch_image.hc_atom_encryption_key", "")
+	viper.SetDefault("batch_image.hc_atom_owned_result_dir", "data/batch-image")
 	viper.SetDefault("batch_image.max_items_per_job_default", 200)
 	viper.SetDefault("batch_image.max_items_per_job_trial", 50)
 	viper.SetDefault("batch_image.max_output_images_per_job", 200)

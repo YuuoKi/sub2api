@@ -988,7 +988,7 @@ func (s *BatchImagePublicService) ensureGroupAllowsBatchImage(ctx context.Contex
 	if !group.AllowBatchImageGeneration {
 		return ErrBatchImageGroupDisabled
 	}
-	if group.Platform != PlatformGemini {
+	if group.Platform != PlatformGemini && group.Platform != PlatformHCAtom {
 		return ErrBatchImageGroupDisabled
 	}
 	return nil
@@ -1258,6 +1258,8 @@ func batchImageProviderPlatform(provider string) string {
 	switch provider {
 	case BatchImageProviderGeminiAPI, BatchImageProviderVertex:
 		return PlatformGemini
+	case BatchImageProviderHCAtom:
+		return PlatformHCAtom
 	default:
 		return PlatformGemini
 	}
@@ -1267,7 +1269,7 @@ func batchImageProviderSelectionOrder(requestedProvider string) []string {
 	if strings.TrimSpace(requestedProvider) != "" {
 		return []string{strings.TrimSpace(requestedProvider)}
 	}
-	return []string{BatchImageProviderGeminiAPI, BatchImageProviderVertex}
+	return []string{BatchImageProviderGeminiAPI, BatchImageProviderVertex, BatchImageProviderHCAtom}
 }
 
 func batchImageModelsFromAccountMapping(account *Account) []string {

@@ -13,6 +13,7 @@ import (
 const (
 	BatchImageProviderGeminiAPI = "gemini_api"
 	BatchImageProviderVertex    = "vertex"
+	BatchImageProviderHCAtom    = "hc_atom"
 )
 
 const (
@@ -350,7 +351,7 @@ func NewBatchImageID() (string, error) {
 
 func IsSupportedBatchImageProvider(provider string) bool {
 	switch provider {
-	case BatchImageProviderGeminiAPI, BatchImageProviderVertex:
+	case BatchImageProviderGeminiAPI, BatchImageProviderVertex, BatchImageProviderHCAtom:
 		return true
 	default:
 		return false

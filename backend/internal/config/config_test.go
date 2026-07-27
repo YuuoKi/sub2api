@@ -385,6 +385,7 @@ func TestLoadHCAtomImageCredentialDomainUsesDedicatedEnvironmentKey(t *testing.T
 	t.Setenv("VIDEO_GATEWAY_ENCRYPTION_KEY", strings.Repeat("a", 64))
 	t.Setenv("BATCH_IMAGE_HC_ATOM_ENABLED", "true")
 	t.Setenv("BATCH_IMAGE_HC_ATOM_ENCRYPTION_KEY", strings.Repeat("b", 64))
+	t.Setenv("BATCH_IMAGE_HC_ATOM_OWNED_RESULT_DIR", t.TempDir())
 
 	cfg, err := Load()
 	require.NoError(t, err)
@@ -401,6 +402,33 @@ func TestLoadHCAtomImageCredentialDomainRejectsMissingDedicatedKey(t *testing.T)
 
 	_, err := Load()
 	require.ErrorContains(t, err, "batch_image.hc_atom_encryption_key")
+}
+
+func TestValidateHCAtomOwnedResultDirectoryRequiredAndWritable(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("BATCH_IMAGE_HC_ATOM_ENABLED", "true")
+	t.Setenv("BATCH_IMAGE_HC_ATOM_ENCRYPTION_KEY", strings.Repeat("b", 64))
+	t.Setenv("BATCH_IMAGE_HC_ATOM_OWNED_RESULT_DIR", t.TempDir())
+
+	cfg, err := Load()
+	require.NoError(t, err)
+
+	cfg.BatchImage.HCAtomOwnedResultDir = ""
+	require.ErrorContains(t, cfg.Validate(), "batch_image.hc_atom_owned_result_dir")
+
+	cfg.BatchImage.HCAtomOwnedResultDir = filepath.VolumeName(t.TempDir()) + string(os.PathSeparator)
+	require.ErrorContains(t, cfg.Validate(), "batch_image.hc_atom_owned_result_dir")
+
+	filePath := filepath.Join(t.TempDir(), "not-a-directory")
+	require.NoError(t, os.WriteFile(filePath, []byte("x"), 0o600))
+	cfg.BatchImage.HCAtomOwnedResultDir = filePath
+	require.ErrorContains(t, cfg.Validate(), "batch_image.hc_atom_owned_result_dir")
+
+	cfg.BatchImage.HCAtomOwnedResultDir = filepath.Join(t.TempDir(), "created-by-validation")
+	require.NoError(t, cfg.Validate())
+	info, err := os.Stat(cfg.BatchImage.HCAtomOwnedResultDir)
+	require.NoError(t, err)
+	require.True(t, info.IsDir())
 }
 
 func TestLoadIdempotencyConfigFromEnv(t *testing.T) {

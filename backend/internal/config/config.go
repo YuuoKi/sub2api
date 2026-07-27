@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -2182,6 +2183,41 @@ func setDefaults() {
 
 }
 
+func validateHCAtomOwnedResultDir(raw string) error {
+	if strings.TrimSpace(raw) == "" {
+		return fmt.Errorf("must not be empty when hc_atom is enabled")
+	}
+	absolute, err := filepath.Abs(raw)
+	if err != nil {
+		return fmt.Errorf("cannot resolve directory")
+	}
+	absolute = filepath.Clean(absolute)
+	volumeRoot := filepath.VolumeName(absolute) + string(filepath.Separator)
+	if absolute == volumeRoot {
+		return fmt.Errorf("must not be a filesystem root")
+	}
+	if err := os.MkdirAll(absolute, 0o700); err != nil {
+		return fmt.Errorf("cannot create directory")
+	}
+	info, err := os.Stat(absolute)
+	if err != nil || !info.IsDir() {
+		return fmt.Errorf("must be a directory")
+	}
+	probe, err := os.CreateTemp(absolute, ".hc-atom-write-probe-*")
+	if err != nil {
+		return fmt.Errorf("directory is not writable")
+	}
+	probeName := probe.Name()
+	if err := probe.Close(); err != nil {
+		_ = os.Remove(probeName)
+		return fmt.Errorf("directory is not writable")
+	}
+	if err := os.Remove(probeName); err != nil {
+		return fmt.Errorf("directory write probe cannot be removed")
+	}
+	return nil
+}
+
 func (c *Config) Validate() error {
 	jwtSecret := strings.TrimSpace(c.JWT.Secret)
 	if jwtSecret == "" {
@@ -2562,6 +2598,9 @@ func (c *Config) Validate() error {
 		}
 		if strings.EqualFold(keyHex, strings.TrimSpace(c.JWT.Secret)) {
 			return fmt.Errorf("batch_image.hc_atom_encryption_key must not reuse jwt.secret")
+		}
+		if err := validateHCAtomOwnedResultDir(c.BatchImage.HCAtomOwnedResultDir); err != nil {
+			return fmt.Errorf("batch_image.hc_atom_owned_result_dir invalid: %w", err)
 		}
 	}
 	if c.BatchImage.VertexEnabled {

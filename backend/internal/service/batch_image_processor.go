@@ -187,7 +187,7 @@ func (p *BatchImageProviderProcessor) indexAndSettle(ctx context.Context, job *B
 
 	result, err := indexer.Index(ctx, job, provider, account)
 	if err != nil {
-		if errors.Is(err, ErrBatchImageIndexOutputMissing) {
+		if errors.Is(err, ErrBatchImageIndexOutputMissing) || errors.Is(err, ErrBatchImageIndexArchivePersist) {
 			return BatchImageProcessResult{}, err
 		}
 		// job 状态已被并发方推进（如已进入 settling/终态）：不是索引数据问题，
@@ -301,10 +301,10 @@ func (i *BatchImageResultIndexer) Index(ctx context.Context, job *BatchImageJob,
 	defer func() { _ = r.Close() }()
 	if ref := batchImageDerefString(job.ProviderOutputRef); ref != "" && ref != outputRefBeforeOpen {
 		if err := i.Repo.UpdateBatchImageJobProviderOutputRef(ctx, job.BatchID, ref); err != nil {
-			return nil, err
+			return nil, ErrBatchImageIndexArchivePersist.WithCause(err)
 		}
 		if err := i.Repo.AppendBatchImageEvent(ctx, job.BatchID, "provider_output_archived", map[string]any{"provider_output_ref": ref}); err != nil {
-			return nil, err
+			return nil, ErrBatchImageIndexArchivePersist.WithCause(err)
 		}
 	}
 

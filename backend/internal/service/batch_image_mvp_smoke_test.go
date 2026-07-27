@@ -212,12 +212,14 @@ func TestHCAtomBatchImagePipeline_FakeEndToEndOwnedResult(t *testing.T) {
 		response.Header.Set("Content-Type", "image/png")
 		return response, nil
 	})}
-	provider := NewHCAtomBatchImageProviderWithResultClientAndCredentialCipher(client, resultClient, cipher)
+	ownedResultDir := t.TempDir()
+	provider := NewHCAtomBatchImageProviderWithOwnedResultStore(client, resultClient, cipher, ownedResultDir)
 	registry := NewBatchImageProviderRegistry(provider)
 	groupID := int64(77)
 	cfg := &config.Config{BatchImage: config.BatchImageConfig{
 		Enabled: true, MaxItemsPerJobDefault: 1, MaxPromptCharsPerItem: 8000,
 		DefaultResponseMimeType: "image/png", DefaultImageSize: "1K",
+		HCAtomOwnedResultDir: ownedResultDir,
 	}}
 	publicSvc := &BatchImagePublicService{
 		Repo: repo, AccountRepo: &publicBatchImageAccountRepo{accounts: []Account{*account}},

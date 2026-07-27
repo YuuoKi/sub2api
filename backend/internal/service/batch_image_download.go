@@ -75,6 +75,7 @@ type BatchImageDownloadService struct {
 	AccountResolver  BatchImageAccountResolver
 	Limiter          BatchImageDownloadLimiter
 	Config           *config.Config
+	OwnedResultStore *HCAtomOwnedResultStore
 }
 
 type batchImageDownloadLimitWriter struct {
@@ -96,12 +97,17 @@ func (w *batchImageDownloadLimitWriter) Write(p []byte) (int, error) {
 }
 
 func NewBatchImageDownloadService(repo BatchImageRepository, accountRepo AccountRepository, limiter BatchImageDownloadLimiter, cfg *config.Config) *BatchImageDownloadService {
+	ownedResultDir := ""
+	if cfg != nil {
+		ownedResultDir = cfg.BatchImage.HCAtomOwnedResultDir
+	}
 	return &BatchImageDownloadService{
 		Repo:             repo,
 		ProviderRegistry: NewBatchImageProviderRegistryFromConfig(cfg),
 		AccountResolver:  &BatchImageAccountRepositoryResolver{Repo: accountRepo},
 		Limiter:          limiter,
 		Config:           cfg,
+		OwnedResultStore: NewHCAtomOwnedResultStore(ownedResultDir),
 	}
 }
 
@@ -135,11 +141,7 @@ func (s *BatchImageDownloadService) OpenItemContent(ctx context.Context, owner B
 		}
 	}()
 
-	provider, account, err := s.providerAndAccount(ctx, job)
-	if err != nil {
-		return nil, err
-	}
-	r, _, err := provider.OpenResult(ctx, job, account)
+	r, err := s.openResult(ctx, job)
 	if err != nil {
 		return nil, ErrBatchImageResultMissing.WithCause(err)
 	}
@@ -210,11 +212,7 @@ func (s *BatchImageDownloadService) StreamZip(ctx context.Context, owner BatchIm
 		defer func() { _ = permit.Release(ctx) }()
 	}
 
-	provider, account, err := s.providerAndAccount(ctx, job)
-	if err != nil {
-		return nil, err
-	}
-	r, _, err := provider.OpenResult(ctx, job, account)
+	r, err := s.openResult(ctx, job)
 	if err != nil {
 		return nil, ErrBatchImageResultMissing.WithCause(err)
 	}
@@ -381,6 +379,24 @@ func (s *BatchImageDownloadService) providerAndAccount(ctx context.Context, job 
 		return nil, nil, ErrBatchImageProviderUnsupportedAccount
 	}
 	return provider, account, nil
+}
+
+func (s *BatchImageDownloadService) openResult(ctx context.Context, job *BatchImageJob) (io.ReadCloser, error) {
+	if s != nil && s.OwnedResultStore != nil {
+		r, ok, err := s.OwnedResultStore.OpenReferenced(job)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			return r, nil
+		}
+	}
+	provider, account, err := s.providerAndAccount(ctx, job)
+	if err != nil {
+		return nil, err
+	}
+	r, _, err := provider.OpenResult(ctx, job, account)
+	return r, err
 }
 
 func (s *BatchImageDownloadService) acquirePermit(ctx context.Context, userID int64, kind string) (BatchImageDownloadPermit, error) {

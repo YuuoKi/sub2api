@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -374,6 +375,57 @@ func TestBatchImageProviderProcessor_StatusFlow(t *testing.T) {
 	})
 }
 
+func TestBatchImageProviderProcessor_HCAtomOwnedResultRecoversAfterOutputRefPersistenceFailure(t *testing.T) {
+	ctx := context.Background()
+	resultTransport := hcAtomRoundTripFunc(func(*http.Request) (*http.Response, error) {
+		response := hcAtomHTTPResponse(http.StatusOK, "\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01")
+		response.Header.Set("Content-Type", "image/png")
+		return response, nil
+	})
+	cipher, account := hcAtomBatchTestAccount(t, "test")
+	client := &fakeHCAtomBatchClient{task: &HCAtomBatchTask{
+		TaskID: "hc-retry-task", Status: "SUCCESS", ResultURL: "https://8.8.8.8/result.png",
+	}}
+	provider := NewHCAtomBatchImageProviderWithOwnedResultStore(
+		client, &http.Client{Transport: resultTransport}, cipher, t.TempDir(),
+	)
+	accountID := int64(10)
+	taskID, customID := "hc-retry-task", "cover_001"
+	job := &BatchImageJob{
+		BatchID: "imgbatch_hc_retry", Status: BatchImageJobStatusSubmitted,
+		Provider: BatchImageProviderHCAtom, AccountID: &accountID,
+		ProviderJobName: &taskID, ProviderInputRef: &customID, ItemCount: 1,
+	}
+	repo := newFakeBatchImageRepository()
+	repo.jobs[job.BatchID] = job
+	require.NoError(t, repo.BulkCreateBatchImageItems(ctx, []CreateBatchImageItemParams{{
+		JobID: job.BatchID, CustomID: customID, Status: BatchImageItemStatusPending,
+	}}))
+	repo.outputRefErr = errors.New("synthetic provider output ref persistence failure")
+	processor := &BatchImageProviderProcessor{
+		Repo: repo, ProviderRegistry: NewBatchImageProviderRegistry(provider),
+		AccountResolver: &fakeBatchImageAccountResolver{account: account},
+		Indexer:         &BatchImageResultIndexer{Repo: repo},
+	}
+
+	_, err := processor.Process(ctx, job.BatchID)
+	require.Error(t, err)
+	require.Equal(t, BatchImageJobStatusIndexing, repo.jobs[job.BatchID].Status)
+	require.Nil(t, repo.jobs[job.BatchID].ProviderOutputRef)
+	require.Equal(t, 2, client.getCalls)
+
+	repo.outputRefErr = nil
+	client.err = errors.New("upstream result expired")
+	got, err := processor.Process(ctx, job.BatchID)
+	require.NoError(t, err)
+	require.False(t, got.Terminal)
+	require.Equal(t, time.Millisecond, got.RequeueAfter)
+	require.Equal(t, BatchImageJobStatusSettling, repo.jobs[job.BatchID].Status)
+	require.Equal(t, hcAtomOwnedResultRef(job.BatchID), batchImageDerefString(repo.jobs[job.BatchID].ProviderOutputRef))
+	require.Equal(t, 2, client.getCalls)
+	require.Equal(t, BatchImageCounts{SuccessCount: 1, FailCount: 0}, repo.counts[job.BatchID])
+}
+
 func TestCanTransitionBatchImageJob_PR5DirectIndexing(t *testing.T) {
 	require.True(t, CanTransitionBatchImageJob(BatchImageJobStatusSubmitted, BatchImageJobStatusIndexing))
 	require.True(t, CanTransitionBatchImageJob(BatchImageJobStatusSubmitted, BatchImageJobStatusFailed))
@@ -443,6 +495,7 @@ type fakeBatchImageRepository struct {
 	transitions   map[string][]string
 	events        map[string][]string
 	transitionErr error
+	outputRefErr  error
 	replaceCalls  int
 }
 
@@ -625,6 +678,10 @@ func (r *fakeBatchImageRepository) UpdateBatchImageJobProviderOutputRef(_ contex
 	job, ok := r.jobs[batchID]
 	if !ok {
 		return ErrBatchImageJobNotFound
+	}
+	if r.outputRefErr != nil {
+		job.ProviderOutputRef = nil
+		return r.outputRefErr
 	}
 	job.ProviderOutputRef = &providerOutputRef
 	return nil

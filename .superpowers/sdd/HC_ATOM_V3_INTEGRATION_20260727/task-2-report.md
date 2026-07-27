@@ -266,3 +266,72 @@ Status: GREEN for the requested local secret-boundary scope.
   path.
 - Rollback is the single focused secret-remediation commit. The unrelated
   pre-existing frontend lockfile and untracked worktree files remain excluded.
+
+## Owned-result lifecycle review remediation
+
+## 结论
+
+状态：内部可用（本地 focused/full gates 通过，未做真实 API、push、deploy、merge）。
+
+HC 图片批结果不再允许内存 fallback；启用 HC 时 owned result 目录必须安全、可创建、可写。完成后的 item/ZIP 下载与 output cleanup 已从 provider/account/feature toggle 解耦。索引阶段若 owned 文件写入成功但 output ref 首次落库失败，任务保持 `indexing` 并可从确定性文件恢复，不再请求已过期上游。
+
+## 变更范围
+
+- `backend/internal/config/config.go`
+  - HC enabled 时校验 owned result dir 非空、非文件系统根目录、可创建、是目录且可写。
+- `backend/internal/service/batch_image_owned_result_hc_atom.go`
+  - 新增 provider-neutral owned result store。
+  - 确定性路径、严格 ref/ID 校验、JSONL/`custom_id` 校验、原子写入、恢复与安全删除。
+- `backend/internal/service/batch_image_provider_hc_atom.go`
+  - 移除内存 fallback。
+  - 在账号/上游访问前恢复 owned result；无 store fail closed。
+- `backend/internal/service/batch_image_download.go`
+  - item/ZIP 优先读 `hc_atom_owned:*`，无需 HC provider 注册或账号。
+- `backend/internal/service/batch_image_cleanup.go`
+  - output cleanup 优先由 owned store 删除，无需账号/provider。
+- `backend/internal/service/batch_image_processor.go`
+  - owned ref/event 持久化失败作为可重试错误，禁止误转 `failed`。
+- 对应 config/provider/download/cleanup/processor/smoke tests。
+
+## TDD 证据
+
+RED：
+
+- config：owned dir 置空时 `Validate()` 错误地返回 nil。
+- provider：无 owned dir 时错误地返回内存 reader；nil account 时未探测确定性文件，先报 unsupported account。
+- download：HC disabled + account nil 时先报 unsupported provider，未读取 owned 文件。
+- retry：首次 output ref 落库失败后错误地吞掉错误并转失败态。
+
+GREEN：
+
+- 无 owned dir 返回 `HC_ATOM_OWNED_RESULT_STORE_UNAVAILABLE`。
+- 确定性 owned 文件可在 nil account 下恢复，新增上游 GET 次数为 0。
+- 损坏的确定性文件返回 `HC_ATOM_OWNED_RESULT_INVALID`，不设置 ref、不访问上游。
+- HC disabled、账号/credentials 不存在时，item 与 ZIP 均可下载。
+- owned output cleanup 无需 provider/account；`hc_atom_owned:../../victim` 被拒且目标文件保留。
+- 首次 DB ref 持久化失败后保持 `indexing`；上游随后 expired，重试恢复 ref 并进入 `settling`。
+- 默认 disabled registry 不注册 HC provider，未开放 create/Submit。
+
+## 最终验证
+
+- `go test -tags unit ./internal/service -count=1`
+  - PASS：`ok .../internal/service 106.011s`
+- `go test ./internal/config ./internal/repository ./internal/handler/... -count=1`
+  - PASS：config、repository、handler、handler/admin、handler/dto、handler/quotaview 全部通过。
+- `go build -o C:\tmp\sub2api-task2-server.exe ./cmd/server`
+  - PASS。默认输出到 worktree 的 `server.exe` 被沙箱拒绝，改为经批准写入 `C:\tmp` 的临时构建产物。
+- `git diff --check`
+  - PASS。
+
+## 风险与回滚
+
+- 风险：HC enabled 的启动校验会创建并写探针到 owned result dir；目录不可写会阻止启动，这是预期 fail-closed。
+- 风险：owned JSONL 当前按 HC 单请求约束只接受一个非空结果行；与现有 `len(input.Items) == 1` 一致。
+- 回滚：回退本轮 focused commit；已落盘的 `data/batch-image/hc_atom/*.jsonl` 不会被自动删除，可人工保留后再决定处理。
+
+## 边界
+
+- 未读取或修改 secret allowlist。
+- 未修改 frontend/video。
+- 未调用真实付费 API。
+- 未 push、deploy、merge。

@@ -547,6 +547,26 @@ func TestBatchImagePublicService_ListModels(t *testing.T) {
 		require.NotContains(t, ids, "gemini-3.1-flash-lite-image")
 	})
 
+	t.Run("does not advertise disabled HC Dola model", func(t *testing.T) {
+		svc, _, _, _, _ := newTestBatchImagePublicService(true)
+		hc := &publicBatchImageProvider{name: BatchImageProviderHCAtom}
+		svc.ProviderRegistry = NewBatchImageProviderRegistry(hc)
+		account := testBatchImageMappedAccount(303, AccountTypeAPIKey, map[string]any{
+			"seedream-5.0":          "seedream-5.0",
+			"dola-seedream-5.0-pro": "dola-seedream-5.0-pro",
+		})
+		account.Platform = PlatformHCAtom
+		svc.AccountRepo = &publicBatchImageAccountRepo{accounts: []Account{account}}
+
+		got, err := svc.ListModels(ctx, testBatchImageOwner())
+		require.NoError(t, err)
+		require.Equal(t, []BatchImagePublicModel{{
+			ID:       "seedream-5.0",
+			Object:   "image.batch.model",
+			Provider: BatchImageProviderHCAtom,
+		}}, got.Data)
+	})
+
 	t.Run("rejects when group disables batch image", func(t *testing.T) {
 		svc, _, _, _, _ := newTestBatchImagePublicService(true)
 		groupID := int64(7)

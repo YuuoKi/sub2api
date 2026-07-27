@@ -291,6 +291,72 @@ func TestHCAtomBatchHTTPClient_ResultURLsDeduplicateAndMissingUsageDoesNotInvent
 	require.Equal(t, BatchProviderStateSucceeded, status.InternalState)
 }
 
+// Regression target: camel/snake plural and singular result aliases must all
+// contribute to one deterministic result set.
+func TestHCAtomBatchHTTPClient_AggregatesDistinctResultURLAliasesAndUsage(t *testing.T) {
+	client := NewHCAtomBatchHTTPClient(&http.Client{Transport: hcAtomRoundTripFunc(func(*http.Request) (*http.Response, error) {
+		return hcAtomHTTPResponse(http.StatusOK, `{"code":0,"data":{"taskId":"hc-task-aliases","status":"SUCCESS","resultUrls":["https://8.8.8.8/a.png"],"result_urls":["https://8.8.8.8/b.png"],"resultUrl":"https://8.8.8.8/c.png","result_url":"https://8.8.8.8/d.png","usage":{"imageCount":4}}}`), nil
+	})})
+
+	task, err := client.Get(context.Background(), "synthetic-key", "hc-task-aliases")
+	require.NoError(t, err)
+	require.Equal(t, 4, task.ImageCount)
+	require.Equal(t, []string{
+		"https://8.8.8.8/a.png",
+		"https://8.8.8.8/b.png",
+		"https://8.8.8.8/c.png",
+		"https://8.8.8.8/d.png",
+	}, hcAtomBatchResultURLs(task))
+}
+
+// Regression target: explicit upstream usage cannot disagree with the
+// deduplicated result set and still become succeeded.
+func TestHCAtomBatchProvider_RejectsUsageImageCountMismatch(t *testing.T) {
+	_, err := mapHCAtomBatchState(&HCAtomBatchTask{
+		Status: "SUCCESS", ImageCount: 3,
+		ResultURLs: []string{"https://8.8.8.8/a.png", "https://8.8.8.8/b.png"},
+	})
+	require.Error(t, err)
+	require.Equal(t, "HC_ATOM_USAGE_MISMATCH", infraerrors.Reason(err))
+}
+
+// Regression target: multiple images for the one HC request belong to one
+// custom_id line with multiple inlineData parts, not duplicate custom_id lines.
+func TestHCAtomBatchProvider_OpenResultAggregatesDistinctURLsIntoOneJSONLLine(t *testing.T) {
+	cipher, account := hcAtomBatchTestAccount(t, "test")
+	provider := NewHCAtomBatchImageProviderWithResultClientAndCredentialCipher(&fakeHCAtomBatchClient{task: &HCAtomBatchTask{
+		TaskID: "hc-task-many", Status: "SUCCESS", ImageCount: 3,
+		ResultURLs: []string{"https://8.8.8.8/a.png", "https://8.8.8.8/b.png"},
+		ResultURL:  "https://8.8.8.8/c.png",
+	}}, &http.Client{Transport: hcAtomRoundTripFunc(func(*http.Request) (*http.Response, error) {
+		response := hcAtomHTTPResponse(http.StatusOK, "\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01")
+		response.Header.Set("Content-Type", "image/png")
+		return response, nil
+	})}, cipher)
+	taskID, customID := "hc-task-many", "item_000001"
+
+	r, _, err := provider.OpenResult(context.Background(), &BatchImageJob{ProviderJobName: &taskID, ProviderInputRef: &customID}, account)
+	require.NoError(t, err)
+	defer r.Close()
+	body, err := io.ReadAll(r)
+	require.NoError(t, err)
+	require.Len(t, strings.Split(strings.TrimSpace(string(body)), "\n"), 1)
+	var line struct {
+		CustomID string `json:"custom_id"`
+		Response struct {
+			Candidates []struct {
+				Content struct {
+					Parts []map[string]any `json:"parts"`
+				} `json:"content"`
+			} `json:"candidates"`
+		} `json:"response"`
+	}
+	require.NoError(t, json.Unmarshal(body, &line))
+	require.Equal(t, customID, line.CustomID)
+	require.Len(t, line.Response.Candidates, 1)
+	require.Len(t, line.Response.Candidates[0].Content.Parts, 3)
+}
+
 // Regression target: every HC result URL must stay inside the public HTTPS
 // archive boundary before the client can consume even one response byte.
 func TestHCAtomBatchProvider_ArchiveRejectsUnsafeURLFormsBeforeDownload(t *testing.T) {

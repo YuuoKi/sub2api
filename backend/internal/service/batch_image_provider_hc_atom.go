@@ -33,9 +33,10 @@ const (
 	hcAtomResultMaxRawImageBytes = 11 << 20
 )
 
-var hcAtomBatchEnabledModels = map[string]struct{}{
-	"seedream-5.0":            {},
-	"doubao-seedream-5.0-pro": {},
+var hcAtomBatchModelCatalog = map[string]bool{
+	"seedream-5.0":            true,
+	"doubao-seedream-5.0-pro": true,
+	"dola-seedream-5.0-pro":   false,
 }
 
 // HCAtomBatchClient has no fallback behaviour: every operation is tied to the
@@ -505,8 +506,7 @@ func hcAtomBatchIdempotencyKey(batchID string) string {
 }
 
 func isHCAtomBatchEnabledModel(model string) bool {
-	_, ok := hcAtomBatchEnabledModels[strings.TrimSpace(model)]
-	return ok
+	return hcAtomBatchModelCatalog[strings.TrimSpace(model)]
 }
 
 func mapHCAtomBatchState(task *HCAtomBatchTask) (*BatchProviderStatus, error) {
@@ -518,8 +518,12 @@ func mapHCAtomBatchState(task *HCAtomBatchTask) (*BatchProviderStatus, error) {
 	case "RUNNING":
 		status.InternalState = BatchProviderStateRunning
 	case "SUCCESS":
-		if len(hcAtomBatchResultURLs(task)) == 0 {
+		resultCount := len(hcAtomBatchResultURLs(task))
+		if resultCount == 0 {
 			return nil, hcAtomBatchError("HC_ATOM_RESULT_MISSING", "HC-ATOM success response is missing result URLs", nil)
+		}
+		if task.ImageCount < 0 || (task.ImageCount > 0 && task.ImageCount != resultCount) {
+			return nil, hcAtomBatchError("HC_ATOM_USAGE_MISMATCH", "HC-ATOM usage image count does not match result URLs", nil)
 		}
 		status.InternalState, status.Done = BatchProviderStateSucceeded, true
 	case "FAILED":
@@ -702,7 +706,10 @@ func (c *HCAtomBatchHTTPClient) doTask(req *http.Request) (*HCAtomBatchTask, err
 	if err := json.Unmarshal(envelope.Data, &data); err != nil {
 		return nil, err
 	}
-	return &HCAtomBatchTask{TaskID: firstHCAtomString(data.TaskID, data.TaskIDSnake), Status: data.Status, ResultURLs: append(data.ResultURLs, data.ResultURLsSnake...), ResultURL: firstHCAtomString(data.ResultURL, data.ResultURLSnake), ImageCount: data.Usage.ImageCount, ErrorCode: data.ErrorCode, ErrorMsg: data.ErrorMsg}, nil
+	resultURLs := append([]string{}, data.ResultURLs...)
+	resultURLs = append(resultURLs, data.ResultURLsSnake...)
+	resultURLs = append(resultURLs, data.ResultURL, data.ResultURLSnake)
+	return &HCAtomBatchTask{TaskID: firstHCAtomString(data.TaskID, data.TaskIDSnake), Status: data.Status, ResultURLs: resultURLs, ImageCount: data.Usage.ImageCount, ErrorCode: data.ErrorCode, ErrorMsg: data.ErrorMsg}, nil
 }
 
 func readHCAtomBatchResponseBody(resp *http.Response) ([]byte, error) {

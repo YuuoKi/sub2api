@@ -43,6 +43,29 @@ func TestBatchImageSettlementService_SettlesAndChargesSuccessfulImagesOnly(t *te
 	require.NotContains(t, fmt.Sprintf("%+v", billing.captures[0]), "prompt")
 }
 
+// Regression target: HC usage must identify the fixed HC image endpoint, never
+// masquerade as a Vertex batchPredictionJobs request.
+func TestBatchImageSettlementService_HCUsageLogUsesProviderEndpoint(t *testing.T) {
+	repo := newFakeBatchImageRepository()
+	job := testSettlingBatchImageJob("imgbatch_hc_usage")
+	job.Provider = BatchImageProviderHCAtom
+	job.Model = "seedream-5.0"
+	repo.jobs[job.BatchID] = job
+	billing := &fakeBatchImageBillingRepo{}
+	usage := &batchImageUsageLogRepoStub{}
+	svc := &BatchImageSettlementService{
+		Repo: repo, BillingRepo: billing, UsageLogRepo: usage,
+		Pricing: &fakeBatchImagePricingResolver{unitPrice: 0.25},
+	}
+
+	_, err := svc.Settle(context.Background(), job.BatchID)
+	require.NoError(t, err)
+	require.NotNil(t, usage.lastLog)
+	require.NotNil(t, usage.lastLog.UpstreamEndpoint)
+	require.Equal(t, "https://api-aigc.fzyinghe.com/image/generation/tasks", *usage.lastLog.UpstreamEndpoint)
+	require.NotContains(t, *usage.lastLog.UpstreamEndpoint, "vertex")
+}
+
 func TestBatchImageSettlementService_ZeroSuccessCanComplete(t *testing.T) {
 	repo := newFakeBatchImageRepository()
 	job := testSettlingBatchImageJob("imgbatch_zero")
@@ -413,6 +436,16 @@ type fakeBatchImagePricingResolver struct {
 	unitPrice     float64
 	missingModels map[string]bool
 	err           error
+}
+
+type batchImageUsageLogRepoStub struct {
+	UsageLogRepository
+	lastLog *UsageLog
+}
+
+func (r *batchImageUsageLogRepoStub) Create(_ context.Context, log *UsageLog) (bool, error) {
+	r.lastLog = log
+	return true, nil
 }
 
 func (r *fakeBatchImagePricingResolver) BatchImageUnitPrice(_ context.Context, job *BatchImageJob) (float64, error) {

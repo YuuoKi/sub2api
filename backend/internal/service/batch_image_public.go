@@ -639,6 +639,9 @@ func (s *BatchImagePublicService) ListModels(ctx context.Context, owner BatchIma
 				continue
 			}
 			for _, model := range batchImageModelsFromAccountMapping(&account) {
+				if providerName == BatchImageProviderHCAtom && !isHCAtomBatchEnabledModel(model) {
+					continue
+				}
 				if _, err := s.Pricing.BatchImageUnitPrice(ctx, &BatchImageJob{Provider: providerName, Model: model}); err != nil {
 					continue
 				}

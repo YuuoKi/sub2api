@@ -136,6 +136,25 @@ func (r *videoGatewayRepository) MarkVideoSubmitted(ctx context.Context, id, ver
 	return nil
 }
 
+func (r *videoGatewayRepository) MarkVideoDispatchUncertain(ctx context.Context, id, version int64, code string) error {
+	db, err := r.requireDB()
+	if err != nil {
+		return err
+	}
+	result, err := db.ExecContext(ctx, `UPDATE video_tasks SET status='review_required', dispatch_state='uncertain', provider_error_code=$3, provider_error_message='provider dispatch outcome requires review', error_message='provider dispatch outcome requires review', version=version+1, worker_claimed_at=NULL, worker_claimed_until=NULL, updated_at=NOW() WHERE id=$1 AND version=$2 AND status='queued' AND real_dispatch_count=1`, id, version, code)
+	if err != nil {
+		return err
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n != 1 {
+		return service.ErrVideoTaskTerminalConflict
+	}
+	return nil
+}
+
 func (r *videoGatewayRepository) UpdateVideoProgress(ctx context.Context, id, version int64, status string) error {
 	if status != service.VideoStatusSubmitted && status != service.VideoStatusRunning {
 		return fmt.Errorf("invalid video progress status")

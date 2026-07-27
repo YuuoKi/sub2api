@@ -129,12 +129,11 @@ func (w *VideoGatewayWorker) RunOnce(ctx context.Context) error {
 	}
 	created, err := w.clientFactory(provider.Provider, provider.BaseURL, key).Create(ctx, request)
 	if err != nil {
-		finalizeErr := w.finalize(ctx, task, VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version + 1, Status: VideoStatusFailed,
-			ErrorMessage: "upstream provider dispatch failed", ProviderErrorCode: "provider_dispatch_failed", ProviderErrorMessage: "upstream provider dispatch failed", Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()})
-		if finalizeErr != nil {
-			return finalizeErr
+		var transportErr *VideoProviderTransportError
+		if errors.As(err, &transportErr) {
+			return w.repo.MarkVideoDispatchUncertain(ctx, task.ID, task.Version+1, "provider_dispatch_uncertain")
 		}
-		return nil
+		return w.finalize(ctx, task, VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version + 1, Status: VideoStatusFailed, ErrorMessage: "upstream provider dispatch failed", ProviderErrorCode: "provider_dispatch_failed", ProviderErrorMessage: "upstream provider dispatch failed", Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()})
 	}
 	for {
 		if persistErr := w.repo.MarkVideoSubmitted(ctx, task.ID, task.Version+1, created.UpstreamTaskID); persistErr == nil {

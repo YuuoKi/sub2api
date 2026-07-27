@@ -7,12 +7,13 @@ import (
 )
 
 const (
-	VideoStatusQueued    = "queued"
-	VideoStatusSubmitted = "submitted"
-	VideoStatusRunning   = "running"
-	VideoStatusSucceeded = "succeeded"
-	VideoStatusFailed    = "failed"
-	VideoStatusCancelled = "cancelled"
+	VideoStatusQueued         = "queued"
+	VideoStatusSubmitted      = "submitted"
+	VideoStatusRunning        = "running"
+	VideoStatusSucceeded      = "succeeded"
+	VideoStatusFailed         = "failed"
+	VideoStatusCancelled      = "cancelled"
+	VideoStatusReviewRequired = "review_required"
 
 	VideoReservationReserved = "reserved"
 	VideoReservationReleased = "released"
@@ -209,5 +210,6 @@ type VideoGatewayRuntimeRepository interface {
 	GetVideoProvider(context.Context, int64, int64) (*VideoProviderAccount, error)
 	BeginRealDispatch(context.Context, int64, int64) (bool, error)
 	MarkVideoSubmitted(context.Context, int64, int64, string) error
+	MarkVideoDispatchUncertain(context.Context, int64, int64, string) error
 	UpdateVideoProgress(context.Context, int64, int64, string) error
 }

@@ -32,6 +32,11 @@ var (
 	ErrVideoRealDispatchConsumed = errors.New("real video dispatch denied: single_smoke_authorized was already consumed")
 )
 
+type VideoProviderTransportError struct{ err error }
+
+func (e *VideoProviderTransportError) Error() string { return e.err.Error() }
+func (e *VideoProviderTransportError) Unwrap() error { return e.err }
+
 type SingleSmokeAuthorization struct {
 	mu                sync.Mutex
 	allowed, consumed bool
@@ -256,7 +261,7 @@ func (a *HCAtomV3Adapter) doTask(ctx context.Context, method, endpoint string, b
 	}
 	resp, err := a.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("hc atom transport failed: %s", RedactVideoSecrets(err.Error(), a.apiKey))
+		return nil, &VideoProviderTransportError{fmt.Errorf("hc atom transport failed: %s", RedactVideoSecrets(err.Error(), a.apiKey))}
 	}
 	defer resp.Body.Close()
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))

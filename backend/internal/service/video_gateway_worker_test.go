@@ -223,6 +223,10 @@ func (r *workerRepoStub) BeginRealDispatch(context.Context, int64, int64) (bool,
 	return r.begin, nil
 }
 func (r *workerRepoStub) MarkVideoSubmitted(context.Context, int64, int64, string) error { return nil }
+func (r *workerRepoStub) MarkVideoDispatchUncertain(_ context.Context, _ int64, _ int64, _ string) error {
+	r.task.Status = VideoStatusReviewRequired
+	return nil
+}
 func (r *workerRepoStub) UpdateVideoProgress(_ context.Context, _ int64, _ int64, status string) error {
 	r.progress = append(r.progress, status)
 	return nil

@@ -30,8 +30,8 @@
 
   <section class="card">
     <h2>当前状态</h2>
-    <p><span class="status">待复核</span></p>
-    <p>统一分支合流、后端全量测试与编译、前端全量测试、typecheck、lint 和生产构建均已通过。镜像验证与服务器部署尚未完成，因此当前仍为“待复核”，不能标记 HC 生产 READY。</p>
+    <p><span class="status">服务器认证阻塞</span></p>
+    <p>统一分支合流、本地全量门禁、Docker 镜像、新库迁移与 loopback 健康检查均已通过。广州服务器公开健康检查正常，但当前机器没有可用 SSH 公钥，且未配置 <code>SSHPASS_FILE</code>，因此备份、上传和热更新尚未执行。不能标记 HC 生产 READY。</p>
   </section>
 
   <section class="card">
@@ -41,7 +41,7 @@
       <li>账单修复来源：<code>cadc1b0d8</code>，发布分支补充额度重置真实持久化修复</li>
       <li>HC-ATOM V3 来源：<code>eb57d5551</code></li>
       <li>发布分支：<code>codex/sub2api-release-20260728</code></li>
-      <li>最终发布提交：待全量验证后填写</li>
+      <li>最终发布提交：以本审查包所在提交为准；镜像构建时必须将该短提交号注入 <code>build_commit</code></li>
     </ul>
   </section>
 
@@ -71,16 +71,23 @@ eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts
 vue-tsc -b
 vite build
 pnpm install --lockfile-only --offline --frozen-lockfile
+docker build ... -t wujie-sub2api:release-&lt;release-commit&gt; .
+docker run --rm --entrypoint /app/sub2api ... --version
+临时 Postgres + Redis + App（无持久卷，127.0.0.1:18081）：
+  /health = ok
+  version = 广州内部版 2026.07.28-r4
+  build_commit = release commit
 
 待执行：
-Docker 镜像与 loopback 健康检查；服务器只读预检、备份、上线回归。</pre>
-    <p>截图：当前阶段未截图。服务器部署后将补管理台真实渲染或说明不可截图原因。</p>
+配置 SSH 认证后执行服务器只读预检、备份、上传、热更新和线上回归。</pre>
+    <p>截图：未截图。原因是本轮 UI 变更已有全量组件/集成测试与生产构建证据，而真实服务器尚未因 SSH 认证阻塞完成部署；不以旧线上页面冒充新版本截图。</p>
   </section>
 
   <section class="card">
     <h2>风险与边界</h2>
     <ul>
       <li>标准模式要求已有持久 <code>TOTP_ENCRYPTION_KEY</code>；部署只检查变量存在，不读取或输出值。</li>
+      <li>服务器认证阻塞：BatchMode 返回 <code>Permission denied (publickey,password)</code>，本机未配置密码文件变量。</li>
       <li>HC 视频和图片真实调度保持关闭；没有执行真实付费调用。</li>
       <li>真实 taskId、状态回传、结果资产和一次结算仍属待单独授权复核，不计入本轮生产 READY。</li>
       <li>主工作区已有脏文件与缓存不纳入发布提交。</li>
@@ -111,8 +118,8 @@ Docker 镜像与 loopback 健康检查；服务器只读预检、备份、上线
 
   <section class="card">
     <h2>下一步建议与可复制提示词</h2>
-    <p>下一步：完成合流语义复核、全量门禁、镜像验证，更新本审查包并创建发布提交；随后执行服务器只读预检、备份、受控更新和线上回归。</p>
-    <pre>请基于 docs/reviews/LATEST_REVIEW_PACKAGE.html 复核 Sub2API 当前发布提交与线上 build_commit；不得读取密钥或触发付费调用。若证据不完整，请标记“待复核”，不要宣称生产 READY。</pre>
+    <p>下一步：提供一次可用的 SSH 认证方式。随后只检查配置项存在性，创建数据库和当前镜像备份，上传 <code>C:\tmp\wujie-sub2api-release-&lt;release-commit&gt;.tar.gz</code>，仅重建 Sub2API 服务并核对公开 <code>build_commit</code>。</p>
+    <pre>请继续部署 Sub2API release：先验证 SSH、活动 Compose 目录、TOTP_ENCRYPTION_KEY 仅“存在”且不输出值；备份数据库和当前镜像；保持 HC 视频/图片门禁关闭；只重建 sub2api，不删除卷、不触发付费调用。部署后核对 /health、version 和 build_commit。</pre>
   </section>
 </main>
 </body>

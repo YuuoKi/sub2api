@@ -58,6 +58,7 @@ func TestLoadVideoGatewayConfigFromEnvironment(t *testing.T) {
 	resetViperWithJWTSecret(t)
 	t.Setenv("VIDEO_GATEWAY_ENCRYPTION_KEY", strings.Repeat("a", 64))
 	t.Setenv("VIDEO_GATEWAY_WORKER_ENABLED", "true")
+	t.Setenv("VIDEO_GATEWAY_HC_ATOM_V3_DISPATCH_ENABLED", "true")
 	t.Setenv("VIDEO_GATEWAY_WORKER_INTERVAL_SECONDS", "2")
 	t.Setenv("VIDEO_GATEWAY_HTTP_TIMEOUT_SECONDS", "180")
 	t.Setenv("VIDEO_GATEWAY_SEEDANCE_CNY_PER_MILLION_TOKENS", "9.5")
@@ -69,12 +70,20 @@ func TestLoadVideoGatewayConfigFromEnvironment(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, strings.Repeat("a", 64), cfg.VideoGateway.EncryptionKey)
 	require.True(t, cfg.VideoGateway.WorkerEnabled)
+	require.True(t, cfg.VideoGateway.HCAtomV3DispatchEnabled)
 	require.Equal(t, 2, cfg.VideoGateway.WorkerIntervalSeconds)
 	require.Equal(t, 180, cfg.VideoGateway.HTTPTimeoutSeconds)
 	require.InDelta(t, 9.5, cfg.VideoGateway.SeedanceCNYPerMillionTokens, 1e-9)
 	require.InDelta(t, 7.2, cfg.VideoGateway.USDCNYExchangeRate, 1e-9)
 	require.InDelta(t, 1.25, cfg.VideoGateway.TinyRealEstimateCNY, 1e-9)
 	require.InDelta(t, 2.5, cfg.VideoGateway.TinyRealMaximumCNY, 1e-9)
+}
+
+func TestLoadVideoGatewayHCAtomDispatchDefaultsDisabled(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.False(t, cfg.VideoGateway.HCAtomV3DispatchEnabled)
 }
 
 func TestNormalizeRunMode(t *testing.T) {
@@ -384,6 +393,66 @@ func TestLoadDefaultBatchImageQueueDisabled(t *testing.T) {
 	cfg, err := Load()
 	require.NoError(t, err)
 	require.False(t, cfg.BatchImage.QueueEnabled)
+}
+
+func TestLoadHCAtomImageCredentialDomainDefaultsDenied(t *testing.T) {
+	resetViperWithJWTSecret(t)
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.False(t, cfg.BatchImage.HCAtomEnabled)
+	require.Empty(t, cfg.BatchImage.HCAtomEncryptionKey)
+}
+
+func TestLoadHCAtomImageCredentialDomainUsesDedicatedEnvironmentKey(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("VIDEO_GATEWAY_ENCRYPTION_KEY", strings.Repeat("a", 64))
+	t.Setenv("BATCH_IMAGE_HC_ATOM_ENABLED", "true")
+	t.Setenv("BATCH_IMAGE_HC_ATOM_ENCRYPTION_KEY", strings.Repeat("b", 64))
+	t.Setenv("BATCH_IMAGE_HC_ATOM_OWNED_RESULT_DIR", t.TempDir())
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.True(t, cfg.BatchImage.HCAtomEnabled)
+	require.Equal(t, strings.Repeat("b", 64), cfg.BatchImage.HCAtomEncryptionKey)
+	require.NotEqual(t, cfg.VideoGateway.EncryptionKey, cfg.BatchImage.HCAtomEncryptionKey)
+	require.NotEqual(t, cfg.JWT.Secret, cfg.BatchImage.HCAtomEncryptionKey)
+}
+
+func TestLoadHCAtomImageCredentialDomainRejectsMissingDedicatedKey(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("BATCH_IMAGE_HC_ATOM_ENABLED", "true")
+	t.Setenv("BATCH_IMAGE_HC_ATOM_ENCRYPTION_KEY", "")
+
+	_, err := Load()
+	require.ErrorContains(t, err, "batch_image.hc_atom_encryption_key")
+}
+
+func TestValidateHCAtomOwnedResultDirectoryRequiredAndWritable(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("BATCH_IMAGE_HC_ATOM_ENABLED", "true")
+	t.Setenv("BATCH_IMAGE_HC_ATOM_ENCRYPTION_KEY", strings.Repeat("b", 64))
+	t.Setenv("BATCH_IMAGE_HC_ATOM_OWNED_RESULT_DIR", t.TempDir())
+
+	cfg, err := Load()
+	require.NoError(t, err)
+
+	cfg.BatchImage.HCAtomOwnedResultDir = ""
+	require.ErrorContains(t, cfg.Validate(), "batch_image.hc_atom_owned_result_dir")
+
+	cfg.BatchImage.HCAtomOwnedResultDir = filepath.VolumeName(t.TempDir()) + string(os.PathSeparator)
+	require.ErrorContains(t, cfg.Validate(), "batch_image.hc_atom_owned_result_dir")
+
+	filePath := filepath.Join(t.TempDir(), "not-a-directory")
+	require.NoError(t, os.WriteFile(filePath, []byte("x"), 0o600))
+	cfg.BatchImage.HCAtomOwnedResultDir = filePath
+	require.ErrorContains(t, cfg.Validate(), "batch_image.hc_atom_owned_result_dir")
+
+	cfg.BatchImage.HCAtomOwnedResultDir = filepath.Join(t.TempDir(), "created-by-validation")
+	require.NoError(t, cfg.Validate())
+	info, err := os.Stat(cfg.BatchImage.HCAtomOwnedResultDir)
+	require.NoError(t, err)
+	require.True(t, info.IsDir())
 }
 
 func TestLoadIdempotencyConfigFromEnv(t *testing.T) {

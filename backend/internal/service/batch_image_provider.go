@@ -45,10 +45,16 @@ func NewDefaultBatchImageProviderRegistry() *BatchImageProviderRegistry {
 }
 
 func NewBatchImageProviderRegistryFromConfig(cfg *config.Config) *BatchImageProviderRegistry {
-	return NewBatchImageProviderRegistry(
+	providers := []BatchImageProvider{
 		NewGeminiAPIBatchImageProvider(nil),
 		NewVertexBatchImageProviderFromConfig(cfg, nil, nil, nil),
-	)
+	}
+	if cfg != nil && cfg.BatchImage.HCAtomEnabled {
+		if cipher, err := NewHCAtomCredentialCipher(cfg.BatchImage.HCAtomEncryptionKey); err == nil {
+			providers = append(providers, NewHCAtomBatchImageProviderWithOwnedResultStore(nil, nil, cipher, cfg.BatchImage.HCAtomOwnedResultDir))
+		}
+	}
+	return NewBatchImageProviderRegistry(providers...)
 }
 
 func (r *BatchImageProviderRegistry) Get(provider string) (BatchImageProvider, bool) {

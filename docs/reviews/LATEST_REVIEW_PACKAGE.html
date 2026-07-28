@@ -1,46 +1,119 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>LATEST REVIEW PACKAGE — GUANGZHOU_HOTFIX_20260725 (Sub2)</title>
-<style>
-  body{max-width:980px;margin:32px auto;padding:0 20px;background:#0f1720;color:#e5edf5;font:15px/1.65 "Segoe UI","Microsoft YaHei",sans-serif}
-  h1,h2{color:#7dd3bc} h1{font-size:22px} h2{margin-top:24px;border-bottom:1px solid #334155;padding-bottom:6px;font-size:16px}
-  code,pre{font-family:Consolas,monospace;background:#182431} pre{padding:12px;overflow:auto;border:1px solid #334155;border-radius:6px}
-  table{width:100%;border-collapse:collapse;font-size:13px} th,td{border:1px solid #334155;padding:8px;vertical-align:top;text-align:left}
-  .pass{color:#86efac}.wait{color:#fbbf24}.blocked{color:#fca5a5}.muted{color:#9fb0c0}
-  .status{display:inline-block;margin:8px 0;padding:4px 10px;border-radius:999px;background:#422006;color:#fdba74;font-weight:700}
-  a{color:#60a5fa}
-  .card{background:#182431;border:1px solid #334155;border-radius:8px;padding:14px 16px;margin:12px 0}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Sub2API 广州内部版统一发布审查包</title>
+  <style>
+    :root { color-scheme: light dark; --bg:#0b1020; --card:#151c31; --text:#edf2ff; --muted:#aeb9d6; --ok:#4ade80; --warn:#fbbf24; --line:#2b3656; }
+    * { box-sizing:border-box; }
+    body { margin:0; font:15px/1.65 system-ui,"Microsoft YaHei",sans-serif; background:var(--bg); color:var(--text); }
+    main { width:min(1080px,calc(100% - 32px)); margin:32px auto 64px; }
+    h1,h2 { line-height:1.25; }
+    h1 { margin-bottom:8px; }
+    h2 { margin-top:0; font-size:20px; }
+    .meta { color:var(--muted); margin-bottom:24px; }
+    .card { border:1px solid var(--line); background:var(--card); border-radius:14px; padding:20px; margin:14px 0; }
+    .status { display:inline-block; padding:3px 10px; border-radius:999px; border:1px solid var(--warn); color:var(--warn); }
+    code { background:#090d18; padding:2px 6px; border-radius:5px; overflow-wrap:anywhere; }
+    pre { background:#090d18; padding:14px; border-radius:8px; overflow:auto; white-space:pre-wrap; }
+    li + li { margin-top:6px; }
+    .ok { color:var(--ok); }
+    .warn { color:var(--warn); }
+    a { color:#93c5fd; }
+  </style>
 </head>
 <body>
-  <h1>最新审查包：GUANGZHOU_HOTFIX_20260725（Sub2API）</h1>
-  <p class="muted">完整包：<a href="GUANGZHOU_HOTFIX_20260725/REVIEW_PACKAGE.html">GUANGZHOU_HOTFIX_20260725/REVIEW_PACKAGE.html</a> · <a href="GUANGZHOU_HOTFIX_20260725/SUMMARY.md">SUMMARY.md</a></p>
-  <div class="status">当前状态：待复核 — NOT READY</div>
+<main>
+  <h1>Sub2API 广州内部版统一发布审查包</h1>
+  <div class="meta">生成日期：2026-07-28 ｜ 执行目录：<code>D:\sub2api-trunk\.worktrees\sub2api-release-20260728</code></div>
 
-  <div class="card">
-    <h2 style="margin-top:0;border:0;padding:0">本轮结论（如实）</h2>
-    <p><span class="wait">代码门通过；生产开卡须老板亲自完成 → 禁止 READY</span></p>
-    <p>tip：<code>92567101c774dad5fe482df69eecba5a9adb3c7c</code></p>
-    <table>
-      <tr><td>82ec1cc34</td><td>409 flat reuse + human/tool 列表</td></tr>
-      <tr><td>ecc10b668</td><td>无损开卡/充值弹窗 + 稳定幂等键</td></tr>
-      <tr><td>92567101c</td><td>不可变「广州内部版」身份；拆除自更新路由/UI</td></tr>
-      <tr><td>StaffView / gate2</td><td class="pass">32+</td></tr>
-      <tr><td>Version 相关单测</td><td class="pass">72</td></tr>
-      <tr><td>Go tests</td><td class="pass">ok</td></tr>
-      <tr><td>生产开卡</td><td class="blocked">待老板签发（agent 不得捕获一次性密钥）</td></tr>
-    </table>
-  </div>
+  <section class="card">
+    <h2>当前状态</h2>
+    <p><span class="status">待复核</span></p>
+    <p>统一分支合流、后端全量测试与编译、前端全量测试、typecheck、lint 和生产构建均已通过。镜像验证与服务器部署尚未完成，因此当前仍为“待复核”，不能标记 HC 生产 READY。</p>
+  </section>
 
-  <div class="card">
-    <h2 style="margin-top:0;border:0;padding:0">安全声明</h2>
+  <section class="card">
+    <h2>目标与来源</h2>
     <ul>
-      <li>本摘要不含密码、API key、<code>.env</code>、一次性卡密。</li>
-      <li>未宣称老板生产开卡完成；未宣称 READY。</li>
+      <li>线上 staff 基线：<code>758f5c419</code></li>
+      <li>账单修复来源：<code>cadc1b0d8</code>，发布分支补充额度重置真实持久化修复</li>
+      <li>HC-ATOM V3 来源：<code>eb57d5551</code></li>
+      <li>发布分支：<code>codex/sub2api-release-20260728</code></li>
+      <li>最终发布提交：待全量验证后填写</li>
     </ul>
-  </div>
+  </section>
+
+  <section class="card">
+    <h2>变更清单与实现</h2>
+    <ul>
+      <li>余额、配额和限速计数改为专用原子更新，避免旧快照覆盖并发计费。</li>
+      <li><code>reset_quota</code> 使用独立仓储更新并回读数据库真实状态；限速重置不触碰配额。</li>
+      <li>保留 staff console 生命周期、一次性 Key 展示、管理员保护和不可变构建身份。</li>
+      <li>加入 HC 固定供应商视频/图片链路、显式门禁、独立加密域、SSRF 防护和 owned-result 归档。</li>
+      <li>迁移编号调整为 <code>187_hc_atom_v3_video_payload.sql</code>，避免与既有 186 号迁移重号。</li>
+      <li>未纳入 HC 分支中的 Superpowers 过程报告，发布结果不依赖该流程技能。</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>验证命令和结果</h2>
+    <pre>已通过：
+go test ./internal/repository -run 'Test(APIKeyRepositoryUpdateDoesNotRewriteQuotaUsedUnderConcurrentIncrement|APIKeyRepositoryResetRateLimitUsageDoesNotTouchQuotaUsed|APIKeyRepositoryResetQuotaUsedDoesNotTouchRateLimitUsage|UserRepositoryUpdateDoesNotRewriteBalanceUnderConcurrentIncrement)' -count=1
+go test -tags=unit ./internal/service -run 'TestAPIKeyService_Update_(RejectsActiveExhaustedKeyBeforeWrite|ResetQuotaPersistsAndReturnsFreshState|RejectsExpiredActiveKeyBeforeWrite|ReactivatesQuotaExhaustedWhenQuotaUnlimited)' -count=1
+go generate ./cmd/server
+go test ./... -count=1
+go build -buildvcs=false ./...
+vitest run --cache=false
+vue-tsc --noEmit
+eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts
+vue-tsc -b
+vite build
+pnpm install --lockfile-only --offline --frozen-lockfile
+
+待执行：
+Docker 镜像与 loopback 健康检查；服务器只读预检、备份、上线回归。</pre>
+    <p>截图：当前阶段未截图。服务器部署后将补管理台真实渲染或说明不可截图原因。</p>
+  </section>
+
+  <section class="card">
+    <h2>风险与边界</h2>
+    <ul>
+      <li>标准模式要求已有持久 <code>TOTP_ENCRYPTION_KEY</code>；部署只检查变量存在，不读取或输出值。</li>
+      <li>HC 视频和图片真实调度保持关闭；没有执行真实付费调用。</li>
+      <li>真实 taskId、状态回传、结果资产和一次结算仍属待单独授权复核，不计入本轮生产 READY。</li>
+      <li>主工作区已有脏文件与缓存不纳入发布提交。</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>回滚方案</h2>
+    <ol>
+      <li>服务器更新前保存当前镜像、Compose 状态和数据库备份。</li>
+      <li>应用异常时恢复线上基线 <code>758f5c419</code> 对应镜像并重新创建应用容器。</li>
+      <li>Git 侧使用 revert，不使用 reset、clean 或 rebase。</li>
+      <li>不删除数据库卷或用户资产。</li>
+    </ol>
+  </section>
+
+  <section class="card">
+    <h2>文件索引</h2>
+    <ul>
+      <li><code>docs/goals/03_CURRENT_GOAL.md</code></li>
+      <li><code>docs/goals/SUB2API_RELEASE_20260728.md</code></li>
+      <li><code>docs/reviews/LATEST_REVIEW_PACKAGE.html</code></li>
+      <li><code>backend/internal/service/api_key_service.go</code></li>
+      <li><code>backend/internal/repository/api_key_repo.go</code></li>
+      <li><code>backend/migrations/187_hc_atom_v3_video_payload.sql</code></li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>下一步建议与可复制提示词</h2>
+    <p>下一步：完成合流语义复核、全量门禁、镜像验证，更新本审查包并创建发布提交；随后执行服务器只读预检、备份、受控更新和线上回归。</p>
+    <pre>请基于 docs/reviews/LATEST_REVIEW_PACKAGE.html 复核 Sub2API 当前发布提交与线上 build_commit；不得读取密钥或触发付费调用。若证据不完整，请标记“待复核”，不要宣称生产 READY。</pre>
+  </section>
+</main>
 </body>
 </html>

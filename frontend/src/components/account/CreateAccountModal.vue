@@ -160,6 +160,20 @@
             <PlatformIcon platform="grok" size="sm" />
             Grok
           </button>
+          <button
+            type="button"
+            data-testid="platform-hc-atom"
+            @click="form.platform = 'hc_atom'"
+            :class="[
+              'flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-all',
+              form.platform === 'hc_atom'
+                ? 'bg-white text-cyan-700 shadow-sm dark:bg-dark-600 dark:text-cyan-300'
+                : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
+            ]"
+          >
+            <Icon name="cloud" size="sm" />
+            HC-ATOM
+          </button>
         </div>
       </div>
 
@@ -1082,11 +1096,14 @@
             v-model="apiKeyBaseUrl"
             type="text"
             class="input"
+            :readonly="form.platform === 'hc_atom'"
             :placeholder="
               form.platform === 'openai'
                 ? 'https://api.openai.com'
                 : form.platform === 'gemini'
                   ? 'https://generativelanguage.googleapis.com'
+                  : form.platform === 'hc_atom'
+                    ? HC_ATOM_IMAGE_BASE_URL
                   : 'https://api.anthropic.com'
             "
           />
@@ -1104,6 +1121,8 @@
                 ? 'sk-proj-...'
                 : form.platform === 'gemini'
                   ? 'AIza...'
+                  : form.platform === 'hc_atom'
+                    ? 'HC-ATOM API Key（保存后仅显示脱敏摘要）'
                   : 'sk-ant-...'
             "
           />
@@ -1121,7 +1140,16 @@
         </div>
 
         <!-- Model Restriction Section (Antigravity 已在上层条件排除) -->
-        <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
+        <div v-if="form.platform === 'hc_atom'" class="rounded-lg border border-cyan-200 bg-cyan-50 p-4 text-sm dark:border-cyan-900 dark:bg-cyan-950/30">
+          <p class="font-medium text-cyan-900 dark:text-cyan-200">固定图片模型目录</p>
+          <ul class="mt-2 list-disc pl-5 text-cyan-800 dark:text-cyan-300">
+            <li v-for="model in HC_ATOM_IMAGE_ENABLED_MODELS" :key="model">{{ model }}</li>
+          </ul>
+          <p class="mt-2 text-xs text-amber-700 dark:text-amber-300">
+            dola-seedream-5.0-pro 仅保留映射，供应商解除“待配置接口地址”前不可启用。
+          </p>
+        </div>
+        <div v-else class="border-t border-gray-200 pt-4 dark:border-dark-600">
           <label class="input-label">{{ t('admin.accounts.modelRestriction') }}</label>
 
           <div
@@ -3453,6 +3481,11 @@ import {
   type OpenAIWSMode
 } from '@/utils/openaiWsMode'
 import OAuthAuthorizationFlow from './OAuthAuthorizationFlow.vue'
+import {
+  HC_ATOM_IMAGE_BASE_URL,
+  HC_ATOM_IMAGE_ENABLED_MODELS,
+  buildHCAtomImageCredentials
+} from './hcAtomAdminContract'
 
 // Type for exposed OAuthAuthorizationFlow component
 // Note: defineExpose automatically unwraps refs, so we use the unwrapped types
@@ -3482,6 +3515,7 @@ const oauthStepTitle = computed(() => {
 
 // Platform-specific hints for API Key type
 const baseUrlHint = computed(() => {
+  if (form.platform === 'hc_atom') return '固定 HC-ATOM 域名，不允许自定义中转地址'
   if (form.platform === 'openai') return t('admin.accounts.openai.baseUrlHint')
   if (form.platform === 'gemini') return t('admin.accounts.gemini.baseUrlHint')
   if (form.platform === 'grok') return t('admin.accounts.grok.baseUrlHint')
@@ -3489,6 +3523,7 @@ const baseUrlHint = computed(() => {
 })
 
 const apiKeyHint = computed(() => {
+  if (form.platform === 'hc_atom') return '密钥通过独立加密域保存，管理 API 不回显明文'
   if (form.platform === 'openai') return t('admin.accounts.openai.apiKeyHint')
   if (form.platform === 'gemini') return t('admin.accounts.gemini.apiKeyHint')
   if (form.platform === 'grok') return t('admin.accounts.grok.apiKeyHint')
@@ -4041,6 +4076,8 @@ watch(
         ? 'https://api.openai.com'
         : newPlatform === 'gemini'
           ? 'https://generativelanguage.googleapis.com'
+          : newPlatform === 'hc_atom'
+            ? HC_ATOM_IMAGE_BASE_URL
           : newPlatform === 'grok'
             ? 'https://api.x.ai/v1'
             : 'https://api.anthropic.com'
@@ -4069,6 +4106,12 @@ watch(
       modelRestrictionMode.value = 'mapping'
       form.concurrency = 1
       form.load_factor = null
+    }
+    if (newPlatform === 'hc_atom') {
+      accountCategory.value = 'apikey'
+      form.type = 'apikey'
+      modelRestrictionMode.value = 'mapping'
+      allowedModels.value = [...HC_ATOM_IMAGE_ENABLED_MODELS]
     }
     if (newPlatform !== 'gemini' && newPlatform !== 'anthropic' && accountCategory.value === 'service_account') {
       accountCategory.value = 'oauth-based'
@@ -4878,19 +4921,23 @@ const handleSubmit = async () => {
       ? 'https://api.openai.com'
       : form.platform === 'gemini'
         ? 'https://generativelanguage.googleapis.com'
+        : form.platform === 'hc_atom'
+          ? HC_ATOM_IMAGE_BASE_URL
         : 'https://api.anthropic.com'
 
   // Build credentials with optional model mapping
-  const credentials: Record<string, unknown> = {
-    base_url: apiKeyBaseUrl.value.trim() || defaultBaseUrl,
-    api_key: apiKeyValue.value.trim()
-  }
+  const credentials: Record<string, unknown> = form.platform === 'hc_atom'
+    ? buildHCAtomImageCredentials(apiKeyValue.value)
+    : {
+        base_url: apiKeyBaseUrl.value.trim() || defaultBaseUrl,
+        api_key: apiKeyValue.value.trim()
+      }
   if (form.platform === 'gemini') {
     credentials.tier_id = geminiTierAIStudio.value
   }
 
   // Add model mapping if configured（OpenAI 开启自动透传时不应用）
-  if (!isOpenAIModelRestrictionDisabled.value) {
+  if (form.platform !== 'hc_atom' && !isOpenAIModelRestrictionDisabled.value) {
     const modelMapping = buildModelMappingObject(modelRestrictionMode.value, allowedModels.value, modelMappings.value)
     if (modelMapping) {
       credentials.model_mapping = modelMapping

@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   authorizeTinyReal: vi.fn(),
   contract: vi.fn(),
   listProviders: vi.fn(),
+  listTasks: vi.fn(),
+  createProvider: vi.fn(),
   getAllGroups: vi.fn(),
   showError: vi.fn(),
   showSuccess: vi.fn()
@@ -17,7 +19,8 @@ vi.mock('@/api/admin', () => ({
     video: {
       contract: mocks.contract,
       listProviders: mocks.listProviders,
-      createProvider: vi.fn(),
+      listTasks: mocks.listTasks,
+      createProvider: mocks.createProvider,
       updateProvider: vi.fn(),
       authorizeTinyReal: mocks.authorizeTinyReal
     },
@@ -55,9 +58,26 @@ describe('VideoProvidersView', () => {
       base_url: 'https://example.invalid',
       default_model: 'seedance-2-0-250428',
       duration_seconds: 4,
-      resolution: '720p'
+      resolution: '720p',
+      platforms: [
+        {
+          provider: 'seedance',
+          display_name: '官方 Ark Seedance',
+          default_base_url: 'https://example.invalid',
+          default_model: 'seedance-2-0-250428',
+          adapter_ready: true
+        },
+        {
+          provider: 'hc_atom_seedance_v3',
+          display_name: 'HC-ATOM Seedance 2.0 V3',
+          default_base_url: 'https://api-aigc.fzyinghe.com',
+          default_model: 'doubao-seedance-2.0',
+          adapter_ready: true
+        }
+      ]
     })
     mocks.listProviders.mockResolvedValue({ items: [provider] })
+    mocks.listTasks.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 100, pages: 0 })
     mocks.getAllGroups.mockResolvedValue([{ id: 3, name: '制作一组', subscription_type: 'standard' }])
     mocks.authorizeTinyReal.mockResolvedValue({ ...provider, tiny_real_authorized_at: '2026-07-16T08:00:00Z' })
   })
@@ -128,5 +148,56 @@ describe('VideoProvidersView', () => {
     expect(wrapper.text()).toContain(provider.masked_key)
     expect(wrapper.get('[data-testid="authorize-provider-7"]').attributes('disabled')).toBeDefined()
     expect(wrapper.text()).toContain('通道已停用；先启用通道。')
+  })
+
+  it('creates HC-ATOM as a distinct fixed provider without automatic real-call authorization', async () => {
+    mocks.createProvider.mockResolvedValue({
+      ...provider,
+      id: 8,
+      provider: 'hc_atom_seedance_v3',
+      display_name: 'HC V3'
+    })
+    mocks.listProviders
+      .mockResolvedValueOnce({ items: [provider] })
+      .mockResolvedValueOnce({ items: [provider] })
+
+    const wrapper = mount(VideoProvidersView, {
+      global: { stubs: { AppLayout: AppLayoutStub, Icon: true } }
+    })
+    await flushPromises()
+
+    await wrapper.get('#video-provider-kind').setValue('hc_atom_seedance_v3')
+    await wrapper.get('#video-provider-name').setValue('HC V3')
+    await wrapper.get('#video-provider-group').setValue('3')
+    await wrapper.get('#video-provider-secret').setValue('fake-local-secret')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(mocks.createProvider).toHaveBeenCalledWith(expect.objectContaining({
+      provider: 'hc_atom_seedance_v3',
+      display_name: 'HC V3',
+      group_id: 3
+    }))
+    expect(mocks.authorizeTinyReal).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('https://api-aigc.fzyinghe.com')
+  })
+
+  it('shows the latest sanitized task error for the matching provider account', async () => {
+    mocks.listProviders.mockResolvedValue({
+      items: [{
+        ...provider,
+        latest_error_message: 'upstream provider operation failed',
+        latest_error_at: '2026-07-27T01:02:03Z',
+      }],
+    })
+
+    const wrapper = mount(VideoProvidersView, {
+      global: { stubs: { AppLayout: AppLayoutStub, Icon: true } }
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('最近错误')
+    expect(wrapper.text()).toContain('upstream provider operation failed')
+    expect(mocks.listTasks).not.toHaveBeenCalled()
   })
 })

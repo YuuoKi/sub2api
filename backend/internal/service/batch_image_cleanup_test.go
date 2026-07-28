@@ -6,6 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -88,6 +90,52 @@ func TestBatchImageCleanupService_DeleteOutputsForOwner(t *testing.T) {
 		require.ErrorIs(t, err, ErrBatchImageCleanupUnsafePath)
 		require.Equal(t, "BATCH_IMAGE_CLEANUP_UNSAFE_PATH", batchImageDerefString(repo.jobs["imgbatch_cleanup"].LastErrorCode))
 	})
+}
+
+func TestBatchImageCleanupService_HCAtomOwnedOutputDeleteNeedsNoProviderOrAccount(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	batchID := "imgbatch_owned_cleanup"
+	ownedDir := filepath.Join(root, "hc_atom")
+	ownedPath := filepath.Join(ownedDir, batchID+".jsonl")
+	require.NoError(t, os.MkdirAll(ownedDir, 0o700))
+	require.NoError(t, os.WriteFile(ownedPath, []byte(
+		`{"custom_id":"cover_001","response":{"candidates":[{"content":{"parts":[{"inlineData":{"mimeType":"image/png","data":"Zmlyc3Q="}}]}}]}}`+"\n",
+	), 0o600))
+
+	repo := newFakeBatchImageRepository()
+	apiKeyID := int64(22)
+	repo.jobs[batchID] = &BatchImageJob{
+		BatchID: batchID, UserID: 11, APIKeyID: &apiKeyID, Provider: BatchImageProviderHCAtom,
+		Status: BatchImageJobStatusCompleted, ProviderOutputRef: batchImageStringPtr(hcAtomOwnedResultRef(batchID)),
+	}
+	svc := NewBatchImageCleanupService(repo, nil, &config.Config{BatchImage: config.BatchImageConfig{
+		HCAtomEnabled: false, HCAtomOwnedResultDir: root,
+	}})
+
+	got, err := svc.DeleteOutputsForOwner(ctx, testBatchImageOwner(), batchID)
+	require.NoError(t, err)
+	require.Equal(t, BatchImageJobStatusOutputDeleted, got.Status)
+	_, err = os.Stat(ownedPath)
+	require.ErrorIs(t, err, os.ErrNotExist)
+}
+
+func TestHCAtomOwnedResultStore_RejectsTraversalReferenceOnDelete(t *testing.T) {
+	root := t.TempDir()
+	victim := filepath.Join(root, "victim.jsonl")
+	require.NoError(t, os.WriteFile(victim, []byte("keep"), 0o600))
+	job := &BatchImageJob{
+		BatchID: "imgbatch_safe",
+		ProviderOutputRef: batchImageStringPtr(
+			"hc_atom_owned:../../victim",
+		),
+	}
+
+	handled, err := NewHCAtomOwnedResultStore(root).DeleteReferenced(job)
+	require.True(t, handled)
+	require.Error(t, err)
+	require.Equal(t, "HC_ATOM_OWNED_RESULT_REF_INVALID", infraerrors.Reason(err))
+	require.FileExists(t, victim)
 }
 
 func TestBatchImageCleanupService_InputOutputAndWorker(t *testing.T) {

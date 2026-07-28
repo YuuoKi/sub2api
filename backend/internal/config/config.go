@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -112,6 +113,7 @@ type VideoGatewayConfig struct {
 	USDCNYExchangeRate          float64 `mapstructure:"usd_cny_exchange_rate"`
 	TinyRealEstimateCNY         float64 `mapstructure:"tiny_real_estimate_cny"`
 	TinyRealMaximumCNY          float64 `mapstructure:"tiny_real_maximum_cny"`
+	HCAtomV3DispatchEnabled     bool    `mapstructure:"hc_atom_v3_dispatch_enabled"`
 }
 
 type LogConfig struct {
@@ -196,6 +198,9 @@ type IdempotencyConfig struct {
 
 type BatchImageConfig struct {
 	Enabled                           bool   `mapstructure:"enabled"`
+	HCAtomEnabled                     bool   `mapstructure:"hc_atom_enabled"`
+	HCAtomEncryptionKey               string `mapstructure:"hc_atom_encryption_key"`
+	HCAtomOwnedResultDir              string `mapstructure:"hc_atom_owned_result_dir"`
 	MaxItemsPerJobDefault             int    `mapstructure:"max_items_per_job_default"`
 	MaxItemsPerJobTrial               int    `mapstructure:"max_items_per_job_trial"`
 	MaxOutputImagesPerJob             int    `mapstructure:"max_output_images_per_job"`
@@ -1680,6 +1685,7 @@ func setDefaults() {
 	// explicitly provide the dedicated key, pricing and both runtime gates.
 	viper.SetDefault("video_gateway.encryption_key", "")
 	viper.SetDefault("video_gateway.worker_enabled", false)
+	viper.SetDefault("video_gateway.hc_atom_v3_dispatch_enabled", false)
 	viper.SetDefault("video_gateway.worker_interval_seconds", 5)
 	viper.SetDefault("video_gateway.http_timeout_seconds", 30)
 	viper.SetDefault("video_gateway.seedance_cny_per_million_tokens", 0)
@@ -1868,6 +1874,9 @@ func setDefaults() {
 
 	// Batch Image queue
 	viper.SetDefault("batch_image.enabled", false)
+	viper.SetDefault("batch_image.hc_atom_enabled", false)
+	viper.SetDefault("batch_image.hc_atom_encryption_key", "")
+	viper.SetDefault("batch_image.hc_atom_owned_result_dir", "data/batch-image")
 	viper.SetDefault("batch_image.max_items_per_job_default", 200)
 	viper.SetDefault("batch_image.max_items_per_job_trial", 50)
 	viper.SetDefault("batch_image.max_output_images_per_job", 200)
@@ -2178,6 +2187,41 @@ func setDefaults() {
 	viper.SetDefault("subscription_maintenance.worker_count", 2)
 	viper.SetDefault("subscription_maintenance.queue_size", 1024)
 
+}
+
+func validateHCAtomOwnedResultDir(raw string) error {
+	if strings.TrimSpace(raw) == "" {
+		return fmt.Errorf("must not be empty when hc_atom is enabled")
+	}
+	absolute, err := filepath.Abs(raw)
+	if err != nil {
+		return fmt.Errorf("cannot resolve directory")
+	}
+	absolute = filepath.Clean(absolute)
+	volumeRoot := filepath.VolumeName(absolute) + string(filepath.Separator)
+	if absolute == volumeRoot {
+		return fmt.Errorf("must not be a filesystem root")
+	}
+	if err := os.MkdirAll(absolute, 0o700); err != nil {
+		return fmt.Errorf("cannot create directory")
+	}
+	info, err := os.Stat(absolute)
+	if err != nil || !info.IsDir() {
+		return fmt.Errorf("must be a directory")
+	}
+	probe, err := os.CreateTemp(absolute, ".hc-atom-write-probe-*")
+	if err != nil {
+		return fmt.Errorf("directory is not writable")
+	}
+	probeName := probe.Name()
+	if err := probe.Close(); err != nil {
+		_ = os.Remove(probeName)
+		return fmt.Errorf("directory is not writable")
+	}
+	if err := os.Remove(probeName); err != nil {
+		return fmt.Errorf("directory write probe cannot be removed")
+	}
+	return nil
 }
 
 func (c *Config) Validate() error {
@@ -2544,6 +2588,25 @@ func (c *Config) Validate() error {
 		}
 		if c.BatchImage.RecoverLimit <= 0 {
 			return fmt.Errorf("batch_image.recover_limit must be positive")
+		}
+	}
+	if c.BatchImage.HCAtomEnabled {
+		keyHex := strings.TrimSpace(c.BatchImage.HCAtomEncryptionKey)
+		if keyHex == "" {
+			return fmt.Errorf("batch_image.hc_atom_encryption_key is required when hc_atom is enabled")
+		}
+		key, err := hex.DecodeString(keyHex)
+		if err != nil || len(key) != 32 {
+			return fmt.Errorf("batch_image.hc_atom_encryption_key must be a 32-byte hex key")
+		}
+		if strings.EqualFold(keyHex, strings.TrimSpace(c.VideoGateway.EncryptionKey)) {
+			return fmt.Errorf("batch_image.hc_atom_encryption_key must not reuse video_gateway.encryption_key")
+		}
+		if strings.EqualFold(keyHex, strings.TrimSpace(c.JWT.Secret)) {
+			return fmt.Errorf("batch_image.hc_atom_encryption_key must not reuse jwt.secret")
+		}
+		if err := validateHCAtomOwnedResultDir(c.BatchImage.HCAtomOwnedResultDir); err != nil {
+			return fmt.Errorf("batch_image.hc_atom_owned_result_dir invalid: %w", err)
 		}
 	}
 	if c.BatchImage.VertexEnabled {

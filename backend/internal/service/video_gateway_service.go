@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 )
@@ -24,18 +25,34 @@ type VideoTaskCreateCommand struct {
 	Scope             VideoTaskScope
 	ProviderAccountID int64
 	Prompt            string
+	Model             string
+	Content           []VideoContentItem
+	Ratio             string
+	GenerateAudio     bool
+	ReturnLastFrame   bool
+	Watermark         bool
 	Duration          int
 	Resolution        string
 	CreationKey       string
 }
 
 type VideoGatewayService struct {
-	repo         VideoGatewayRuntimeRepository
-	gate         *SingleSmokeAuthorization
-	cfg          *config.Config
-	authCache    VideoAuthCacheInvalidator
-	billingCache VideoBillingCacheInvalidator
-	assetStore   *VideoAssetStore
+	repo          VideoGatewayRuntimeRepository
+	gate          *SingleSmokeAuthorization
+	cfg           *config.Config
+	authCache     VideoAuthCacheInvalidator
+	billingCache  VideoBillingCacheInvalidator
+	assetStore    *VideoAssetStore
+	encryptor     VideoKeyEncryptor
+	clientFactory func(string, string, string) VideoProviderClient
+}
+
+// ConfigureProviderClientFactory wires dispatched HC cancellation without
+// changing the existing constructor used by legacy callers.
+func (s *VideoGatewayService) ConfigureProviderClientFactory(encryptor VideoKeyEncryptor, factory func(string, string, string) VideoProviderClient) {
+	if s != nil {
+		s.encryptor, s.clientFactory = encryptor, factory
+	}
 }
 
 func videoMaximumUSD(cfg *config.Config) (float64, error) {
@@ -71,10 +88,6 @@ func (s *VideoGatewayService) CreateTask(ctx context.Context, cmd VideoTaskCreat
 	if s == nil || s.repo == nil {
 		return nil, errors.New("video gateway repository is required")
 	}
-	input := VideoCreateRequest{Prompt: cmd.Prompt, Duration: cmd.Duration, Resolution: cmd.Resolution}
-	if err := ValidateTinyRealContract(input); err != nil {
-		return nil, err
-	}
 	if cmd.Scope.UserID <= 0 || cmd.Scope.APIKeyID <= 0 || cmd.Scope.GroupID <= 0 {
 		return nil, errors.New("complete employee video scope is required")
 	}
@@ -85,8 +98,27 @@ func (s *VideoGatewayService) CreateTask(ctx context.Context, cmd VideoTaskCreat
 	if err != nil {
 		return nil, err
 	}
-	if !provider.Enabled || provider.Provider != "seedance" {
+	if !provider.Enabled || (provider.Provider != "seedance" && provider.Provider != HCAtomSeedanceV3Provider) {
 		return nil, ErrVideoProviderNotFound
+	}
+	if provider.Provider == HCAtomSeedanceV3Provider && !s.cfg.VideoGateway.HCAtomV3DispatchEnabled {
+		return nil, ErrVideoRealDispatchDenied
+	}
+	if provider.Provider == HCAtomSeedanceV3Provider && strings.TrimSpace(cmd.Model) != "" && strings.TrimSpace(cmd.Model) != HCAtomSeedanceV3PublicModel {
+		return nil, ErrVideoProviderNotFound
+	}
+	input := VideoCreateRequest{Model: cmd.Model, Prompt: cmd.Prompt, Content: cmd.Content, Ratio: cmd.Ratio, GenerateAudio: cmd.GenerateAudio, ReturnLastFrame: cmd.ReturnLastFrame, Watermark: cmd.Watermark, Duration: cmd.Duration, Resolution: cmd.Resolution}
+	if provider.Provider == "seedance" {
+		input.ReturnLastFrame = true
+		if err := ValidateTinyRealContract(input); err != nil {
+			return nil, err
+		}
+	} else {
+		content, err := normalizeHCAtomV3Content(input)
+		if err != nil {
+			return nil, err
+		}
+		input.Content = content
 	}
 	maximumUSD, err := videoMaximumUSD(s.cfg)
 	if err != nil {
@@ -96,12 +128,16 @@ func (s *VideoGatewayService) CreateTask(ctx context.Context, cmd VideoTaskCreat
 	usdCNYExchangeRate := s.cfg.VideoGateway.USDCNYExchangeRate
 	maximumCNY := s.cfg.VideoGateway.TinyRealMaximumCNY
 	task := &VideoTask{APIKeyID: cmd.Scope.APIKeyID, GroupID: cmd.Scope.GroupID, ProviderAccountID: provider.ID,
-		Provider: provider.Provider, Model: SeedanceModel, TaskType: "text_to_video", Prompt: strings.TrimSpace(cmd.Prompt),
+		Provider: provider.Provider, Model: SeedanceModel, TaskType: "text_to_video", Prompt: strings.TrimSpace(cmd.Prompt), CreateRequest: input,
 		Status: VideoStatusQueued, CreationKey: strings.TrimSpace(cmd.CreationKey), CreatedBy: cmd.Scope.UserID,
 		DurationSeconds: 4, Resolution: "720p", Currency: "USD", ReservedCostUSD: maximumUSD, ReservationState: VideoReservationReserved,
 		PricingSource: VideoPricingSourceConfig, PricingVersion: VideoPricingVersionSeedanceCompletionTokensUSDV1,
 		PricingCNYPerMillionCompletionTokens: &priceCNYPerMillionCompletionTokens,
 		PricingUSDCNYExchangeRate:            &usdCNYExchangeRate, PricingMaximumCNY: &maximumCNY}
+	if provider.Provider == HCAtomSeedanceV3Provider {
+		task.Model = HCAtomSeedanceV3PublicModel
+		task.DurationSeconds, task.Resolution = cmd.Duration, cmd.Resolution
+	}
 	if err := s.repo.ReserveAndCreateTask(ctx, task, maximumUSD); err != nil {
 		return nil, err
 	}
@@ -116,8 +152,40 @@ func (s *VideoGatewayService) GetTask(ctx context.Context, id int64, scope Video
 }
 
 func (s *VideoGatewayService) CancelTask(ctx context.Context, id int64, scope VideoTaskScope) (*VideoTask, error) {
+	current, err := s.repo.GetTaskForScope(ctx, id, scope)
+	if err != nil {
+		return nil, err
+	}
+	if (current.Status == VideoStatusSubmitted || current.Status == VideoStatusRunning) && current.Provider == HCAtomSeedanceV3Provider {
+		if s.encryptor == nil || s.clientFactory == nil {
+			return nil, ErrVideoCancelConflict
+		}
+		provider, err := s.repo.GetVideoProvider(ctx, current.ProviderAccountID, current.GroupID)
+		if err != nil {
+			return nil, err
+		}
+		key, err := s.encryptor.Decrypt(provider.EncryptedAPIKey)
+		if err != nil {
+			return nil, errors.New("video provider credential decryption failed")
+		}
+		cancelled, err := s.clientFactory(provider.Provider, provider.BaseURL, key).Cancel(ctx, current.UpstreamTaskID)
+		if err != nil {
+			return nil, err
+		}
+		if cancelled == nil || cancelled.Status != VideoStatusCancelled {
+			return nil, ErrVideoCancelConflict
+		}
+		_, err = s.repo.FinalizeTask(ctx, VideoTaskFinalization{TaskID: current.ID, ExpectedVersion: current.Version, Status: VideoStatusCancelled, ProviderErrorCode: "cancelled", ProviderErrorMessage: "cancelled by employee", ErrorMessage: "cancelled by employee", Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()})
+		if err != nil {
+			return nil, err
+		}
+		current.Status = VideoStatusCancelled
+		current.CancelOutcome = "upstream_confirmed"
+		return current, invalidateVideoCaches(ctx, s.authCache, s.billingCache, scope.UserID, scope.APIKeyID)
+	}
 	task, err := s.repo.CancelTaskForScope(ctx, id, scope)
 	if err == nil {
+		task.CancelOutcome = "local_pre_dispatch"
 		err = invalidateVideoCaches(ctx, s.authCache, s.billingCache, scope.UserID, scope.APIKeyID)
 	}
 	return task, err

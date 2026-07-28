@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -17,14 +18,29 @@ import (
 )
 
 const (
-	SeedanceModel   = "doubao-seedance-2-0-260128"
-	SeedanceBaseURL = "https://ark.cn-beijing.volces.com/api/v3"
+	SeedanceModel               = "doubao-seedance-2-0-260128"
+	SeedanceBaseURL             = "https://ark.cn-beijing.volces.com/api/v3"
+	HCAtomSeedanceV3Provider    = "hc_atom_seedance_v3"
+	HCAtomSeedanceV3BaseURL     = "https://api-aigc.fzyinghe.com"
+	HCAtomSeedanceV3Host        = "api-aigc.fzyinghe.com"
+	HCAtomSeedanceV3Path        = "/v3/video/tasks"
+	HCAtomSeedanceV3PublicModel = "doubao-seedance-2.0"
+	HCAtomSeedanceV3Model       = "doubao-seedance-2-0-260128"
 )
 
 var (
 	ErrVideoRealDispatchDenied   = errors.New("real video dispatch denied: single_smoke_authorized is required")
 	ErrVideoRealDispatchConsumed = errors.New("real video dispatch denied: single_smoke_authorized was already consumed")
+	ErrHCAtomMediaURLUnreachable = errors.New("hc atom media URL is not safely accessible")
 )
+
+type VideoProviderTransportError struct {
+	err            error
+	UpstreamTaskID string
+}
+
+func (e *VideoProviderTransportError) Error() string { return e.err.Error() }
+func (e *VideoProviderTransportError) Unwrap() error { return e.err }
 
 type SingleSmokeAuthorization struct {
 	mu                sync.Mutex
@@ -58,11 +74,35 @@ func (a *SingleSmokeAuthorization) Allowed() bool {
 }
 
 type VideoCreateRequest struct {
-	Prompt            string `json:"prompt"`
-	Duration          int    `json:"duration"`
-	Resolution        string `json:"resolution"`
-	ReferenceImageURL string `json:"reference_image_url,omitempty"`
-	ReturnLastFrame   bool   `json:"return_last_frame"`
+	Model             string             `json:"model,omitempty"`
+	Prompt            string             `json:"prompt"`
+	Content           []VideoContentItem `json:"content,omitempty"`
+	Ratio             string             `json:"ratio,omitempty"`
+	GenerateAudio     bool               `json:"generate_audio,omitempty"`
+	Duration          int                `json:"duration"`
+	Resolution        string             `json:"resolution"`
+	ReferenceImageURL string             `json:"reference_image_url,omitempty"`
+	ReturnLastFrame   bool               `json:"return_last_frame"`
+	Watermark         bool               `json:"watermark,omitempty"`
+}
+
+type VideoContentURL struct {
+	URL string `json:"url"`
+}
+type VideoContentItem struct {
+	Type     string           `json:"type"`
+	Text     string           `json:"text,omitempty"`
+	ImageURL *VideoContentURL `json:"image_url,omitempty"`
+	VideoURL *VideoContentURL `json:"video_url,omitempty"`
+	AudioURL *VideoContentURL `json:"audio_url,omitempty"`
+}
+
+// VideoProviderClient keeps dispatch protocol-neutral while retaining the
+// official Ark adapter as a compatible implementation.
+type VideoProviderClient interface {
+	Create(context.Context, VideoCreateRequest) (*VideoProviderTask, error)
+	Poll(context.Context, string) (*VideoProviderTask, error)
+	Cancel(context.Context, string) (*VideoProviderTask, error)
 }
 
 func ValidateTinyRealContract(r VideoCreateRequest) error {
@@ -78,7 +118,322 @@ func ValidateTinyRealContract(r VideoCreateRequest) error {
 	if strings.TrimSpace(r.ReferenceImageURL) != "" {
 		return errors.New("tiny_real does not accept reference images")
 	}
+	if len(r.Content) != 0 || strings.TrimSpace(r.Ratio) != "" || r.GenerateAudio || r.Watermark {
+		return errors.New("tiny_real accepts prompt-only requests")
+	}
 	return nil
+}
+
+func (a *SeedanceAdapter) Cancel(context.Context, string) (*VideoProviderTask, error) {
+	return nil, errors.New("seedance upstream cancel is unsupported")
+}
+
+type HCAtomV3Adapter struct {
+	client          *http.Client
+	assetClient     *http.Client
+	baseURL, apiKey string
+}
+
+func NewHCAtomV3Adapter(client *http.Client, baseURL, apiKey string) *HCAtomV3Adapter {
+	if client == nil {
+		client = &http.Client{Timeout: 30 * time.Second}
+	}
+	assetClient := newPublicAssetHTTPClient(10 * time.Second)
+	previousRedirectCheck := assetClient.CheckRedirect
+	assetClient.CheckRedirect = func(request *http.Request, via []*http.Request) error {
+		if err := validatePublicHTTPSAssetURL(request.URL.String()); err != nil {
+			return errors.New("unsafe HC-ATOM media redirect")
+		}
+		if previousRedirectCheck != nil {
+			return previousRedirectCheck(request, via)
+		}
+		return nil
+	}
+	return &HCAtomV3Adapter{
+		client:      client,
+		assetClient: assetClient,
+		baseURL:     strings.TrimRight(strings.TrimSpace(baseURL), "/"),
+		apiKey:      apiKey,
+	}
+}
+
+func validateHCAtomV3BaseURL(raw string) (*url.URL, error) {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u.Scheme != "https" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || strings.ToLower(u.Hostname()) != HCAtomSeedanceV3Host || strings.TrimRight(u.Path, "/") != "" {
+		return nil, errors.New("hc atom endpoint is not allowlisted")
+	}
+	return u, nil
+}
+
+func normalizeHCAtomV3Content(input VideoCreateRequest) ([]VideoContentItem, error) {
+	content := input.Content
+	if len(content) == 0 && strings.TrimSpace(input.Prompt) != "" {
+		content = []VideoContentItem{{Type: "text", Text: strings.TrimSpace(input.Prompt)}}
+	}
+	if len(content) == 0 {
+		return nil, errors.New("hc atom content is required")
+	}
+	for _, item := range content {
+		switch item.Type {
+		case "text":
+			if strings.TrimSpace(item.Text) == "" || item.ImageURL != nil || item.VideoURL != nil || item.AudioURL != nil {
+				return nil, errors.New("hc atom text content is invalid")
+			}
+		case "image_url", "video_url", "audio_url":
+			var media *VideoContentURL
+			if item.Type == "image_url" {
+				media = item.ImageURL
+			}
+			if item.Type == "video_url" {
+				media = item.VideoURL
+			}
+			if item.Type == "audio_url" {
+				media = item.AudioURL
+			}
+			if media == nil || strings.TrimSpace(item.Text) != "" || (item.Type != "image_url" && item.ImageURL != nil) || (item.Type != "video_url" && item.VideoURL != nil) || (item.Type != "audio_url" && item.AudioURL != nil) || validateHCAtomMediaURL(media.URL) != nil {
+				return nil, errors.New("hc atom media content is invalid")
+			}
+		default:
+			return nil, errors.New("hc atom content type is unsupported")
+		}
+	}
+	return content, nil
+}
+
+func ValidateHCAtomV3Request(input VideoCreateRequest) error {
+	_, err := normalizeHCAtomV3Content(input)
+	return err
+}
+
+func validateHCAtomMediaURL(raw string) error {
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(raw)), "data:") {
+		return errors.New("data URLs are forbidden")
+	}
+	if strings.HasPrefix(raw, "asset://") {
+		identifier := strings.TrimPrefix(raw, "asset://")
+		if assetIdentifierPattern.MatchString(identifier) {
+			return nil
+		}
+		return errors.New("asset URL is invalid")
+	}
+	return validatePublicHTTPSAssetURL(raw)
+}
+
+func (a *HCAtomV3Adapter) taskURL() (string, error) {
+	if _, err := validateHCAtomV3BaseURL(a.baseURL); err != nil {
+		return "", err
+	}
+	return HCAtomSeedanceV3BaseURL + HCAtomSeedanceV3Path, nil
+}
+
+func (a *HCAtomV3Adapter) Create(ctx context.Context, input VideoCreateRequest) (*VideoProviderTask, error) {
+	endpoint, err := a.taskURL()
+	if err != nil {
+		return nil, err
+	}
+	content, err := normalizeHCAtomV3Content(input)
+	if err != nil {
+		return nil, err
+	}
+	if err := a.probeRemoteMediaURLs(ctx, content); err != nil {
+		return nil, err
+	}
+	payload := struct {
+		Model           string             `json:"model"`
+		Content         []VideoContentItem `json:"content"`
+		Ratio           string             `json:"ratio,omitempty"`
+		GenerateAudio   bool               `json:"generate_audio"`
+		ReturnLastFrame bool               `json:"return_last_frame"`
+		Watermark       bool               `json:"watermark"`
+		Duration        int                `json:"duration,omitempty"`
+		Resolution      string             `json:"resolution,omitempty"`
+	}{HCAtomSeedanceV3Model, content, input.Ratio, input.GenerateAudio, input.ReturnLastFrame, input.Watermark, input.Duration, input.Resolution}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	return a.doTask(ctx, http.MethodPost, endpoint, body)
+}
+
+func (a *HCAtomV3Adapter) probeRemoteMediaURLs(ctx context.Context, content []VideoContentItem) error {
+	client := a.assetClient
+	if client == nil {
+		return ErrHCAtomMediaURLUnreachable
+	}
+	for _, item := range content {
+		var raw string
+		switch item.Type {
+		case "image_url":
+			if item.ImageURL != nil {
+				raw = item.ImageURL.URL
+			}
+		case "video_url":
+			if item.VideoURL != nil {
+				raw = item.VideoURL.URL
+			}
+		case "audio_url":
+			if item.AudioURL != nil {
+				raw = item.AudioURL.URL
+			}
+		}
+		raw = strings.TrimSpace(raw)
+		if raw == "" || strings.HasPrefix(raw, "asset://") {
+			continue
+		}
+		if err := probeHCAtomRemoteMediaURL(ctx, client, raw); err != nil {
+			return ErrHCAtomMediaURLUnreachable
+		}
+	}
+	return nil
+}
+
+func probeHCAtomRemoteMediaURL(ctx context.Context, client *http.Client, raw string) error {
+	request, err := http.NewRequestWithContext(ctx, http.MethodHead, raw, nil)
+	if err != nil {
+		return err
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode >= http.StatusOK && response.StatusCode < http.StatusMultipleChoices {
+		return nil
+	}
+	if response.StatusCode != http.StatusMethodNotAllowed {
+		return fmt.Errorf("media probe returned HTTP %d", response.StatusCode)
+	}
+
+	getRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, raw, nil)
+	if err != nil {
+		return err
+	}
+	getRequest.Header.Set("Range", "bytes=0-0")
+	getResponse, err := client.Do(getRequest)
+	if err != nil {
+		return err
+	}
+	defer getResponse.Body.Close()
+	if getResponse.StatusCode < http.StatusOK || getResponse.StatusCode >= http.StatusMultipleChoices {
+		return fmt.Errorf("media probe returned HTTP %d", getResponse.StatusCode)
+	}
+	_, _ = io.Copy(io.Discard, io.LimitReader(getResponse.Body, 1))
+	return nil
+}
+
+func (a *HCAtomV3Adapter) Poll(ctx context.Context, id string) (*VideoProviderTask, error) {
+	endpoint, err := a.taskURL()
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(id) == "" {
+		return nil, errors.New("hc atom upstream task id is required")
+	}
+	return a.doTask(ctx, http.MethodGet, endpoint+"/"+url.PathEscape(id), nil)
+}
+func (a *HCAtomV3Adapter) Cancel(ctx context.Context, id string) (*VideoProviderTask, error) {
+	endpoint, err := a.taskURL()
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(id) == "" {
+		return nil, errors.New("hc atom upstream task id is required")
+	}
+	return a.doTask(ctx, http.MethodDelete, endpoint+"/"+url.PathEscape(id), nil)
+}
+func (a *HCAtomV3Adapter) doTask(ctx context.Context, method, endpoint string, body []byte) (*VideoProviderTask, error) {
+	req, err := http.NewRequestWithContext(ctx, method, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+a.apiKey)
+	if method == http.MethodPost {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := a.client.Do(req)
+	if err != nil {
+		return nil, &VideoProviderTransportError{err: fmt.Errorf("hc atom transport failed: %s", RedactVideoSecrets(err.Error(), a.apiKey))}
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		if method == http.MethodPost {
+			return nil, &VideoProviderTransportError{err: errors.New("hc atom create response read failed")}
+		}
+		return nil, errors.New("hc atom response read failed")
+	}
+	if a.apiKey != "" && strings.Contains(string(data), a.apiKey) {
+		return nil, errors.New("hc atom response echoed provider credential")
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("hc atom request failed: http_%d", resp.StatusCode)
+	}
+	var parsed struct {
+		ID      string `json:"id"`
+		Status  string `json:"status"`
+		Content struct {
+			VideoURL     string `json:"video_url"`
+			LastFrameURL string `json:"last_frame_url"`
+		} `json:"content"`
+		Usage struct {
+			CompletionTokens *int64 `json:"completion_tokens"`
+			TotalTokens      *int64 `json:"total_tokens"`
+		} `json:"usage"`
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		if method == http.MethodPost {
+			return nil, &VideoProviderTransportError{err: errors.New("hc atom create response is invalid")}
+		}
+		return nil, errors.New("hc atom response is invalid")
+	}
+	if strings.TrimSpace(parsed.ID) == "" {
+		if method == http.MethodPost {
+			return nil, &VideoProviderTransportError{err: errors.New("hc atom create response missing task id")}
+		}
+		return nil, errors.New("hc atom response missing task id")
+	}
+	status, err := normalizeHCAtomV3Status(parsed.Status)
+	if err != nil {
+		if method == http.MethodPost {
+			return nil, &VideoProviderTransportError{err: err, UpstreamTaskID: parsed.ID}
+		}
+		return nil, errors.New("hc atom returned unknown task status")
+	}
+	if parsed.Content.VideoURL != "" && validatePublicHTTPSAssetURL(parsed.Content.VideoURL) != nil {
+		return nil, errors.New("hc atom returned unsafe result URL")
+	}
+	if parsed.Content.LastFrameURL != "" && validatePublicHTTPSAssetURL(parsed.Content.LastFrameURL) != nil {
+		return nil, errors.New("hc atom returned unsafe last-frame URL")
+	}
+	usage := parsed.Usage.CompletionTokens
+	if usage == nil || *usage <= 0 {
+		usage = parsed.Usage.TotalTokens
+	}
+	if usage != nil && *usage <= 0 {
+		usage = nil
+	}
+	return &VideoProviderTask{UpstreamTaskID: parsed.ID, Status: status, ResultURL: parsed.Content.VideoURL, LastFrameURL: parsed.Content.LastFrameURL, CompletionTokens: usage, ErrorCode: sanitizeProviderCode(parsed.Error.Code), ErrorMessage: sanitizeProviderMessage(parsed.Error.Message)}, nil
+}
+
+func normalizeHCAtomV3Status(value string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "queued", "pending":
+		return VideoStatusSubmitted, nil
+	case "running":
+		return VideoStatusRunning, nil
+	case "succeeded":
+		return VideoStatusSucceeded, nil
+	case "failed":
+		return VideoStatusFailed, nil
+	case "cancelled", "canceled":
+		return VideoStatusCancelled, nil
+	default:
+		return "", errors.New("hc atom returned unknown task status")
+	}
 }
 
 type VideoProviderTask struct {
@@ -294,14 +649,40 @@ func validatePublicHTTPSAssetURL(raw string) error {
 	if err != nil || u.Scheme != "https" || u.User != nil || u.Hostname() == "" {
 		return errors.New("asset URL must be HTTPS")
 	}
-	host := strings.ToLower(u.Hostname())
-	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
+	host := strings.ToLower(strings.TrimSuffix(u.Hostname(), "."))
+	if strings.Contains(host, "%") || host == "localhost" || strings.HasSuffix(host, ".localhost") {
 		return errors.New("asset URL host is private")
 	}
-	if ip := net.ParseIP(host); ip != nil && (ip.IsLoopback() || ip.IsPrivate() || ip.IsUnspecified() || ip.IsLinkLocalUnicast()) {
+	if numericLikeHostPattern.MatchString(host) || (net.ParseIP(host) == nil && isNonCanonicalNumericIPv4(host)) {
+		return errors.New("asset URL host is private")
+	}
+	if ip := net.ParseIP(host); ip != nil && (!ip.IsGlobalUnicast() || ip.IsPrivate() || ip.IsLoopback() || ip.IsUnspecified() || ip.IsLinkLocalUnicast() || (ip.To4() != nil && ip.To4()[0] == 100 && ip.To4()[1] >= 64 && ip.To4()[1] <= 127)) {
 		return errors.New("asset URL host is private")
 	}
 	return nil
+}
+
+var assetIdentifierPattern = regexp.MustCompile(`^asset-[A-Za-z0-9_-]+$`)
+var numericLikeHostPattern = regexp.MustCompile(`^(0x[0-9a-f]+|0[0-7]+|[0-9]+)$`)
+
+func isNonCanonicalNumericIPv4(host string) bool {
+	labels := strings.Split(host, ".")
+	if len(labels) < 1 || len(labels) > 4 {
+		return false
+	}
+	for _, label := range labels {
+		if label == "" {
+			return false
+		}
+		if _, err := strconv.ParseUint(label, 10, 32); err == nil {
+			continue
+		}
+		if _, err := strconv.ParseUint(label, 0, 32); err == nil {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func sanitizeProviderCode(value string) string {

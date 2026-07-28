@@ -92,7 +92,7 @@ describe('useAppStore', () => {
   })
 
   it('distinguishes immutable LAN administrator mode from mutable backend mode', () => {
-    ;(window as any).__APP_CONFIG__ = createPublicSettings({
+    (window as any).__APP_CONFIG__ = createPublicSettings({
       backend_mode_enabled: true,
       lan_admin_mode_enabled: false,
     })

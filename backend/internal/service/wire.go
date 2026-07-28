@@ -539,8 +539,15 @@ func ProvideVideoSingleSmokeAuthorization() *SingleSmokeAuthorization {
 	return NewSingleSmokeAuthorization(strings.EqualFold(strings.TrimSpace(os.Getenv("VIDEO_SINGLE_SMOKE_AUTHORIZED")), "true"))
 }
 
-func ProvideVideoGatewayService(repo VideoGatewayRuntimeRepository, gate *SingleSmokeAuthorization, cfg *config.Config, authCache *APIKeyService, billingCache *BillingCacheService, store *VideoAssetStore) *VideoGatewayService {
-	return NewVideoGatewayService(repo, gate, cfg, authCache, billingCache, store)
+func ProvideVideoGatewayService(repo VideoGatewayRuntimeRepository, encryptor VideoKeyEncryptor, gate *SingleSmokeAuthorization, cfg *config.Config, authCache *APIKeyService, billingCache *BillingCacheService, store *VideoAssetStore) *VideoGatewayService {
+	svc := NewVideoGatewayService(repo, gate, cfg, authCache, billingCache, store)
+	svc.ConfigureProviderClientFactory(encryptor, func(provider, baseURL, key string) VideoProviderClient {
+		if provider == HCAtomSeedanceV3Provider {
+			return NewHCAtomV3Adapter(nil, baseURL, key)
+		}
+		return NewSeedanceAdapter(nil, baseURL, key)
+	})
+	return svc
 }
 
 func ProvideVideoAuthCacheInvalidator(apiKeyService *APIKeyService) VideoAuthCacheInvalidator {
@@ -662,6 +669,7 @@ var ProviderSet = wire.NewSet(
 	ProvideAPIKeyService,
 	ProvideAPIKeyAuthCacheInvalidator,
 	ProvideVideoSingleSmokeAuthorization,
+	ProvideHCAtomCredentialCipher,
 	ProvideVideoAssetStore,
 	ProvideVideoAssetArchiver,
 	ProvideVideoGatewayService,
@@ -683,7 +691,7 @@ var ProviderSet = wire.NewSet(
 	NewBillingService,
 	ProvideBillingCacheService,
 	NewAnnouncementService,
-	NewAdminService,
+	ProvideAdminService,
 	ProvideGatewayService,
 	NewGenerationContentCollector,
 	ProvideOpenAIGatewayService,

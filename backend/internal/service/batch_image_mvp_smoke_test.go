@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -189,6 +190,135 @@ func TestBatchImageMVPFlow(t *testing.T) {
 	require.ErrorIs(t, err, ErrBatchImageOutputDeleted)
 	require.Empty(t, afterDelete.Bytes())
 }
+
+// Regression target: the HC provider must traverse the same owned batch
+// pipeline as Gemini: a held public intent submits once, polls to success,
+// archives bytes into JSONL for indexing, and settles only once.
+func TestHCAtomBatchImagePipeline_FakeEndToEndOwnedResult(t *testing.T) {
+	ctx := context.Background()
+	repo := newFakeBatchImageRepository()
+	queue := &publicBatchImageQueue{}
+	billing := &fakeBatchImageBillingRepo{}
+	cipher, account := hcAtomBatchTestAccount(t, "hc-fake-key")
+	account.ID = 303
+	account.Status = StatusActive
+	account.Schedulable = true
+	account.Priority = 100
+	client := &hcAtomPipelineClient{}
+	resultClient := &http.Client{Transport: hcAtomRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		require.Equal(t, "https", req.URL.Scheme)
+		require.Equal(t, "8.8.8.8", req.URL.Hostname())
+		response := hcAtomHTTPResponse(http.StatusOK, string(hcAtomPipelinePNG))
+		response.Header.Set("Content-Type", "image/png")
+		return response, nil
+	})}
+	ownedResultDir := t.TempDir()
+	provider := NewHCAtomBatchImageProviderWithOwnedResultStore(client, resultClient, cipher, ownedResultDir)
+	registry := NewBatchImageProviderRegistry(provider)
+	groupID := int64(77)
+	cfg := &config.Config{BatchImage: config.BatchImageConfig{
+		Enabled: true, MaxItemsPerJobDefault: 1, MaxPromptCharsPerItem: 8000,
+		DefaultResponseMimeType: "image/png", DefaultImageSize: "1K",
+		HCAtomOwnedResultDir: ownedResultDir,
+	}}
+	publicSvc := &BatchImagePublicService{
+		Repo: repo, AccountRepo: &publicBatchImageAccountRepo{accounts: []Account{*account}},
+		GroupRepo: &publicBatchImageGroupRepo{groups: map[int64]*Group{
+			groupID: {ID: groupID, Platform: PlatformHCAtom, AllowBatchImageGeneration: true, RateMultiplier: 1, BatchImageDiscountMultiplier: 1, BatchImageHoldMultiplier: 1},
+		}},
+		Queue: queue, ProviderRegistry: registry, Pricing: &fakeBatchImagePricingResolver{unitPrice: 0.25}, BillingRepo: billing, Config: cfg,
+	}
+	processor := &BatchImagePipelineProcessor{
+		ProviderProcessor: &BatchImageProviderProcessor{Repo: repo, ProviderRegistry: registry, AccountResolver: &fakeBatchImageAccountResolver{account: account}, BillingRepo: billing},
+		SettlementService: &BatchImageSettlementService{Repo: repo, BillingRepo: billing, Pricing: &fakeBatchImagePricingResolver{unitPrice: 0.25}, Config: cfg},
+	}
+	req := validBatchImageSubmitRequest()
+	req.Provider, req.Model, req.Items = BatchImageProviderHCAtom, "seedream-5.0", req.Items[:1]
+	owner := BatchImageOwner{UserID: 11, APIKeyID: 22, GroupID: &groupID}
+
+	submitted, err := publicSvc.Submit(ctx, owner, req, "hc-e2e-intent")
+	require.NoError(t, err)
+	require.Equal(t, BatchImageProviderHCAtom, repo.jobs[submitted.ID].Provider)
+	require.Equal(t, []string{submitted.ID}, queue.enqueued)
+	require.Equal(t, 1, client.createCount)
+	require.Equal(t, "hc-image:"+submitted.ID, client.idempotencyKey)
+	require.Equal(t, "seedream-5.0", client.createRequest.Model)
+	require.Equal(t, map[string]any{"prompt": "hero"}, client.createRequest.Input)
+	require.Len(t, billing.reserves, 1)
+
+	indexed, err := processor.Process(ctx, submitted.ID)
+	require.NoError(t, err)
+	require.False(t, indexed.Terminal)
+	require.Equal(t, BatchImageJobStatusSettling, repo.jobs[submitted.ID].Status)
+	require.Equal(t, BatchImageCounts{SuccessCount: 1}, repo.counts[submitted.ID])
+	require.GreaterOrEqual(t, client.getCount, 2, "poll plus owned-result archival must re-check HC success")
+
+	settled, err := processor.Process(ctx, submitted.ID)
+	require.NoError(t, err)
+	require.True(t, settled.Terminal)
+	require.Equal(t, BatchImageJobStatusCompleted, repo.jobs[submitted.ID].Status)
+	require.Len(t, billing.captures, 1)
+
+	repeated, err := processor.Process(ctx, submitted.ID)
+	require.NoError(t, err)
+	require.True(t, repeated.Terminal)
+	require.Len(t, billing.captures, 1, "repeat polling must not bill a completed HC batch again")
+}
+
+func TestHCAtomBatchPublicSubmit_UncertainCreateDoesNotReplaySameIntent(t *testing.T) {
+	ctx := context.Background()
+	cipher, account := hcAtomBatchTestAccount(t, "hc-fake-key")
+	account.ID, account.Status, account.Schedulable = 303, StatusActive, true
+	client := &hcAtomPipelineClient{createErr: context.DeadlineExceeded}
+	provider := NewHCAtomBatchImageProviderWithCredentialCipher(client, cipher)
+	repo, billing := newFakeBatchImageRepository(), &fakeBatchImageBillingRepo{}
+	svc := &BatchImagePublicService{
+		Repo: repo, AccountRepo: &publicBatchImageAccountRepo{accounts: []Account{*account}},
+		ProviderRegistry: NewBatchImageProviderRegistry(provider), Pricing: &fakeBatchImagePricingResolver{unitPrice: 0.25}, BillingRepo: billing,
+		Config: &config.Config{BatchImage: config.BatchImageConfig{Enabled: true, MaxItemsPerJobDefault: 1, MaxPromptCharsPerItem: 8000, DefaultResponseMimeType: "image/png", DefaultImageSize: "1K"}},
+	}
+	req := validBatchImageSubmitRequest()
+	req.Provider, req.Model, req.Items = BatchImageProviderHCAtom, "seedream-5.0", req.Items[:1]
+
+	_, err := svc.Submit(ctx, testBatchImageOwner(), req, "hc-uncertain-intent")
+	require.ErrorIs(t, err, ErrBatchImageProviderSubmitFailed)
+	require.Equal(t, 1, client.createCount)
+	require.Len(t, billing.reserves, 1)
+	require.Len(t, billing.releases, 1)
+
+	again, err := svc.Submit(ctx, testBatchImageOwner(), req, "hc-uncertain-intent")
+	require.NoError(t, err)
+	require.Equal(t, "failed", again.Status)
+	require.Equal(t, 1, client.createCount, "uncertain HC create is never automatically replayed")
+	require.Len(t, billing.releases, 1)
+}
+
+var hcAtomPipelinePNG = []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01")
+
+type hcAtomPipelineClient struct {
+	createCount    int
+	getCount       int
+	idempotencyKey string
+	createRequest  HCAtomBatchCreateRequest
+	createErr      error
+}
+
+func (c *hcAtomPipelineClient) Create(_ context.Context, _ string, idempotencyKey string, req HCAtomBatchCreateRequest) (*HCAtomBatchTask, error) {
+	c.createCount++
+	c.idempotencyKey = idempotencyKey
+	c.createRequest = req
+	if c.createErr != nil {
+		return nil, c.createErr
+	}
+	return &HCAtomBatchTask{TaskID: "hc-task-e2e", Status: "PENDING"}, nil
+}
+
+func (c *hcAtomPipelineClient) Get(context.Context, string, string) (*HCAtomBatchTask, error) {
+	c.getCount++
+	return &HCAtomBatchTask{TaskID: "hc-task-e2e", Status: "SUCCESS", ResultURLs: []string{"https://8.8.8.8/hc-e2e.png"}, ImageCount: 1}, nil
+}
+
+func (*hcAtomPipelineClient) Delete(context.Context, string, string) error { return nil }
 
 func batchImageSmokeResultJSONL() string {
 	return strings.Join([]string{

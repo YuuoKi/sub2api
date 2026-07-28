@@ -251,6 +251,17 @@ func TestAdminService_CreateGroup_DefaultsGrokMediaGenerationEnabled(t *testing.
 	require.True(t, group.AllowImageGeneration)
 }
 
+func TestAdminService_CreateGroup_AllowsHCAtomBatchImage(t *testing.T) {
+	repo := &groupRepoStubForAdmin{}
+	svc := &adminServiceImpl{groupRepo: repo}
+	group, err := svc.CreateGroup(context.Background(), &CreateGroupInput{
+		Name: "hc-batch", Platform: PlatformHCAtom, RateMultiplier: 1,
+		AllowImageGeneration: true, AllowBatchImageGeneration: true,
+	})
+	require.NoError(t, err)
+	require.True(t, group.AllowBatchImageGeneration)
+}
+
 func TestAdminService_CreateGroup_PreservesNonGrokImageGenerationDisabled(t *testing.T) {
 	repo := &groupRepoStubForAdmin{}
 	svc := &adminServiceImpl{groupRepo: repo}

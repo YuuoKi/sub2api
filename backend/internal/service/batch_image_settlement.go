@@ -256,7 +256,7 @@ func (s *BatchImageSettlementService) recordUsageLog(ctx context.Context, job *B
 	billingMode := string(BillingModeImage)
 	accountRateMultiplier := job.AccountRateMultiplier
 	inboundEndpoint := "/v1/images/batches"
-	upstreamEndpoint := "vertex:batchPredictionJobs"
+	upstreamEndpoint := batchImageUsageUpstreamEndpoint(job.Provider)
 	imageSize := "1K"
 	usageLog := &UsageLog{
 		UserID:                job.UserID,
@@ -280,6 +280,19 @@ func (s *BatchImageSettlementService) recordUsageLog(ctx context.Context, job *B
 		CreatedAt:             createdAt,
 	}
 	writeUsageLogBestEffort(ctx, s.UsageLogRepo, usageLog, "service.batch_image_settlement")
+}
+
+func batchImageUsageUpstreamEndpoint(provider string) string {
+	switch strings.TrimSpace(provider) {
+	case BatchImageProviderHCAtom:
+		return hcAtomBatchOrigin + hcAtomBatchCreatePath
+	case BatchImageProviderGeminiAPI:
+		return "gemini:batches"
+	case BatchImageProviderVertex:
+		return "vertex:batchPredictionJobs"
+	default:
+		return "batch_image:" + strings.TrimSpace(provider)
+	}
 }
 
 func (s *BatchImageSettlementService) invalidateAuthCache(ctx context.Context, userID int64) {

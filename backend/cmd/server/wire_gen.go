@@ -177,7 +177,11 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	dashboardHandler := admin.NewDashboardHandler(dashboardService, dashboardAggregationService, settingService)
 	proxyExitInfoProber := repository.NewProxyExitInfoProber(configConfig)
 	proxyLatencyCache := repository.NewProxyLatencyCache(redisClient)
-	adminService := service.NewAdminService(userRepository, groupRepository, accountRepository, proxyRepository, apiKeyRepository, redeemCodeRepository, userGroupRateRepository, userRPMCache, billingCacheService, proxyExitInfoProber, proxyLatencyCache, apiKeyAuthCacheInvalidator, client, settingService, subscriptionService, userSubscriptionRepository, privacyClientFactory, openAIGatewayService)
+	hcAtomCredentialCipher, err := service.ProvideHCAtomCredentialCipher(configConfig)
+	if err != nil {
+		return nil, err
+	}
+	adminService := service.ProvideAdminService(userRepository, groupRepository, accountRepository, proxyRepository, apiKeyRepository, redeemCodeRepository, userGroupRateRepository, userRPMCache, billingCacheService, proxyExitInfoProber, proxyLatencyCache, apiKeyAuthCacheInvalidator, client, settingService, subscriptionService, userSubscriptionRepository, privacyClientFactory, openAIGatewayService, hcAtomCredentialCipher)
 	adminUserHandler := admin.NewUserHandler(adminService, concurrencyService, serviceUserPlatformQuotaRepository, billingCache)
 	groupCapacityService := service.NewGroupCapacityService(accountRepository, groupRepository, concurrencyService, sessionLimitCache, rpmCache)
 	groupHandler := admin.NewGroupHandler(adminService, dashboardService, groupCapacityService)
@@ -218,8 +222,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	opsHandler := admin.NewOpsHandler(opsService)
 	updateCache := repository.NewUpdateCache(redisClient)
 	gitHubReleaseClient := repository.ProvideGitHubReleaseClient(configConfig)
-	serviceBuildInfo := provideServiceBuildInfo(buildInfo)
-	updateService := service.ProvideUpdateService(updateCache, gitHubReleaseClient, serviceBuildInfo)
+	updateService := service.ProvideUpdateService(updateCache, gitHubReleaseClient, buildInfo)
 	idempotencyRepository := repository.NewIdempotencyRepository(client, db)
 	systemOperationLockService := service.ProvideSystemOperationLockService(idempotencyRepository, configConfig)
 	systemHandler := handler.ProvideSystemHandler(buildInfo, updateService, systemOperationLockService)
@@ -280,7 +283,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	batchImageHandler := handler.NewBatchImageHandler(batchImagePublicService, batchImageDownloadService, batchImageCleanupService)
 	videoGatewayRuntimeRepository := repository.NewVideoGatewayRuntimeRepository(db)
 	singleSmokeAuthorization := service.ProvideVideoSingleSmokeAuthorization()
-	videoGatewayService := service.ProvideVideoGatewayService(videoGatewayRuntimeRepository, singleSmokeAuthorization, configConfig, apiKeyService, billingCacheService, videoAssetStore)
+	videoGatewayService := service.ProvideVideoGatewayService(videoGatewayRuntimeRepository, videoKeyEncryptor, singleSmokeAuthorization, configConfig, apiKeyService, billingCacheService, videoAssetStore)
 	videoGatewayHandler := handler.NewVideoGatewayHandler(videoGatewayService)
 	videoSimulationRepository := repository.ProvideVideoSimulationRepository(videoGatewayRuntimeRepository)
 	videoSimulationService := service.ProvideVideoSimulationService(videoSimulationRepository, apiKeyService)
@@ -332,10 +335,6 @@ type Application struct {
 
 func providePrivacyClientFactory() service.PrivacyClientFactory {
 	return repository.CreatePrivacyReqClient
-}
-
-func provideServiceBuildInfo(buildInfo handler.BuildInfo) service.BuildInfo {
-	return service.BuildInfo(buildInfo)
 }
 
 func provideCleanup(

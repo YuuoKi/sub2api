@@ -46,9 +46,6 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 		// Privacy client factory for OpenAI training opt-out
 		providePrivacyClientFactory,
 
-		// BuildInfo provider
-		provideServiceBuildInfo,
-
 		// Cleanup function provider
 		provideCleanup,
 
@@ -60,10 +57,6 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 
 func providePrivacyClientFactory() service.PrivacyClientFactory {
 	return repository.CreatePrivacyReqClient
-}
-
-func provideServiceBuildInfo(buildInfo handler.BuildInfo) service.BuildInfo {
-	return service.BuildInfo(buildInfo)
 }
 
 func provideCleanup(

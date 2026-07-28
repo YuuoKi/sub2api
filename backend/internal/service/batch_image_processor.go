@@ -145,6 +145,7 @@ func (p *BatchImageProviderProcessor) Process(ctx context.Context, batchID strin
 			code = "PROVIDER_BATCH_FAILED"
 		}
 		msg := truncateBatchImageMessage(status.ErrorMessage, batchImageMaxErrorMessageLength)
+		code, msg = sanitizeBatchImageProviderFailure(code, msg, "PROVIDER_BATCH_FAILED", "provider batch failed")
 		if err := p.Repo.TransitionBatchImageJobStatus(ctx, job.BatchID, BatchImageJobStatusFailed, BatchImageTransitionOptions{
 			EventType:    "job_failed",
 			EventPayload: map[string]any{"provider_state": status.RawState, "error_code": code},
@@ -186,7 +187,7 @@ func (p *BatchImageProviderProcessor) indexAndSettle(ctx context.Context, job *B
 
 	result, err := indexer.Index(ctx, job, provider, account)
 	if err != nil {
-		if errors.Is(err, ErrBatchImageIndexOutputMissing) {
+		if errors.Is(err, ErrBatchImageIndexOutputMissing) || errors.Is(err, ErrBatchImageIndexArchivePersist) {
 			return BatchImageProcessResult{}, err
 		}
 		// job 状态已被并发方推进（如已进入 settling/终态）：不是索引数据问题，
@@ -292,14 +293,23 @@ func (i *BatchImageResultIndexer) Index(ctx context.Context, job *BatchImageJob,
 		return nil, err
 	}
 
+	outputRefBeforeOpen := batchImageDerefString(job.ProviderOutputRef)
 	r, _, err := provider.OpenResult(ctx, job, account)
 	if err != nil {
 		return nil, ErrBatchImageIndexOutputMissing.WithCause(err)
 	}
 	defer func() { _ = r.Close() }()
+	if ref := batchImageDerefString(job.ProviderOutputRef); ref != "" && ref != outputRefBeforeOpen {
+		if err := i.Repo.UpdateBatchImageJobProviderOutputRef(ctx, job.BatchID, ref); err != nil {
+			return nil, ErrBatchImageIndexArchivePersist.WithCause(err)
+		}
+		if err := i.Repo.AppendBatchImageEvent(ctx, job.BatchID, "provider_output_archived", map[string]any{"provider_output_ref": ref}); err != nil {
+			return nil, ErrBatchImageIndexArchivePersist.WithCause(err)
+		}
+	}
 
 	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
+	scanner.Buffer(make([]byte, 0, 64*1024), batchImageJSONLMaxLineBytes)
 
 	seen := make(map[string]int)
 	unknownCount := 0

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -546,6 +547,26 @@ func TestBatchImagePublicService_ListModels(t *testing.T) {
 		require.NotContains(t, ids, "gemini-3.1-flash-lite-image")
 	})
 
+	t.Run("does not advertise disabled HC Dola model", func(t *testing.T) {
+		svc, _, _, _, _ := newTestBatchImagePublicService(true)
+		hc := &publicBatchImageProvider{name: BatchImageProviderHCAtom}
+		svc.ProviderRegistry = NewBatchImageProviderRegistry(hc)
+		account := testBatchImageMappedAccount(303, AccountTypeAPIKey, map[string]any{
+			"seedream-5.0":          "seedream-5.0",
+			"dola-seedream-5.0-pro": "dola-seedream-5.0-pro",
+		})
+		account.Platform = PlatformHCAtom
+		svc.AccountRepo = &publicBatchImageAccountRepo{accounts: []Account{account}}
+
+		got, err := svc.ListModels(ctx, testBatchImageOwner())
+		require.NoError(t, err)
+		require.Equal(t, []BatchImagePublicModel{{
+			ID:       "seedream-5.0",
+			Object:   "image.batch.model",
+			Provider: BatchImageProviderHCAtom,
+		}}, got.Data)
+	})
+
 	t.Run("rejects when group disables batch image", func(t *testing.T) {
 		svc, _, _, _, _ := newTestBatchImagePublicService(true)
 		groupID := int64(7)
@@ -774,6 +795,77 @@ func validBatchImageSubmitRequest() BatchImageSubmitRequest {
 			{CustomID: "cover_002", Prompt: "clean"},
 		},
 	}
+}
+
+func TestBatchImageProviderSelectionOrder_DoesNotSilentlyFallbackToHCAtom(t *testing.T) {
+	require.Equal(t,
+		[]string{BatchImageProviderGeminiAPI, BatchImageProviderVertex},
+		batchImageProviderSelectionOrder(""),
+	)
+	require.Equal(t,
+		[]string{BatchImageProviderHCAtom},
+		batchImageProviderSelectionOrder(BatchImageProviderHCAtom),
+	)
+}
+
+func TestBatchImagePublicSubmit_HCAtomRejectsGeminiOnlyGroupBeforeAccountSelection(t *testing.T) {
+	svc, repo, _, gemini, _ := newTestBatchImagePublicService(true)
+	hc := &publicBatchImageProvider{name: BatchImageProviderHCAtom}
+	svc.ProviderRegistry = NewBatchImageProviderRegistry(gemini, hc)
+	svc.AccountRepo = &publicBatchImageAccountRepo{accounts: []Account{{
+		ID:          303,
+		Platform:    PlatformHCAtom,
+		Type:        AccountTypeAPIKey,
+		Status:      StatusActive,
+		Schedulable: true,
+		Credentials: map[string]any{"api_key": "test-only"},
+	}}}
+	groupID := int64(77)
+	svc.GroupRepo = &publicBatchImageGroupRepo{groups: map[int64]*Group{
+		groupID: {ID: groupID, Platform: PlatformGemini, AllowBatchImageGeneration: true},
+	}}
+	req := validBatchImageSubmitRequest()
+	req.Provider = BatchImageProviderHCAtom
+	req.Model = "seedream-5.0"
+	req.Items = req.Items[:1]
+
+	_, err := svc.Submit(context.Background(), BatchImageOwner{UserID: 11, APIKeyID: 22, GroupID: &groupID}, req, "hc-group-mismatch")
+
+	require.ErrorIs(t, err, ErrBatchImageGroupDisabled)
+	require.Empty(t, repo.jobs)
+	require.Empty(t, hc.submits)
+}
+
+func TestBatchImagePublicCancel_HCAtomBusinessFailureKeepsHeldJobSubmitted(t *testing.T) {
+	cipher, account := hcAtomBatchTestAccount(t, "test-only")
+	account.ID = 303
+	account.Status = StatusActive
+	account.Schedulable = true
+	provider := NewHCAtomBatchImageProviderWithCredentialCipher(NewHCAtomBatchHTTPClient(&http.Client{Transport: hcAtomRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		require.Equal(t, http.MethodDelete, req.Method)
+		return hcAtomHTTPResponse(http.StatusOK, `{"code":40001,"msg":"not cancelled","data":{}}`), nil
+	})}), cipher)
+	repo := newFakeBatchImageRepository()
+	billing := &fakeBatchImageBillingRepo{}
+	apiKeyID, accountID := int64(22), account.ID
+	holdAmount, holdID := 0.5, BatchImageHoldRequestID("imgbatch_hc_cancel")
+	repo.jobs["imgbatch_hc_cancel"] = &BatchImageJob{
+		BatchID: "imgbatch_hc_cancel", UserID: 11, APIKeyID: &apiKeyID, AccountID: &accountID,
+		Provider: BatchImageProviderHCAtom, Model: "seedream-5.0", Status: BatchImageJobStatusSubmitted,
+		ProviderJobName: batchImageStringPtr("hc-task-cancel"), HoldAmount: &holdAmount, HoldID: &holdID,
+		RequestHash: batchImageStringPtr("request-hash"), CreatedAt: time.Now(),
+	}
+	svc := &BatchImagePublicService{
+		Repo: repo, AccountRepo: &publicBatchImageAccountRepo{accounts: []Account{*account}},
+		ProviderRegistry: NewBatchImageProviderRegistry(provider), BillingRepo: billing,
+	}
+
+	_, err := svc.Cancel(context.Background(), testBatchImageOwner(), "imgbatch_hc_cancel")
+
+	require.ErrorIs(t, err, ErrBatchImageCancelFailed)
+	require.Equal(t, BatchImageJobStatusSubmitted, repo.jobs["imgbatch_hc_cancel"].Status)
+	require.Empty(t, billing.releases)
+	require.Empty(t, repo.events["imgbatch_hc_cancel"])
 }
 
 func testBatchImageAccount(id int64, accountType string) Account {

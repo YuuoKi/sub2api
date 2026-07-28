@@ -78,7 +78,7 @@ func TestInvalidateVideoCachesAggregatesEveryFailure(t *testing.T) {
 }
 
 func TestVideoWorkerRequiresCacheInvalidators(t *testing.T) {
-	w := NewVideoGatewayWorker(&workerRepoStub{}, keyDecryptStub{}, func(string, string) *SeedanceAdapter { return nil }, nil, nil, &config.Config{}, NewSingleSmokeAuthorization(false))
+	w := NewVideoGatewayWorker(&workerRepoStub{}, keyDecryptStub{}, func(string, string, string) VideoProviderClient { return nil }, nil, nil, &config.Config{}, NewSingleSmokeAuthorization(false))
 	require.ErrorContains(t, w.RunOnce(context.Background()), "cache invalidators")
 }
 
@@ -153,6 +153,9 @@ func TestVideoGatewayCreateRequiresWorkerAndReservesServerMaximum(t *testing.T) 
 	if err != nil || task == nil || task.DurationSeconds != 4 || task.Resolution != "720p" {
 		t.Fatalf("task=%#v err=%v", task, err)
 	}
+	if !task.CreateRequest.ReturnLastFrame {
+		t.Fatal("official Seedance task must request last frame")
+	}
 	if repo.reserved != 0.2 || task.ReservedCostUSD != 0.2 || task.ReservationState != VideoReservationReserved {
 		t.Fatalf("reserved=%v task=%#v", repo.reserved, task)
 	}
@@ -204,7 +207,7 @@ func TestVideoActualUSDForTaskUsesExplicitLegacyConfigFallback(t *testing.T) {
 
 func TestVideoGatewayRuntimeStartsOnlyWithExplicitWorkerAndRealGate(t *testing.T) {
 	cfg := &config.Config{VideoGateway: config.VideoGatewayConfig{WorkerEnabled: true, WorkerIntervalSeconds: 1}}
-	w := NewVideoGatewayWorker(&workerRepoStub{}, keyDecryptStub{}, func(string, string) *SeedanceAdapter { return nil }, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}, cfg, NewSingleSmokeAuthorization(false))
+	w := NewVideoGatewayWorker(&workerRepoStub{}, keyDecryptStub{}, func(string, string, string) VideoProviderClient { return nil }, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}, cfg, NewSingleSmokeAuthorization(false))
 	denied := ProvideVideoGatewayRuntime(w, cfg, NewSingleSmokeAuthorization(false))
 	if denied.Running() {
 		t.Fatal("runtime started without real gate")
@@ -222,7 +225,15 @@ func (r *workerRepoStub) BeginRealDispatch(context.Context, int64, int64) (bool,
 	r.beginCalls++
 	return r.begin, nil
 }
+func (r *workerRepoStub) BeginHCAtomV3Dispatch(context.Context, int64, int64) (bool, error) {
+	return r.begin, nil
+}
 func (r *workerRepoStub) MarkVideoSubmitted(context.Context, int64, int64, string) error { return nil }
+func (r *workerRepoStub) MarkVideoDispatchUncertain(_ context.Context, _ int64, _ int64, _ string, upstreamTaskID string) error {
+	r.task.Status = VideoStatusReviewRequired
+	r.task.UpstreamTaskID = upstreamTaskID
+	return nil
+}
 func (r *workerRepoStub) UpdateVideoProgress(_ context.Context, _ int64, _ int64, status string) error {
 	r.progress = append(r.progress, status)
 	return nil
@@ -236,7 +247,7 @@ func (keyDecryptStub) Decrypt(string) (string, error)   { return "synthetic-prov
 func TestVideoWorkerRequiresProcessGateBeforeDispatchClaim(t *testing.T) {
 	repo := &workerRepoStub{begin: true, task: &VideoTask{ID: 7, GroupID: 9, ProviderAccountID: 10, Status: VideoStatusQueued, Version: 1, ReservedCostUSD: 0.2, ReservationState: VideoReservationReserved}, provider: VideoProviderAccount{ID: 10, GroupID: 9, Enabled: true, BaseURL: SeedanceBaseURL, EncryptedAPIKey: "cipher"}}
 	clientCalls := 0
-	factory := func(string, string) *SeedanceAdapter { clientCalls++; return nil }
+	factory := func(string, string, string) VideoProviderClient { clientCalls++; return nil }
 	w := NewVideoGatewayWorker(repo, keyDecryptStub{}, factory, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}, &config.Config{}, NewSingleSmokeAuthorization(false))
 	require.ErrorIs(t, w.RunOnce(context.Background()), ErrVideoRealDispatchDenied)
 	require.Zero(t, repo.beginCalls)
@@ -246,7 +257,7 @@ func TestVideoWorkerRequiresProcessGateBeforeDispatchClaim(t *testing.T) {
 func TestVideoWorkerConsumesProcessGateAfterAtomicDBClaim(t *testing.T) {
 	repo := &workerRepoStub{begin: false, task: &VideoTask{ID: 7, GroupID: 9, ProviderAccountID: 10, Status: VideoStatusQueued, Version: 1, ReservedCostUSD: 0.2, ReservationState: VideoReservationReserved}, provider: VideoProviderAccount{ID: 10, GroupID: 9, Enabled: true, BaseURL: SeedanceBaseURL, EncryptedAPIKey: "cipher"}}
 	gate := NewSingleSmokeAuthorization(true)
-	w := NewVideoGatewayWorker(repo, keyDecryptStub{}, func(string, string) *SeedanceAdapter { return nil }, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}, &config.Config{}, gate)
+	w := NewVideoGatewayWorker(repo, keyDecryptStub{}, func(string, string, string) VideoProviderClient { return nil }, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}, &config.Config{}, gate)
 	require.NoError(t, w.RunOnce(context.Background()))
 	require.NoError(t, gate.Consume(), "DB denial must not consume process gate")
 }
@@ -258,7 +269,7 @@ func TestVideoWorkerDelegatesSuccessfulAtomicCapture(t *testing.T) {
 		Currency: "USD", PricingSource: VideoPricingSourceConfig, PricingVersion: VideoPricingVersionSeedanceCompletionTokensUSDV1,
 		PricingCNYPerMillionCompletionTokens: &price, PricingUSDCNYExchangeRate: &rate, PricingMaximumCNY: &maximum}, provider: VideoProviderAccount{ID: 10, GroupID: 9, Enabled: true, BaseURL: "https://ark.cn-beijing.volces.com", EncryptedAPIKey: "cipher"}}
 	responseBody := `{"id":"up-7","status":"succeeded","model":"doubao-seedance-2-0-260128","duration":"4","resolution":"720p","content":{"video_url":"https://cdn.example.test/v.mp4"},"usage":{"completion_tokens":245025}}`
-	factory := func(base, key string) *SeedanceAdapter {
+	factory := func(_ string, base, key string) VideoProviderClient {
 		return NewSeedanceAdapter(&http.Client{Transport: videoRoundTripperFunc(func(*http.Request) (*http.Response, error) {
 			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(responseBody)), Header: make(http.Header)}, nil
 		})}, base, key)
@@ -294,7 +305,7 @@ func TestVideoWorkerDelegatesSuccessfulAtomicCapture(t *testing.T) {
 func TestVideoWorkerPreservesAssetsAndFailsWithoutCompletionTokens(t *testing.T) {
 	repo := &workerRepoStub{task: &VideoTask{ID: 7, APIKeyID: 8, GroupID: 9, ProviderAccountID: 10, CreatedBy: 11, Model: SeedanceModel, Status: VideoStatusSubmitted, UpstreamTaskID: "up-7", Version: 2, DurationSeconds: 4, Resolution: "720p", ReservedCostUSD: 0.2, ReservationState: VideoReservationReserved}, provider: VideoProviderAccount{ID: 10, GroupID: 9, Enabled: true, BaseURL: "https://ark.cn-beijing.volces.com", EncryptedAPIKey: "cipher"}}
 	body := `{"id":"up-7","status":"succeeded","content":{"video_url":"https://cdn.example.test/v.mp4"}}`
-	factory := func(base, key string) *SeedanceAdapter {
+	factory := func(_ string, base, key string) VideoProviderClient {
 		return NewSeedanceAdapter(&http.Client{Transport: videoRoundTripperFunc(func(*http.Request) (*http.Response, error) {
 			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}, nil
 		})}, base, key)
@@ -312,7 +323,7 @@ func TestVideoWorkerFailsAndReleasesWhenSuccessOmitsVideoURL(t *testing.T) {
 	tokens := int64(10)
 	repo := &workerRepoStub{task: &VideoTask{ID: 7, APIKeyID: 8, GroupID: 9, ProviderAccountID: 10, CreatedBy: 11, Model: SeedanceModel, Status: VideoStatusSubmitted, UpstreamTaskID: "up-7", Version: 2, ReservedCostUSD: 0.2, ReservationState: VideoReservationReserved}, provider: VideoProviderAccount{ID: 10, GroupID: 9, Enabled: true, BaseURL: "https://ark.cn-beijing.volces.com", EncryptedAPIKey: "cipher"}}
 	body := `{"id":"up-7","status":"succeeded","usage":{"completion_tokens":10}}`
-	factory := func(base, key string) *SeedanceAdapter {
+	factory := func(_ string, base, key string) VideoProviderClient {
 		return NewSeedanceAdapter(&http.Client{Transport: videoRoundTripperFunc(func(*http.Request) (*http.Response, error) {
 			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}, nil
 		})}, base, key)
@@ -330,7 +341,7 @@ func TestVideoWorkerFailsAndReleasesWhenSuccessOmitsVideoURL(t *testing.T) {
 func TestVideoWorkerCapturesReservationAndFailsWhenActualExceedsMaximum(t *testing.T) {
 	repo := &workerRepoStub{task: &VideoTask{ID: 7, APIKeyID: 8, GroupID: 9, ProviderAccountID: 10, CreatedBy: 11, Model: SeedanceModel, Status: VideoStatusSubmitted, UpstreamTaskID: "up-7", Version: 2, ReservedCostUSD: 0.1, ReservationState: VideoReservationReserved}, provider: VideoProviderAccount{ID: 10, GroupID: 9, Enabled: true, BaseURL: "https://ark.cn-beijing.volces.com", EncryptedAPIKey: "cipher"}}
 	body := `{"id":"up-7","status":"succeeded","content":{"video_url":"https://cdn.example.test/v.mp4"},"usage":{"completion_tokens":1000000}}`
-	factory := func(base, key string) *SeedanceAdapter {
+	factory := func(_ string, base, key string) VideoProviderClient {
 		return NewSeedanceAdapter(&http.Client{Transport: videoRoundTripperFunc(func(*http.Request) (*http.Response, error) {
 			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}, nil
 		})}, base, key)

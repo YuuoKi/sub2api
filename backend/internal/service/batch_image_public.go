@@ -206,7 +206,7 @@ func (s *BatchImagePublicService) Submit(ctx context.Context, owner BatchImageOw
 	}
 	// 与 ListModels 使用同一鉴权谓词（AllowBatchImageGeneration + Platform==Gemini），
 	// 避免两个入口校验口径不一致留下防御纵深缺口。
-	if err := s.ensureGroupAllowsBatchImage(ctx, owner.GroupID); err != nil {
+	if err := s.ensureGroupAllowsBatchImageForProvider(ctx, owner.GroupID, normalized.Provider); err != nil {
 		return nil, err
 	}
 	requestHash := HashBatchImageSubmitRequest(normalized)
@@ -624,7 +624,7 @@ func (s *BatchImagePublicService) ListModels(ctx context.Context, owner BatchIma
 	}
 
 	modelsByProvider := make(map[string]map[string]struct{})
-	for _, providerName := range batchImageProviderSelectionOrder("") {
+	for _, providerName := range batchImageProviderCatalogOrder() {
 		provider, ok := s.ProviderRegistry.Get(providerName)
 		if !ok || provider == nil {
 			continue
@@ -639,6 +639,9 @@ func (s *BatchImagePublicService) ListModels(ctx context.Context, owner BatchIma
 				continue
 			}
 			for _, model := range batchImageModelsFromAccountMapping(&account) {
+				if providerName == BatchImageProviderHCAtom && !isHCAtomBatchEnabledModel(model) {
+					continue
+				}
 				if _, err := s.Pricing.BatchImageUnitPrice(ctx, &BatchImageJob{Provider: providerName, Model: model}); err != nil {
 					continue
 				}
@@ -654,7 +657,7 @@ func (s *BatchImagePublicService) ListModels(ctx context.Context, owner BatchIma
 	}
 
 	out := make([]BatchImagePublicModel, 0)
-	for _, providerName := range batchImageProviderSelectionOrder("") {
+	for _, providerName := range batchImageProviderCatalogOrder() {
 		models := make([]string, 0, len(modelsByProvider[providerName]))
 		for model := range modelsByProvider[providerName] {
 			models = append(models, model)
@@ -975,6 +978,10 @@ func (s *BatchImagePublicService) listCandidateAccounts(ctx context.Context, gro
 }
 
 func (s *BatchImagePublicService) ensureGroupAllowsBatchImage(ctx context.Context, groupID *int64) error {
+	return s.ensureGroupAllowsBatchImageForProvider(ctx, groupID, "")
+}
+
+func (s *BatchImagePublicService) ensureGroupAllowsBatchImageForProvider(ctx context.Context, groupID *int64, requestedProvider string) error {
 	if groupID == nil || *groupID <= 0 {
 		return nil
 	}
@@ -988,7 +995,10 @@ func (s *BatchImagePublicService) ensureGroupAllowsBatchImage(ctx context.Contex
 	if !group.AllowBatchImageGeneration {
 		return ErrBatchImageGroupDisabled
 	}
-	if group.Platform != PlatformGemini {
+	if group.Platform != PlatformGemini && group.Platform != PlatformHCAtom {
+		return ErrBatchImageGroupDisabled
+	}
+	if requestedProvider = strings.TrimSpace(requestedProvider); requestedProvider != "" && group.Platform != batchImageProviderPlatform(requestedProvider) {
 		return ErrBatchImageGroupDisabled
 	}
 	return nil
@@ -1258,6 +1268,8 @@ func batchImageProviderPlatform(provider string) string {
 	switch provider {
 	case BatchImageProviderGeminiAPI, BatchImageProviderVertex:
 		return PlatformGemini
+	case BatchImageProviderHCAtom:
+		return PlatformHCAtom
 	default:
 		return PlatformGemini
 	}
@@ -1267,7 +1279,14 @@ func batchImageProviderSelectionOrder(requestedProvider string) []string {
 	if strings.TrimSpace(requestedProvider) != "" {
 		return []string{strings.TrimSpace(requestedProvider)}
 	}
+	// HC-ATOM is an explicitly selected provider. Keeping it out of the
+	// legacy default order prevents an omitted provider from silently crossing
+	// from Gemini/Vertex to the relay.
 	return []string{BatchImageProviderGeminiAPI, BatchImageProviderVertex}
+}
+
+func batchImageProviderCatalogOrder() []string {
+	return []string{BatchImageProviderGeminiAPI, BatchImageProviderVertex, BatchImageProviderHCAtom}
 }
 
 func batchImageModelsFromAccountMapping(account *Account) []string {

@@ -5,6 +5,7 @@ export interface VideoProviderAccount {
   id: number; group_id: number; group_name: string; provider: string; display_name: string
   enabled: boolean; api_key_configured: boolean; masked_key: string; base_url: string; default_model: string
   tiny_real_authorized_at?: string; tiny_real_authorized_by?: number; tiny_real_consumed_at?: string
+  latest_error_message?: string; latest_error_at?: string
 }
 export interface VideoProviderPayload {
   group_id?: number; provider?: string; display_name?: string; enabled?: boolean; api_key?: string

@@ -13,7 +13,7 @@
 </head>
 <body>
   <h1>Sub2API HC-ATOM 全链路审查包</h1>
-  <p class="warn">当前状态：代码与假链路通过；部署后仍默认关闭；真实 HC 调用待单独授权。</p>
+  <p class="ok">当前状态：代码、假链路、容器构建与广州生产部署通过；HC 调度保持默认关闭；真实 HC 调用待单独付费授权。</p>
 
   <section class="card"><h2>目标与执行目录</h2>
     <p>把 HC-ATOM 的文字、同步图片、异步图片、普通视频和 Seedance V3 统一收口到 Sub2API，由 QCanvas 只持有两把能力隔离的 Sub2 Key。</p>
@@ -66,7 +66,13 @@ pnpm run build
 PASS（仅既有 chunk / browserslist 警告）
 
 git diff --check
-PASS</pre>
+PASS
+
+Sub2API image: hc-b0a2895e8
+广州生产部署：sub2api healthy
+三服务及其余 6 个依赖服务全部 healthy
+HC_DISPATCH_FLAGS_OFF
+DEPLOY_OK</pre>
     <p>假中转站覆盖六类协议、公开模型到上游编码、Wan T2I/I2I、V1/V3、凭证脱敏与默认关闸；没有真实或付费请求。</p>
   </section>
 
@@ -80,7 +86,7 @@ PASS</pre>
       <li class="warn">文字模型只有配置 Channel token 价格后才展示；图片/视频要求各自组价格为正。</li>
       <li class="warn">真实 HC 的成功/失败响应和资产下载尚未付费验证，不能标记产品 READY。</li>
     </ul>
-    <p>回滚：将服务镜像恢复到部署前保留的 rollback 标签并仅重建 Sub2API；数据库无新增迁移。功能开关保持关闭时，新链不会产生上游请求。</p>
+    <p>回滚：将三服务镜像恢复到部署前保留的 <code>rollback-hc-20260729T0112</code> 标签并重建 Sub2API、q-api、q-web；数据库无新增迁移。功能开关保持关闭时，新链不会产生上游请求。</p>
   </section>
 
   <section class="card"><h2>文件索引</h2>

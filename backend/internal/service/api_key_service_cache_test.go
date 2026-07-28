@@ -119,6 +119,15 @@ func (s *authRepoStub) IncrementRateLimitUsage(ctx context.Context, id int64, co
 func (s *authRepoStub) ResetRateLimitWindows(ctx context.Context, id int64) error {
 	panic("unexpected ResetRateLimitWindows call")
 }
+
+func (s *authRepoStub) ResetRateLimitUsage(ctx context.Context, id int64) error {
+	panic("unexpected ResetRateLimitUsage call")
+}
+
+func (s *authRepoStub) ResetQuotaUsed(ctx context.Context, id int64) error {
+	panic("unexpected ResetQuotaUsed call")
+}
+
 func (s *authRepoStub) GetRateLimitData(ctx context.Context, id int64) (*APIKeyRateLimitData, error) {
 	panic("unexpected GetRateLimitData call")
 }

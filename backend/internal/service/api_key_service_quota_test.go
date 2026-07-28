@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/stretchr/testify/require"
 )
@@ -149,6 +150,15 @@ func (s *quotaBaseAPIKeyRepoStub) IncrementRateLimitUsage(context.Context, int64
 func (s *quotaBaseAPIKeyRepoStub) ResetRateLimitWindows(context.Context, int64) error {
 	panic("unexpected ResetRateLimitWindows call")
 }
+
+func (s *quotaBaseAPIKeyRepoStub) ResetRateLimitUsage(context.Context, int64) error {
+	panic("unexpected ResetRateLimitUsage call")
+}
+
+func (s *quotaBaseAPIKeyRepoStub) ResetQuotaUsed(context.Context, int64) error {
+	panic("unexpected ResetQuotaUsed call")
+}
+
 func (s *quotaBaseAPIKeyRepoStub) GetRateLimitData(context.Context, int64) (*APIKeyRateLimitData, error) {
 	panic("unexpected GetRateLimitData call")
 }
@@ -197,4 +207,73 @@ func TestAPIKeyService_Update_ReactivatesQuotaExhaustedWhenQuotaUnlimited(t *tes
 	require.Len(t, repo.updatedKeys, 1)
 	require.Equal(t, StatusActive, repo.updatedKeys[0].Status)
 	require.Equal(t, 0.0, repo.updatedKeys[0].Quota)
+}
+
+func TestAPIKeyService_Update_RejectsActiveExhaustedKeyBeforeWrite(t *testing.T) {
+	repo := &apiKeyRepoStub{
+		apiKey: &APIKey{
+			ID:        11,
+			UserID:    7,
+			Key:       "sk-test-exhausted",
+			Status:    StatusAPIKeyQuotaExhausted,
+			Quota:     10,
+			QuotaUsed: 10,
+		},
+	}
+	svc := &APIKeyService{apiKeyRepo: repo}
+	active := StatusActive
+
+	updated, err := svc.Update(context.Background(), 11, 7, UpdateAPIKeyRequest{Status: &active})
+
+	require.Nil(t, updated)
+	require.Equal(t, "CANNOT_ACTIVATE_QUOTA_EXHAUSTED", infraerrors.Reason(err))
+	require.Empty(t, repo.updatedKeys)
+	require.Empty(t, repo.resetQuotaUsedIDs)
+	require.Empty(t, repo.resetRateLimitIDs)
+}
+
+func TestAPIKeyService_Update_ResetQuotaPersistsAndReturnsFreshState(t *testing.T) {
+	repo := &apiKeyRepoStub{
+		apiKey: &APIKey{
+			ID:        12,
+			UserID:    7,
+			Key:       "sk-test-reset-quota",
+			Status:    StatusAPIKeyQuotaExhausted,
+			Quota:     10,
+			QuotaUsed: 10,
+		},
+	}
+	svc := &APIKeyService{apiKeyRepo: repo}
+	reset := true
+
+	updated, err := svc.Update(context.Background(), 12, 7, UpdateAPIKeyRequest{ResetQuota: &reset})
+
+	require.NoError(t, err)
+	require.Equal(t, []int64{12}, repo.resetQuotaUsedIDs)
+	require.Len(t, repo.updatedKeys, 1)
+	require.Equal(t, StatusActive, updated.Status)
+	require.Zero(t, updated.QuotaUsed)
+}
+
+func TestAPIKeyService_Update_RejectsExpiredActiveKeyBeforeWrite(t *testing.T) {
+	expiredAt := time.Now().Add(-time.Hour)
+	repo := &apiKeyRepoStub{
+		apiKey: &APIKey{
+			ID:        13,
+			UserID:    7,
+			Key:       "sk-test-expired",
+			Status:    StatusAPIKeyExpired,
+			ExpiresAt: &expiredAt,
+		},
+	}
+	svc := &APIKeyService{apiKeyRepo: repo}
+	active := StatusActive
+
+	updated, err := svc.Update(context.Background(), 13, 7, UpdateAPIKeyRequest{Status: &active})
+
+	require.Nil(t, updated)
+	require.Equal(t, "CANNOT_ACTIVATE_EXPIRED", infraerrors.Reason(err))
+	require.Empty(t, repo.updatedKeys)
+	require.Empty(t, repo.resetQuotaUsedIDs)
+	require.Empty(t, repo.resetRateLimitIDs)
 }

@@ -3153,6 +3153,10 @@ func (r *oauthPendingFlowUserRepo) UpdateBalance(ctx context.Context, userID int
 	return client.User.UpdateOneID(userID).AddBalance(amount).Exec(ctx)
 }
 
+func (r *oauthPendingFlowUserRepo) SetBalance(context.Context, int64, float64) error {
+	panic("unexpected SetBalance call")
+}
+
 func (r *oauthPendingFlowUserRepo) DeductBalance(context.Context, int64, float64) error {
 	panic("unexpected DeductBalance call")
 }

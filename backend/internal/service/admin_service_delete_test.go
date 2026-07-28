@@ -120,11 +120,30 @@ func (s *userRepoStub) UpdateUserLastActiveAt(ctx context.Context, userID int64,
 }
 
 func (s *userRepoStub) UpdateBalance(ctx context.Context, id int64, amount float64) error {
-	panic("unexpected UpdateBalance call")
+	if s.user == nil {
+		return ErrUserNotFound
+	}
+	s.user.Balance += amount
+	if amount > 0 {
+		s.user.TotalRecharged += amount
+	}
+	return nil
+}
+
+func (s *userRepoStub) SetBalance(ctx context.Context, id int64, balance float64) error {
+	if s.user == nil {
+		return ErrUserNotFound
+	}
+	s.user.Balance = balance
+	return nil
 }
 
 func (s *userRepoStub) DeductBalance(ctx context.Context, id int64, amount float64) error {
-	panic("unexpected DeductBalance call")
+	if s.user == nil {
+		return ErrUserNotFound
+	}
+	s.user.Balance -= amount
+	return nil
 }
 
 func (s *userRepoStub) UpdateConcurrency(ctx context.Context, id int64, amount int) error {

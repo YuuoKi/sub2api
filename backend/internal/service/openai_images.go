@@ -1076,6 +1076,7 @@ func (s *OpenAIGatewayService) handleOpenAIImagesStreamingResponse(
 			if time.Since(lastRead) < streamInterval {
 				continue
 			}
+			_ = resp.Body.Close()
 			if clientDisconnected {
 				return usage, imageCounter.Count(), imageCounter.Sizes(), firstTokenMs, fmt.Errorf("image stream incomplete after timeout")
 			}

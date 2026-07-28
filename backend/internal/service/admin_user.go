@@ -589,24 +589,50 @@ func (s *adminServiceImpl) UpdateUserBalance(ctx context.Context, userID int64, 
 	}
 
 	oldBalance := user.Balance
+	var balanceDiff float64
 
 	switch operation {
 	case "set":
-		user.Balance = balance
+		if balance < 0 {
+			return nil, fmt.Errorf("balance cannot be negative, current balance: %.2f, requested operation would result in: %.2f", oldBalance, balance)
+		}
+		balanceDiff = balance - oldBalance
+		if balanceDiff != 0 {
+			if err := s.userRepo.SetBalance(ctx, userID, balance); err != nil {
+				return nil, err
+			}
+		}
 	case "add":
-		user.Balance += balance
+		newBalance := oldBalance + balance
+		if newBalance < 0 {
+			return nil, fmt.Errorf("balance cannot be negative, current balance: %.2f, requested operation would result in: %.2f", oldBalance, newBalance)
+		}
+		balanceDiff = balance
+		if balanceDiff != 0 {
+			if err := s.userRepo.UpdateBalance(ctx, userID, balance); err != nil {
+				return nil, err
+			}
+		}
 	case "subtract":
-		user.Balance -= balance
+		newBalance := oldBalance - balance
+		if newBalance < 0 {
+			return nil, fmt.Errorf("balance cannot be negative, current balance: %.2f, requested operation would result in: %.2f", oldBalance, newBalance)
+		}
+		balanceDiff = -balance
+		if balanceDiff != 0 {
+			if err := s.userRepo.UpdateBalance(ctx, userID, -balance); err != nil {
+				return nil, err
+			}
+		}
+	default:
+		return nil, fmt.Errorf("unsupported balance operation: %s", operation)
 	}
 
-	if user.Balance < 0 {
-		return nil, fmt.Errorf("balance cannot be negative, current balance: %.2f, requested operation would result in: %.2f", oldBalance, user.Balance)
-	}
-
-	if err := s.userRepo.Update(ctx, user); err != nil {
+	updated, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
 		return nil, err
 	}
-	balanceDiff := user.Balance - oldBalance
+
 	if s.authCacheInvalidator != nil && balanceDiff != 0 {
 		s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, userID)
 	}
@@ -625,7 +651,7 @@ func (s *adminServiceImpl) UpdateUserBalance(ctx context.Context, userID int64, 
 		code, err := GenerateRedeemCode()
 		if err != nil {
 			logger.LegacyPrintf("service.admin", "failed to generate adjustment redeem code: %v", err)
-			return user, nil
+			return updated, nil
 		}
 
 		adjustmentRecord := &RedeemCode{
@@ -633,7 +659,7 @@ func (s *adminServiceImpl) UpdateUserBalance(ctx context.Context, userID int64, 
 			Type:   AdjustmentTypeAdminBalance,
 			Value:  balanceDiff,
 			Status: StatusUsed,
-			UsedBy: &user.ID,
+			UsedBy: &updated.ID,
 			Notes:  notes,
 		}
 		now := time.Now()
@@ -644,7 +670,7 @@ func (s *adminServiceImpl) UpdateUserBalance(ctx context.Context, userID int64, 
 		}
 	}
 
-	return user, nil
+	return updated, nil
 }
 
 func (s *adminServiceImpl) GetUserAPIKeys(ctx context.Context, userID int64, page, pageSize int, sortBy, sortOrder string) ([]APIKey, int64, error) {

@@ -440,6 +440,7 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 			if time.Since(lastRead) < streamInterval {
 				continue
 			}
+			_ = resp.Body.Close()
 			if clientDisconnected {
 				return resultWithUsage(), fmt.Errorf("stream usage incomplete after timeout")
 			}

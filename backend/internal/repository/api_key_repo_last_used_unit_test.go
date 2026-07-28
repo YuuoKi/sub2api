@@ -19,10 +19,16 @@ import (
 
 func newAPIKeyRepoSQLite(t *testing.T) (*apiKeyRepository, *dbent.Client) {
 	t.Helper()
+	return newAPIKeyRepoSQLiteNamed(t, "api_key_repo_last_used")
+}
 
-	db, err := sql.Open("sqlite", "file:api_key_repo_last_used?mode=memory&cache=shared")
+func newAPIKeyRepoSQLiteNamed(t *testing.T, name string) (*apiKeyRepository, *dbent.Client) {
+	t.Helper()
+
+	db, err := sql.Open("sqlite", "file:"+name+"?mode=memory&cache=shared")
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
+	db.SetMaxOpenConns(10)
 
 	_, err = db.Exec("PRAGMA foreign_keys = ON")
 	require.NoError(t, err)

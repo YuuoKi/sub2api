@@ -1058,6 +1058,7 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 			if time.Since(lastRead) < streamInterval {
 				continue
 			}
+			_ = resp.Body.Close()
 			if clientDisconnected {
 				return &streamingResult{usage: usage, firstTokenMs: firstTokenMs, clientDisconnect: true}, fmt.Errorf("stream usage incomplete after timeout")
 			}

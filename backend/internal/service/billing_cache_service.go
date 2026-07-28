@@ -96,6 +96,11 @@ type apiKeyRateLimitLoader interface {
 	GetRateLimitData(ctx context.Context, keyID int64) (*APIKeyRateLimitData, error)
 }
 
+// apiKeyQuotaUsageLoader loads near-realtime API key quota usage from DB.
+type apiKeyQuotaUsageLoader interface {
+	GetByID(ctx context.Context, id int64) (*APIKey, error)
+}
+
 type subscriptionCacheInvalidationPubSub interface {
 	PublishSubscriptionCacheInvalidation(ctx context.Context, cacheKey string) error
 	SubscribeSubscriptionCacheInvalidation(ctx context.Context, handler func(cacheKey string)) error
@@ -108,6 +113,8 @@ type BillingCacheService struct {
 	userRepo              UserRepository
 	subRepo               UserSubscriptionRepository
 	apiKeyRateLimitLoader apiKeyRateLimitLoader
+	apiKeyRepo            apiKeyQuotaUsageLoader
+	authCacheInvalidator  APIKeyAuthCacheInvalidator // optional; best-effort auth cache eviction
 	userRPMCache          UserRPMCache
 	userGroupRateRepo     UserGroupRateRepository
 	cfg                   *config.Config
@@ -144,6 +151,7 @@ func NewBillingCacheService(
 		userRepo:              userRepo,
 		subRepo:               subRepo,
 		apiKeyRateLimitLoader: apiKeyRepo,
+		apiKeyRepo:            apiKeyRepo,
 		userRPMCache:          userRPMCache,
 		userGroupRateRepo:     userGroupRateRepo,
 		cfg:                   cfg,
@@ -775,12 +783,70 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 		}
 	}
 
+	// Near-realtime API key quota check (do not rely only on auth snapshot IsQuotaExhausted).
+	if err := s.checkAPIKeyQuotaEligibility(ctx, apiKey); err != nil {
+		return err
+	}
+
 	// RPM 限流：级联回落（Override → Group → User），放在最后以避免为注定失败的请求增加计数。
 	if err := s.checkRPM(ctx, user, group); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+// checkAPIKeyQuotaEligibility loads near-realtime quota_used from DB when the key has a quota.
+// Auth-cache snapshots can lag behind concurrent deductions; DB is the source of truth here.
+func (s *BillingCacheService) checkAPIKeyQuotaEligibility(ctx context.Context, apiKey *APIKey) error {
+	if s == nil || apiKey == nil || apiKey.Quota <= 0 {
+		return nil
+	}
+	if s.apiKeyRepo == nil {
+		if apiKey.IsQuotaExhausted() {
+			return ErrAPIKeyQuotaExhausted
+		}
+		return nil
+	}
+
+	fresh, err := s.apiKeyRepo.GetByID(ctx, apiKey.ID)
+	if err != nil {
+		logger.LegacyPrintf(
+			"service.billing_cache",
+			"Warning: api key quota lookup failed for api_key=%d: %v",
+			apiKey.ID, err,
+		)
+		// Fail-open on DB errors (consistent with rate-limit loader), but still honor a clearly exhausted snapshot.
+		if apiKey.IsQuotaExhausted() {
+			return ErrAPIKeyQuotaExhausted
+		}
+		return nil
+	}
+	if fresh == nil {
+		return nil
+	}
+	if fresh.Quota > 0 && fresh.QuotaUsed >= fresh.Quota {
+		key := fresh.Key
+		if key == "" {
+			key = apiKey.Key
+		}
+		s.invalidateAPIKeyAuthCacheIfPossible(ctx, key)
+		return ErrAPIKeyQuotaExhausted
+	}
+	return nil
+}
+
+func (s *BillingCacheService) invalidateAPIKeyAuthCacheIfPossible(ctx context.Context, key string) {
+	if s == nil || key == "" || s.authCacheInvalidator == nil {
+		return
+	}
+	if err := s.authCacheInvalidator.InvalidateAuthCacheByKey(ctx, key); err != nil {
+		logger.LegacyPrintf(
+			"service.billing_cache",
+			"Warning: invalidate auth cache after quota exhaustion failed key=%s: %v",
+			key, err,
+		)
+	}
 }
 
 // checkRPM 执行并行 RPM 限流，所有适用的限制同时生效，任一超限即拒绝：

@@ -1,7 +1,9 @@
-const DEFAULT_QCANVAS_BASE_URL = 'http://127.0.0.1:5174'
-
 export const buildQCanvasProjectsURL = (configuredBaseURL?: string): string => {
-  const baseURL = configuredBaseURL?.trim() || DEFAULT_QCANVAS_BASE_URL
+  const baseURL = configuredBaseURL?.trim()
+  if (!baseURL) {
+    throw new Error('QCanvas 地址未配置（请设置 VITE_QCANVAS_BASE_URL）')
+  }
+
   const url = new URL(baseURL)
 
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
@@ -15,4 +17,12 @@ export const buildQCanvasProjectsURL = (configuredBaseURL?: string): string => {
   }
 
   return new URL('/projects', url.origin).toString()
+}
+
+export const tryBuildQCanvasProjectsURL = (configuredBaseURL?: string): string | null => {
+  try {
+    return buildQCanvasProjectsURL(configuredBaseURL)
+  } catch {
+    return null
+  }
 }

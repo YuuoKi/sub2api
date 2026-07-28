@@ -1615,16 +1615,22 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 		cfg.Gateway.UserMessageQueue.Mode = ""
 	}
 
-	// Auto-generate TOTP encryption key if not set (32 bytes = 64 hex chars for AES-256)
+	// TOTP encryption key: production/standard must use a persistent key so 2FA
+	// (and any payment config encrypted with the same key domain) survives restarts.
+	// simple mode and bootstrap (AUTO_SETUP) may still auto-generate for local demos.
 	cfg.Totp.EncryptionKey = strings.TrimSpace(cfg.Totp.EncryptionKey)
 	if cfg.Totp.EncryptionKey == "" {
+		allowEphemeralTOTP := allowMissingJWTSecret || NormalizeRunMode(cfg.RunMode) == RunModeSimple
+		if !allowEphemeralTOTP {
+			return nil, fmt.Errorf("totp.encryption_key (TOTP_ENCRYPTION_KEY) is required in %s mode; generate with 'openssl rand -hex 32' and set a persistent value", NormalizeRunMode(cfg.RunMode))
+		}
 		key, err := generateJWTSecret(32) // Reuse the same random generation function
 		if err != nil {
 			return nil, fmt.Errorf("generate totp encryption key error: %w", err)
 		}
 		cfg.Totp.EncryptionKey = key
 		cfg.Totp.EncryptionKeyConfigured = false
-		slog.Warn("TOTP encryption key auto-generated. Consider setting a fixed key for production.")
+		slog.Warn("TOTP encryption key auto-generated for demo/bootstrap. Set a fixed TOTP_ENCRYPTION_KEY before production.")
 	} else {
 		cfg.Totp.EncryptionKeyConfigured = true
 	}
@@ -2944,7 +2950,8 @@ func (c *Config) Validate() error {
 	if c.Gateway.UsageRecord.TaskTimeoutSeconds <= 0 {
 		return fmt.Errorf("gateway.usage_record.task_timeout_seconds must be positive")
 	}
-	switch strings.ToLower(strings.TrimSpace(c.Gateway.UsageRecord.OverflowPolicy)) {
+	overflowPolicy := strings.ToLower(strings.TrimSpace(c.Gateway.UsageRecord.OverflowPolicy))
+	switch overflowPolicy {
 	case UsageRecordOverflowPolicyDrop, UsageRecordOverflowPolicySample, UsageRecordOverflowPolicySync:
 	default:
 		return fmt.Errorf("gateway.usage_record.overflow_policy must be one of: %s/%s/%s",
@@ -2953,9 +2960,17 @@ func (c *Config) Validate() error {
 	if c.Gateway.UsageRecord.OverflowSamplePercent < 0 || c.Gateway.UsageRecord.OverflowSamplePercent > 100 {
 		return fmt.Errorf("gateway.usage_record.overflow_sample_percent must be between 0-100")
 	}
-	if strings.EqualFold(strings.TrimSpace(c.Gateway.UsageRecord.OverflowPolicy), UsageRecordOverflowPolicySample) &&
+	if overflowPolicy == UsageRecordOverflowPolicySample &&
 		c.Gateway.UsageRecord.OverflowSamplePercent <= 0 {
 		return fmt.Errorf("gateway.usage_record.overflow_sample_percent must be positive when overflow_policy=sample")
+	}
+	// Fail-closed for production/standard: drop/sample can silently lose billing usage records.
+	// simple/demo/AUTO_SETUP-style local modes may still use them for load experiments.
+	if NormalizeRunMode(c.RunMode) != RunModeSimple {
+		if overflowPolicy == UsageRecordOverflowPolicyDrop || overflowPolicy == UsageRecordOverflowPolicySample {
+			return fmt.Errorf("gateway.usage_record.overflow_policy %q is not allowed in run_mode=%s; use %s",
+				overflowPolicy, NormalizeRunMode(c.RunMode), UsageRecordOverflowPolicySync)
+		}
 	}
 	if c.Gateway.UsageRecord.AutoScaleEnabled {
 		if c.Gateway.UsageRecord.AutoScaleMinWorkers <= 0 {

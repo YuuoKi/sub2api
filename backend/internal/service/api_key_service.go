@@ -77,12 +77,21 @@ type APIKeyRepository interface {
 
 	// Quota methods
 	IncrementQuotaUsed(ctx context.Context, id int64, amount float64) (float64, error)
+	// ResetQuotaUsed clears only quota_used (admin/manual reset).
+	ResetQuotaUsed(ctx context.Context, id int64) error
 	UpdateLastUsed(ctx context.Context, id int64, usedAt time.Time) error
 
 	// Rate limit methods
 	IncrementRateLimitUsage(ctx context.Context, id int64, cost float64) error
 	ResetRateLimitWindows(ctx context.Context, id int64) error
+	// ResetRateLimitUsage clears all usage counters/windows (admin/manual reset).
+	ResetRateLimitUsage(ctx context.Context, id int64) error
 	GetRateLimitData(ctx context.Context, id int64) (*APIKeyRateLimitData, error)
+}
+
+// apiKeyQuotaStatusMarker marks a key exhausted without rewriting usage counters.
+type apiKeyQuotaStatusMarker interface {
+	MarkQuotaExhausted(ctx context.Context, id int64) error
 }
 
 type apiKeyAllByUserIDLister interface {
@@ -830,7 +839,8 @@ func (s *APIKeyService) Update(ctx context.Context, id int64, userID int64, req 
 			apiKey.Status = StatusActive
 		}
 	}
-	if req.ResetQuota != nil && *req.ResetQuota {
+	resetQuota := req.ResetQuota != nil && *req.ResetQuota
+	if resetQuota {
 		apiKey.QuotaUsed = 0
 		// If resetting quota and status was quota_exhausted, reactivate
 		if apiKey.Status == StatusAPIKeyQuotaExhausted {
@@ -866,14 +876,6 @@ func (s *APIKeyService) Update(ctx context.Context, id int64, userID int64, req 
 		apiKey.RateLimit7d = *req.RateLimit7d
 	}
 	resetRateLimit := req.ResetRateLimitUsage != nil && *req.ResetRateLimitUsage
-	if resetRateLimit {
-		apiKey.Usage5h = 0
-		apiKey.Usage1d = 0
-		apiKey.Usage7d = 0
-		apiKey.Window5hStart = nil
-		apiKey.Window1dStart = nil
-		apiKey.Window7dStart = nil
-	}
 
 	// Refuse "active" when the key is still unusable by quota or expiry.
 	// UI should recover via reset_quota / expires_at; this is the fail-closed backstop.
@@ -886,19 +888,33 @@ func (s *APIKeyService) Update(ctx context.Context, id int64, userID int64, req 
 		}
 	}
 
+	if resetQuota {
+		if err := s.apiKeyRepo.ResetQuotaUsed(ctx, apiKey.ID); err != nil {
+			return nil, fmt.Errorf("reset api key quota usage: %w", err)
+		}
+	}
 	if err := s.apiKeyRepo.Update(ctx, apiKey); err != nil {
 		return nil, fmt.Errorf("update api key: %w", err)
 	}
+	if resetRateLimit {
+		if err := s.apiKeyRepo.ResetRateLimitUsage(ctx, apiKey.ID); err != nil {
+			return nil, fmt.Errorf("reset api key rate limit usage: %w", err)
+		}
+	}
 
 	s.InvalidateAuthCacheByKey(ctx, apiKey.Key)
-	s.compileAPIKeyIPRules(apiKey)
 
 	// Invalidate Redis rate limit cache so reset takes effect immediately
 	if resetRateLimit && s.rateLimitCacheInvalid != nil {
 		_ = s.rateLimitCacheInvalid.InvalidateAPIKeyRateLimit(ctx, apiKey.ID)
 	}
 
-	return apiKey, nil
+	fresh, err := s.apiKeyRepo.GetByID(ctx, apiKey.ID)
+	if err != nil {
+		return nil, fmt.Errorf("reload api key after update: %w", err)
+	}
+	s.compileAPIKeyIPRules(fresh)
+	return fresh, nil
 }
 
 // Delete 删除API Key
@@ -1110,25 +1126,25 @@ func (s *APIKeyService) UpdateQuotaUsed(ctx context.Context, apiKeyID int64, cos
 		return nil
 	}
 
-	// Use repository to atomically increment quota_used
+	// Fallback path for repos that only expose IncrementQuotaUsed: still avoid
+	// Get→Update rewriting quota_used from a stale snapshot.
 	newQuotaUsed, err := s.apiKeyRepo.IncrementQuotaUsed(ctx, apiKeyID, cost)
 	if err != nil {
 		return fmt.Errorf("increment quota used: %w", err)
 	}
 
-	// Check if quota is now exhausted and update status if needed
 	apiKey, err := s.apiKeyRepo.GetByID(ctx, apiKeyID)
 	if err != nil {
 		return nil // Don't fail the request, just log
 	}
 
-	// If quota is set and now exhausted, update status
 	if apiKey.Quota > 0 && newQuotaUsed >= apiKey.Quota {
-		apiKey.Status = StatusAPIKeyQuotaExhausted
-		if err := s.apiKeyRepo.Update(ctx, apiKey); err != nil {
-			return nil // Don't fail the request
+		if marker, ok := s.apiKeyRepo.(apiKeyQuotaStatusMarker); ok {
+			_ = marker.MarkQuotaExhausted(ctx, apiKeyID)
+		} else {
+			apiKey.Status = StatusAPIKeyQuotaExhausted
+			_ = s.apiKeyRepo.Update(ctx, apiKey) // Update no longer rewrites quota_used
 		}
-		// Invalidate cache so next request sees the new status
 		s.InvalidateAuthCacheByKey(ctx, apiKey.Key)
 	}
 

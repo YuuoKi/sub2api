@@ -1528,6 +1528,10 @@ func (r *stubUserRepo) UpdateBalance(ctx context.Context, id int64, amount float
 	return errors.New("not implemented")
 }
 
+func (r *stubUserRepo) SetBalance(ctx context.Context, id int64, balance float64) error {
+	return errors.New("not implemented")
+}
+
 func (r *stubUserRepo) DeductBalance(ctx context.Context, id int64, amount float64) error {
 	return errors.New("not implemented")
 }
@@ -2383,6 +2387,12 @@ func (r *stubApiKeyRepo) IncrementRateLimitUsage(ctx context.Context, id int64, 
 	return nil
 }
 func (r *stubApiKeyRepo) ResetRateLimitWindows(ctx context.Context, id int64) error {
+	return nil
+}
+func (r *stubApiKeyRepo) ResetRateLimitUsage(ctx context.Context, id int64) error {
+	return nil
+}
+func (r *stubApiKeyRepo) ResetQuotaUsed(ctx context.Context, id int64) error {
 	return nil
 }
 func (r *stubApiKeyRepo) GetRateLimitData(ctx context.Context, id int64) (*service.APIKeyRateLimitData, error) {

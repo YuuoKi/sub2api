@@ -15,6 +15,30 @@ func resetViperWithJWTSecret(t *testing.T) {
 	t.Helper()
 	viper.Reset()
 	t.Setenv("JWT_SECRET", strings.Repeat("x", 32))
+	t.Setenv("TOTP_ENCRYPTION_KEY", strings.Repeat("ab", 32)) // 64 hex chars / 32 bytes
+}
+
+func TestLoadRejectsEmptyTOTPEncryptionKeyInStandardMode(t *testing.T) {
+	viper.Reset()
+	t.Setenv("JWT_SECRET", strings.Repeat("x", 32))
+	t.Setenv("TOTP_ENCRYPTION_KEY", "")
+	t.Setenv("RUN_MODE", RunModeStandard)
+
+	_, err := Load()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "TOTP_ENCRYPTION_KEY")
+}
+
+func TestLoadAllowsEphemeralTOTPEncryptionKeyInSimpleMode(t *testing.T) {
+	viper.Reset()
+	t.Setenv("JWT_SECRET", strings.Repeat("x", 32))
+	t.Setenv("TOTP_ENCRYPTION_KEY", "")
+	t.Setenv("RUN_MODE", RunModeSimple)
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.NotEmpty(t, cfg.Totp.EncryptionKey)
+	require.False(t, cfg.Totp.EncryptionKeyConfigured)
 }
 
 func TestLoadForBootstrapAllowsMissingJWTSecret(t *testing.T) {
@@ -1558,10 +1582,28 @@ func TestValidateConfigErrors(t *testing.T) {
 		{
 			name: "gateway usage record sample percent required for sample policy",
 			mutate: func(c *Config) {
+				c.RunMode = RunModeSimple
 				c.Gateway.UsageRecord.OverflowPolicy = UsageRecordOverflowPolicySample
 				c.Gateway.UsageRecord.OverflowSamplePercent = 0
 			},
 			wantErr: "gateway.usage_record.overflow_sample_percent must be positive",
+		},
+		{
+			name: "gateway usage record drop rejected in standard mode",
+			mutate: func(c *Config) {
+				c.RunMode = RunModeStandard
+				c.Gateway.UsageRecord.OverflowPolicy = UsageRecordOverflowPolicyDrop
+			},
+			wantErr: "gateway.usage_record.overflow_policy \"drop\" is not allowed",
+		},
+		{
+			name: "gateway usage record sample rejected in standard mode",
+			mutate: func(c *Config) {
+				c.RunMode = RunModeStandard
+				c.Gateway.UsageRecord.OverflowPolicy = UsageRecordOverflowPolicySample
+				c.Gateway.UsageRecord.OverflowSamplePercent = 10
+			},
+			wantErr: "gateway.usage_record.overflow_policy \"sample\" is not allowed",
 		},
 		{
 			name: "gateway usage record auto scale max gte min",
@@ -1885,6 +1927,17 @@ func TestValidateConfig_OpenAIWSRules(t *testing.T) {
 
 		require.NoError(t, cfg.Validate())
 	})
+}
+
+func TestValidateConfig_UsageRecordDropAllowedInSimpleMode(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	cfg.RunMode = RunModeSimple
+	cfg.Gateway.UsageRecord.OverflowPolicy = UsageRecordOverflowPolicyDrop
+	require.NoError(t, cfg.Validate())
 }
 
 func TestValidateConfig_AutoScaleDisabledIgnoreAutoScaleFields(t *testing.T) {

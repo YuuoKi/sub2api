@@ -105,6 +105,13 @@ func (f fakeAPIKeyRepo) IncrementRateLimitUsage(ctx context.Context, id int64, c
 func (f fakeAPIKeyRepo) ResetRateLimitWindows(ctx context.Context, id int64) error {
 	return nil
 }
+
+func (f fakeAPIKeyRepo) ResetRateLimitUsage(ctx context.Context, id int64) error {
+	return nil
+}
+func (f fakeAPIKeyRepo) ResetQuotaUsed(ctx context.Context, id int64) error {
+	return nil
+}
 func (f fakeAPIKeyRepo) GetRateLimitData(ctx context.Context, id int64) (*service.APIKeyRateLimitData, error) {
 	return &service.APIKeyRateLimitData{}, nil
 }

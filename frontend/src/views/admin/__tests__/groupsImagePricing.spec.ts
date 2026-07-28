@@ -5,8 +5,10 @@ import {
   getDefaultVideoPreviewPrice,
   getImagePricePlaceholder,
   getVideoPricePlaceholder,
+  batchImageGenerationPlatforms,
   imagePricingPlatforms,
   imagePricingI18nKey,
+  supportsBatchImageGenerationPlatform,
   supportsImagePricingPlatform,
   supportsVideoPricingPlatform,
   videoPricingI18nKey,
@@ -17,6 +19,13 @@ describe("groups image pricing platform support", () => {
     expect(supportsImagePricingPlatform("grok")).toBe(true);
     expect(imagePricingPlatforms.has("grok")).toBe(true);
     expect(imagePricingPlatforms.has("hc_atom")).toBe(true);
+  });
+
+  it("shows and preserves batch image controls for Gemini and HC-ATOM", () => {
+    expect(supportsBatchImageGenerationPlatform("gemini")).toBe(true);
+    expect(supportsBatchImageGenerationPlatform("hc_atom")).toBe(true);
+    expect(batchImageGenerationPlatforms).toEqual(new Set(["gemini", "hc_atom"]));
+    expect(supportsBatchImageGenerationPlatform("openai")).toBe(false);
   });
 
   it("enables video pricing controls for Grok only", () => {

@@ -62,6 +62,20 @@ func (h *VideoGatewayHandler) Providers(c *gin.Context) {
 	response.Success(c, items)
 }
 
+func (h *VideoGatewayHandler) Models(c *gin.Context) {
+	scope, ok := videoScope(c)
+	if !ok {
+		return
+	}
+	key, ok := middleware.GetAPIKeyFromContext(c)
+	if !ok || key == nil {
+		response.Error(c, http.StatusForbidden, "complete employee API-key scope is required")
+		return
+	}
+	items := h.service.AuthorizedHCAtomVideoModels(c.Request.Context(), scope, key.Group)
+	c.JSON(http.StatusOK, gin.H{"object": "list", "data": items})
+}
+
 func (h *VideoGatewayHandler) Create(c *gin.Context) {
 	scope, ok := videoScope(c)
 	if !ok {

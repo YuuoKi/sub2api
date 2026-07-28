@@ -118,16 +118,18 @@ func TestAccountFromServiceShallow_HCAtomKeepsOnlyPublicCatalogConfiguration(t *
 			service.HCAtomAPIKeyMaskedField:     "********7x9Q",
 			service.HCAtomAPIKeyConfiguredField: true,
 			"model_mapping": map[string]any{
-				"seedream-5.0":          "seedream-5.0",
-				"dola-seedream-5.0-pro": "dola-seedream-5.0-pro",
+				"seedream-5.0":       "seedream-5.0",
+				"wan2.5-t2i-preview": "wan2.5-t2i-preview",
+				"wan2.5-i2i-preview": "wan2.5-i2i-preview",
 			},
 		},
 	}
 	got := AccountFromServiceShallow(src)
 	require.Equal(t, "hc_atom", got.Credentials["protocol"])
 	require.Equal(t, map[string]any{
-		"seedream-5.0":          "seedream-5.0",
-		"dola-seedream-5.0-pro": "dola-seedream-5.0-pro",
+		"seedream-5.0":       "seedream-5.0",
+		"wan2.5-t2i-preview": "wan2.5-t2i-preview",
+		"wan2.5-i2i-preview": "wan2.5-i2i-preview",
 	}, got.Credentials["model_mapping"])
 	require.NotContains(t, got.Credentials, service.HCAtomAPIKeyCiphertextField)
 	require.True(t, got.CredentialsStatus["has_"+service.HCAtomAPIKeyCiphertextField])

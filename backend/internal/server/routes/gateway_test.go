@@ -67,6 +67,36 @@ func TestVideoGatewayCanonicalRoutesAreRegistered(t *testing.T) {
 	}
 }
 
+func TestVideoGatewaySub2CompatibilityRoutesAreRegistered(t *testing.T) {
+	router := newGatewayRoutesTestRouter(service.PlatformHCAtom)
+	wanted := map[string]bool{
+		http.MethodGet + " /sub2api/v1/video/providers":         false,
+		http.MethodPost + " /sub2api/v1/video/tasks":            false,
+		http.MethodGet + " /sub2api/v1/video/tasks/:id":         false,
+		http.MethodPost + " /sub2api/v1/video/tasks/:id/cancel": false,
+	}
+	for _, route := range router.Routes() {
+		key := route.Method + " " + route.Path
+		if _, ok := wanted[key]; ok {
+			wanted[key] = true
+		}
+	}
+	for route, registered := range wanted {
+		require.True(t, registered, route)
+	}
+}
+
+func TestHCAtomV1ModelsKindRoutesToProtectedCatalog(t *testing.T) {
+	router := newGatewayRoutesTestRouter(service.PlatformHCAtom)
+	for _, path := range []string{"/v1/models?kind=text", "/v1/models?kind=image", "/sub2api/v1/models?kind=text"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		require.Equal(t, http.StatusOK, w.Code, path)
+		require.JSONEq(t, `{"object":"list","data":[]}`, w.Body.String(), path)
+	}
+}
+
 func TestGatewayRoutesOpenAIResponsesCompactPathIsRegistered(t *testing.T) {
 	router := newGatewayRoutesTestRouter()
 

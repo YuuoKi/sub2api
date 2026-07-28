@@ -111,8 +111,8 @@ describe('StaffView one-shot staff issuance', () => {
     mocks.revealApiKey.mockResolvedValue({ id: 10, name: 'card', key: FULL_KEY, status: 'active', quota: 0, quota_used: 0 })
     mocks.getBatchApiKeysUsage.mockResolvedValue({ stats: {} })
     mocks.groupsGetAll.mockResolvedValue([
-      { id: 7, name: '默认组', status: 'active', platform: 'openai', is_exclusive: false, subscription_type: 'standard' },
-      { id: 8, name: '视频组', status: 'active', platform: 'openai', is_exclusive: false, subscription_type: 'standard' },
+      { id: 7, name: '视频组', status: 'active', platform: 'openai', is_exclusive: false, subscription_type: 'standard' },
+      { id: 8, name: 'HC 媒体组', status: 'active', platform: 'hc_atom', is_exclusive: false, subscription_type: 'standard', allow_image_generation: true, allow_batch_image_generation: true },
     ])
     mocks.createQCanvasKeyPairForUser.mockResolvedValue({
       video: { id: 12, name: 'QCanvas · video', key: 'sk-video-one-time', status: 'active', quota: 0, quota_used: 0 },
@@ -174,14 +174,15 @@ describe('StaffView one-shot staff issuance', () => {
     expect(wrapper.text()).toContain('共 2 个员工')
   })
 
-  it('single modal: creates employee, issues dual keys into the same group, recharges, then shows both plaintext keys once', async () => {
+  it('single modal: creates employee, issues dual keys into distinct capability groups, recharges, then shows both plaintext keys once', async () => {
     mocks.usersUpdateBalance.mockResolvedValue({ id: 2, balance: 55 })
     const wrapper = mountView()
     await flushPromises()
 
     await wrapper.find('[data-test="create-service-identity"]').trigger('click')
     await wrapper.find('[data-test="service-identity-email"]').setValue('zhangsan@wujie.local')
-    await wrapper.find('[data-test="wizard-group"]').setValue('8')
+    await wrapper.find('[data-test="wizard-video-group"]').setValue('7')
+    await wrapper.find('[data-test="wizard-media-group"]').setValue('8')
     await wrapper.find('[data-test="wizard-amount"]').setValue(55)
     await wrapper.find('form[data-test="service-identity-form"]').trigger('submit.prevent')
     await flushPromises()
@@ -191,16 +192,17 @@ describe('StaffView one-shot staff issuance', () => {
       member_type: 'tool',
       role: 'user',
     }))
-    // 后端已放开同组限制：video_group_id 与 media_group_id 传同一个所选组
     expect(mocks.createQCanvasKeyPairForUser).toHaveBeenCalledWith(
       2,
-      expect.objectContaining({ video_group_id: 8, media_group_id: 8, allow_admin_target: false }),
+      expect.objectContaining({ video_group_id: 7, media_group_id: 8, allow_admin_target: false }),
       expect.any(String),
     )
     expect(mocks.usersUpdateBalance).toHaveBeenCalledWith(2, 55, 'add', expect.any(String))
 
     expect(wrapper.find('[data-test="wizard-video-key"]').text()).toContain('sk-video-one-time')
     expect(wrapper.find('[data-test="wizard-media-key"]').text()).toContain(FULL_KEY)
+    expect(wrapper.find('[data-test="wizard-video-group-name"]').text()).toContain('视频组')
+    expect(wrapper.find('[data-test="wizard-media-group-name"]').text()).toContain('HC 媒体组')
     expect(wrapper.find('[data-test="wizard-recharge-result"]').text()).toContain('55.00')
 
     // 关闭后明文不残留
@@ -240,7 +242,7 @@ describe('StaffView one-shot staff issuance', () => {
     expect(mocks.usersCreate).toHaveBeenCalledTimes(1)
     expect(mocks.createQCanvasKeyPairForUser).toHaveBeenCalledWith(
       1,
-      expect.objectContaining({ video_group_id: 7, media_group_id: 7, allow_admin_target: false }),
+      expect.objectContaining({ video_group_id: 7, media_group_id: 8, allow_admin_target: false }),
       expect.any(String),
     )
     expect(wrapper.find('[data-test="wizard-video-key"]').text()).toContain('sk-video-one-time')
@@ -276,7 +278,7 @@ describe('StaffView one-shot staff issuance', () => {
     expect(mocks.usersCreate).toHaveBeenCalledTimes(1)
     expect(mocks.createQCanvasKeyPairForUser).toHaveBeenCalledWith(
       4,
-      expect.objectContaining({ video_group_id: 7, media_group_id: 7, allow_admin_target: false }),
+      expect.objectContaining({ video_group_id: 7, media_group_id: 8, allow_admin_target: false }),
       expect.any(String),
     )
     // Must not attempt to rewrite human → tool on conflict reuse.
@@ -433,21 +435,76 @@ describe('StaffView one-shot staff issuance', () => {
     expect(wrapper.find('form[data-test="service-identity-form"]').exists()).toBe(true)
   })
 
-  it('quick-creates a group inline and selects it for issuance', async () => {
+  it('quick-creates separate video and HC media groups inline and selects both for issuance', async () => {
     mocks.groupsGetAll.mockReset()
+    const videoGroup = { id: 9, name: '视频组二', platform: 'hc_atom', status: 'active', is_exclusive: false, subscription_type: 'standard' }
+    const mediaGroup = { id: 10, name: 'HC 媒体组二', platform: 'hc_atom', status: 'active', is_exclusive: false, subscription_type: 'standard', allow_image_generation: true, allow_batch_image_generation: true }
     mocks.groupsGetAll
       .mockResolvedValueOnce([]) // 首次加载：还没有任何组
-      .mockResolvedValue([{ id: 9, name: '后期组', platform: 'openai', status: 'active', is_exclusive: false, subscription_type: 'standard' }])
-    mocks.groupsCreate.mockResolvedValue({ id: 9, name: '后期组', platform: 'openai', status: 'active', is_exclusive: false, subscription_type: 'standard' })
+      .mockResolvedValueOnce([videoGroup])
+      .mockResolvedValue([videoGroup, mediaGroup])
+    mocks.groupsCreate
+      .mockResolvedValueOnce(videoGroup)
+      .mockResolvedValueOnce(mediaGroup)
     const wrapper = mountView()
     await flushPromises()
 
     await wrapper.find('[data-test="create-service-identity"]').trigger('click')
-    await wrapper.find('[data-test="staff-quick-group-name"]').setValue('后期组')
-    await wrapper.find('[data-test="staff-quick-group-create"]').trigger('click')
+    await wrapper.find('[data-test="staff-quick-group-name"]').setValue('视频组二')
+    await wrapper.find('[data-test="staff-quick-video-group-create"]').trigger('click')
+    await flushPromises()
+    await wrapper.find('[data-test="staff-quick-group-name"]').setValue('HC 媒体组二')
+    await wrapper.find('[data-test="staff-quick-media-group-create"]').trigger('click')
     await flushPromises()
 
-    expect(mocks.groupsCreate).toHaveBeenCalledWith(expect.objectContaining({ name: '后期组', platform: 'openai' }))
+    expect(mocks.groupsCreate).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        name: '视频组二',
+        platform: 'hc_atom',
+        allow_image_generation: false,
+        allow_batch_image_generation: false,
+        image_price_1k: null,
+        image_price_2k: null,
+        image_price_4k: null,
+        video_price_480p: 0.05,
+        video_price_720p: 0.07,
+        video_price_1080p: 0.25,
+        models_list_config: {
+          enabled: true,
+          models: [
+            'doubao-seedance-2.0',
+            'doubao-seedance-2.0-v3',
+          ],
+        },
+      }),
+    )
+    expect(mocks.groupsCreate).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        name: 'HC 媒体组二',
+        platform: 'hc_atom',
+        allow_image_generation: true,
+        allow_batch_image_generation: true,
+        image_price_1k: 0.134,
+        image_price_2k: 0.201,
+        image_price_4k: 0.268,
+        video_price_480p: null,
+        video_price_720p: null,
+        video_price_1080p: null,
+        models_list_config: {
+          enabled: true,
+          models: [
+            'gpt-5.6-sol',
+            'gemini-3-flash-preview',
+            'claude-opus-4-6',
+            'seedream-5.0',
+            'wan2.5-t2i-preview',
+            'wan2.5-i2i-preview',
+          ],
+        },
+      }),
+    )
 
     await wrapper.find('[data-test="service-identity-email"]').setValue('zhangsan@wujie.local')
     await wrapper.find('form[data-test="service-identity-form"]').trigger('submit.prevent')
@@ -455,12 +512,12 @@ describe('StaffView one-shot staff issuance', () => {
 
     expect(mocks.createQCanvasKeyPairForUser).toHaveBeenCalledWith(
       2,
-      expect.objectContaining({ video_group_id: 9, media_group_id: 9, allow_admin_target: false }),
+      expect.objectContaining({ video_group_id: 9, media_group_id: 10, allow_admin_target: false }),
       expect.any(String),
     )
   })
 
-  it('does not offer exclusive or subscription groups in the single group select', async () => {
+  it('does not offer exclusive or subscription groups in either capability selector', async () => {
     mocks.groupsGetAll.mockResolvedValue([
       { id: 6, name: '未授权专属组', status: 'active', platform: 'openai', is_exclusive: true, subscription_type: 'standard' },
       { id: 5, name: '订阅组', status: 'active', platform: 'openai', is_exclusive: false, subscription_type: 'subscription' },
@@ -470,10 +527,30 @@ describe('StaffView one-shot staff issuance', () => {
     await flushPromises()
 
     await wrapper.find('[data-test="create-service-identity"]').trigger('click')
-    const options = wrapper.find('[data-test="wizard-group"]').findAll('option')
-    expect(options.map((option) => option.text())).not.toContain('未授权专属组')
-    expect(options.map((option) => option.text())).not.toContain('订阅组')
-    expect(options.map((option) => option.text())).toContain('默认组')
+    for (const selector of ['wizard-video-group', 'wizard-media-group']) {
+      const options = wrapper.find(`[data-test="${selector}"]`).findAll('option')
+      const text = options.map((option) => option.text()).join(' ')
+      expect(text).not.toContain('未授权专属组')
+      expect(text).not.toContain('订阅组')
+      expect(text).toContain('默认组')
+    }
+  })
+
+  it('rejects the same group before creating an owner or issuing keys', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('[data-test="create-service-identity"]').trigger('click')
+    await wrapper.find('[data-test="service-identity-email"]').setValue('zhangsan@wujie.local')
+    await wrapper.find('[data-test="wizard-media-group"]').setValue('7')
+    expect(wrapper.find('[data-test="wizard-group-conflict"]').exists()).toBe(true)
+
+    await wrapper.find('form[data-test="service-identity-form"]').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(mocks.usersCreate).not.toHaveBeenCalled()
+    expect(mocks.createQCanvasKeyPairForUser).not.toHaveBeenCalled()
+    expect(mocks.showError).toHaveBeenCalledWith(expect.stringContaining('不同分组'))
   })
 
   it('renders the employee total from the user aggregate instead of treating two keys as two balances', async () => {
@@ -553,7 +630,8 @@ describe('StaffView one-shot staff issuance', () => {
 
     await wrapper.find('[data-test="create-service-identity"]').trigger('click')
     await wrapper.find('[data-test="admin-self-issue"] input').setValue(true)
-    await wrapper.find('[data-test="wizard-group"]').setValue(7)
+    await wrapper.find('[data-test="wizard-video-group"]').setValue(7)
+    await wrapper.find('[data-test="wizard-media-group"]').setValue(8)
     await wrapper.find('[data-test="wizard-submit"]').trigger('submit')
     await flushPromises()
 
@@ -562,7 +640,7 @@ describe('StaffView one-shot staff issuance', () => {
       99,
       expect.objectContaining({
         video_group_id: 7,
-        media_group_id: 7,
+        media_group_id: 8,
         allow_admin_target: true,
       }),
       expect.any(String),
@@ -737,13 +815,13 @@ describe('StaffView one-shot staff issuance', () => {
     expect(mocks.createQCanvasKeyPairForUser).toHaveBeenNthCalledWith(
       1,
       2,
-      expect.objectContaining({ video_group_id: 7, media_group_id: 7, allow_admin_target: false }),
+      expect.objectContaining({ video_group_id: 7, media_group_id: 8, allow_admin_target: false }),
       'idem-stable-aaa',
     )
     expect(mocks.createQCanvasKeyPairForUser).toHaveBeenNthCalledWith(
       2,
       2,
-      expect.objectContaining({ video_group_id: 7, media_group_id: 7, allow_admin_target: false }),
+      expect.objectContaining({ video_group_id: 7, media_group_id: 8, allow_admin_target: false }),
       'idem-stable-aaa',
     )
 
@@ -763,7 +841,7 @@ describe('StaffView one-shot staff issuance', () => {
 
     expect(mocks.createQCanvasKeyPairForUser).toHaveBeenLastCalledWith(
       3,
-      expect.objectContaining({ video_group_id: 7, media_group_id: 7, allow_admin_target: false }),
+      expect.objectContaining({ video_group_id: 7, media_group_id: 8, allow_admin_target: false }),
       'idem-after-reopen',
     )
     uuidSpy.mockRestore()
@@ -921,7 +999,7 @@ describe('StaffView one-shot staff issuance', () => {
 
     expect(mocks.createQCanvasKeyPairForUser).toHaveBeenCalledWith(
       77,
-      expect.objectContaining({ video_group_id: 7, media_group_id: 7, allow_admin_target: false }),
+      expect.objectContaining({ video_group_id: 7, media_group_id: 8, allow_admin_target: false }),
       expect.any(String),
     )
     expect(wrapper.find('[data-test="wizard-video-key"]').text()).toContain('sk-video-one-time')

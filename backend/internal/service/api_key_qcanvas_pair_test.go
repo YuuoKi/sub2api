@@ -78,7 +78,7 @@ func TestAPIKeyService_CreateQCanvasKeyPair(t *testing.T) {
 		require.Len(t, repo.persisted, 2)
 	})
 
-	t.Run("creates both keys on the same group when groups match", func(t *testing.T) {
+	t.Run("rejects matching media and video groups before any write", func(t *testing.T) {
 		repo := &qcanvasPairAPIKeyRepoStub{}
 		svc := &APIKeyService{
 			cfg:        &config.Config{},
@@ -88,12 +88,10 @@ func TestAPIKeyService_CreateQCanvasKeyPair(t *testing.T) {
 		}
 
 		pair, err := svc.CreateQCanvasKeyPair(context.Background(), 7, CreateQCanvasKeyPairRequest{VideoGroupID: 11, MediaGroupID: 11})
-		require.NoError(t, err)
-		require.NotNil(t, pair)
-		require.Equal(t, int64(11), *pair.Video.GroupID)
-		require.Equal(t, int64(11), *pair.Media.GroupID)
-		require.NotEqual(t, pair.Video.Key, pair.Media.Key)
-		require.Len(t, repo.persisted, 2)
+		require.Error(t, err)
+		require.Nil(t, pair)
+		require.ErrorContains(t, err, "distinct groups")
+		require.Empty(t, repo.persisted)
 	})
 
 	t.Run("rejects unavailable groups before any write", func(t *testing.T) {

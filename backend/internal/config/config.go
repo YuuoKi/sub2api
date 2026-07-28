@@ -102,6 +102,15 @@ type Config struct {
 	Idempotency             IdempotencyConfig             `mapstructure:"idempotency"`
 	BatchImage              BatchImageConfig              `mapstructure:"batch_image"`
 	VideoGateway            VideoGatewayConfig            `mapstructure:"video_gateway"`
+	HCAtom                  HCAtomConfig                  `mapstructure:"hc_atom"`
+}
+
+// HCAtomConfig gates every newly exposed HC capability independently. All
+// values default false; configuring an HC account never enables paid traffic.
+type HCAtomConfig struct {
+	LLMEnabled       bool `mapstructure:"llm_enabled"`
+	SyncImageEnabled bool `mapstructure:"sync_image_enabled"`
+	VideoV1Enabled   bool `mapstructure:"video_v1_enabled"`
 }
 
 type VideoGatewayConfig struct {
@@ -114,6 +123,7 @@ type VideoGatewayConfig struct {
 	TinyRealEstimateCNY         float64 `mapstructure:"tiny_real_estimate_cny"`
 	TinyRealMaximumCNY          float64 `mapstructure:"tiny_real_maximum_cny"`
 	HCAtomV3DispatchEnabled     bool    `mapstructure:"hc_atom_v3_dispatch_enabled"`
+	HCAtomV1DispatchEnabled     bool    `mapstructure:"hc_atom_v1_dispatch_enabled"`
 }
 
 type LogConfig struct {
@@ -1686,6 +1696,10 @@ func setDefaults() {
 	viper.SetDefault("video_gateway.encryption_key", "")
 	viper.SetDefault("video_gateway.worker_enabled", false)
 	viper.SetDefault("video_gateway.hc_atom_v3_dispatch_enabled", false)
+	viper.SetDefault("video_gateway.hc_atom_v1_dispatch_enabled", false)
+	viper.SetDefault("hc_atom.llm_enabled", false)
+	viper.SetDefault("hc_atom.sync_image_enabled", false)
+	viper.SetDefault("hc_atom.video_v1_enabled", false)
 	viper.SetDefault("video_gateway.worker_interval_seconds", 5)
 	viper.SetDefault("video_gateway.http_timeout_seconds", 30)
 	viper.SetDefault("video_gateway.seedance_cny_per_million_tokens", 0)
@@ -2590,11 +2604,12 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("batch_image.recover_limit must be positive")
 		}
 	}
-	if c.BatchImage.HCAtomEnabled {
-		keyHex := strings.TrimSpace(c.BatchImage.HCAtomEncryptionKey)
-		if keyHex == "" {
-			return fmt.Errorf("batch_image.hc_atom_encryption_key is required when hc_atom is enabled")
-		}
+	hcAtomAccountDispatchEnabled := c.BatchImage.HCAtomEnabled || c.HCAtom.LLMEnabled || c.HCAtom.SyncImageEnabled
+	keyHex := strings.TrimSpace(c.BatchImage.HCAtomEncryptionKey)
+	if hcAtomAccountDispatchEnabled && keyHex == "" {
+		return fmt.Errorf("batch_image.hc_atom_encryption_key is required when any HC-ATOM account capability is enabled")
+	}
+	if keyHex != "" {
 		key, err := hex.DecodeString(keyHex)
 		if err != nil || len(key) != 32 {
 			return fmt.Errorf("batch_image.hc_atom_encryption_key must be a 32-byte hex key")
@@ -2605,6 +2620,8 @@ func (c *Config) Validate() error {
 		if strings.EqualFold(keyHex, strings.TrimSpace(c.JWT.Secret)) {
 			return fmt.Errorf("batch_image.hc_atom_encryption_key must not reuse jwt.secret")
 		}
+	}
+	if c.BatchImage.HCAtomEnabled {
 		if err := validateHCAtomOwnedResultDir(c.BatchImage.HCAtomOwnedResultDir); err != nil {
 			return fmt.Errorf("batch_image.hc_atom_owned_result_dir invalid: %w", err)
 		}

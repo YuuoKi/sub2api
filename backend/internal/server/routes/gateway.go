@@ -30,6 +30,13 @@ func RegisterGatewayRoutes(
 	// 未分组 Key 拦截中间件（按协议格式区分错误响应）
 	requireGroupAnthropic := middleware.RequireGroupAssignment(settingService, middleware.AnthropicErrorWriter)
 	requireGroupGoogle := middleware.RequireGroupAssignment(settingService, middleware.GoogleErrorWriter)
+	r.GET("/sub2api/v1/models", clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, func(c *gin.Context) {
+		if c.Query("kind") == "video" {
+			h.VideoGateway.Models(c)
+			return
+		}
+		h.Gateway.HCAtomModels(c)
+	})
 
 	isOpenAIResponsesCompatibleGatewayPlatform := func(c *gin.Context) bool {
 		switch getGroupPlatform(c) {
@@ -46,6 +53,8 @@ func RegisterGatewayRoutes(
 		switch getGroupPlatform(c) {
 		case service.PlatformOpenAI:
 			h.OpenAIGateway.Images(c)
+		case service.PlatformHCAtom:
+			h.Gateway.HCAtomImages(c)
 		case service.PlatformGrok:
 			h.OpenAIGateway.GrokImages(c)
 		default:
@@ -93,6 +102,14 @@ func RegisterGatewayRoutes(
 		video.GET("/tasks/:id", h.VideoGateway.Get)
 		video.POST("/tasks/:id/cancel", h.VideoGateway.Cancel)
 	}
+	sub2Video := r.Group("/sub2api/v1/video")
+	sub2Video.Use(bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth))
+	{
+		sub2Video.GET("/providers", h.VideoGateway.Providers)
+		sub2Video.POST("/tasks", h.VideoGateway.Create)
+		sub2Video.GET("/tasks/:id", h.VideoGateway.Get)
+		sub2Video.POST("/tasks/:id/cancel", h.VideoGateway.Cancel)
+	}
 	gateway := r.Group("/v1")
 	gateway.Use(bodyLimit)
 	gateway.Use(clientRequestID)
@@ -133,6 +150,16 @@ func RegisterGatewayRoutes(
 		// /models endpoint with a client_version query and expect the ChatGPT
 		// Codex manifest format; other clients keep the OpenAI-style list.
 		gateway.GET("/models", func(c *gin.Context) {
+			if getGroupPlatform(c) == service.PlatformHCAtom {
+				switch c.Query("kind") {
+				case "video":
+					h.VideoGateway.Models(c)
+					return
+				case "text", "image":
+					h.Gateway.HCAtomModels(c)
+					return
+				}
+			}
 			if isOpenAIGatewayPlatform(c) && c.Query("client_version") != "" {
 				h.OpenAIGateway.CodexModels(c)
 				return

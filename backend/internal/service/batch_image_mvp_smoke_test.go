@@ -233,7 +233,7 @@ func TestHCAtomBatchImagePipeline_FakeEndToEndOwnedResult(t *testing.T) {
 		SettlementService: &BatchImageSettlementService{Repo: repo, BillingRepo: billing, Pricing: &fakeBatchImagePricingResolver{unitPrice: 0.25}, Config: cfg},
 	}
 	req := validBatchImageSubmitRequest()
-	req.Provider, req.Model, req.Items = BatchImageProviderHCAtom, "seedream-5.0", req.Items[:1]
+	req.Provider, req.Model, req.Items = BatchImageProviderHCAtom, HCAtomImageAsyncT2IModel, req.Items[:1]
 	owner := BatchImageOwner{UserID: 11, APIKeyID: 22, GroupID: &groupID}
 
 	submitted, err := publicSvc.Submit(ctx, owner, req, "hc-e2e-intent")
@@ -242,8 +242,9 @@ func TestHCAtomBatchImagePipeline_FakeEndToEndOwnedResult(t *testing.T) {
 	require.Equal(t, []string{submitted.ID}, queue.enqueued)
 	require.Equal(t, 1, client.createCount)
 	require.Equal(t, "hc-image:"+submitted.ID, client.idempotencyKey)
-	require.Equal(t, "seedream-5.0", client.createRequest.Model)
+	require.Equal(t, HCAtomImageAsyncT2IModel, client.createRequest.Model)
 	require.Equal(t, map[string]any{"prompt": "hero"}, client.createRequest.Input)
+	require.Equal(t, map[string]any{"n": 1, "size": "1280*1280"}, client.createRequest.Parameters)
 	require.Len(t, billing.reserves, 1)
 
 	indexed, err := processor.Process(ctx, submitted.ID)
@@ -278,7 +279,7 @@ func TestHCAtomBatchPublicSubmit_UncertainCreateDoesNotReplaySameIntent(t *testi
 		Config: &config.Config{BatchImage: config.BatchImageConfig{Enabled: true, MaxItemsPerJobDefault: 1, MaxPromptCharsPerItem: 8000, DefaultResponseMimeType: "image/png", DefaultImageSize: "1K"}},
 	}
 	req := validBatchImageSubmitRequest()
-	req.Provider, req.Model, req.Items = BatchImageProviderHCAtom, "seedream-5.0", req.Items[:1]
+	req.Provider, req.Model, req.Items = BatchImageProviderHCAtom, HCAtomImageAsyncT2IModel, req.Items[:1]
 
 	_, err := svc.Submit(ctx, testBatchImageOwner(), req, "hc-uncertain-intent")
 	require.ErrorIs(t, err, ErrBatchImageProviderSubmitFailed)

@@ -21,10 +21,12 @@ const (
 	SeedanceModel               = "doubao-seedance-2-0-260128"
 	SeedanceBaseURL             = "https://ark.cn-beijing.volces.com/api/v3"
 	HCAtomSeedanceV3Provider    = "hc_atom_seedance_v3"
+	HCAtomVideoV1Provider       = "hc_atom_video_v1"
 	HCAtomSeedanceV3BaseURL     = "https://api-aigc.fzyinghe.com"
 	HCAtomSeedanceV3Host        = "api-aigc.fzyinghe.com"
 	HCAtomSeedanceV3Path        = "/v3/video/tasks"
-	HCAtomSeedanceV3PublicModel = "doubao-seedance-2.0"
+	HCAtomVideoV1PublicModel    = "doubao-seedance-2.0"
+	HCAtomSeedanceV3PublicModel = "doubao-seedance-2.0-v3"
 	HCAtomSeedanceV3Model       = "doubao-seedance-2-0-260128"
 )
 
@@ -84,6 +86,7 @@ type VideoCreateRequest struct {
 	ReferenceImageURL string             `json:"reference_image_url,omitempty"`
 	ReturnLastFrame   bool               `json:"return_last_frame"`
 	Watermark         bool               `json:"watermark,omitempty"`
+	IdempotencyKey    string             `json:"-"`
 }
 
 type VideoContentURL struct {
@@ -91,6 +94,7 @@ type VideoContentURL struct {
 }
 type VideoContentItem struct {
 	Type     string           `json:"type"`
+	Role     string           `json:"role,omitempty"`
 	Text     string           `json:"text,omitempty"`
 	ImageURL *VideoContentURL `json:"image_url,omitempty"`
 	VideoURL *VideoContentURL `json:"video_url,omitempty"`
@@ -132,6 +136,111 @@ type HCAtomV3Adapter struct {
 	client          *http.Client
 	assetClient     *http.Client
 	baseURL, apiKey string
+}
+
+// HCAtomV1Adapter implements the legacy HC task protocol at the fixed
+// /video/generation/tasks origin. It intentionally remains separate from V3.
+type HCAtomV1Adapter struct{ inner *HCAtomV3Adapter }
+
+func NewHCAtomV1Adapter(client *http.Client, baseURL, apiKey string) *HCAtomV1Adapter {
+	return &HCAtomV1Adapter{inner: NewHCAtomV3Adapter(client, baseURL, apiKey)}
+}
+
+func (a *HCAtomV1Adapter) taskURL() (string, error) {
+	if a == nil || a.inner == nil {
+		return "", errors.New("hc atom video v1 adapter is not configured")
+	}
+	if _, err := validateHCAtomV3BaseURL(a.inner.baseURL); err != nil {
+		return "", err
+	}
+	spec, ok := LookupHCAtomModel(HCAtomCapabilityVideoV1, HCAtomVideoV1PublicModel)
+	if !ok {
+		return "", errors.New("hc atom video v1 model is not enabled")
+	}
+	return spec.Origin + spec.Path, nil
+}
+
+func (a *HCAtomV1Adapter) Create(ctx context.Context, input VideoCreateRequest) (*VideoProviderTask, error) {
+	endpoint, err := a.taskURL()
+	if err != nil {
+		return nil, err
+	}
+	content, err := normalizeHCAtomV1Content(input)
+	if err != nil {
+		return nil, err
+	}
+	spec, _ := LookupHCAtomModel(HCAtomCapabilityVideoV1, HCAtomVideoV1PublicModel)
+	payload, err := json.Marshal(struct {
+		Model         string             `json:"model"`
+		Content       []VideoContentItem `json:"content"`
+		GenerateAudio bool               `json:"generate_audio"`
+		Ratio         string             `json:"ratio,omitempty"`
+		Duration      int                `json:"duration"`
+		Watermark     bool               `json:"watermark"`
+	}{spec.UpstreamModel, content, input.GenerateAudio, strings.TrimSpace(input.Ratio), input.Duration, input.Watermark})
+	if err != nil {
+		return nil, errors.New("hc atom video v1 request is invalid")
+	}
+	return a.inner.doTaskWithIdempotency(ctx, http.MethodPost, endpoint, payload, input.IdempotencyKey)
+}
+
+func normalizeHCAtomV1Content(input VideoCreateRequest) ([]VideoContentItem, error) {
+	content := input.Content
+	if len(content) == 0 && strings.TrimSpace(input.Prompt) != "" {
+		content = []VideoContentItem{{Type: "text", Text: strings.TrimSpace(input.Prompt)}}
+	}
+	if len(content) == 0 {
+		return nil, errors.New("hc atom video v1 content is required")
+	}
+	for _, item := range content {
+		switch item.Type {
+		case "text":
+			if strings.TrimSpace(item.Text) == "" || strings.TrimSpace(item.Role) != "" ||
+				item.ImageURL != nil || item.VideoURL != nil || item.AudioURL != nil {
+				return nil, errors.New("hc atom video v1 text content is invalid")
+			}
+		case "image_url":
+			if item.Role != "reference_image" || item.ImageURL == nil || item.VideoURL != nil || item.AudioURL != nil ||
+				strings.TrimSpace(item.Text) != "" || validateHCAtomMediaURL(item.ImageURL.URL) != nil {
+				return nil, errors.New("hc atom video v1 image content is invalid")
+			}
+		case "video_url":
+			if item.Role != "reference_video" || item.VideoURL == nil || item.ImageURL != nil || item.AudioURL != nil ||
+				strings.TrimSpace(item.Text) != "" || validateHCAtomMediaURL(item.VideoURL.URL) != nil {
+				return nil, errors.New("hc atom video v1 video content is invalid")
+			}
+		case "audio_url":
+			if item.Role != "reference_audio" || item.AudioURL == nil || item.ImageURL != nil || item.VideoURL != nil ||
+				strings.TrimSpace(item.Text) != "" || validateHCAtomMediaURL(item.AudioURL.URL) != nil {
+				return nil, errors.New("hc atom video v1 audio content is invalid")
+			}
+		default:
+			return nil, errors.New("hc atom video v1 content type is unsupported")
+		}
+	}
+	return content, nil
+}
+
+func (a *HCAtomV1Adapter) Poll(ctx context.Context, id string) (*VideoProviderTask, error) {
+	endpoint, err := a.taskURL()
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(id) == "" {
+		return nil, errors.New("hc atom upstream task id is required")
+	}
+	return a.inner.doTask(ctx, http.MethodGet, endpoint+"/"+url.PathEscape(id), nil)
+}
+
+func (a *HCAtomV1Adapter) Cancel(ctx context.Context, id string) (*VideoProviderTask, error) {
+	endpoint, err := a.taskURL()
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(id) == "" {
+		return nil, errors.New("hc atom upstream task id is required")
+	}
+	return a.inner.doTask(ctx, http.MethodDelete, endpoint+"/"+url.PathEscape(id), nil)
 }
 
 func NewHCAtomV3Adapter(client *http.Client, baseURL, apiKey string) *HCAtomV3Adapter {
@@ -176,7 +285,7 @@ func normalizeHCAtomV3Content(input VideoCreateRequest) ([]VideoContentItem, err
 	for _, item := range content {
 		switch item.Type {
 		case "text":
-			if strings.TrimSpace(item.Text) == "" || item.ImageURL != nil || item.VideoURL != nil || item.AudioURL != nil {
+			if strings.TrimSpace(item.Text) == "" || strings.TrimSpace(item.Role) != "" || item.ImageURL != nil || item.VideoURL != nil || item.AudioURL != nil {
 				return nil, errors.New("hc atom text content is invalid")
 			}
 		case "image_url", "video_url", "audio_url":
@@ -190,7 +299,7 @@ func normalizeHCAtomV3Content(input VideoCreateRequest) ([]VideoContentItem, err
 			if item.Type == "audio_url" {
 				media = item.AudioURL
 			}
-			if media == nil || strings.TrimSpace(item.Text) != "" || (item.Type != "image_url" && item.ImageURL != nil) || (item.Type != "video_url" && item.VideoURL != nil) || (item.Type != "audio_url" && item.AudioURL != nil) || validateHCAtomMediaURL(media.URL) != nil {
+			if media == nil || strings.TrimSpace(item.Role) != "" || strings.TrimSpace(item.Text) != "" || (item.Type != "image_url" && item.ImageURL != nil) || (item.Type != "video_url" && item.VideoURL != nil) || (item.Type != "audio_url" && item.AudioURL != nil) || validateHCAtomMediaURL(media.URL) != nil {
 				return nil, errors.New("hc atom media content is invalid")
 			}
 		default:
@@ -342,6 +451,10 @@ func (a *HCAtomV3Adapter) Cancel(ctx context.Context, id string) (*VideoProvider
 	return a.doTask(ctx, http.MethodDelete, endpoint+"/"+url.PathEscape(id), nil)
 }
 func (a *HCAtomV3Adapter) doTask(ctx context.Context, method, endpoint string, body []byte) (*VideoProviderTask, error) {
+	return a.doTaskWithIdempotency(ctx, method, endpoint, body, "")
+}
+
+func (a *HCAtomV3Adapter) doTaskWithIdempotency(ctx context.Context, method, endpoint string, body []byte, idempotencyKey string) (*VideoProviderTask, error) {
 	req, err := http.NewRequestWithContext(ctx, method, endpoint, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
@@ -349,6 +462,9 @@ func (a *HCAtomV3Adapter) doTask(ctx context.Context, method, endpoint string, b
 	req.Header.Set("Authorization", "Bearer "+a.apiKey)
 	if method == http.MethodPost {
 		req.Header.Set("Content-Type", "application/json")
+		if idempotencyKey = strings.TrimSpace(idempotencyKey); idempotencyKey != "" {
+			req.Header.Set("Idempotency-Key", idempotencyKey)
+		}
 	}
 	resp, err := a.client.Do(req)
 	if err != nil {

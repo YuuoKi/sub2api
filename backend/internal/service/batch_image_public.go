@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -867,7 +868,14 @@ func (s *BatchImagePublicService) validateSubmitRequest(req BatchImageSubmitRequ
 }
 
 func normalizeBatchImageReferenceInputs(model string, item *BatchImageSubmitItem) (int, int, error) {
-	if item == nil || len(item.ReferenceImages) == 0 {
+	if item == nil {
+		return 0, 0, nil
+	}
+	isHCAtomI2I := strings.EqualFold(strings.TrimSpace(model), HCAtomImageAsyncI2IModel)
+	if len(item.ReferenceImages) == 0 {
+		if isHCAtomI2I {
+			return 0, 0, ErrBatchImageInvalidReferenceImage
+		}
 		return 0, 0, nil
 	}
 	maxRefs := maxBatchImageReferenceImagesForModel(model)
@@ -881,9 +889,6 @@ func normalizeBatchImageReferenceInputs(model string, item *BatchImageSubmitItem
 		ref.Type = truncateBatchImageMessage(strings.TrimSpace(ref.Type), 40)
 		ref.MimeType = normalizeBatchImageReferenceMimeType(ref.MimeType)
 		ref.FileURI = strings.TrimSpace(ref.FileURI)
-		if ref.MimeType == "" {
-			return 0, 0, ErrBatchImageInvalidReferenceImage
-		}
 		if len(ref.Data) == 0 && ref.FileURI == "" {
 			return 0, 0, ErrBatchImageInvalidReferenceImage
 		}
@@ -893,8 +898,17 @@ func normalizeBatchImageReferenceInputs(model string, item *BatchImageSubmitItem
 		if len(ref.Data) > maxBatchImageReferenceImageBytes {
 			return 0, 0, ErrBatchImageInvalidReferenceImage
 		}
-		if ref.FileURI != "" && !strings.HasPrefix(ref.FileURI, "gs://") {
-			return 0, 0, ErrBatchImageInvalidReferenceImage
+		if isHCAtomI2I {
+			if len(ref.Data) != 0 || !isHCAtomHTTPSReferenceURL(ref.FileURI) {
+				return 0, 0, ErrBatchImageInvalidReferenceImage
+			}
+		} else {
+			if ref.MimeType == "" {
+				return 0, 0, ErrBatchImageInvalidReferenceImage
+			}
+			if ref.FileURI != "" && !strings.HasPrefix(ref.FileURI, "gs://") {
+				return 0, 0, ErrBatchImageInvalidReferenceImage
+			}
 		}
 		inlineBytes += len(ref.Data)
 		out = append(out, ref)
@@ -925,6 +939,9 @@ func batchImageRepeatSuffixWidth(count int) int {
 
 func maxBatchImageReferenceImagesForModel(model string) int {
 	model = strings.ToLower(strings.TrimSpace(model))
+	if model == HCAtomImageAsyncI2IModel {
+		return 1
+	}
 	if strings.Contains(model, "pro-image") {
 		return 14
 	}
@@ -932,6 +949,12 @@ func maxBatchImageReferenceImagesForModel(model string) int {
 		return 3
 	}
 	return 0
+}
+
+func isHCAtomHTTPSReferenceURL(rawURL string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	return err == nil && parsed != nil && strings.EqualFold(parsed.Scheme, "https") &&
+		parsed.User == nil && parsed.Hostname() != ""
 }
 
 func (s *BatchImagePublicService) selectProviderAndAccount(ctx context.Context, owner BatchImageOwner, requestedProvider, model string) (BatchImageProvider, *Account, error) {

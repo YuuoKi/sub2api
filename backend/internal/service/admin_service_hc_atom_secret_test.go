@@ -258,7 +258,7 @@ func TestHCAtomSecretBoundary_InvalidAllowedFieldValueFailsBeforeRepository(t *t
 	}
 }
 
-func TestProtectHCAtomAccountCredentials_AllowsReservedDolaMappingButOwnsProtectedFields(t *testing.T) {
+func TestProtectHCAtomAccountCredentials_AllowsOnlyCurrentCatalogMappingsAndOwnsProtectedFields(t *testing.T) {
 	cipher, err := NewHCAtomCredentialCipher(strings.Repeat("27", 32))
 	require.NoError(t, err)
 	protected, err := ProtectHCAtomAccountCredentials(nil, map[string]any{
@@ -268,9 +268,10 @@ func TestProtectHCAtomAccountCredentials_AllowsReservedDolaMappingButOwnsProtect
 		HCAtomAPIKeyMaskedField:     hcAtomSecretSentinel,
 		HCAtomAPIKeyConfiguredField: false,
 		"model_mapping": map[string]string{
-			"seedream-5.0":            "seedream-5.0",
-			"doubao-seedream-5.0-pro": "doubao-seedream-5.0-pro",
-			"dola-seedream-5.0-pro":   "dola-seedream-5.0-pro",
+			"seedream-5.0":       "seedream-5.0",
+			"wan2.5-i2i-preview": "wan2.5-i2i-preview",
+			"gpt-5.6-sol":        "gpt-5.6-sol",
+			"claude-opus-4-6":    "claude-opus-4-6",
 		},
 	}, cipher)
 	require.NoError(t, err)
@@ -280,8 +281,8 @@ func TestProtectHCAtomAccountCredentials_AllowsReservedDolaMappingButOwnsProtect
 	require.Equal(t, true, protected[HCAtomAPIKeyConfiguredField])
 	require.Equal(t, "********7x9Q", protected[HCAtomAPIKeyMaskedField])
 	require.NotEqual(t, hcAtomSecretSentinel, protected[HCAtomAPIKeyCiphertextField])
-	require.Equal(t, "dola-seedream-5.0-pro", protected["model_mapping"].(map[string]any)["dola-seedream-5.0-pro"])
-	require.False(t, isHCAtomBatchEnabledModel("dola-seedream-5.0-pro"))
+	require.Equal(t, "wan2.5-i2i-preview", protected["model_mapping"].(map[string]any)["wan2.5-i2i-preview"])
+	require.True(t, isHCAtomBatchEnabledModel("wan2.5-i2i-preview"))
 }
 
 func TestProtectHCAtomAccountCredentials_RejectsNestedModelMappingMetadata(t *testing.T) {
@@ -361,9 +362,9 @@ func TestHCAtomBatchProvider_DecryptsOnlyAfterDedicatedAccountSelection(t *testi
 
 	require.True(t, provider.SupportsAccount(account))
 	require.Empty(t, client.apiKey, "account selection must not decrypt the credential")
-	_, err = provider.Submit(context.Background(), &BatchImageJob{BatchID: "imgbatch_secret", Model: "seedream-5.0"}, account, BatchImageInput{
+	_, err = provider.Submit(context.Background(), &BatchImageJob{BatchID: "imgbatch_secret", Model: HCAtomImageAsyncT2IModel}, account, BatchImageInput{
 		BatchID: "imgbatch_secret",
-		Model:   "seedream-5.0",
+		Model:   HCAtomImageAsyncT2IModel,
 		Items:   []BatchImageInputItem{{CustomID: "item_1", Prompt: "safe synthetic prompt"}},
 	})
 	require.NoError(t, err)

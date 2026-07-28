@@ -25,36 +25,119 @@ import (
 // Regression target: a provider change that redirects HC requests, flattens its
 // body, loses the intent key, or uses a non-HC account must fail this test.
 func TestHCAtomBatchProvider_SubmitUsesFixedAsyncContract(t *testing.T) {
-	transport := hcAtomRoundTripFunc(func(req *http.Request) (*http.Response, error) {
-		require.Equal(t, "POST", req.Method)
-		require.Equal(t, "https", req.URL.Scheme)
-		require.Equal(t, "api-aigc.fzyinghe.com", req.URL.Host)
-		require.Equal(t, "/image/generation/tasks", req.URL.Path)
-		require.Equal(t, "Bearer hc-test-key", req.Header.Get("Authorization"))
-		require.Equal(t, "hc-image:imgbatch_123", req.Header.Get("Idempotency-Key"))
+	const referenceURL = "https://assets.example.test/reference.png"
+	tests := []struct {
+		name           string
+		model          string
+		references     []BatchImageReference
+		expectedInput  map[string]any
+		expectedParams map[string]any
+	}{
+		{
+			name:       "image to image",
+			model:      HCAtomImageAsyncI2IModel,
+			references: []BatchImageReference{{FileURI: referenceURL}},
+			expectedInput: map[string]any{
+				"prompt": "A clean product hero image",
+				"images": []any{referenceURL},
+			},
+			expectedParams: map[string]any{"prompt_extend": true, "n": float64(1)},
+		},
+		{
+			name:           "text to image",
+			model:          HCAtomImageAsyncT2IModel,
+			expectedInput:  map[string]any{"prompt": "A clean product hero image"},
+			expectedParams: map[string]any{"size": "1280*1280", "n": float64(1)},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			transport := hcAtomRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+				require.Equal(t, http.MethodPost, req.Method)
+				require.Equal(t, "https", req.URL.Scheme)
+				require.Equal(t, "api-aigc.fzyinghe.com", req.URL.Host)
+				require.Equal(t, "/image/generation/tasks", req.URL.Path)
+				require.Equal(t, "Bearer hc-test-key", req.Header.Get("Authorization"))
+				require.Equal(t, "application/json", req.Header.Get("Content-Type"))
+				require.Equal(t, "enable", req.Header.Get("X-DashScope-Async"))
+				require.Equal(t, "hc-image:imgbatch_123", req.Header.Get("Idempotency-Key"))
 
-		var body map[string]any
-		require.NoError(t, json.NewDecoder(req.Body).Decode(&body))
-		require.Equal(t, "seedream-5.0", body["model"])
-		require.Equal(t, map[string]any{"prompt": "A clean product hero image"}, body["input"])
-		require.Equal(t, map[string]any{"aspect_ratio": "1:1", "image_size": "2K", "response_mime_type": "image/png"}, body["parameters"])
+				var body map[string]any
+				require.NoError(t, json.NewDecoder(req.Body).Decode(&body))
+				require.Equal(t, test.model, body["model"])
+				require.Equal(t, test.expectedInput, body["input"])
+				require.Equal(t, test.expectedParams, body["parameters"])
+				require.Len(t, body, 3)
 
-		return hcAtomHTTPResponse(http.StatusOK, `{"code":0,"msg":"ok","data":{"taskId":"hc-task-1","status":"PENDING"}}`), nil
-	})
-	cipher, account := hcAtomBatchTestAccount(t, "hc-test-key")
-	provider := NewHCAtomBatchImageProviderWithCredentialCipher(NewHCAtomBatchHTTPClient(&http.Client{Transport: transport}), cipher)
+				return hcAtomHTTPResponse(http.StatusOK, `{"code":0,"msg":"ok","data":{"taskId":"hc-task-1","status":"PENDING"}}`), nil
+			})
+			cipher, account := hcAtomBatchTestAccount(t, "hc-test-key")
+			provider := NewHCAtomBatchImageProviderWithCredentialCipher(NewHCAtomBatchHTTPClient(&http.Client{Transport: transport}), cipher)
 
-	got, err := provider.Submit(context.Background(), &BatchImageJob{BatchID: "imgbatch_123", Model: "seedream-5.0"}, account, BatchImageInput{
-		BatchID:          "imgbatch_123",
-		Model:            "seedream-5.0",
-		ResponseMimeType: "image/png",
-		AspectRatio:      "1:1",
-		ImageSize:        "2K",
-		Items:            []BatchImageInputItem{{CustomID: "cover_001", Prompt: "A clean product hero image"}},
-	})
+			got, err := provider.Submit(context.Background(), &BatchImageJob{BatchID: "imgbatch_123", Model: test.model}, account, BatchImageInput{
+				BatchID:          "imgbatch_123",
+				Model:            test.model,
+				ResponseMimeType: "image/png",
+				AspectRatio:      "1:1",
+				ImageSize:        "2K",
+				Items: []BatchImageInputItem{{
+					CustomID:        "cover_001",
+					Prompt:          "A clean product hero image",
+					ReferenceImages: test.references,
+				}},
+			})
+			require.NoError(t, err)
+			require.Equal(t, "hc-task-1", got.ProviderJobName)
+			require.Equal(t, "PENDING", got.RawState)
+		})
+	}
+}
+
+func TestHCAtomBatchProvider_ValidatesModelReferenceContract(t *testing.T) {
+	tests := []struct {
+		name       string
+		model      string
+		references []BatchImageReference
+		reason     string
+	}{
+		{name: "i2i requires reference", model: HCAtomImageAsyncI2IModel, reason: "HC_ATOM_REFERENCE_IMAGE_REQUIRED"},
+		{name: "i2i rejects multiple references", model: HCAtomImageAsyncI2IModel, references: []BatchImageReference{{FileURI: "https://assets.example.test/a.png"}, {FileURI: "https://assets.example.test/b.png"}}, reason: "HC_ATOM_REFERENCE_IMAGE_REQUIRED"},
+		{name: "i2i rejects http", model: HCAtomImageAsyncI2IModel, references: []BatchImageReference{{FileURI: "http://assets.example.test/a.png"}}, reason: "HC_ATOM_REFERENCE_IMAGE_REQUIRED"},
+		{name: "i2i rejects userinfo", model: HCAtomImageAsyncI2IModel, references: []BatchImageReference{{FileURI: "https://user:pass@assets.example.test/a.png"}}, reason: "HC_ATOM_REFERENCE_IMAGE_REQUIRED"},
+		{name: "i2i rejects inline bytes", model: HCAtomImageAsyncI2IModel, references: []BatchImageReference{{FileURI: "https://assets.example.test/a.png", Data: []byte("inline")}}, reason: "HC_ATOM_REFERENCE_IMAGE_REQUIRED"},
+		{name: "t2i rejects reference", model: HCAtomImageAsyncT2IModel, references: []BatchImageReference{{FileURI: "https://assets.example.test/a.png"}}, reason: "HC_ATOM_REFERENCE_IMAGES_UNSUPPORTED"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cipher, account := hcAtomBatchTestAccount(t, "hc-test-key")
+			provider := NewHCAtomBatchImageProviderWithCredentialCipher(&fakeHCAtomBatchClient{}, cipher)
+			_, err := provider.Submit(context.Background(), &BatchImageJob{BatchID: "imgbatch_validation", Model: test.model}, account, BatchImageInput{
+				BatchID: "imgbatch_validation",
+				Model:   test.model,
+				Items: []BatchImageInputItem{{
+					CustomID:        "cover_001",
+					Prompt:          "A clean product hero image",
+					ReferenceImages: test.references,
+				}},
+			})
+			require.Error(t, err)
+			require.Equal(t, test.reason, infraerrors.Reason(err))
+		})
+	}
+}
+
+func TestHCAtomBatchHTTPClient_GetUsesFixedTaskContract(t *testing.T) {
+	client := NewHCAtomBatchHTTPClient(&http.Client{Transport: hcAtomRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		require.Equal(t, http.MethodGet, req.Method)
+		require.Equal(t, "https://api-aigc.fzyinghe.com/image/generation/tasks/hc-task-1", req.URL.String())
+		require.Equal(t, "Bearer synthetic-key", req.Header.Get("Authorization"))
+		return hcAtomHTTPResponse(http.StatusOK, `{"code":0,"msg":"ok","data":{"taskId":"hc-task-1","status":"RUNNING"}}`), nil
+	})})
+
+	task, err := client.Get(context.Background(), "synthetic-key", "hc-task-1")
 	require.NoError(t, err)
-	require.Equal(t, "hc-task-1", got.ProviderJobName)
-	require.Equal(t, "PENDING", got.RawState)
+	require.Equal(t, "hc-task-1", task.TaskID)
+	require.Equal(t, "RUNNING", task.Status)
 }
 
 // Regression target: treating an HC-only media group as Gemini would either
@@ -371,7 +454,7 @@ func TestHCAtomBatchProvider_RejectsDisabledDolaAndMultipleItemsBeforeCreate(t *
 	require.Equal(t, "HC_ATOM_MODEL_UNSUPPORTED", infraerrors.Reason(err))
 
 	_, err = provider.Submit(context.Background(), job, account, BatchImageInput{
-		BatchID: "imgbatch_validate", Model: "seedream-5.0", Items: []BatchImageInputItem{{CustomID: "one", Prompt: "hero"}, {CustomID: "two", Prompt: "other"}},
+		BatchID: "imgbatch_validate", Model: "wan2.5-i2i-preview", Items: []BatchImageInputItem{{CustomID: "one", Prompt: "hero"}, {CustomID: "two", Prompt: "other"}},
 	})
 	require.Error(t, err)
 	require.Equal(t, "HC_ATOM_SINGLE_ITEM_REQUIRED", infraerrors.Reason(err))

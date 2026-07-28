@@ -31,12 +31,6 @@ const (
 	hcAtomResultMaxRawImageBytes = 11 << 20
 )
 
-var hcAtomBatchModelCatalog = map[string]bool{
-	"seedream-5.0":            true,
-	"doubao-seedream-5.0-pro": true,
-	"dola-seedream-5.0-pro":   false,
-}
-
 // HCAtomBatchClient has no fallback behaviour: every operation is tied to the
 // HC fixed-origin protocol and callers only receive normalized task data.
 type HCAtomBatchClient interface {
@@ -163,13 +157,27 @@ func (p *HCAtomBatchImageProvider) Submit(ctx context.Context, job *BatchImageJo
 	if strings.TrimSpace(item.Prompt) == "" {
 		return nil, ErrBatchImageProviderInvalidInput
 	}
-	if len(item.ReferenceImages) != 0 {
-		return nil, hcAtomBatchError("HC_ATOM_REFERENCE_IMAGES_UNSUPPORTED", "HC-ATOM batch image reference images are not enabled", nil)
+	requestInput := map[string]any{"prompt": item.Prompt}
+	requestParameters := map[string]any{"n": 1}
+	switch input.Model {
+	case HCAtomImageAsyncI2IModel:
+		if len(item.ReferenceImages) != 1 || !isHCAtomHTTPSReferenceURL(item.ReferenceImages[0].FileURI) || len(item.ReferenceImages[0].Data) != 0 {
+			return nil, hcAtomBatchError("HC_ATOM_REFERENCE_IMAGE_REQUIRED", "HC-ATOM image-to-image requests require exactly one HTTPS reference image", nil)
+		}
+		requestInput["images"] = []string{strings.TrimSpace(item.ReferenceImages[0].FileURI)}
+		requestParameters["prompt_extend"] = true
+	case HCAtomImageAsyncT2IModel:
+		if len(item.ReferenceImages) != 0 {
+			return nil, hcAtomBatchError("HC_ATOM_REFERENCE_IMAGES_UNSUPPORTED", "HC-ATOM text-to-image requests do not accept reference images", nil)
+		}
+		requestParameters["size"] = "1280*1280"
+	default:
+		return nil, hcAtomBatchError("HC_ATOM_MODEL_UNSUPPORTED", "HC-ATOM batch image model is not enabled", nil)
 	}
 	created, err := p.client.Create(ctx, apiKey, hcAtomBatchIdempotencyKey(input.BatchID), HCAtomBatchCreateRequest{
 		Model:      input.Model,
-		Input:      map[string]any{"prompt": item.Prompt},
-		Parameters: map[string]any{"response_mime_type": input.ResponseMimeType, "aspect_ratio": input.AspectRatio, "image_size": input.ImageSize},
+		Input:      requestInput,
+		Parameters: requestParameters,
 	})
 	if err != nil {
 		return nil, mapHCAtomBatchError(err)
@@ -438,10 +446,6 @@ func hcAtomBatchIdempotencyKey(batchID string) string {
 	return "hc-image:" + strings.TrimSpace(batchID)
 }
 
-func isHCAtomBatchEnabledModel(model string) bool {
-	return hcAtomBatchModelCatalog[strings.TrimSpace(model)]
-}
-
 func mapHCAtomBatchState(task *HCAtomBatchTask) (*BatchProviderStatus, error) {
 	state := strings.ToUpper(strings.TrimSpace(task.Status))
 	status := &BatchProviderStatus{RawState: state, SuggestedRequeueAfter: hcAtomBatchRequeueAfter}
@@ -542,6 +546,7 @@ func (c *HCAtomBatchHTTPClient) Create(ctx context.Context, apiKey, idempotencyK
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-DashScope-Async", "enable")
 	req.Header.Set("Idempotency-Key", idempotencyKey)
 	return c.doTask(req)
 }

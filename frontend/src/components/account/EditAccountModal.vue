@@ -89,11 +89,10 @@
 
         <!-- Model Restriction Section (不适用于 Antigravity) -->
         <div v-if="account.platform === 'hc_atom'" class="rounded-lg border border-cyan-200 bg-cyan-50 p-4 text-sm dark:border-cyan-900 dark:bg-cyan-950/30">
-          <p class="font-medium text-cyan-900 dark:text-cyan-200">固定图片模型目录</p>
+          <p class="font-medium text-cyan-900 dark:text-cyan-200">固定通用 AI 模型目录</p>
           <ul class="mt-2 list-disc pl-5 text-cyan-800 dark:text-cyan-300">
-            <li v-for="model in HC_ATOM_IMAGE_ENABLED_MODELS" :key="model">{{ model }}</li>
+            <li v-for="model in HC_ATOM_MEDIA_ENABLED_MODELS" :key="model">{{ model }}</li>
           </ul>
-          <p class="mt-2 text-xs text-amber-700 dark:text-amber-300">dola-seedream-5.0-pro 暂不启用。</p>
           <p class="mt-2 text-xs text-gray-600 dark:text-gray-400">
             密钥：{{ accountCredentials.hc_atom_api_key_masked || (hasExistingApiKey ? '已配置' : '未配置') }}
           </p>
@@ -2615,7 +2614,7 @@ import {
 } from '@/composables/useModelWhitelist'
 import {
   HC_ATOM_IMAGE_BASE_URL,
-  HC_ATOM_IMAGE_ENABLED_MODELS,
+  HC_ATOM_MEDIA_ENABLED_MODELS,
   buildHCAtomImageCredentials
 } from './hcAtomAdminContract'
 
@@ -4066,7 +4065,7 @@ const handleSubmit = async () => {
           : {
               protocol: 'hc_atom',
               model_mapping: Object.fromEntries(
-                HC_ATOM_IMAGE_ENABLED_MODELS.map((model) => [model, model]),
+                HC_ATOM_MEDIA_ENABLED_MODELS.map((model) => [model, model]),
               ),
             }
       } else {

@@ -516,6 +516,9 @@ func (s *APIKeyService) CreateQCanvasKeyPair(ctx context.Context, userID int64, 
 	if req.VideoGroupID <= 0 || req.MediaGroupID <= 0 {
 		return nil, infraerrors.BadRequest("QC_KEY_PAIR_GROUP_REQUIRED", "video_group_id and media_group_id must be positive")
 	}
+	if req.VideoGroupID == req.MediaGroupID {
+		return nil, infraerrors.BadRequest("QC_KEY_PAIR_GROUPS_MUST_DIFFER", "video_group_id and media_group_id must reference two distinct groups")
+	}
 
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {

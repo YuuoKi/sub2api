@@ -1141,13 +1141,10 @@
 
         <!-- Model Restriction Section (Antigravity 已在上层条件排除) -->
         <div v-if="form.platform === 'hc_atom'" class="rounded-lg border border-cyan-200 bg-cyan-50 p-4 text-sm dark:border-cyan-900 dark:bg-cyan-950/30">
-          <p class="font-medium text-cyan-900 dark:text-cyan-200">固定图片模型目录</p>
+          <p class="font-medium text-cyan-900 dark:text-cyan-200">固定通用 AI 模型目录</p>
           <ul class="mt-2 list-disc pl-5 text-cyan-800 dark:text-cyan-300">
-            <li v-for="model in HC_ATOM_IMAGE_ENABLED_MODELS" :key="model">{{ model }}</li>
+            <li v-for="model in HC_ATOM_MEDIA_ENABLED_MODELS" :key="model">{{ model }}</li>
           </ul>
-          <p class="mt-2 text-xs text-amber-700 dark:text-amber-300">
-            dola-seedream-5.0-pro 仅保留映射，供应商解除“待配置接口地址”前不可启用。
-          </p>
         </div>
         <div v-else class="border-t border-gray-200 pt-4 dark:border-dark-600">
           <label class="input-label">{{ t('admin.accounts.modelRestriction') }}</label>
@@ -3483,7 +3480,7 @@ import {
 import OAuthAuthorizationFlow from './OAuthAuthorizationFlow.vue'
 import {
   HC_ATOM_IMAGE_BASE_URL,
-  HC_ATOM_IMAGE_ENABLED_MODELS,
+  HC_ATOM_MEDIA_ENABLED_MODELS,
   buildHCAtomImageCredentials
 } from './hcAtomAdminContract'
 
@@ -4111,7 +4108,7 @@ watch(
       accountCategory.value = 'apikey'
       form.type = 'apikey'
       modelRestrictionMode.value = 'mapping'
-      allowedModels.value = [...HC_ATOM_IMAGE_ENABLED_MODELS]
+      allowedModels.value = [...HC_ATOM_MEDIA_ENABLED_MODELS]
     }
     if (newPlatform !== 'gemini' && newPlatform !== 'anthropic' && accountCategory.value === 'service_account') {
       accountCategory.value = 'oauth-based'

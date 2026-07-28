@@ -28,6 +28,9 @@ func ProvideVideoGatewayWorker(repo VideoGatewayRuntimeRepository, encryptor Vid
 	}
 	client := &http.Client{Timeout: timeout}
 	return NewVideoGatewayWorker(repo, encryptor, func(provider, baseURL, key string) VideoProviderClient {
+		if provider == HCAtomVideoV1Provider {
+			return NewHCAtomV1Adapter(client, baseURL, key)
+		}
 		if provider == HCAtomSeedanceV3Provider {
 			return NewHCAtomV3Adapter(client, baseURL, key)
 		}

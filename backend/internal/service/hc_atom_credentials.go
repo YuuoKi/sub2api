@@ -53,7 +53,7 @@ func (disabledHCAtomCredentialCipher) Decrypt(string) (string, error) {
 }
 
 func ProvideHCAtomCredentialCipher(cfg *config.Config) (HCAtomCredentialCipher, error) {
-	if cfg == nil || !cfg.BatchImage.HCAtomEnabled {
+	if cfg == nil || strings.TrimSpace(cfg.BatchImage.HCAtomEncryptionKey) == "" {
 		return disabledHCAtomCredentialCipher{}, nil
 	}
 	return NewHCAtomCredentialCipher(cfg.BatchImage.HCAtomEncryptionKey)
@@ -244,11 +244,6 @@ func normalizeHCAtomModelMapping(raw any) (map[string]any, error) {
 		return nil, ErrHCAtomCredentialInvalid
 	}
 	return out, nil
-}
-
-func isHCAtomCatalogModel(value string) bool {
-	_, ok := hcAtomBatchModelCatalog[value]
-	return ok
 }
 
 // ResolveHCAtomAPIKey decrypts only after the dedicated HC account was chosen.

@@ -3,7 +3,9 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -111,6 +113,10 @@ func (w *VideoGatewayWorker) RunOnce(ctx context.Context) error {
 		return ErrVideoRealDispatchDenied
 	}
 	started, err := w.repo.BeginRealDispatch(ctx, task.ID, task.Version)
+	if provider.Provider == HCAtomVideoV1Provider && (!w.cfg.VideoGateway.HCAtomV1DispatchEnabled || !w.cfg.HCAtom.VideoV1Enabled) {
+		started = false
+		err = nil
+	}
 	if provider.Provider == HCAtomSeedanceV3Provider {
 		if !w.cfg.VideoGateway.HCAtomV3DispatchEnabled {
 			started = false
@@ -134,6 +140,12 @@ func (w *VideoGatewayWorker) RunOnce(ctx context.Context) error {
 	request := task.CreateRequest
 	if request.Prompt == "" && len(request.Content) == 0 {
 		request = VideoCreateRequest{Prompt: task.Prompt, Duration: task.DurationSeconds, Resolution: task.Resolution, ReturnLastFrame: true}
+	}
+	if provider.Provider == HCAtomVideoV1Provider && strings.TrimSpace(request.IdempotencyKey) == "" {
+		request.IdempotencyKey = strings.TrimSpace(task.CreationKey)
+		if request.IdempotencyKey == "" {
+			request.IdempotencyKey = fmt.Sprintf("sub2api-video-%d", task.ID)
+		}
 	}
 	created, err := w.clientFactory(provider.Provider, provider.BaseURL, key).Create(ctx, request)
 	if err != nil {

@@ -797,6 +797,40 @@ func validBatchImageSubmitRequest() BatchImageSubmitRequest {
 	}
 }
 
+func TestNormalizeBatchImageReferenceInputsHCAtomContracts(t *testing.T) {
+	tests := []struct {
+		name  string
+		model string
+		refs  []BatchImageReferenceInput
+		want  error
+	}{
+		{name: "i2i accepts one https URL without mime", model: HCAtomImageAsyncI2IModel, refs: []BatchImageReferenceInput{{FileURI: "https://assets.example.test/reference.png"}}},
+		{name: "i2i requires one reference", model: HCAtomImageAsyncI2IModel, want: ErrBatchImageInvalidReferenceImage},
+		{name: "i2i rejects two references", model: HCAtomImageAsyncI2IModel, refs: []BatchImageReferenceInput{{FileURI: "https://assets.example.test/a.png"}, {FileURI: "https://assets.example.test/b.png"}}, want: ErrBatchImageTooManyReferenceImages},
+		{name: "i2i rejects http", model: HCAtomImageAsyncI2IModel, refs: []BatchImageReferenceInput{{FileURI: "http://assets.example.test/reference.png"}}, want: ErrBatchImageInvalidReferenceImage},
+		{name: "i2i rejects userinfo", model: HCAtomImageAsyncI2IModel, refs: []BatchImageReferenceInput{{FileURI: "https://user:pass@assets.example.test/reference.png"}}, want: ErrBatchImageInvalidReferenceImage},
+		{name: "i2i rejects missing host", model: HCAtomImageAsyncI2IModel, refs: []BatchImageReferenceInput{{FileURI: "https:///reference.png"}}, want: ErrBatchImageInvalidReferenceImage},
+		{name: "i2i rejects inline data", model: HCAtomImageAsyncI2IModel, refs: []BatchImageReferenceInput{{MimeType: "image/png", Data: []byte("inline")}}, want: ErrBatchImageInvalidReferenceImage},
+		{name: "t2i accepts no reference", model: HCAtomImageAsyncT2IModel},
+		{name: "t2i rejects reference", model: HCAtomImageAsyncT2IModel, refs: []BatchImageReferenceInput{{FileURI: "https://assets.example.test/reference.png"}}, want: ErrBatchImageTooManyReferenceImages},
+		{name: "gemini keeps gs URI support", model: "gemini-2.5-flash-image", refs: []BatchImageReferenceInput{{MimeType: "image/png", FileURI: "gs://bucket/reference.png"}}},
+		{name: "gemini rejects https URI", model: "gemini-2.5-flash-image", refs: []BatchImageReferenceInput{{MimeType: "image/png", FileURI: "https://assets.example.test/reference.png"}}, want: ErrBatchImageInvalidReferenceImage},
+		{name: "gemini keeps inline support", model: "gemini-2.5-flash-image", refs: []BatchImageReferenceInput{{MimeType: "image/png", Data: []byte("inline")}}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			item := &BatchImageSubmitItem{ReferenceImages: test.refs}
+			count, _, err := normalizeBatchImageReferenceInputs(test.model, item)
+			if test.want != nil {
+				require.ErrorIs(t, err, test.want)
+				return
+			}
+			require.NoError(t, err)
+			require.Len(t, item.ReferenceImages, count)
+		})
+	}
+}
+
 func TestBatchImageProviderSelectionOrder_DoesNotSilentlyFallbackToHCAtom(t *testing.T) {
 	require.Equal(t,
 		[]string{BatchImageProviderGeminiAPI, BatchImageProviderVertex},

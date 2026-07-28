@@ -84,6 +84,10 @@ func TestLoadVideoGatewayHCAtomDispatchDefaultsDisabled(t *testing.T) {
 	cfg, err := Load()
 	require.NoError(t, err)
 	require.False(t, cfg.VideoGateway.HCAtomV3DispatchEnabled)
+	require.False(t, cfg.VideoGateway.HCAtomV1DispatchEnabled)
+	require.False(t, cfg.HCAtom.LLMEnabled)
+	require.False(t, cfg.HCAtom.SyncImageEnabled)
+	require.False(t, cfg.HCAtom.VideoV1Enabled)
 }
 
 func TestNormalizeRunMode(t *testing.T) {
@@ -426,6 +430,49 @@ func TestLoadHCAtomImageCredentialDomainRejectsMissingDedicatedKey(t *testing.T)
 
 	_, err := Load()
 	require.ErrorContains(t, err, "batch_image.hc_atom_encryption_key")
+}
+
+func TestLoadHCAtomImageCredentialDomainAcceptsDedicatedKeyWhileDispatchDisabled(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("BATCH_IMAGE_HC_ATOM_ENCRYPTION_KEY", strings.Repeat("b", 64))
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.False(t, cfg.BatchImage.HCAtomEnabled)
+	require.False(t, cfg.HCAtom.LLMEnabled)
+	require.False(t, cfg.HCAtom.SyncImageEnabled)
+	require.Equal(t, strings.Repeat("b", 64), cfg.BatchImage.HCAtomEncryptionKey)
+}
+
+func TestLoadHCAtomImageCredentialDomainRejectsMalformedConfiguredKeyWhileDispatchDisabled(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("BATCH_IMAGE_HC_ATOM_ENCRYPTION_KEY", "not-a-32-byte-hex-key")
+
+	_, err := Load()
+	require.ErrorContains(t, err, "batch_image.hc_atom_encryption_key must be a 32-byte hex key")
+}
+
+func TestLoadHCAtomImageCredentialDomainRejectsReusedConfiguredKeyWhileDispatchDisabled(t *testing.T) {
+	t.Run("video encryption key", func(t *testing.T) {
+		resetViperWithJWTSecret(t)
+		key := strings.Repeat("b", 64)
+		t.Setenv("VIDEO_GATEWAY_ENCRYPTION_KEY", key)
+		t.Setenv("BATCH_IMAGE_HC_ATOM_ENCRYPTION_KEY", key)
+
+		_, err := Load()
+		require.ErrorContains(t, err, "must not reuse video_gateway.encryption_key")
+	})
+
+	t.Run("JWT secret", func(t *testing.T) {
+		viper.Reset()
+		key := strings.Repeat("b", 64)
+		t.Setenv("JWT_SECRET", key)
+		t.Setenv("TOTP_ENCRYPTION_KEY", strings.Repeat("ab", 32))
+		t.Setenv("BATCH_IMAGE_HC_ATOM_ENCRYPTION_KEY", key)
+
+		_, err := Load()
+		require.ErrorContains(t, err, "must not reuse jwt.secret")
+	})
 }
 
 func TestValidateHCAtomOwnedResultDirectoryRequiredAndWritable(t *testing.T) {

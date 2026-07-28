@@ -9,6 +9,11 @@ export const imagePricingPlatforms = new Set([
 export const supportsImagePricingPlatform = (platform: string): boolean =>
   imagePricingPlatforms.has(platform);
 
+export const batchImageGenerationPlatforms = new Set(["gemini", "hc_atom"]);
+
+export const supportsBatchImageGenerationPlatform = (platform: string): boolean =>
+  batchImageGenerationPlatforms.has(platform);
+
 export const supportsVideoPricingPlatform = (platform: string): boolean =>
   platform === "grok";
 

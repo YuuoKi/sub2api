@@ -542,6 +542,9 @@ func ProvideVideoSingleSmokeAuthorization() *SingleSmokeAuthorization {
 func ProvideVideoGatewayService(repo VideoGatewayRuntimeRepository, encryptor VideoKeyEncryptor, gate *SingleSmokeAuthorization, cfg *config.Config, authCache *APIKeyService, billingCache *BillingCacheService, store *VideoAssetStore) *VideoGatewayService {
 	svc := NewVideoGatewayService(repo, gate, cfg, authCache, billingCache, store)
 	svc.ConfigureProviderClientFactory(encryptor, func(provider, baseURL, key string) VideoProviderClient {
+		if provider == HCAtomVideoV1Provider {
+			return NewHCAtomV1Adapter(nil, baseURL, key)
+		}
 		if provider == HCAtomSeedanceV3Provider {
 			return NewHCAtomV3Adapter(nil, baseURL, key)
 		}

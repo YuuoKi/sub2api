@@ -98,14 +98,35 @@ func (s *VideoGatewayService) CreateTask(ctx context.Context, cmd VideoTaskCreat
 	if err != nil {
 		return nil, err
 	}
-	if !provider.Enabled || (provider.Provider != "seedance" && provider.Provider != HCAtomSeedanceV3Provider) {
+	if !provider.Enabled || (provider.Provider != "seedance" && provider.Provider != HCAtomVideoV1Provider && provider.Provider != HCAtomSeedanceV3Provider) {
 		return nil, ErrVideoProviderNotFound
+	}
+	if provider.Provider == HCAtomVideoV1Provider && (!s.cfg.VideoGateway.HCAtomV1DispatchEnabled || !s.cfg.HCAtom.VideoV1Enabled) {
+		return nil, ErrVideoRealDispatchDenied
 	}
 	if provider.Provider == HCAtomSeedanceV3Provider && !s.cfg.VideoGateway.HCAtomV3DispatchEnabled {
 		return nil, ErrVideoRealDispatchDenied
 	}
-	if provider.Provider == HCAtomSeedanceV3Provider && strings.TrimSpace(cmd.Model) != "" && strings.TrimSpace(cmd.Model) != HCAtomSeedanceV3PublicModel {
-		return nil, ErrVideoProviderNotFound
+	expectedHCModel := ""
+	if provider.Provider == HCAtomVideoV1Provider {
+		spec, ok := LookupHCAtomModel(HCAtomCapabilityVideoV1, strings.TrimSpace(cmd.Model))
+		if strings.TrimSpace(cmd.Model) == "" {
+			spec, ok = LookupHCAtomModel(HCAtomCapabilityVideoV1, HCAtomVideoV1PublicModel)
+		}
+		if !ok {
+			return nil, ErrVideoProviderNotFound
+		}
+		expectedHCModel = spec.PublicModel
+	}
+	if provider.Provider == HCAtomSeedanceV3Provider {
+		spec, ok := LookupHCAtomModel(HCAtomCapabilityVideoV3, strings.TrimSpace(cmd.Model))
+		if strings.TrimSpace(cmd.Model) == "" {
+			spec, ok = LookupHCAtomModel(HCAtomCapabilityVideoV3, HCAtomSeedanceV3PublicModel)
+		}
+		if !ok {
+			return nil, ErrVideoProviderNotFound
+		}
+		expectedHCModel = spec.PublicModel
 	}
 	input := VideoCreateRequest{Model: cmd.Model, Prompt: cmd.Prompt, Content: cmd.Content, Ratio: cmd.Ratio, GenerateAudio: cmd.GenerateAudio, ReturnLastFrame: cmd.ReturnLastFrame, Watermark: cmd.Watermark, Duration: cmd.Duration, Resolution: cmd.Resolution}
 	if provider.Provider == "seedance" {
@@ -113,7 +134,13 @@ func (s *VideoGatewayService) CreateTask(ctx context.Context, cmd VideoTaskCreat
 		if err := ValidateTinyRealContract(input); err != nil {
 			return nil, err
 		}
-	} else {
+	} else if provider.Provider == HCAtomVideoV1Provider {
+		content, err := normalizeHCAtomV1Content(input)
+		if err != nil {
+			return nil, err
+		}
+		input.Content = content
+	} else if provider.Provider == HCAtomSeedanceV3Provider {
 		content, err := normalizeHCAtomV3Content(input)
 		if err != nil {
 			return nil, err
@@ -134,8 +161,8 @@ func (s *VideoGatewayService) CreateTask(ctx context.Context, cmd VideoTaskCreat
 		PricingSource: VideoPricingSourceConfig, PricingVersion: VideoPricingVersionSeedanceCompletionTokensUSDV1,
 		PricingCNYPerMillionCompletionTokens: &priceCNYPerMillionCompletionTokens,
 		PricingUSDCNYExchangeRate:            &usdCNYExchangeRate, PricingMaximumCNY: &maximumCNY}
-	if provider.Provider == HCAtomSeedanceV3Provider {
-		task.Model = HCAtomSeedanceV3PublicModel
+	if provider.Provider == HCAtomSeedanceV3Provider || provider.Provider == HCAtomVideoV1Provider {
+		task.Model = expectedHCModel
 		task.DurationSeconds, task.Resolution = cmd.Duration, cmd.Resolution
 	}
 	if err := s.repo.ReserveAndCreateTask(ctx, task, maximumUSD); err != nil {
@@ -156,7 +183,7 @@ func (s *VideoGatewayService) CancelTask(ctx context.Context, id int64, scope Vi
 	if err != nil {
 		return nil, err
 	}
-	if (current.Status == VideoStatusSubmitted || current.Status == VideoStatusRunning) && current.Provider == HCAtomSeedanceV3Provider {
+	if (current.Status == VideoStatusSubmitted || current.Status == VideoStatusRunning) && (current.Provider == HCAtomVideoV1Provider || current.Provider == HCAtomSeedanceV3Provider) {
 		if s.encryptor == nil || s.clientFactory == nil {
 			return nil, ErrVideoCancelConflict
 		}

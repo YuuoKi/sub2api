@@ -216,16 +216,17 @@
             <div class="grid gap-4 sm:grid-cols-2">
               <div>
                 <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">平台</label>
-                <select v-model="accountForm.platform" class="input" :disabled="!!editingAccount">
+                <select v-model="accountForm.platform" class="input" data-test="account-platform" :disabled="!!editingAccount">
                   <option value="anthropic">Claude（Anthropic）</option>
                   <option value="openai">OpenAI</option>
                   <option value="gemini">Gemini</option>
                   <option value="antigravity">Antigravity</option>
+                  <option value="hc_atom">HC-ATOM（图片）</option>
                 </select>
               </div>
               <div>
                 <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">名称</label>
-                <input v-model="accountForm.name" class="input" maxlength="100" placeholder="例如：老板的 Claude 主账号" required />
+                <input v-model="accountForm.name" class="input" maxlength="100" placeholder="例如：老板的 Claude 主账号" data-test="account-name" required />
               </div>
             </div>
             <div>
@@ -245,10 +246,10 @@
               >
                 <p class="text-gray-600 dark:text-gray-300">当前平台还没有分组，先建一个（也可到「模型分组」页精细调整）：</p>
                 <div class="mt-2 flex flex-wrap items-center gap-2">
-                  <button class="btn btn-sm btn-outline" type="button" :disabled="creatingGroup" data-test="quick-create-media" @click="quickCreateGroup('media')">
+                  <button class="btn btn-sm btn-outline" type="button" :disabled="creatingGroup" data-test="quick-create-media" @click="quickCreateGroup('media', accountForm.platform, 'account', 'media')">
                     作图组 media
                   </button>
-                  <button class="btn btn-sm btn-outline" type="button" :disabled="creatingGroup" data-test="quick-create-video" @click="quickCreateGroup('video')">
+                  <button class="btn btn-sm btn-outline" type="button" :disabled="creatingGroup" data-test="quick-create-video" @click="quickCreateGroup('video', accountForm.platform, 'account', 'video')">
                     视频组 video
                   </button>
                   <input
@@ -280,13 +281,45 @@
                 autocomplete="off"
                 maxlength="4000"
                 data-test="account-api-key"
-                :placeholder="editingAccount ? '留空表示保留当前密钥' : 'sk-...'"
+                :placeholder="editingAccount ? '留空表示保留当前密钥' : isHCAtomAccount ? 'HC-ATOM API Key' : 'sk-...'"
                 :required="!editingAccount"
               />
+              <p v-if="isHCAtomAccount" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                密钥使用 HC-ATOM 独立加密域保存，管理接口不会回显明文。
+              </p>
             </div>
             <div>
-              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">接口地址（可选）</label>
-              <input v-model="accountForm.baseUrl" class="input" maxlength="500" placeholder="留空使用官方默认地址" />
+              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                {{ isHCAtomAccount ? '固定接口地址' : '接口地址（可选）' }}
+              </label>
+              <p
+                v-if="isHCAtomAccount"
+                class="rounded-md bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:bg-gray-800/60 dark:text-gray-300"
+                data-test="hc-atom-base-url-locked"
+              >
+                {{ HC_ATOM_IMAGE_BASE_URL }}
+              </p>
+              <input
+                v-else
+                v-model="accountForm.baseUrl"
+                class="input"
+                maxlength="500"
+                placeholder="留空使用官方默认地址"
+                data-test="account-base-url"
+              />
+              <p v-if="isHCAtomAccount" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                固定 HC-ATOM 官方中转地址，不允许自定义。
+              </p>
+            </div>
+            <div
+              v-if="isHCAtomAccount"
+              class="rounded-lg border border-cyan-200 bg-cyan-50 p-4 text-sm dark:border-cyan-900 dark:bg-cyan-950/30"
+              data-test="hc-atom-model-directory"
+            >
+              <p class="font-medium text-cyan-900 dark:text-cyan-200">固定通用 AI 模型目录</p>
+              <ul class="mt-2 list-disc pl-5 text-cyan-800 dark:text-cyan-300">
+                <li v-for="model in HC_ATOM_MEDIA_ENABLED_MODELS" :key="model">{{ model }}</li>
+              </ul>
             </div>
             <div>
               <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">备注（可选）</label>
@@ -346,7 +379,7 @@
               >
                 <p class="text-gray-600 dark:text-gray-300">还没有分组，先建一个（也可到「模型分组」页精细调整）：</p>
                 <div class="mt-2 flex flex-wrap items-center gap-2">
-                  <button class="btn btn-sm btn-outline" type="button" :disabled="creatingGroup" data-test="provider-quick-create-video" @click="quickCreateGroup('video', VIDEO_GROUP_PLATFORM)">
+                  <button class="btn btn-sm btn-outline" type="button" :disabled="creatingGroup" data-test="provider-quick-create-video" @click="quickCreateGroup('video', videoProviderGroupPlatform(providerForm.provider), 'provider', 'video')">
                     视频组 video
                   </button>
                   <input
@@ -361,7 +394,7 @@
                     type="button"
                     :disabled="creatingGroup || !quickGroupName.trim()"
                     data-test="provider-quick-create-custom"
-                    @click="quickCreateGroup(quickGroupName, VIDEO_GROUP_PLATFORM, 'provider')"
+                    @click="quickCreateGroup(quickGroupName, videoProviderGroupPlatform(providerForm.provider), 'provider', 'video')"
                   >
                     {{ creatingGroup ? '创建中…' : '创建并选中' }}
                   </button>
@@ -398,7 +431,7 @@
                 <input v-model="providerForm.authorizeAfterSave" type="checkbox" data-test="provider-authorize-after-save" />
                 保存后自动授权一次最小真实调用
               </label>
-              <p class="text-xs text-gray-500 dark:text-gray-400">授权只是记账，不会马上扣费；等第一次真实出片后通道永久可用。</p>
+              <p class="text-xs text-gray-500 dark:text-gray-400">默认关闭；只有明确勾选才记录授权，保存配置本身不会触发上游调用。</p>
             </div>
             <div class="flex justify-end gap-2 pt-2">
               <button class="btn btn-outline" type="button" data-test="cancel-provider" @click="closeProviderModal">取消</button>
@@ -469,6 +502,16 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import GroupSelector from '@/components/common/GroupSelector.vue'
 import AccountGroupsCell from '@/components/account/AccountGroupsCell.vue'
+import {
+  HC_ATOM_IMAGE_BASE_URL,
+  HC_ATOM_MEDIA_ENABLED_MODELS,
+  HC_ATOM_MEDIA_GROUP_PRICES,
+  HC_ATOM_VIDEO_ENABLED_MODELS,
+  HC_ATOM_VIDEO_GROUP_PRICES,
+  HC_ATOM_VIDEO_V1_MODEL,
+  HC_ATOM_VIDEO_V3_MODEL,
+  buildHCAtomImageCredentials,
+} from '@/components/account/hcAtomAdminContract'
 import { adminAPI } from '@/api/admin'
 import type { Account, AccountPlatform, AdminGroup, GroupPlatform } from '@/types'
 import type { VideoPlatformContract, VideoProviderAccount, VideoProviderContract } from '@/api/admin/video'
@@ -509,6 +552,7 @@ const accountForm = reactive({
   notes: '',
   groupIds: [] as number[],
 })
+const isHCAtomAccount = computed(() => accountForm.platform === 'hc_atom')
 
 // 分组必选：当前平台可选的分组；切平台时清掉不再匹配的已选 id
 const platformGroups = computed(() => groups.value.filter((g) => g.platform === accountForm.platform))
@@ -523,9 +567,24 @@ watch(
   },
 )
 
-async function quickCreateGroup(name: string, platform: GroupPlatform = accountForm.platform, target: 'account' | 'provider' = 'account') {
+async function quickCreateGroup(
+  name: string,
+  platform: GroupPlatform = accountForm.platform,
+  target: 'account' | 'provider' = 'account',
+  capability?: 'media' | 'video',
+) {
   const trimmed = name.trim()
   if (!trimmed || creatingGroup.value) return
+  const isHCAtom = platform === 'hc_atom'
+  const isMedia = capability
+    ? capability === 'media'
+    : target === 'account' && (isHCAtom || trimmed === 'media')
+  const videoModels = target === 'provider'
+    ? hcAtomVideoModelsForProvider(providerForm.provider)
+    : HC_ATOM_VIDEO_ENABLED_MODELS
+  const models = isHCAtom
+    ? [...(isMedia ? HC_ATOM_MEDIA_ENABLED_MODELS : videoModels)]
+    : []
   creatingGroup.value = true
   try {
     // 后端建组契约要求全量字段（缺失会 500）；与 GroupsView 默认表单对齐，按模板名预置媒体开关
@@ -539,20 +598,20 @@ async function quickCreateGroup(name: string, platform: GroupPlatform = accountF
       daily_limit_usd: null,
       weekly_limit_usd: null,
       monthly_limit_usd: null,
-      allow_image_generation: trimmed === 'media',
-      allow_batch_image_generation: false,
+      allow_image_generation: isMedia,
+      allow_batch_image_generation: isHCAtom && isMedia,
       image_rate_independent: false,
       image_rate_multiplier: 1,
       batch_image_discount_multiplier: 0.5,
       batch_image_hold_multiplier: 0.6,
-      image_price_1k: null,
-      image_price_2k: null,
-      image_price_4k: null,
+      image_price_1k: isHCAtom && isMedia ? HC_ATOM_MEDIA_GROUP_PRICES.image_price_1k : null,
+      image_price_2k: isHCAtom && isMedia ? HC_ATOM_MEDIA_GROUP_PRICES.image_price_2k : null,
+      image_price_4k: isHCAtom && isMedia ? HC_ATOM_MEDIA_GROUP_PRICES.image_price_4k : null,
       video_rate_independent: false,
       video_rate_multiplier: 1,
-      video_price_480p: null,
-      video_price_720p: null,
-      video_price_1080p: null,
+      video_price_480p: isHCAtom && !isMedia ? HC_ATOM_VIDEO_GROUP_PRICES.video_price_480p : null,
+      video_price_720p: isHCAtom && !isMedia ? HC_ATOM_VIDEO_GROUP_PRICES.video_price_720p : null,
+      video_price_1080p: isHCAtom && !isMedia ? HC_ATOM_VIDEO_GROUP_PRICES.video_price_1080p : null,
       peak_rate_enabled: false,
       peak_start: '',
       peak_end: '',
@@ -563,6 +622,7 @@ async function quickCreateGroup(name: string, platform: GroupPlatform = accountF
       allow_messages_dispatch: false,
       require_oauth_only: false,
       require_privacy_set: false,
+      models_list_config: { enabled: isHCAtom, models },
       model_routing_enabled: false,
       supported_model_scopes: ['claude', 'gemini_text', 'gemini_image'],
       mcp_xml_inject: true,
@@ -591,6 +651,7 @@ const platformDefaults: Record<string, string> = {
   openai: 'https://api.openai.com',
   gemini: 'https://generativelanguage.googleapis.com',
   antigravity: '',
+  hc_atom: HC_ATOM_IMAGE_BASE_URL,
 }
 
 function platformLabel(platform: string): string {
@@ -599,6 +660,7 @@ function platformLabel(platform: string): string {
     openai: 'OpenAI',
     gemini: 'Gemini',
     antigravity: 'Antigravity',
+    hc_atom: 'HC-ATOM',
   }
   return labels[platform] || platform
 }
@@ -644,7 +706,9 @@ function openEditAccount(account: Account) {
   accountForm.platform = account.platform
   accountForm.name = account.name
   accountForm.apiKey = ''
-  accountForm.baseUrl = String(account.credentials?.base_url ?? '')
+  accountForm.baseUrl = account.platform === 'hc_atom'
+    ? HC_ATOM_IMAGE_BASE_URL
+    : String(account.credentials?.base_url ?? '')
   accountForm.notes = account.notes || ''
   // 回填已绑定分组；老数据若没有 group_ids 字段则用预加载的 groups 兜底
   accountForm.groupIds = [...(account.group_ids ?? account.groups?.map((g) => g.id) ?? [])]
@@ -673,12 +737,24 @@ async function saveAccount() {
   savingAccount.value = true
   try {
     if (editingAccount.value) {
-      const credentials: Record<string, unknown> = { ...(editingAccount.value.credentials || {}) }
-      if (accountForm.apiKey.trim()) credentials.api_key = accountForm.apiKey.trim()
-      if (accountForm.baseUrl.trim()) {
-        credentials.base_url = accountForm.baseUrl.trim()
-      } else if (platformDefaults[accountForm.platform]) {
-        credentials.base_url = credentials.base_url || platformDefaults[accountForm.platform]
+      let credentials: Record<string, unknown>
+      if (accountForm.platform === 'hc_atom') {
+        credentials = accountForm.apiKey.trim()
+          ? buildHCAtomImageCredentials(accountForm.apiKey)
+          : {
+              protocol: 'hc_atom',
+              model_mapping: Object.fromEntries(
+                HC_ATOM_MEDIA_ENABLED_MODELS.map((model) => [model, model]),
+              ),
+            }
+      } else {
+        credentials = { ...(editingAccount.value.credentials || {}) }
+        if (accountForm.apiKey.trim()) credentials.api_key = accountForm.apiKey.trim()
+        if (accountForm.baseUrl.trim()) {
+          credentials.base_url = accountForm.baseUrl.trim()
+        } else if (platformDefaults[accountForm.platform]) {
+          credentials.base_url = credentials.base_url || platformDefaults[accountForm.platform]
+        }
       }
       await adminAPI.accounts.update(editingAccount.value.id, {
         name: accountForm.name.trim(),
@@ -688,9 +764,13 @@ async function saveAccount() {
       })
       appStore.showSuccess('账号已更新')
     } else {
-      const baseUrl = accountForm.baseUrl.trim() || platformDefaults[accountForm.platform]
-      const credentials: Record<string, unknown> = { api_key: accountForm.apiKey.trim() }
-      if (baseUrl) credentials.base_url = baseUrl
+      const credentials: Record<string, unknown> = accountForm.platform === 'hc_atom'
+        ? buildHCAtomImageCredentials(accountForm.apiKey)
+        : { api_key: accountForm.apiKey.trim() }
+      if (accountForm.platform !== 'hc_atom') {
+        const baseUrl = accountForm.baseUrl.trim() || platformDefaults[accountForm.platform]
+        if (baseUrl) credentials.base_url = baseUrl
+      }
       await adminAPI.accounts.create({
         name: accountForm.name.trim(),
         notes: accountForm.notes.trim() || null,
@@ -793,7 +873,15 @@ async function loadGroups() {
 
 // ---- 视频通道（页内完整管理：列表/启停/删除/录入 + 保存后自动授权） ----
 
-const VIDEO_GROUP_PLATFORM: GroupPlatform = 'openai'
+function videoProviderGroupPlatform(provider: string): GroupPlatform {
+  return provider.startsWith('hc_atom_') ? 'hc_atom' : 'openai'
+}
+
+function hcAtomVideoModelsForProvider(provider: string): readonly string[] {
+  if (provider === 'hc_atom_video_v1') return [HC_ATOM_VIDEO_V1_MODEL]
+  if (provider === 'hc_atom_seedance_v3') return [HC_ATOM_VIDEO_V3_MODEL]
+  return HC_ATOM_VIDEO_ENABLED_MODELS
+}
 
 const providerModalOpen = ref(false)
 const savingProvider = ref(false)
@@ -817,7 +905,7 @@ const providerForm = reactive({
   baseUrl: '',
   groupIds: [] as number[],
   enabled: true,
-  authorizeAfterSave: true,
+  authorizeAfterSave: false,
 })
 
 // contract 请求失败时回落为只含 seedance 的静态兜底平台
@@ -865,7 +953,7 @@ function openCreateProvider() {
   providerForm.baseUrl = ''
   providerForm.groupIds = []
   providerForm.enabled = true
-  providerForm.authorizeAfterSave = true
+  providerForm.authorizeAfterSave = false
   quickGroupName.value = ''
   providerModalOpen.value = true
   if (!videoContract.value) void loadVideoContract()

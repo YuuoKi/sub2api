@@ -36,6 +36,7 @@ vi.mock('@/api/admin', () => ({
     },
     groups: {
       getAll: mocks.groupsGetAll,
+      getAllIncludingInactive: mocks.groupsGetAll,
       create: mocks.groupsCreate,
     },
   },
@@ -82,7 +83,54 @@ const AccountGroupsCellStub = {
 
 const SECRET_KEY = 'sk-super-secret-upstream-key-1234567890'
 const ANTHROPIC_GROUP = { id: 7, name: 'media', platform: 'anthropic', status: 'active' }
-const HC_ATOM_GROUP = { id: 11, name: 'HC media', platform: 'hc_atom', status: 'active' }
+const HC_ATOM_GROUP = {
+  id: 11,
+  name: 'HC media',
+  platform: 'hc_atom',
+  status: 'active',
+  allow_image_generation: true,
+  allow_batch_image_generation: true,
+  image_price_1k: 0.134,
+  image_price_2k: 0.201,
+  image_price_4k: 0.268,
+  models_list_config: {
+    enabled: true,
+    models: [
+      'seedream-5.0',
+      'doubao-seedream-5.0-pro',
+      'gemini-3.1-flash-image-preview',
+      'gpt-image-2',
+      's-gpt-image-2',
+    ],
+  },
+}
+const OPENAI_VIDEO_GROUP = {
+  id: 7,
+  name: '视频组',
+  platform: 'openai',
+  status: 'active',
+}
+const HC_VIDEO_V1_GROUP = {
+  id: 12,
+  name: 'HC-ATOM 视频组',
+  platform: 'hc_atom',
+  status: 'active',
+  video_price_480p: 0.05,
+  video_price_720p: 0.07,
+  video_price_1080p: 0.25,
+  models_list_config: {
+    enabled: true,
+    models: ['doubao-seedance-2.0'],
+  },
+}
+const HC_VIDEO_V3_GROUP = {
+  ...HC_VIDEO_V1_GROUP,
+  id: 13,
+  models_list_config: {
+    enabled: true,
+    models: ['doubao-seedance-2.0-v3'],
+  },
+}
 
 const VIDEO_CONTRACT = {
   provider: 'seedance',
@@ -161,6 +209,26 @@ describe('KeyVaultView account secret handling', () => {
     expect(wrapper.text()).not.toContain(SECRET_KEY)
   })
 
+  it('reuses one account-create Idempotency-Key across retries in the same dialog', async () => {
+    mocks.accountsCreate
+      .mockRejectedValueOnce({ status: 500, message: 'temporary failure' })
+      .mockResolvedValueOnce({ id: 2 })
+    const wrapper = await mountView()
+
+    await wrapper.find('[data-test="open-create-account"]').trigger('click')
+    await wrapper.find('[data-test="account-name"]').setValue('retry account')
+    await wrapper.find('[data-test="group-check-7"]').setValue(true)
+    await wrapper.find('[data-test="account-api-key"]').setValue(SECRET_KEY)
+    await wrapper.find('[data-test="account-form"]').trigger('submit.prevent')
+    await flushPromises()
+    await wrapper.find('[data-test="account-form"]').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(mocks.accountsCreate).toHaveBeenCalledTimes(2)
+    expect(mocks.accountsCreate.mock.calls[0][1]).toBeTruthy()
+    expect(mocks.accountsCreate.mock.calls[1][1]).toBe(mocks.accountsCreate.mock.calls[0][1])
+  })
+
   it('uses the fixed HC-ATOM endpoint and model builder without echoing the upstream key', async () => {
     mocks.groupsGetAll.mockResolvedValue([HC_ATOM_GROUP])
     mocks.accountsCreate.mockResolvedValue({ id: 11 })
@@ -170,11 +238,12 @@ describe('KeyVaultView account secret handling', () => {
     await wrapper.find('[data-test="account-platform"]').setValue('hc_atom')
     await flushPromises()
 
-    expect(wrapper.find('[data-test="hc-atom-base-url-locked"]').text()).toBe('https://api-aigc.fzyinghe.com')
+    expect(wrapper.find('[data-test="hc-atom-base-url-locked"]').text()).toContain('https://ai-aigc.fzyinghe.com/v1/images/generations')
+    expect(wrapper.find('[data-test="hc-atom-base-url-locked"]').text()).toContain('https://api-aigc.fzyinghe.com/image/generation/tasks')
     const modelDirectory = wrapper.find('[data-test="hc-atom-model-directory"]').text()
-    expect(modelDirectory).toContain('gpt-5.6-sol')
-    expect(modelDirectory).toContain('gemini-3-flash-preview')
-    expect(modelDirectory).toContain('claude-opus-4-6')
+    expect(modelDirectory).not.toContain('gpt-5.6-sol')
+    expect(modelDirectory).not.toContain('gemini-3-flash-preview')
+    expect(modelDirectory).not.toContain('claude-opus-4-6')
     expect(modelDirectory).toContain('seedream-5.0')
     expect(modelDirectory).toContain('doubao-seedream-5.0-pro')
     expect(modelDirectory).toContain('gemini-3.1-flash-image-preview')
@@ -197,9 +266,6 @@ describe('KeyVaultView account secret handling', () => {
         api_key: SECRET_KEY,
         protocol: 'hc_atom',
         model_mapping: {
-          'gpt-5.6-sol': 'gpt-5.6-sol',
-          'gemini-3-flash-preview': 'gemini-3-flash-preview',
-          'claude-opus-4-6': 'claude-opus-4-6',
           'seedream-5.0': 'seedream-5.0',
           'doubao-seedream-5.0-pro': 'doubao-seedream-5.0-pro',
           'gemini-3.1-flash-image-preview': 'gemini-3.1-flash-image-preview',
@@ -207,7 +273,7 @@ describe('KeyVaultView account secret handling', () => {
           's-gpt-image-2': 's-gpt-image-2',
         },
       },
-    }))
+    }), expect.any(String))
     expect(wrapper.text()).not.toContain(SECRET_KEY)
 
     await wrapper.find('[data-test="open-create-account"]').trigger('click')
@@ -233,7 +299,7 @@ describe('KeyVaultView group binding (P0)', () => {
     await flushPromises()
 
     expect(mocks.accountsCreate).not.toHaveBeenCalled()
-    expect(mocks.showError).toHaveBeenCalledWith(expect.stringContaining('请至少选择一个分组'))
+    expect(mocks.showError).toHaveBeenCalledWith(expect.stringContaining('请至少选择一个图片分组'))
   })
 
   it('sends group_ids on create when a group is selected', async () => {
@@ -254,7 +320,7 @@ describe('KeyVaultView group binding (P0)', () => {
 
   it('quick-creates a preset group inline and auto-selects it when no group exists', async () => {
     mocks.groupsGetAll.mockResolvedValue([])
-    mocks.groupsCreate.mockResolvedValue({ id: 9, name: 'media', platform: 'anthropic' })
+    mocks.groupsCreate.mockResolvedValue({ id: 9, name: 'anthropic-图片组', platform: 'anthropic' })
     mocks.accountsCreate.mockResolvedValue({ id: 2 })
     const wrapper = await mountView()
 
@@ -265,7 +331,7 @@ describe('KeyVaultView group binding (P0)', () => {
     await flushPromises()
 
     expect(mocks.groupsCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'media', platform: 'anthropic', allow_image_generation: true }),
+      expect.objectContaining({ name: 'anthropic-图片组', platform: 'anthropic', allow_image_generation: true }),
     )
 
     await wrapper.find('input[placeholder="例如：老板的 Claude 主账号"]').setValue('Ark 作图')
@@ -278,7 +344,7 @@ describe('KeyVaultView group binding (P0)', () => {
   })
 
   it('quick-creates an HC media group with the live async model and positive image prices', async () => {
-    const created = { id: 12, name: 'media', platform: 'hc_atom', status: 'active' }
+    const created = { ...HC_ATOM_GROUP, id: 12, name: 'HC-ATOM 图片组' }
     mocks.groupsGetAll.mockReset()
     mocks.groupsGetAll.mockResolvedValueOnce([]).mockResolvedValue([created])
     mocks.groupsCreate.mockResolvedValue(created)
@@ -291,7 +357,7 @@ describe('KeyVaultView group binding (P0)', () => {
     await flushPromises()
 
     expect(mocks.groupsCreate).toHaveBeenCalledWith(expect.objectContaining({
-      name: 'media',
+      name: 'HC-ATOM 图片组',
       platform: 'hc_atom',
       allow_image_generation: true,
       allow_batch_image_generation: true,
@@ -304,9 +370,6 @@ describe('KeyVaultView group binding (P0)', () => {
       models_list_config: {
         enabled: true,
         models: [
-          'gpt-5.6-sol',
-          'gemini-3-flash-preview',
-          'claude-opus-4-6',
           'seedream-5.0',
           'doubao-seedream-5.0-pro',
           'gemini-3.1-flash-image-preview',
@@ -337,7 +400,7 @@ describe('KeyVaultView video provider management', () => {
     mocks.accountsList.mockResolvedValue({ items: [], total: 0 })
     mocks.listProviders.mockResolvedValue({ items: [PROVIDER] })
     mocks.videoContract.mockResolvedValue(VIDEO_CONTRACT)
-    mocks.groupsGetAll.mockResolvedValue([ANTHROPIC_GROUP])
+    mocks.groupsGetAll.mockResolvedValue([OPENAI_VIDEO_GROUP])
     mocks.requestConfirmation.mockResolvedValue(true)
     mocks.createProvider.mockResolvedValue({ ...PROVIDER, id: 4 })
     mocks.updateProvider.mockResolvedValue({ ...PROVIDER, enabled: false })
@@ -387,7 +450,7 @@ describe('KeyVaultView video provider management', () => {
   })
 
   it('keeps an HC V1 provider quick group on the V1 public alias', async () => {
-    const created = { id: 12, name: 'video', platform: 'hc_atom', status: 'active' }
+    const created = HC_VIDEO_V1_GROUP
     mocks.groupsGetAll.mockReset()
     mocks.groupsGetAll.mockResolvedValueOnce([]).mockResolvedValue([created])
     mocks.groupsCreate.mockResolvedValue(created)
@@ -401,6 +464,7 @@ describe('KeyVaultView video provider management', () => {
     await flushPromises()
 
     expect(mocks.groupsCreate).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'HC-ATOM 视频组',
       platform: 'hc_atom',
       models_list_config: {
         enabled: true,
@@ -410,7 +474,7 @@ describe('KeyVaultView video provider management', () => {
   })
 
   it('keeps the HC V3 group allowlist and provider default model on the V3 public alias', async () => {
-    const created = { id: 13, name: 'video', platform: 'hc_atom', status: 'active' }
+    const created = HC_VIDEO_V3_GROUP
     mocks.groupsGetAll.mockReset()
     mocks.groupsGetAll.mockResolvedValueOnce([]).mockResolvedValue([created])
     mocks.groupsCreate.mockResolvedValue(created)
@@ -425,7 +489,7 @@ describe('KeyVaultView video provider management', () => {
     await flushPromises()
 
     expect(mocks.groupsCreate).toHaveBeenCalledWith(expect.objectContaining({
-      name: 'video',
+      name: 'HC-ATOM 视频组',
       platform: 'hc_atom',
       allow_image_generation: false,
       allow_batch_image_generation: false,
@@ -453,6 +517,20 @@ describe('KeyVaultView video provider management', () => {
     }))
   })
 
+  it('shows only groups matching the selected HC video protocol', async () => {
+    mocks.groupsGetAll.mockResolvedValue([HC_ATOM_GROUP, HC_VIDEO_V1_GROUP, HC_VIDEO_V3_GROUP])
+    const wrapper = await mountView()
+    await switchToVideoTab(wrapper)
+
+    await wrapper.find('[data-test="open-create-provider"]').trigger('click')
+    await wrapper.find('[data-test="provider-platform"]').setValue('hc_atom_video_v1')
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="group-check-11"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="group-check-12"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="group-check-13"]').exists()).toBe(false)
+  })
+
   it('blocks provider save when no group is selected', async () => {
     const wrapper = await mountView()
     await switchToVideoTab(wrapper)
@@ -464,7 +542,7 @@ describe('KeyVaultView video provider management', () => {
     await flushPromises()
 
     expect(mocks.createProvider).not.toHaveBeenCalled()
-    expect(mocks.showError).toHaveBeenCalledWith(expect.stringContaining('请至少选择一个分组'))
+    expect(mocks.showError).toHaveBeenCalledWith(expect.stringContaining('匹配当前视频协议的分组'))
   })
 
   it('falls back to a static seedance-only platform list when the contract request fails', async () => {

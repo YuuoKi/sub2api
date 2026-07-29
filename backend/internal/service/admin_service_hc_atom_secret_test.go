@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -22,6 +23,42 @@ type hcAtomSecretBoundaryRepo struct {
 
 type hcAtomSecretCaptureClient struct {
 	apiKey string
+}
+
+type hcAtomGroupValidationRepo struct {
+	groupRepoStub
+	groups map[int64]*Group
+}
+
+func validHCAtomImageGroupForTest(id int64) *Group {
+	price1K, price2K, price4K := 0.134, 0.201, 0.268
+	return &Group{
+		ID:                        id,
+		Platform:                  PlatformHCAtom,
+		Status:                    StatusActive,
+		AllowImageGeneration:      true,
+		AllowBatchImageGeneration: true,
+		ImagePrice1K:              &price1K,
+		ImagePrice2K:              &price2K,
+		ImagePrice4K:              &price4K,
+		ModelsListConfig: GroupModelsListConfig{
+			Enabled: true,
+			Models: []string{
+				HCAtomImageSeedreamModel,
+				HCAtomImageDoubaoSeedreamModel,
+				HCAtomImageGeminiModel,
+				HCAtomImageGPTModel,
+				HCAtomImageSGPTModel,
+			},
+		},
+	}
+}
+
+func (r *hcAtomGroupValidationRepo) GetByID(_ context.Context, id int64) (*Group, error) {
+	if group := r.groups[id]; group != nil {
+		return group, nil
+	}
+	return nil, ErrGroupNotFound
 }
 
 func (c *hcAtomSecretCaptureClient) Create(_ context.Context, apiKey, _ string, _ HCAtomBatchCreateRequest) (*HCAtomBatchTask, error) {
@@ -63,13 +100,49 @@ func (r *hcAtomSecretBoundaryRepo) Update(_ context.Context, account *Account) e
 	return nil
 }
 
+func TestAdminService_HCAtomAccountAcceptsOnlyAuthorizedImageGroup(t *testing.T) {
+	valid := validHCAtomImageGroupForTest(11)
+	video := &Group{
+		ID:       12,
+		Platform: PlatformHCAtom,
+		Status:   StatusActive,
+		ModelsListConfig: GroupModelsListConfig{
+			Enabled: true,
+			Models:  []string{HCAtomVideoV1PublicModel},
+		},
+	}
+	svc := &adminServiceImpl{groupRepo: &hcAtomGroupValidationRepo{groups: map[int64]*Group{
+		valid.ID: valid,
+		video.ID: video,
+	}}}
+
+	got, err := svc.validateAccountGroupIDs(context.Background(), PlatformHCAtom, []int64{valid.ID, valid.ID})
+	require.NoError(t, err)
+	require.Equal(t, []int64{valid.ID}, got)
+
+	_, err = svc.validateAccountGroupIDs(context.Background(), PlatformHCAtom, []int64{video.ID})
+	require.Equal(t, "HC_ATOM_IMAGE_GROUP_INVALID", infraerrors.Reason(err))
+
+	withExtra := *valid
+	withExtra.ID = 13
+	withExtra.ModelsListConfig.Models = append(
+		append([]string{}, valid.ModelsListConfig.Models...),
+		"dola-seedream-5.0-pro",
+	)
+	svc.groupRepo = &hcAtomGroupValidationRepo{groups: map[int64]*Group{withExtra.ID: &withExtra}}
+	_, err = svc.validateAccountGroupIDs(context.Background(), PlatformHCAtom, []int64{withExtra.ID})
+	require.Equal(t, "HC_ATOM_IMAGE_GROUP_INVALID", infraerrors.Reason(err))
+}
+
 func TestHCAtomSecretBoundary_CreateEncryptsSentinelBeforeRepository(t *testing.T) {
 	cipher, err := NewHCAtomCredentialCipher(strings.Repeat("11", 32))
 	require.NoError(t, err)
 	nestedSentinel := strings.Join([]string{"hc-review", "repo", "secret"}, "-")
 	repo := &hcAtomSecretBoundaryRepo{}
+	group := validHCAtomImageGroupForTest(11)
 	svc := &adminServiceImpl{
 		accountRepo:            repo,
+		groupRepo:              &hcAtomGroupValidationRepo{groups: map[int64]*Group{group.ID: group}},
 		hcAtomCredentialCipher: cipher,
 	}
 
@@ -84,7 +157,7 @@ func TestHCAtomSecretBoundary_CreateEncryptsSentinelBeforeRepository(t *testing.
 			"metadata":      []any{map[string]any{"token": nestedSentinel}},
 			"model_mapping": map[string]any{"seedream-5.0": "seedream-5.0"},
 		},
-		SkipDefaultGroupBind: true,
+		GroupIDs: []int64{group.ID},
 	})
 	require.NoError(t, err)
 	require.NotNil(t, created)
@@ -103,6 +176,30 @@ func TestHCAtomSecretBoundary_CreateEncryptsSentinelBeforeRepository(t *testing.
 	require.NotEmpty(t, repo.account.Credentials[HCAtomAPIKeyCiphertextField])
 	require.Equal(t, "********7x9Q", repo.account.Credentials[HCAtomAPIKeyMaskedField])
 	require.Equal(t, true, repo.account.Credentials[HCAtomAPIKeyConfiguredField])
+}
+
+func TestHCAtomSecretBoundary_CreateRequiresAuthorizedImageGroup(t *testing.T) {
+	cipher, err := NewHCAtomCredentialCipher(strings.Repeat("31", 32))
+	require.NoError(t, err)
+	repo := &hcAtomSecretBoundaryRepo{}
+	svc := &adminServiceImpl{
+		accountRepo:            repo,
+		hcAtomCredentialCipher: cipher,
+	}
+
+	_, err = svc.CreateAccount(context.Background(), &CreateAccountInput{
+		Name:     "hc-group-required",
+		Platform: PlatformHCAtom,
+		Type:     AccountTypeAPIKey,
+		Credentials: map[string]any{
+			"api_key":  hcAtomSecretSentinel,
+			"protocol": "hc_atom",
+		},
+		SkipDefaultGroupBind: true,
+	})
+	require.Equal(t, "HC_ATOM_IMAGE_GROUP_REQUIRED", infraerrors.Reason(err))
+	require.Zero(t, repo.createCalls)
+	require.Nil(t, repo.account)
 }
 
 func TestHCAtomSecretBoundary_UpdateWithoutNewKeyRetainsCiphertext(t *testing.T) {

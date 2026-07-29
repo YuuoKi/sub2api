@@ -572,6 +572,50 @@ func TestBatchImagePublicService_ListModels(t *testing.T) {
 		}}, got.Data)
 	})
 
+	t.Run("uses HC group image prices for the three async models", func(t *testing.T) {
+		svc, _, _, _, _ := newTestBatchImagePublicService(true)
+		hc := &publicBatchImageProvider{name: BatchImageProviderHCAtom}
+		svc.ProviderRegistry = NewBatchImageProviderRegistry(hc)
+		svc.Pricing = &fakeBatchImagePricingResolver{
+			unitPrice: 0.25,
+			missingModels: map[string]bool{
+				HCAtomImageGeminiModel: true,
+				HCAtomImageGPTModel:    true,
+				HCAtomImageSGPTModel:   true,
+			},
+		}
+		account := testBatchImageMappedAccount(303, AccountTypeAPIKey, map[string]any{
+			HCAtomImageGeminiModel:         HCAtomImageGeminiModel,
+			HCAtomImageGPTModel:            HCAtomImageGPTModel,
+			HCAtomImageSGPTModel:           HCAtomImageSGPTModel,
+			HCAtomImageSeedreamModel:       HCAtomImageSeedreamModel,
+			HCAtomImageDoubaoSeedreamModel: HCAtomImageDoubaoSeedreamModel,
+			HCAtomImageDolaModel:           HCAtomImageDolaModel,
+		})
+		account.Platform = PlatformHCAtom
+		svc.AccountRepo = &publicBatchImageAccountRepo{accounts: []Account{account}}
+		groupID := int64(77)
+		price1K, price2K, price4K := 0.10, 0.20, 0.40
+		svc.GroupRepo = &publicBatchImageGroupRepo{groups: map[int64]*Group{
+			groupID: {
+				ID:                        groupID,
+				Platform:                  PlatformHCAtom,
+				AllowBatchImageGeneration: true,
+				ImagePrice1K:              &price1K,
+				ImagePrice2K:              &price2K,
+				ImagePrice4K:              &price4K,
+			},
+		}}
+
+		got, err := svc.ListModels(ctx, BatchImageOwner{UserID: 11, APIKeyID: 22, GroupID: &groupID})
+		require.NoError(t, err)
+		require.Equal(t, []BatchImagePublicModel{
+			{ID: HCAtomImageGeminiModel, Object: "image.batch.model", Provider: BatchImageProviderHCAtom},
+			{ID: HCAtomImageGPTModel, Object: "image.batch.model", Provider: BatchImageProviderHCAtom},
+			{ID: HCAtomImageSGPTModel, Object: "image.batch.model", Provider: BatchImageProviderHCAtom},
+		}, got.Data)
+	})
+
 	t.Run("rejects when group disables batch image", func(t *testing.T) {
 		svc, _, _, _, _ := newTestBatchImagePublicService(true)
 		groupID := int64(7)
@@ -911,7 +955,7 @@ func TestBatchImagePublicSubmit_HCAtomRejectsGeminiOnlyGroupBeforeAccountSelecti
 	}}
 	req := validBatchImageSubmitRequest()
 	req.Provider = BatchImageProviderHCAtom
-	req.Model = "seedream-5.0"
+	req.Model = HCAtomImageGeminiModel
 	req.Items = req.Items[:1]
 
 	_, err := svc.Submit(context.Background(), BatchImageOwner{UserID: 11, APIKeyID: 22, GroupID: &groupID}, req, "hc-group-mismatch")

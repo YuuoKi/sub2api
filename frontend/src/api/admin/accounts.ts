@@ -4,6 +4,7 @@
  */
 
 import { apiClient } from '../client'
+import { createIdempotencyKey } from '@/utils/idempotencyKey'
 import type {
   Account,
   CreateAccountRequest,
@@ -133,8 +134,13 @@ export async function getById(id: number): Promise<Account> {
  * @param accountData - Account data
  * @returns Created account
  */
-export async function create(accountData: CreateAccountRequest): Promise<Account> {
-  const { data } = await apiClient.post<Account>('/admin/accounts', accountData)
+export async function create(
+  accountData: CreateAccountRequest,
+  idempotencyKey: string = createIdempotencyKey()
+): Promise<Account> {
+  const { data } = await apiClient.post<Account>('/admin/accounts', accountData, {
+    headers: { 'Idempotency-Key': idempotencyKey }
+  })
   return data
 }
 

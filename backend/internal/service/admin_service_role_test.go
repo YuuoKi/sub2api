@@ -6,6 +6,7 @@ import (
 	"context"
 	"testing"
 
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/stretchr/testify/require"
 )
@@ -102,7 +103,7 @@ func TestAdminService_UpdateUser_DemoteLastAdminRejected(t *testing.T) {
 
 	_, err := svc.UpdateUser(context.Background(), 42, &UpdateUserInput{Role: RoleUser})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "last admin")
+	require.Equal(t, "CANNOT_DEMOTE_LAST_ADMIN", infraerrors.Reason(err))
 	require.Nil(t, repo.lastUpdated, "最后一个管理员不应被降级持久化")
 	require.Equal(t, 1, repo.listCalls, "降级路径应触发管理员计数")
 }

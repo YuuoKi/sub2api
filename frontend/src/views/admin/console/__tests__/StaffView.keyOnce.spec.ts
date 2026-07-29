@@ -57,6 +57,7 @@ vi.mock('@/api/admin', () => ({
     },
     groups: {
       getAll: mocks.groupsGetAll,
+      getAllIncludingInactive: mocks.groupsGetAll,
       create: mocks.groupsCreate,
     },
   },
@@ -75,6 +76,42 @@ const IconStub = { template: '<i />' }
 const RouterLinkStub = { template: '<a><slot /></a>' }
 
 const FULL_KEY = 'sk-once-visible-1234567890abcdef'
+const HC_VIDEO_MODELS = ['doubao-seedance-2.0', 'doubao-seedance-2.0-v3']
+const HC_IMAGE_MODELS = [
+  'seedream-5.0',
+  'doubao-seedream-5.0-pro',
+  'gemini-3.1-flash-image-preview',
+  'gpt-image-2',
+  's-gpt-image-2',
+]
+const HC_VIDEO_GROUP = {
+  id: 7,
+  name: '视频组',
+  status: 'active',
+  platform: 'hc_atom',
+  is_exclusive: false,
+  subscription_type: 'standard',
+  allow_image_generation: false,
+  allow_batch_image_generation: false,
+  video_price_480p: 0.05,
+  video_price_720p: 0.07,
+  video_price_1080p: 0.25,
+  models_list_config: { enabled: true, models: HC_VIDEO_MODELS },
+}
+const HC_IMAGE_GROUP = {
+  id: 8,
+  name: 'HC 图片组',
+  status: 'active',
+  platform: 'hc_atom',
+  is_exclusive: false,
+  subscription_type: 'standard',
+  allow_image_generation: true,
+  allow_batch_image_generation: true,
+  image_price_1k: 0.134,
+  image_price_2k: 0.201,
+  image_price_4k: 0.268,
+  models_list_config: { enabled: true, models: HC_IMAGE_MODELS },
+}
 
 function mountView() {
   return mount(StaffView, {
@@ -110,10 +147,7 @@ describe('StaffView one-shot staff issuance', () => {
     })
     mocks.revealApiKey.mockResolvedValue({ id: 10, name: 'card', key: FULL_KEY, status: 'active', quota: 0, quota_used: 0 })
     mocks.getBatchApiKeysUsage.mockResolvedValue({ stats: {} })
-    mocks.groupsGetAll.mockResolvedValue([
-      { id: 7, name: '视频组', status: 'active', platform: 'openai', is_exclusive: false, subscription_type: 'standard' },
-      { id: 8, name: 'HC 媒体组', status: 'active', platform: 'hc_atom', is_exclusive: false, subscription_type: 'standard', allow_image_generation: true, allow_batch_image_generation: true },
-    ])
+    mocks.groupsGetAll.mockResolvedValue([HC_VIDEO_GROUP, HC_IMAGE_GROUP])
     mocks.createQCanvasKeyPairForUser.mockResolvedValue({
       video: { id: 12, name: 'QCanvas · video', key: 'sk-video-one-time', status: 'active', quota: 0, quota_used: 0 },
       media: { id: 13, name: 'QCanvas · media', key: FULL_KEY, status: 'active', quota: 0, quota_used: 0 },
@@ -202,7 +236,7 @@ describe('StaffView one-shot staff issuance', () => {
     expect(wrapper.find('[data-test="wizard-video-key"]').text()).toContain('sk-video-one-time')
     expect(wrapper.find('[data-test="wizard-media-key"]').text()).toContain(FULL_KEY)
     expect(wrapper.find('[data-test="wizard-video-group-name"]').text()).toContain('视频组')
-    expect(wrapper.find('[data-test="wizard-media-group-name"]').text()).toContain('HC 媒体组')
+    expect(wrapper.find('[data-test="wizard-media-group-name"]').text()).toContain('HC 图片组')
     expect(wrapper.find('[data-test="wizard-recharge-result"]').text()).toContain('55.00')
 
     // 关闭后明文不残留
@@ -437,8 +471,8 @@ describe('StaffView one-shot staff issuance', () => {
 
   it('quick-creates separate video and HC media groups inline and selects both for issuance', async () => {
     mocks.groupsGetAll.mockReset()
-    const videoGroup = { id: 9, name: '视频组二', platform: 'hc_atom', status: 'active', is_exclusive: false, subscription_type: 'standard' }
-    const mediaGroup = { id: 10, name: 'HC 媒体组二', platform: 'hc_atom', status: 'active', is_exclusive: false, subscription_type: 'standard', allow_image_generation: true, allow_batch_image_generation: true }
+    const videoGroup = { ...HC_VIDEO_GROUP, id: 9, name: '视频组二' }
+    const mediaGroup = { ...HC_IMAGE_GROUP, id: 10, name: 'HC 媒体组二' }
     mocks.groupsGetAll
       .mockResolvedValueOnce([]) // 首次加载：还没有任何组
       .mockResolvedValueOnce([videoGroup])
@@ -495,9 +529,6 @@ describe('StaffView one-shot staff issuance', () => {
         models_list_config: {
           enabled: true,
           models: [
-            'gpt-5.6-sol',
-            'gemini-3-flash-preview',
-            'claude-opus-4-6',
             'seedream-5.0',
             'doubao-seedream-5.0-pro',
             'gemini-3.1-flash-image-preview',
@@ -521,38 +552,32 @@ describe('StaffView one-shot staff issuance', () => {
 
   it('does not offer exclusive or subscription groups in either capability selector', async () => {
     mocks.groupsGetAll.mockResolvedValue([
-      { id: 6, name: '未授权专属组', status: 'active', platform: 'openai', is_exclusive: true, subscription_type: 'standard' },
-      { id: 5, name: '订阅组', status: 'active', platform: 'openai', is_exclusive: false, subscription_type: 'subscription' },
-      { id: 7, name: '默认组', status: 'active', platform: 'openai', is_exclusive: false, subscription_type: 'standard' },
+      { ...HC_VIDEO_GROUP, id: 6, name: '未授权专属组', is_exclusive: true },
+      { ...HC_IMAGE_GROUP, id: 5, name: '订阅组', subscription_type: 'subscription' },
+      HC_VIDEO_GROUP,
+      HC_IMAGE_GROUP,
     ])
     const wrapper = mountView()
     await flushPromises()
 
     await wrapper.find('[data-test="create-service-identity"]').trigger('click')
-    for (const selector of ['wizard-video-group', 'wizard-media-group']) {
-      const options = wrapper.find(`[data-test="${selector}"]`).findAll('option')
-      const text = options.map((option) => option.text()).join(' ')
-      expect(text).not.toContain('未授权专属组')
-      expect(text).not.toContain('订阅组')
-      expect(text).toContain('默认组')
-    }
+    const videoText = wrapper.find('[data-test="wizard-video-group"]').text()
+    const mediaText = wrapper.find('[data-test="wizard-media-group"]').text()
+    expect(videoText).not.toContain('未授权专属组')
+    expect(mediaText).not.toContain('订阅组')
+    expect(videoText).toContain('视频组')
+    expect(videoText).not.toContain('HC 图片组')
+    expect(mediaText).toContain('HC 图片组')
+    expect(mediaText).not.toContain('视频组')
   })
 
-  it('rejects the same group before creating an owner or issuing keys', async () => {
+  it('does not allow a video group to be selected as the image capability group', async () => {
     const wrapper = mountView()
     await flushPromises()
 
     await wrapper.find('[data-test="create-service-identity"]').trigger('click')
-    await wrapper.find('[data-test="service-identity-email"]').setValue('zhangsan@wujie.local')
-    await wrapper.find('[data-test="wizard-media-group"]').setValue('7')
-    expect(wrapper.find('[data-test="wizard-group-conflict"]').exists()).toBe(true)
-
-    await wrapper.find('form[data-test="service-identity-form"]').trigger('submit.prevent')
-    await flushPromises()
-
-    expect(mocks.usersCreate).not.toHaveBeenCalled()
-    expect(mocks.createQCanvasKeyPairForUser).not.toHaveBeenCalled()
-    expect(mocks.showError).toHaveBeenCalledWith(expect.stringContaining('不同分组'))
+    const mediaOptions = wrapper.find('[data-test="wizard-media-group"]').findAll('option')
+    expect(mediaOptions.some((option) => option.attributes('value') === '7')).toBe(false)
   })
 
   it('renders the employee total from the user aggregate instead of treating two keys as two balances', async () => {

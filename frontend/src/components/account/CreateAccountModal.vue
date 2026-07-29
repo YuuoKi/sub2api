@@ -1141,7 +1141,7 @@
 
         <!-- Model Restriction Section (Antigravity 已在上层条件排除) -->
         <div v-if="form.platform === 'hc_atom'" class="rounded-lg border border-cyan-200 bg-cyan-50 p-4 text-sm dark:border-cyan-900 dark:bg-cyan-950/30">
-          <p class="font-medium text-cyan-900 dark:text-cyan-200">固定通用 AI 模型目录</p>
+          <p class="font-medium text-cyan-900 dark:text-cyan-200">本次已授权并启用的 5 个图片模型</p>
           <ul class="mt-2 list-disc pl-5 text-cyan-800 dark:text-cyan-300">
             <li v-for="model in HC_ATOM_MEDIA_ENABLED_MODELS" :key="model">{{ model }}</li>
           </ul>
@@ -3055,7 +3055,7 @@
         <GroupSelector
           v-if="!authStore.isSimpleMode"
           v-model="form.group_ids"
-          :groups="groups"
+          :groups="selectableGroups"
           :platform="form.platform"
           :mixed-scheduling="mixedScheduling"
           data-tour="account-form-groups"
@@ -3467,6 +3467,7 @@ import {
 } from '@/components/account/credentialsBuilder'
 import { formatDateTimeLocalInput, parseDateTimeLocalInput } from '@/utils/format'
 import { createStableObjectKeyResolver } from '@/utils/stableObjectKey'
+import { createAccountCreateIdempotencySession } from './accountCreateIdempotency'
 import { VERTEX_LOCATION_OPTIONS } from '@/constants/account'
 import {
   OPENAI_WS_MODE_CTX_POOL,
@@ -3481,7 +3482,8 @@ import OAuthAuthorizationFlow from './OAuthAuthorizationFlow.vue'
 import {
   HC_ATOM_IMAGE_BASE_URL,
   HC_ATOM_MEDIA_ENABLED_MODELS,
-  buildHCAtomImageCredentials
+  buildHCAtomImageCredentials,
+  isHCAtomImageGroup
 } from './hcAtomAdminContract'
 
 // Type for exposed OAuthAuthorizationFlow component
@@ -3501,6 +3503,12 @@ interface OAuthFlowExposed {
 
 const { t } = useI18n()
 const authStore = useAuthStore()
+const accountCreateIdempotency = createAccountCreateIdempotencySession()
+
+const createAccountOnce = (
+  payload: CreateAccountRequest,
+  scope = 'single',
+) => adminAPI.accounts.create(payload, accountCreateIdempotency.keyFor(scope))
 
 const oauthStepTitle = computed(() => {
   if (form.platform === 'openai') return t('admin.accounts.oauth.openai.title')
@@ -3512,7 +3520,7 @@ const oauthStepTitle = computed(() => {
 
 // Platform-specific hints for API Key type
 const baseUrlHint = computed(() => {
-  if (form.platform === 'hc_atom') return '固定 HC-ATOM 域名，不允许自定义中转地址'
+  if (form.platform === 'hc_atom') return '系统按图片模型自动选择同步或异步接口，无需自定义地址'
   if (form.platform === 'openai') return t('admin.accounts.openai.baseUrlHint')
   if (form.platform === 'gemini') return t('admin.accounts.gemini.baseUrlHint')
   if (form.platform === 'grok') return t('admin.accounts.grok.baseUrlHint')
@@ -3967,6 +3975,11 @@ const form = reactive({
   group_ids: [] as number[],
   expires_at: null as number | null
 })
+const selectableGroups = computed(() => (
+  form.platform === 'hc_atom'
+    ? props.groups.filter(isHCAtomImageGroup)
+    : props.groups
+))
 
 // Helper to check if current type needs OAuth flow
 const isOAuthFlow = computed(() => {
@@ -4463,7 +4476,7 @@ const ensureAntigravityMixedChannelConfirmed = async (onConfirm: () => Promise<v
 const submitCreateAccount = async (payload: CreateAccountRequest) => {
   submitting.value = true
   try {
-    await adminAPI.accounts.create(withAntigravityConfirmFlag(payload))
+    await createAccountOnce(withAntigravityConfirmFlag(payload))
     appStore.showSuccess(t('admin.accounts.accountCreated'))
     emit('created')
     handleClose()
@@ -4486,6 +4499,7 @@ const submitCreateAccount = async (payload: CreateAccountRequest) => {
 
 // Methods
 const resetForm = () => {
+  accountCreateIdempotency.reset()
   step.value = 1
   form.name = ''
   form.notes = ''
@@ -5164,7 +5178,7 @@ const handleGrokValidateRT = async (refreshTokenInput: string) => {
           return
         }
 
-        await adminAPI.accounts.create({
+        await createAccountOnce({
           name: accountName,
           notes: form.notes,
           platform: 'grok',
@@ -5179,7 +5193,7 @@ const handleGrokValidateRT = async (refreshTokenInput: string) => {
           group_ids: form.group_ids,
           expires_at: form.expires_at,
           auto_pause_on_expired: autoPauseOnExpired.value
-        })
+        }, `grok-refresh-token:${i}`)
         successCount++
       } catch (error: any) {
         failedCount++
@@ -5258,7 +5272,7 @@ const handleOpenAIExchange = async (authCode: string) => {
     }
 
     if (shouldCreateOpenAI) {
-      await adminAPI.accounts.create({
+      await createAccountOnce({
         name: form.name,
         notes: form.notes,
         platform: 'openai',
@@ -5273,7 +5287,7 @@ const handleOpenAIExchange = async (authCode: string) => {
         group_ids: form.group_ids,
         expires_at: form.expires_at,
         auto_pause_on_expired: autoPauseOnExpired.value
-      })
+      }, 'openai-oauth-code')
       appStore.showSuccess(t('admin.accounts.accountCreated'))
     }
 
@@ -5511,7 +5525,7 @@ const handleOpenAIBatchRT = async (refreshTokenInput: string, clientId?: string)
         const accountName = refreshTokens.length > 1 ? `${baseName} #${i + 1}` : baseName
 
         if (shouldCreateOpenAI) {
-          await adminAPI.accounts.create({
+          await createAccountOnce({
             name: accountName,
             notes: form.notes,
             platform: 'openai',
@@ -5526,7 +5540,7 @@ const handleOpenAIBatchRT = async (refreshTokenInput: string, clientId?: string)
             group_ids: form.group_ids,
             expires_at: form.expires_at,
             auto_pause_on_expired: autoPauseOnExpired.value
-          })
+          }, `openai-refresh-token:${clientId || 'default'}:${i}`)
         }
 
         successCount++
@@ -5626,7 +5640,7 @@ const handleAntigravityValidateRT = async (refreshTokenInput: string) => {
           expires_at: form.expires_at,
           auto_pause_on_expired: autoPauseOnExpired.value
         })
-        await adminAPI.accounts.create(createPayload)
+        await createAccountOnce(createPayload, `antigravity-refresh-token:${i}`)
         successCount++
       } catch (error: any) {
         failedCount++
@@ -5989,7 +6003,7 @@ const handleCookieAuth = async (sessionKey: string) => {
           credentials.temp_unschedulable_rules = tempUnschedPayload
         }
 
-        await adminAPI.accounts.create({
+        await createAccountOnce({
           name: accountName,
           notes: form.notes,
           platform: form.platform,
@@ -6004,7 +6018,7 @@ const handleCookieAuth = async (sessionKey: string) => {
           group_ids: form.group_ids,
           expires_at: form.expires_at,
           auto_pause_on_expired: autoPauseOnExpired.value
-        })
+        }, `key-auth:${i}`)
 
         successCount++
       } catch (error: any) {

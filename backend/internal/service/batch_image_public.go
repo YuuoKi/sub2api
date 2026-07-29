@@ -623,6 +623,14 @@ func (s *BatchImagePublicService) ListModels(ctx context.Context, owner BatchIma
 	if err := s.ensureGroupAllowsBatchImage(ctx, owner.GroupID); err != nil {
 		return nil, err
 	}
+	var ownerGroup *Group
+	if owner.GroupID != nil && *owner.GroupID > 0 {
+		var err error
+		ownerGroup, err = s.GroupRepo.GetByIDLite(ctx, *owner.GroupID)
+		if err != nil || ownerGroup == nil {
+			return nil, ErrBatchImageSettlementPricingMissing
+		}
+	}
 
 	modelsByProvider := make(map[string]map[string]struct{})
 	for _, providerName := range batchImageProviderCatalogOrder() {
@@ -643,7 +651,7 @@ func (s *BatchImagePublicService) ListModels(ctx context.Context, owner BatchIma
 				if providerName == BatchImageProviderHCAtom && !isHCAtomBatchEnabledModel(model) {
 					continue
 				}
-				if _, err := s.Pricing.BatchImageUnitPrice(ctx, &BatchImageJob{Provider: providerName, Model: model}); err != nil {
+				if !s.batchImageCatalogPricingConfigured(ctx, ownerGroup, providerName, model) {
 					continue
 				}
 				if !account.IsModelSupported(model) {
@@ -673,6 +681,19 @@ func (s *BatchImagePublicService) ListModels(ctx context.Context, owner BatchIma
 		}
 	}
 	return &BatchImagePublicModelsResponse{Object: "list", Data: out}, nil
+}
+
+func (s *BatchImagePublicService) batchImageCatalogPricingConfigured(ctx context.Context, group *Group, provider, model string) bool {
+	if provider == BatchImageProviderHCAtom && group != nil && group.Platform == PlatformHCAtom {
+		return group.ImagePrice1K != nil && *group.ImagePrice1K > 0 &&
+			group.ImagePrice2K != nil && *group.ImagePrice2K > 0 &&
+			group.ImagePrice4K != nil && *group.ImagePrice4K > 0
+	}
+	if s.Pricing == nil {
+		return false
+	}
+	_, err := s.Pricing.BatchImageUnitPrice(ctx, &BatchImageJob{Provider: provider, Model: model})
+	return err == nil
 }
 
 func (s *BatchImagePublicService) ListItems(ctx context.Context, owner BatchImageOwner, batchID string, query BatchImageItemsQuery) (*BatchImagePublicItemsResponse, error) {

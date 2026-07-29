@@ -271,7 +271,7 @@
           <template v-if="!issuedQCanvasPair">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">新增员工</h2>
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              提交后自动建好账号，并为视频与文字 / 图片能力分别开 Key；两把 Key 必须绑定不同分组，明文只显示一次。
+              提交后自动建好账号，并为视频与图片能力分别开 Key；两把 Key 必须绑定不同分组，明文只显示一次。
             </p>
             <form class="mt-5 space-y-4" data-test="service-identity-form" @submit.prevent="submitStaff">
               <label class="flex items-start gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-dark-700" data-test="admin-self-issue">
@@ -301,16 +301,16 @@
                   <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">视频能力组</label>
                   <select v-model.number="staffForm.videoGroupId" class="input" data-test="wizard-video-group" required>
                     <option :value="0" disabled>选择视频通道所在组</option>
-                    <option v-for="group in eligibleGroups" :key="group.id" :value="group.id">
+                    <option v-for="group in videoGroups" :key="group.id" :value="group.id">
                       {{ group.name }} · {{ groupPlatformLabel(group.platform) }}
                     </option>
                   </select>
                 </div>
                 <div>
-                  <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">文字 / 图片能力组</label>
+                  <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">图片能力组</label>
                   <select v-model.number="staffForm.mediaGroupId" class="input" data-test="wizard-media-group" required>
                     <option :value="0" disabled>选择媒体账号所在组</option>
-                    <option v-for="group in eligibleGroups" :key="group.id" :value="group.id">
+                    <option v-for="group in mediaGroups" :key="group.id" :value="group.id">
                       {{ group.name }} · {{ groupPlatformLabel(group.platform) }}
                     </option>
                   </select>
@@ -322,13 +322,13 @@
                   class="text-xs text-red-600 dark:text-red-300"
                   data-test="wizard-group-conflict"
                 >
-                  视频与文字 / 图片 Key 必须选择不同分组。
+                  视频与图片 Key 必须选择不同分组。
                 </p>
                 <p v-if="groupsLoading" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                   正在加载可用组…
                 </p>
-                <p v-else-if="!eligibleGroups.length" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  没有可选分组，先在下方新建一个：
+                <p v-else-if="!videoGroups.length || !mediaGroups.length" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  视频组和图片组必须各有一个可用分组，请在下方补齐：
                 </p>
                 <div class="mt-2 flex flex-wrap items-center gap-2">
                   <input
@@ -400,7 +400,7 @@
                 <div class="mt-1 break-all font-mono text-sm text-gray-900 dark:text-white" data-test="wizard-video-key">{{ issuedQCanvasPair.video.key }}</div>
               </div>
               <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-dark-700 dark:bg-dark-900">
-                <div class="text-xs text-gray-500" data-test="wizard-media-group-name">文字 / 图片 Key · {{ selectedGroupName(staffForm.mediaGroupId) }}</div>
+                <div class="text-xs text-gray-500" data-test="wizard-media-group-name">图片 Key · {{ selectedGroupName(staffForm.mediaGroupId) }}</div>
                 <div class="mt-1 break-all font-mono text-sm text-gray-900 dark:text-white" data-test="wizard-media-key">{{ issuedQCanvasPair.media.key }}</div>
               </div>
             </div>
@@ -481,6 +481,8 @@ import {
   HC_ATOM_MEDIA_GROUP_PRICES,
   HC_ATOM_VIDEO_ENABLED_MODELS,
   HC_ATOM_VIDEO_GROUP_PRICES,
+  isHCAtomImageGroup,
+  isHCAtomVideoGroup,
 } from '@/components/account/hcAtomAdminContract'
 import {
   CONSOLE_ERROR_ZH,
@@ -745,10 +747,12 @@ const eligibleGroups = computed(() => {
     (group) => group.status === 'active' && group.subscription_type !== 'subscription' && !group.is_exclusive,
   )
 })
+const videoGroups = computed(() => eligibleGroups.value.filter(isHCAtomVideoGroup))
+const mediaGroups = computed(() => eligibleGroups.value.filter(isHCAtomImageGroup))
 
 const staffGroupsReady = computed(() => (
-  staffForm.videoGroupId > 0
-  && staffForm.mediaGroupId > 0
+  videoGroups.value.some((group) => group.id === staffForm.videoGroupId)
+  && mediaGroups.value.some((group) => group.id === staffForm.mediaGroupId)
   && staffForm.videoGroupId !== staffForm.mediaGroupId
 ))
 
@@ -771,7 +775,7 @@ function selectedGroupName(groupID: number): string {
 async function loadActiveGroups() {
   groupsLoading.value = true
   try {
-    activeGroups.value = await adminAPI.groups.getAll()
+    activeGroups.value = await adminAPI.groups.getAllIncludingInactive()
   } catch (err) {
     activeGroups.value = []
     appStore.showError(extractApiErrorMessage(err, '加载分组失败', CONSOLE_ERROR_ZH))
@@ -783,10 +787,8 @@ async function loadActiveGroups() {
 function openCreateStaff() {
   staffForm.username = ''
   staffForm.email = ''
-  staffForm.videoGroupId = eligibleGroups.value[0]?.id ?? 0
-  staffForm.mediaGroupId = eligibleGroups.value.find(
-    (group) => group.id !== staffForm.videoGroupId,
-  )?.id ?? 0
+  staffForm.videoGroupId = videoGroups.value[0]?.id ?? 0
+  staffForm.mediaGroupId = mediaGroups.value[0]?.id ?? 0
   staffForm.rechargeAmount = 0
   staffForm.issueForAdminSelf = false
   wizardUser.value = null
@@ -824,6 +826,19 @@ function completeStaffModal() {
 async function quickCreateGroup(name: string, target: 'video' | 'media') {
   const trimmed = name.trim()
   if (!trimmed || creatingGroup.value) return
+  const existing = activeGroups.value.find((group) => group.name === trimmed)
+  if (existing) {
+    const eligible = target === 'video' ? isHCAtomVideoGroup(existing) : isHCAtomImageGroup(existing)
+    if (eligible) {
+      if (target === 'video') staffForm.videoGroupId = existing.id
+      else staffForm.mediaGroupId = existing.id
+      quickGroupName.value = ''
+      appStore.showSuccess(`分组「${existing.name}」已存在，已直接选中`)
+    } else {
+      appStore.showError(`分组名「${trimmed}」已被其他平台或能力占用，请换一个明确的名称`)
+    }
+    return
+  }
   creatingGroup.value = true
   try {
     // 后端建组契约要求全量字段（缺失会 500）；与密钥库内联建组同一模板
@@ -920,16 +935,16 @@ async function resolveConflictOwner(email: string): Promise<AdminUser | null> {
 
 async function submitStaff() {
   if (submitting.value) return
-  if (!eligibleGroups.value.some((group) => group.id === staffForm.videoGroupId)) {
+  if (!videoGroups.value.some((group) => group.id === staffForm.videoGroupId)) {
     appStore.showError('请先选择有效的视频能力组；没有可用分组时先新建一个')
     return
   }
-  if (!eligibleGroups.value.some((group) => group.id === staffForm.mediaGroupId)) {
-    appStore.showError('请先选择有效的文字 / 图片能力组；没有可用分组时先新建一个')
+  if (!mediaGroups.value.some((group) => group.id === staffForm.mediaGroupId)) {
+    appStore.showError('请先选择有效的图片能力组；没有可用分组时先新建一个')
     return
   }
   if (staffForm.videoGroupId === staffForm.mediaGroupId) {
-    appStore.showError('视频与文字 / 图片 Key 必须绑定不同分组')
+    appStore.showError('视频与图片 Key 必须绑定不同分组')
     return
   }
   if (staffForm.issueForAdminSelf) {

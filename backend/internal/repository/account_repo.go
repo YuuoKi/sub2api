@@ -151,6 +151,35 @@ func (r *accountRepository) Create(ctx context.Context, account *service.Account
 	return nil
 }
 
+// CreateWithGroups persists the account and its routing bindings in one
+// database transaction. Admin create must never leave a schedulable orphan
+// account when a binding write fails.
+func (r *accountRepository) CreateWithGroups(ctx context.Context, account *service.Account, groupIDs []int64) error {
+	if account == nil {
+		return service.ErrAccountNilInput
+	}
+	tx, err := r.client.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	txClient := tx.Client()
+	// Keep cache updates outside the transaction. A rolled-back account must
+	// never leak into the scheduler snapshot.
+	txRepo := newAccountRepositoryWithSQL(txClient, txClient, nil)
+	if err := txRepo.Create(ctx, account); err != nil {
+		return err
+	}
+	if err := txRepo.BindGroups(ctx, account.ID, groupIDs); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (r *accountRepository) GetByID(ctx context.Context, id int64) (*service.Account, error) {
 	m, err := r.client.Account.Query().Where(dbaccount.IDEQ(id)).Only(ctx)
 	if err != nil {
@@ -421,6 +450,39 @@ func (r *accountRepository) Update(ctx context.Context, account *service.Account
 	}
 	// 普通账号编辑（如 model_mapping / credentials）也需要立即刷新单账号快照，
 	// 否则网关在 outbox worker 延迟或异常时仍可能读到旧配置。
+	r.syncSchedulerAccountSnapshot(ctx, account.ID)
+	return nil
+}
+
+// UpdateWithGroups keeps account fields and group bindings on the same commit
+// boundary. A failed binding therefore cannot leave new credentials attached
+// to stale routing groups.
+func (r *accountRepository) UpdateWithGroups(ctx context.Context, account *service.Account, groupIDs []int64) error {
+	if account == nil {
+		return service.ErrAccountNilInput
+	}
+	tx, err := r.client.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	txClient := tx.Client()
+	// Update() normally refreshes the scheduler immediately; suppress that
+	// while the transaction is uncommitted and refresh from the outer repo.
+	txRepo := newAccountRepositoryWithSQL(txClient, txClient, nil)
+	if err := txRepo.Update(ctx, account); err != nil {
+		r.syncSchedulerAccountSnapshot(ctx, account.ID)
+		return err
+	}
+	if err := txRepo.BindGroups(ctx, account.ID, groupIDs); err != nil {
+		r.syncSchedulerAccountSnapshot(ctx, account.ID)
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		r.syncSchedulerAccountSnapshot(ctx, account.ID)
+		return err
+	}
 	r.syncSchedulerAccountSnapshot(ctx, account.ID)
 	return nil
 }

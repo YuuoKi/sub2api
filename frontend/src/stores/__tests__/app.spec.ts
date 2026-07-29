@@ -206,6 +206,15 @@ describe('useAppStore', () => {
       expect(id1).not.toBe(id2)
       expect(id2).not.toBe(id3)
     })
+
+    it('相同类型和内容的活动 toast 只显示一次', () => {
+      const store = useAppStore()
+      const first = store.showError('分组名已存在')
+      const second = store.showError('分组名已存在')
+
+      expect(second).toBe(first)
+      expect(store.toasts).toHaveLength(1)
+    })
   })
 
   // --- 侧边栏 ---

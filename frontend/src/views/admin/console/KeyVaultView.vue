@@ -232,7 +232,7 @@
             <div>
               <GroupSelector
                 v-model="accountForm.groupIds"
-                :groups="groups"
+                :groups="platformGroups"
                 :platform="accountForm.platform"
                 data-test="account-groups"
               />
@@ -246,11 +246,8 @@
               >
                 <p class="text-gray-600 dark:text-gray-300">当前平台还没有分组，先建一个（也可到「模型分组」页精细调整）：</p>
                 <div class="mt-2 flex flex-wrap items-center gap-2">
-                  <button class="btn btn-sm btn-outline" type="button" :disabled="creatingGroup" data-test="quick-create-media" @click="quickCreateGroup('media', accountForm.platform, 'account', 'media')">
-                    作图组 media
-                  </button>
-                  <button class="btn btn-sm btn-outline" type="button" :disabled="creatingGroup" data-test="quick-create-video" @click="quickCreateGroup('video', accountForm.platform, 'account', 'video')">
-                    视频组 video
+                  <button class="btn btn-sm btn-outline" type="button" :disabled="creatingGroup" data-test="quick-create-media" @click="quickCreateGroup(isHCAtomAccount ? 'HC-ATOM 图片组' : `${accountForm.platform}-图片组`, accountForm.platform, 'account', 'media')">
+                    {{ isHCAtomAccount ? '创建 HC-ATOM 图片组' : '创建图片组' }}
                   </button>
                   <input
                     v-model="quickGroupName"
@@ -297,7 +294,8 @@
                 class="rounded-md bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:bg-gray-800/60 dark:text-gray-300"
                 data-test="hc-atom-base-url-locked"
               >
-                {{ HC_ATOM_IMAGE_BASE_URL }}
+                同步图片：{{ HC_ATOM_SYNC_IMAGE_BASE_URL }}/v1/images/generations<br />
+                异步图片：{{ HC_ATOM_ASYNC_IMAGE_BASE_URL }}/image/generation/tasks
               </p>
               <input
                 v-else
@@ -308,7 +306,7 @@
                 data-test="account-base-url"
               />
               <p v-if="isHCAtomAccount" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                固定 HC-ATOM 官方中转地址，不允许自定义。
+                系统按模型自动选择同步或异步协议，不需要手工填写地址。
               </p>
             </div>
             <div
@@ -316,7 +314,7 @@
               class="rounded-lg border border-cyan-200 bg-cyan-50 p-4 text-sm dark:border-cyan-900 dark:bg-cyan-950/30"
               data-test="hc-atom-model-directory"
             >
-              <p class="font-medium text-cyan-900 dark:text-cyan-200">固定通用 AI 模型目录</p>
+              <p class="font-medium text-cyan-900 dark:text-cyan-200">本次已授权并启用的 5 个图片模型</p>
               <ul class="mt-2 list-disc pl-5 text-cyan-800 dark:text-cyan-300">
                 <li v-for="model in HC_ATOM_MEDIA_ENABLED_MODELS" :key="model">{{ model }}</li>
               </ul>
@@ -366,21 +364,21 @@
             <div>
               <GroupSelector
                 v-model="providerForm.groupIds"
-                :groups="groups"
+                :groups="providerPlatformGroups"
                 data-test="provider-groups"
               />
               <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                 必选，通道的调用按分组计费与路由。
               </p>
               <div
-                v-if="!groups.length"
+                v-if="!providerPlatformGroups.length"
                 class="mt-2 border-t border-gray-200 pt-3 text-xs dark:border-dark-700"
                 data-test="provider-group-quick-create"
               >
                 <p class="text-gray-600 dark:text-gray-300">还没有分组，先建一个（也可到「模型分组」页精细调整）：</p>
                 <div class="mt-2 flex flex-wrap items-center gap-2">
-                  <button class="btn btn-sm btn-outline" type="button" :disabled="creatingGroup" data-test="provider-quick-create-video" @click="quickCreateGroup('video', videoProviderGroupPlatform(providerForm.provider), 'provider', 'video')">
-                    视频组 video
+                  <button class="btn btn-sm btn-outline" type="button" :disabled="creatingGroup" data-test="provider-quick-create-video" @click="quickCreateGroup(defaultVideoGroupName(providerForm.provider), videoProviderGroupPlatform(providerForm.provider), 'provider', 'video')">
+                    {{ defaultVideoGroupName(providerForm.provider) }}
                   </button>
                   <input
                     v-model="quickGroupName"
@@ -459,7 +457,7 @@
             <div>
               <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">分组</label>
               <select v-model="editProviderForm.groupId" class="input" required>
-                <option v-for="group in groups" :key="group.id" :value="group.id">{{ group.name }}</option>
+                <option v-for="group in editProviderGroups" :key="group.id" :value="group.id">{{ group.name }}</option>
               </select>
             </div>
             <div>
@@ -503,20 +501,25 @@ import Icon from '@/components/icons/Icon.vue'
 import GroupSelector from '@/components/common/GroupSelector.vue'
 import AccountGroupsCell from '@/components/account/AccountGroupsCell.vue'
 import {
+  HC_ATOM_ASYNC_IMAGE_BASE_URL,
   HC_ATOM_IMAGE_BASE_URL,
   HC_ATOM_MEDIA_ENABLED_MODELS,
   HC_ATOM_MEDIA_GROUP_PRICES,
+  HC_ATOM_SYNC_IMAGE_BASE_URL,
   HC_ATOM_VIDEO_ENABLED_MODELS,
   HC_ATOM_VIDEO_GROUP_PRICES,
   HC_ATOM_VIDEO_V1_MODEL,
   HC_ATOM_VIDEO_V3_MODEL,
   buildHCAtomImageCredentials,
+  isHCAtomImageGroup,
+  isHCAtomVideoGroup,
 } from '@/components/account/hcAtomAdminContract'
 import { adminAPI } from '@/api/admin'
 import type { Account, AccountPlatform, AdminGroup, GroupPlatform } from '@/types'
 import type { VideoPlatformContract, VideoProviderAccount, VideoProviderContract } from '@/api/admin/video'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
+import { createIdempotencyKey } from '@/utils/idempotencyKey'
 import { requestConfirmation } from '@/composables/useAppDialog'
 import { CONSOLE_ERROR_ZH, formatDateTime } from './consoleUtils'
 
@@ -543,6 +546,8 @@ const providerActionId = ref<number | null>(null)
 const accountModalOpen = ref(false)
 const editingAccount = ref<Account | null>(null)
 const savingAccount = ref(false)
+const accountCreateIdempotencyKey = ref<string | null>(null)
+const groupsLoadFailed = ref(false)
 
 const accountForm = reactive({
   platform: 'anthropic' as AccountPlatform,
@@ -555,7 +560,11 @@ const accountForm = reactive({
 const isHCAtomAccount = computed(() => accountForm.platform === 'hc_atom')
 
 // 分组必选：当前平台可选的分组；切平台时清掉不再匹配的已选 id
-const platformGroups = computed(() => groups.value.filter((g) => g.platform === accountForm.platform))
+const platformGroups = computed(() => groups.value.filter((group) => {
+  if (group.platform !== accountForm.platform || group.status !== 'active') return false
+  if (accountForm.platform === 'hc_atom') return isHCAtomImageGroup(group)
+  return true
+}))
 const creatingGroup = ref(false)
 const quickGroupName = ref('')
 
@@ -585,6 +594,30 @@ async function quickCreateGroup(
   const models = isHCAtom
     ? [...(isMedia ? HC_ATOM_MEDIA_ENABLED_MODELS : videoModels)]
     : []
+  const existing = groups.value.find((group) => group.name === trimmed)
+  if (existing) {
+    const reusable = target === 'account'
+      ? existing.platform === platform
+        && existing.status === 'active'
+        && (!isHCAtom || (isMedia && isHCAtomImageGroup(existing)))
+      : isEligibleVideoProviderGroup(existing, providerForm.provider)
+    if (reusable) {
+      if (target === 'provider') {
+        providerForm.groupIds = [existing.id]
+      } else if (!accountForm.groupIds.includes(existing.id)) {
+        accountForm.groupIds = [...accountForm.groupIds, existing.id]
+      }
+      quickGroupName.value = ''
+      appStore.showSuccess(`分组「${existing.name}」已存在，已直接选中`)
+      return
+    }
+    appStore.showError(
+      existing.status !== 'active'
+        ? `分组名「${trimmed}」已被停用分组占用，请先到「模型分组」启用或改名`
+        : `分组名「${trimmed}」已被其他平台或能力占用，请换一个明确的名称`,
+    )
+    return
+  }
   creatingGroup.value = true
   try {
     // 后端建组契约要求全量字段（缺失会 500）；与 GroupsView 默认表单对齐，按模板名预置媒体开关
@@ -698,6 +731,7 @@ function openCreate() {
   accountForm.notes = ''
   accountForm.groupIds = []
   quickGroupName.value = ''
+  accountCreateIdempotencyKey.value = createIdempotencyKey()
   accountModalOpen.value = true
 }
 
@@ -725,13 +759,25 @@ function clearAccountSecrets() {
 function closeAccountModal() {
   accountModalOpen.value = false
   editingAccount.value = null
+  accountCreateIdempotencyKey.value = null
   clearAccountSecrets()
 }
 
 async function saveAccount() {
   // 分组必选：未选组直接拦截并显式报错，避免账号落成「无组孤儿」（计费/路由都走不通）
   if (accountForm.groupIds.length === 0) {
-    appStore.showError('请至少选择一个分组；没有可用分组时先点下方「作图组 media / 视频组 video」快速创建')
+    appStore.showError('请至少选择一个图片分组；没有可用分组时先点下方「创建 HC-ATOM 图片组」')
+    return
+  }
+  if (groupsLoadFailed.value) {
+    appStore.showError('分组加载失败，无法安全保存账号。请刷新页面后重试')
+    return
+  }
+  if (
+    accountForm.platform === 'hc_atom'
+    && accountForm.groupIds.some((id) => !platformGroups.value.some((group) => group.id === id))
+  ) {
+    appStore.showError('请选择启用状态且只包含已授权 5 个图片模型的 HC-ATOM 图片组')
     return
   }
   savingAccount.value = true
@@ -778,7 +824,7 @@ async function saveAccount() {
         type: 'apikey',
         credentials,
         group_ids: [...accountForm.groupIds],
-      })
+      }, accountCreateIdempotencyKey.value ?? createIdempotencyKey())
       appStore.showSuccess('账号已录入密钥库')
     }
     closeAccountModal()
@@ -868,13 +914,24 @@ async function loadAccounts() {
 }
 
 async function loadGroups() {
-  groups.value = await adminAPI.groups.getAll()
+  try {
+    groups.value = await adminAPI.groups.getAllIncludingInactive()
+    groupsLoadFailed.value = false
+  } catch (error) {
+    groups.value = []
+    groupsLoadFailed.value = true
+    throw error
+  }
 }
 
 // ---- 视频通道（页内完整管理：列表/启停/删除/录入 + 保存后自动授权） ----
 
 function videoProviderGroupPlatform(provider: string): GroupPlatform {
   return provider.startsWith('hc_atom_') ? 'hc_atom' : 'openai'
+}
+
+function defaultVideoGroupName(provider: string): string {
+  return provider.startsWith('hc_atom_') ? 'HC-ATOM 视频组' : '视频组'
 }
 
 function hcAtomVideoModelsForProvider(provider: string): readonly string[] {
@@ -907,6 +964,40 @@ const providerForm = reactive({
   enabled: true,
   authorizeAfterSave: false,
 })
+
+function isEligibleVideoProviderGroup(group: AdminGroup, provider: string): boolean {
+  if (
+    group.status !== 'active'
+    || group.platform !== videoProviderGroupPlatform(provider)
+  ) return false
+  if (!provider.startsWith('hc_atom_')) return true
+  if (!isHCAtomVideoGroup(group)) return false
+  const configured = new Set(
+    group.models_list_config?.enabled
+      ? group.models_list_config.models.map((model) => model.trim()).filter(Boolean)
+      : [],
+  )
+  return hcAtomVideoModelsForProvider(provider).every((model) => configured.has(model))
+}
+
+const providerPlatformGroups = computed(() => (
+  groups.value.filter((group) => isEligibleVideoProviderGroup(group, providerForm.provider))
+))
+
+watch(
+  () => providerForm.provider,
+  () => {
+    providerForm.groupIds = providerForm.groupIds.filter((id) => (
+      providerPlatformGroups.value.some((group) => group.id === id)
+    ))
+  },
+)
+
+const editProviderGroups = computed(() => (
+  editingProvider.value
+    ? groups.value.filter((group) => isEligibleVideoProviderGroup(group, editingProvider.value!.provider))
+    : []
+))
 
 // contract 请求失败时回落为只含 seedance 的静态兜底平台
 const FALLBACK_VIDEO_PLATFORMS: VideoPlatformContract[] = [
@@ -971,7 +1062,15 @@ function closeProviderModal() {
 
 async function saveProvider() {
   if (providerForm.groupIds.length === 0) {
-    appStore.showError('请至少选择一个分组；没有可用分组时先点下方「视频组 video」快速创建')
+    appStore.showError('请至少选择一个匹配当前视频协议的分组；没有可用分组时先在下方创建')
+    return
+  }
+  if (groupsLoadFailed.value) {
+    appStore.showError('分组加载失败，无法安全保存视频通道。请刷新页面后重试')
+    return
+  }
+  if (providerForm.groupIds.some((id) => !providerPlatformGroups.value.some((group) => group.id === id))) {
+    appStore.showError('所选分组与当前视频协议不匹配，请重新选择')
     return
   }
   const platform = selectedVideoPlatform.value
@@ -1040,6 +1139,10 @@ async function saveEditProvider() {
   if (!editingProvider.value) return
   if (!editProviderForm.groupId) {
     appStore.showError('请选择一个分组')
+    return
+  }
+  if (!editProviderGroups.value.some((group) => group.id === Number(editProviderForm.groupId))) {
+    appStore.showError('所选分组与当前视频协议不匹配，请重新选择')
     return
   }
   savingEditProvider.value = true

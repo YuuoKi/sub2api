@@ -539,24 +539,32 @@ func (s *APIKeyService) CreateQCanvasKeyPair(ctx context.Context, userID int64, 
 		)
 	}
 
-	validateGroup := func(groupID int64) error {
+	validateGroup := func(groupID int64) (*Group, error) {
 		group, groupErr := s.groupRepo.GetByID(ctx, groupID)
 		if groupErr != nil {
-			return fmt.Errorf("get group: %w", groupErr)
+			return nil, fmt.Errorf("get group: %w", groupErr)
 		}
 		if !group.IsActive() {
-			return infraerrors.BadRequest("QC_KEY_PAIR_GROUP_NOT_ACTIVE", "selected group is not active")
+			return nil, infraerrors.BadRequest("QC_KEY_PAIR_GROUP_NOT_ACTIVE", "selected group is not active")
 		}
 		if !s.canUserBindGroup(ctx, user, group) {
-			return ErrGroupNotAllowed
+			return nil, ErrGroupNotAllowed
 		}
-		return nil
+		return group, nil
 	}
-	if err := validateGroup(req.VideoGroupID); err != nil {
+	videoGroup, err := validateGroup(req.VideoGroupID)
+	if err != nil {
 		return nil, err
 	}
-	if err := validateGroup(req.MediaGroupID); err != nil {
+	mediaGroup, err := validateGroup(req.MediaGroupID)
+	if err != nil {
 		return nil, err
+	}
+	if !qcanvasVideoGroupValid(videoGroup) {
+		return nil, infraerrors.BadRequest("QC_KEY_PAIR_VIDEO_GROUP_INVALID", "selected video group does not provide HC-ATOM video capability")
+	}
+	if !qcanvasMediaGroupValid(mediaGroup) {
+		return nil, infraerrors.BadRequest("QC_KEY_PAIR_MEDIA_GROUP_INVALID", "selected media group does not provide the authorized HC-ATOM image capability")
 	}
 
 	videoSecret, err := s.GenerateKey()
@@ -583,6 +591,69 @@ func (s *APIKeyService) CreateQCanvasKeyPair(ctx context.Context, userID int64, 
 	s.compileAPIKeyIPRules(video)
 	s.compileAPIKeyIPRules(media)
 	return &QCanvasKeyPair{Video: video, Media: media}, nil
+}
+
+func qcanvasGroupModels(group *Group) map[string]struct{} {
+	models := make(map[string]struct{})
+	if group == nil || !group.ModelsListConfig.Enabled {
+		return models
+	}
+	for _, model := range group.ModelsListConfig.Models {
+		if normalized := strings.TrimSpace(model); normalized != "" {
+			models[normalized] = struct{}{}
+		}
+	}
+	return models
+}
+
+func qcanvasVideoGroupValid(group *Group) bool {
+	if group == nil || group.Platform != PlatformHCAtom || !group.IsActive() ||
+		group.VideoPrice480P == nil || *group.VideoPrice480P <= 0 ||
+		group.VideoPrice720P == nil || *group.VideoPrice720P <= 0 ||
+		group.VideoPrice1080P == nil || *group.VideoPrice1080P <= 0 {
+		return false
+	}
+	models := qcanvasGroupModels(group)
+	_, v1 := models[HCAtomVideoV1PublicModel]
+	_, v3 := models[HCAtomSeedanceV3PublicModel]
+	for _, image := range []string{
+		HCAtomImageSeedreamModel,
+		HCAtomImageDoubaoSeedreamModel,
+		HCAtomImageGeminiModel,
+		HCAtomImageGPTModel,
+		HCAtomImageSGPTModel,
+	} {
+		if _, mixed := models[image]; mixed {
+			return false
+		}
+	}
+	return v1 || v3
+}
+
+func qcanvasMediaGroupValid(group *Group) bool {
+	if group == nil || group.Platform != PlatformHCAtom || !group.IsActive() ||
+		!group.AllowImageGeneration || !group.AllowBatchImageGeneration ||
+		group.ImagePrice1K == nil || *group.ImagePrice1K <= 0 ||
+		group.ImagePrice2K == nil || *group.ImagePrice2K <= 0 ||
+		group.ImagePrice4K == nil || *group.ImagePrice4K <= 0 {
+		return false
+	}
+	models := qcanvasGroupModels(group)
+	if len(models) != 5 {
+		return false
+	}
+	for _, image := range []string{
+		HCAtomImageSeedreamModel,
+		HCAtomImageDoubaoSeedreamModel,
+		HCAtomImageGeminiModel,
+		HCAtomImageGPTModel,
+		HCAtomImageSGPTModel,
+	} {
+		if _, ok := models[image]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 // List 获取用户的API Key列表

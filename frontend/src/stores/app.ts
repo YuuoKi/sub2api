@@ -107,6 +107,10 @@ export const useAppStore = defineStore('app', () => {
    * @returns Toast ID for manual dismissal
    */
   function showToast(type: ToastType, message: string, duration?: number): string {
+    const duplicate = toasts.value.find((toast) => toast.type === type && toast.message === message)
+    if (duplicate) {
+      return duplicate.id
+    }
     const id = `toast-${++toastIdCounter}`
     const toast: Toast = {
       id,

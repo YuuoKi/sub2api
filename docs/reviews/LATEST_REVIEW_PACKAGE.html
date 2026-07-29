@@ -13,12 +13,23 @@
 </head>
 <body>
   <h1>Sub2API HC-ATOM 授权图片模型审查包</h1>
-  <p class="warn">当前状态：代码与假上游链路通过，待部署、待配置生产凭证，未执行真实付费生成。</p>
+  <p class="warn">当前状态：本地代码、全量测试与构建通过；待提交和受控部署。没有读取生产凭证，也没有执行真实付费生成。</p>
 
   <section class="card">
     <h2>目标、范围与执行目录</h2>
-    <p>只适配用户在 HC-ATOM 控制台授权的 6 个图片模型，不扩展到全部模型。</p>
+    <p>修复密钥库、员工双 Key 和模型目录的分组隔离，只开放用户确认授权且协议完整的 5 个图片模型，不扩展到全部模型。</p>
     <p><code>D:\sub2api-trunk\.worktrees\hc-unified-chain-20260728</code></p>
+  </section>
+
+  <section class="card">
+    <h2>截图问题与根因</h2>
+    <ul>
+      <li>分组名称全局唯一，但旧页面只加载活跃且当前平台可见的分组；同名分组被隐藏时仍会占名，导致“无可用分组”与 <code>group name already exists</code> 同时出现。</li>
+      <li>图片账号只按平台过滤，没有按价格、模型和图片能力过滤，因此可能把视频组放进图片账号。</li>
+      <li>图片账号目录错误混入 3 个文字模型，页面信息与“HC-ATOM（图片）”语义不一致。</li>
+      <li>创建账号没有稳定的 <code>Idempotency-Key</code>，账号创建与分组绑定也不是原子操作。</li>
+      <li>员工 media/video 双 Key 只检查组 ID，没有证明两组能力不同，存在错误绑定风险。</li>
+    </ul>
   </section>
 
   <section class="card">
@@ -38,10 +49,18 @@
   </section>
 
   <section class="card">
-    <h2>实现与安全边界</h2>
+    <h2>改动清单与安全边界</h2>
     <ul>
-      <li>目录只公布 5 个可执行模型；Dola 不进入公开模型目录，也不能进入调度缓存。</li>
-      <li>通用 HC 账号映射保持 3 个文字模型与这 5 个图片模型；Dola 不进入账号能力映射。</li>
+      <li>图片弹窗只显示 5 个授权图片模型；文字、视频和 Dola 不进入图片账号目录。</li>
+      <li>图片组必须是活跃 HC 组、允许图片与批量图片、配置 1K/2K/4K 正价格、包含精确 5 个图片模型且不包含视频模型。</li>
+      <li>视频组必须是活跃 HC 组、配置 480p/720p/1080p 正价格、包含当前通道对应的 V1 或 V3 视频模型且不包含任何图片模型。</li>
+      <li>快速建组会复用同名且能力正确的现有组；名称冲突、停用组或能力不匹配均给出中文原因。相同活跃 toast 在短时间内只显示一次。</li>
+      <li>分组加载失败不会伪装成“当前没有分组”，账号与视频通道保存前会再次验证所选组。</li>
+      <li>HC 图片账号在 API 层也禁止无分组创建或显式清空分组；真实数据库故障不会被误报成“分组不存在”。</li>
+      <li>密钥库与通用开户弹窗都按一次打开会话复用稳定 <code>Idempotency-Key</code>；批量开户的每个逻辑账号使用独立 Key。</li>
+      <li>后端在事务内完成账号和分组绑定，失败时不留下无组账号或调度缓存残影；真实 PostgreSQL 回滚测试覆盖创建和更新两条路径。</li>
+      <li>员工双 Key 后端强制 media/video 两组能力互斥；错误平台、停用组、缺价或模型不完整均拒绝开卡。</li>
+      <li>HC 组图片价格可直接满足异步图片模型可见性判断，不再要求额外全局价格。</li>
       <li>同步模型自动规范化 <code>prompt / count / quality / reference_images</code>；Seedream 只接受文生图，Doubao 支持参考图。</li>
       <li>异步模型使用平铺请求体，支持 1K/2K/4K、比例、参考图；GPT 两个模型会把档位换算为真实上游像素，且 4K 严格低于上游像素上限。</li>
       <li>GPT 两个模型使用 <code>x-api-key</code>，Gemini 使用 Bearer；支持 <code>queued/running/success/failed/cancelled</code> 与结果 URL。</li>
@@ -52,44 +71,54 @@
 
   <section class="card">
     <h2>验证命令与结果</h2>
-    <pre>go test -buildvcs=false ./... -count=1
-PASS（全部 Go 包）
+    <pre>cd backend
+go test ./internal/service -count=1
+PASS（65.079s）
 
-go build -buildvcs=false ./...
+go test ./internal/handler/admin ./internal/repository -count=1
+PASS（4.621s / 5.484s）
+
+go test -tags=unit ./internal/service -count=1
+PASS（包含 HC 账号组校验、员工双 Key、同步/异步图片与脱敏）
+
+WSL Docker + PostgreSQL 18 / Redis 8:
+go test -tags=integration ./internal/repository -run TestAccountRepository_CreateWithGroups_RollsBackAccountWhenBindingFails -count=1 -v
 PASS
 
-go test -buildvcs=false ./internal/service -run "HCAtom|BatchImage" -count=1
+go test -tags=integration ./internal/repository -run TestAccountRepository_UpdateWithGroups_RollsBackFieldsAndBindings -count=1 -v
 PASS
 
-vitest（HC 账号契约、密钥库与员工开卡定向用例）
-PASS（3 files / 50 tests）
+cd ../frontend
+node_modules\.bin\vitest.CMD run --reporter=dot
+PASS（全量前端测试）
 
-pnpm typecheck
+pnpm.cmd typecheck
 PASS
 
-pnpm build
-PASS（仅既有 chunk / browserslist 警告）
+pnpm.cmd build
+PASS（968 modules；仅既有 chunk / dynamic-import 警告）
 
 git diff --check
 PASS</pre>
-    <p>测试使用假 HC 上游，验证模型名、接口路径、请求字段、Bearer / x-api-key、业务码 200、轮询状态、失败原因与密钥脱敏；没有使用真实 Key。</p>
+    <p>测试使用假 HC 上游，验证模型名、接口路径、请求字段、Bearer / x-api-key、业务码 200、轮询状态、失败原因、密钥脱敏、分组能力与事务回滚；没有使用真实 Key。</p>
+    <p>QCanvas 证据固定到提交 <code>d39109578f1843c91da12b242243661c31f58869</code>：<code>apps/web/src/config/useModelOptions.ts</code> 消费 Sub2 动态目录，<code>apps/web/src/ui/studio-v2/shell/store/createGenerationSlice.ts</code> 强制图片生成走 <code>/public/draw</code>，<code>apps/hono-api/src/modules/sub2api/sub2api.image-gateway.service.ts</code> 只走 Sub2 并失败关闭；API 定向 109 个用例、Web 定向 20 个用例、API/Web build 和 Web typecheck 均通过。</p>
   </section>
 
   <section class="card">
     <h2>风险、回滚与当前阻塞</h2>
     <ul>
-      <li class="blocked">真实用户路径尚未验收：没有真实任务编号、预览资产或下载证据，因此不能标记“产品 READY”。</li>
-      <li class="blocked">生产环境仍需配置专用加密 Key、HC 媒体账号、媒体组价格和员工媒体 Sub2 Key，之后才能开启调度。</li>
+      <li class="blocked">真实用户路径尚未验收：没有真实付费任务编号、预览资产或下载证据，因此当前只能判定“内部可用，待用户实测”，不能标记“产品 READY”。</li>
+      <li class="blocked">部署后仍需由管理员本人录入 HC 图片 Key，并为实际员工签发 media Sub2 Key；本轮不读取或代填该凭证。</li>
       <li class="warn">HC 单模型文档未证明 DELETE 取消接口；本地保持现有取消外壳，但真实取消能力需在最小付费验收时单独确认。</li>
     </ul>
-    <p>回滚：回退本次提交并重新构建 Sub2API；本次没有数据库迁移，也没有修改生产数据。</p>
+    <p>回滚：部署前备份当前服务目录和数据库；异常时恢复备份或回退本次提交并重新构建 Sub2API。本次没有数据库迁移。</p>
   </section>
 
   <section class="card">
     <h2>文件索引与下一步</h2>
-    <p><code>backend/internal/service/hc_atom_catalog.go</code>、<code>hc_atom_sync_image.go</code>、<code>batch_image_provider_hc_atom.go</code>、<code>batch_image_public.go</code>、<code>frontend/src/components/account/hcAtomAdminContract.ts</code> 及对应测试。</p>
-    <p>下一步：部署代码但保持 HC 调度关闭；由管理员录入生产加密配置、媒体账号和价格后，每类协议最多发起一次最小真实任务。</p>
-    <p>可复制提示词：<code>部署当前 Sub2API HC 图片模型提交，保持调度关闭；先检查加密 Key、媒体账号、价格和员工媒体 Key，只报告存在性，不打印值。</code></p>
+    <p><code>backend/internal/repository/account_repo.go</code>、<code>backend/internal/service/admin_account.go</code>、<code>api_key_service.go</code>、<code>batch_image_public.go</code>、<code>frontend/src/components/account/hcAtomAdminContract.ts</code>、<code>KeyVaultView.vue</code>、<code>StaffView.vue</code> 及对应测试。</p>
+    <p>下一步：提交并受控部署；线上复核图片/视频分组、精确 5 模型、中文错误和版本后，再通知管理员本人录入 Key 并发起一次最小真实任务。</p>
+    <p>可复制提示词：<code>检查当前 Sub2API HC 图片模型线上版本和分组能力，只报告配置存在性，不读取或打印任何 Key，不发起真实付费任务。</code></p>
   </section>
 </body>
 </html>

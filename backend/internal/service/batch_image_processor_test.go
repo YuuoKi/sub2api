@@ -333,6 +333,7 @@ func TestBatchImageProviderProcessor_StatusFlow(t *testing.T) {
 			BatchID:         "imgbatch_flow",
 			Status:          BatchImageJobStatusRunning,
 			Provider:        provider.Name(),
+			Model:           HCAtomImageGeminiModel,
 			AccountID:       &accountID,
 			ProviderJobName: &providerJob,
 		}
@@ -393,7 +394,7 @@ func TestBatchImageProviderProcessor_HCAtomOwnedResultRecoversAfterOutputRefPers
 	taskID, customID := "hc-retry-task", "cover_001"
 	job := &BatchImageJob{
 		BatchID: "imgbatch_hc_retry", Status: BatchImageJobStatusSubmitted,
-		Provider: BatchImageProviderHCAtom, AccountID: &accountID,
+		Provider: BatchImageProviderHCAtom, Model: HCAtomImageGeminiModel, AccountID: &accountID,
 		ProviderJobName: &taskID, ProviderInputRef: &customID, ItemCount: 1,
 	}
 	repo := newFakeBatchImageRepository()

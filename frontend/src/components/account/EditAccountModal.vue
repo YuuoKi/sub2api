@@ -89,7 +89,7 @@
 
         <!-- Model Restriction Section (不适用于 Antigravity) -->
         <div v-if="account.platform === 'hc_atom'" class="rounded-lg border border-cyan-200 bg-cyan-50 p-4 text-sm dark:border-cyan-900 dark:bg-cyan-950/30">
-          <p class="font-medium text-cyan-900 dark:text-cyan-200">固定通用 AI 模型目录</p>
+          <p class="font-medium text-cyan-900 dark:text-cyan-200">本次已授权并启用的 5 个图片模型</p>
           <ul class="mt-2 list-disc pl-5 text-cyan-800 dark:text-cyan-300">
             <li v-for="model in HC_ATOM_MEDIA_ENABLED_MODELS" :key="model">{{ model }}</li>
           </ul>
@@ -2493,7 +2493,7 @@
       <GroupSelector
         v-if="!authStore.isSimpleMode"
         v-model="form.group_ids"
-        :groups="groups"
+        :groups="selectableGroups"
         :platform="account?.platform"
         :mixed-scheduling="mixedScheduling"
         data-tour="account-form-groups"
@@ -2615,7 +2615,8 @@ import {
 import {
   HC_ATOM_IMAGE_BASE_URL,
   HC_ATOM_MEDIA_ENABLED_MODELS,
-  buildHCAtomImageCredentials
+  buildHCAtomImageCredentials,
+  isHCAtomImageGroup
 } from './hcAtomAdminContract'
 
 interface Props {
@@ -2626,6 +2627,11 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+const selectableGroups = computed(() => (
+  props.account?.platform === 'hc_atom'
+    ? props.groups.filter(isHCAtomImageGroup)
+    : props.groups
+))
 const emit = defineEmits<{
   close: []
   updated: [account: Account]
@@ -2642,7 +2648,7 @@ const isSparkShadow = computed(() => props.account?.parent_account_id != null)
 // Platform-specific hint for Base URL
 const baseUrlHint = computed(() => {
   if (!props.account) return t('admin.accounts.baseUrlHint')
-  if (props.account.platform === 'hc_atom') return '固定 HC-ATOM 域名，不允许自定义中转地址'
+  if (props.account.platform === 'hc_atom') return '系统按图片模型自动选择同步或异步接口，无需自定义地址'
   if (props.account.platform === 'openai') return t('admin.accounts.openai.baseUrlHint')
   if (props.account.platform === 'gemini') return t('admin.accounts.gemini.baseUrlHint')
   return t('admin.accounts.baseUrlHint')

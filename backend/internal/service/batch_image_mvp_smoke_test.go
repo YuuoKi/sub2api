@@ -243,8 +243,10 @@ func TestHCAtomBatchImagePipeline_FakeEndToEndOwnedResult(t *testing.T) {
 	require.Equal(t, 1, client.createCount)
 	require.Equal(t, "hc-image:"+submitted.ID, client.idempotencyKey)
 	require.Equal(t, HCAtomImageAsyncT2IModel, client.createRequest.Model)
-	require.Equal(t, map[string]any{"prompt": "hero"}, client.createRequest.Input)
-	require.Equal(t, map[string]any{"n": 1, "size": "1280*1280"}, client.createRequest.Parameters)
+	require.Equal(t, "hero", client.createRequest.Prompt)
+	require.Equal(t, "1:1", client.createRequest.Size)
+	require.Equal(t, "1K", client.createRequest.Quality)
+	require.Zero(t, client.createRequest.N)
 	require.Len(t, billing.reserves, 1)
 
 	indexed, err := processor.Process(ctx, submitted.ID)

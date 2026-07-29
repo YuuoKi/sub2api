@@ -531,6 +531,49 @@ describe('KeyVaultView video provider management', () => {
     expect(wrapper.find('[data-test="group-check-13"]').exists()).toBe(false)
   })
 
+  it('migrates a legacy HC provider to the eligible group and clears stale endpoint overrides', async () => {
+    const legacyHCProvider = {
+      ...PROVIDER,
+      id: 30,
+      group_id: OPENAI_VIDEO_GROUP.id,
+      group_name: OPENAI_VIDEO_GROUP.name,
+      provider: 'hc_atom_seedance_v3',
+      display_name: '中转站',
+      base_url: 'https://legacy-relay.example.test',
+      default_model: 'doubao-seedance-2.0',
+    }
+    mocks.listProviders.mockResolvedValue({ items: [legacyHCProvider] })
+    mocks.groupsGetAll.mockResolvedValue([OPENAI_VIDEO_GROUP, HC_VIDEO_V3_GROUP])
+    mocks.updateProvider.mockResolvedValue({
+      ...legacyHCProvider,
+      group_id: HC_VIDEO_V3_GROUP.id,
+      group_name: HC_VIDEO_V3_GROUP.name,
+      base_url: VIDEO_CONTRACT.platforms[2].default_base_url,
+      default_model: VIDEO_CONTRACT.platforms[2].default_model,
+    })
+    const wrapper = await mountView()
+    await switchToVideoTab(wrapper)
+
+    await wrapper.find('[data-test="edit-provider-30"]').trigger('click')
+    await flushPromises()
+
+    expect((wrapper.find('[data-test="edit-provider-group"]').element as HTMLSelectElement).value).toBe('13')
+    expect(wrapper.find('[data-test="edit-provider-base-url-locked"]').text()).toContain('https://api-aigc.fzyinghe.com')
+    expect(wrapper.find('[data-test="edit-provider-default-model-locked"]').text()).toContain('doubao-seedance-2.0-v3')
+    expect(wrapper.find('[data-test="edit-provider-base-url"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="edit-provider-default-model"]').exists()).toBe(false)
+
+    await wrapper.find('[data-test="edit-provider-form"]').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(mocks.updateProvider).toHaveBeenCalledWith(30, {
+      display_name: '中转站',
+      group_id: 13,
+      base_url: '',
+      default_model: '',
+    })
+  })
+
   it('blocks provider save when no group is selected', async () => {
     const wrapper = await mountView()
     await switchToVideoTab(wrapper)

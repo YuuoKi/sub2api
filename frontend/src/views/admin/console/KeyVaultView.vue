@@ -456,7 +456,7 @@
             </div>
             <div>
               <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">分组</label>
-              <select v-model="editProviderForm.groupId" class="input" required>
+              <select v-model="editProviderForm.groupId" class="input" data-test="edit-provider-group" required>
                 <option v-for="group in editProviderGroups" :key="group.id" :value="group.id">{{ group.name }}</option>
               </select>
             </div>
@@ -473,11 +473,42 @@
             </div>
             <div>
               <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">接口地址</label>
-              <input v-model="editProviderForm.baseUrl" class="input" maxlength="500" placeholder="留空使用官方默认地址" />
+              <p
+                v-if="isEditingHCAtomProvider"
+                class="rounded-md bg-gray-50 px-3 py-2 text-sm text-gray-600 dark:bg-gray-800/60 dark:text-gray-300"
+                data-test="edit-provider-base-url-locked"
+              >
+                {{ editingVideoPlatform?.default_base_url || 'HC-ATOM 固定地址' }}
+              </p>
+              <input
+                v-else
+                v-model="editProviderForm.baseUrl"
+                class="input"
+                maxlength="500"
+                placeholder="留空使用官方默认地址"
+                data-test="edit-provider-base-url"
+              />
             </div>
             <div>
               <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">默认模型</label>
-              <input v-model="editProviderForm.defaultModel" class="input" maxlength="200" placeholder="留空使用平台默认" />
+              <p
+                v-if="isEditingHCAtomProvider"
+                class="rounded-md bg-gray-50 px-3 py-2 text-sm text-gray-600 dark:bg-gray-800/60 dark:text-gray-300"
+                data-test="edit-provider-default-model-locked"
+              >
+                {{ editingVideoPlatform?.default_model || '系统按通道自动匹配' }}
+              </p>
+              <input
+                v-else
+                v-model="editProviderForm.defaultModel"
+                class="input"
+                maxlength="200"
+                placeholder="留空使用平台默认"
+                data-test="edit-provider-default-model"
+              />
+              <p v-if="isEditingHCAtomProvider" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                HC-ATOM 的接口和模型由通道协议固定，保存时会自动清理旧配置，不需要手工填写。
+              </p>
             </div>
             <div class="flex justify-end gap-2 pt-2">
               <button class="btn btn-outline" type="button" data-test="cancel-edit-provider" @click="closeEditProviderModal">取消</button>
@@ -999,6 +1030,10 @@ const editProviderGroups = computed(() => (
     : []
 ))
 
+const isEditingHCAtomProvider = computed(
+  () => editingProvider.value?.provider.startsWith('hc_atom_') ?? false,
+)
+
 // contract 请求失败时回落为只含 seedance 的静态兜底平台
 const FALLBACK_VIDEO_PLATFORMS: VideoPlatformContract[] = [
   { provider: 'seedance', display_name: 'Seedance', default_base_url: '', default_model: '', adapter_ready: true },
@@ -1008,6 +1043,10 @@ const videoPlatforms = computed<VideoPlatformContract[]>(() => {
   const platforms = videoContract.value?.platforms
   return platforms && platforms.length ? platforms : FALLBACK_VIDEO_PLATFORMS
 })
+
+const editingVideoPlatform = computed(
+  () => videoPlatforms.value.find((platform) => platform.provider === editingProvider.value?.provider) ?? null,
+)
 
 const selectedVideoPlatform = computed(
   () => videoPlatforms.value.find((platform) => platform.provider === providerForm.provider) ?? null,
@@ -1119,9 +1158,13 @@ function openEditProvider(provider: VideoProviderAccount) {
   editingProvider.value = provider
   editProviderForm.displayName = provider.display_name
   editProviderForm.apiKey = ''
-  editProviderForm.baseUrl = provider.base_url || ''
-  editProviderForm.defaultModel = provider.default_model || ''
-  editProviderForm.groupId = provider.group_id
+  const isHCAtom = provider.provider.startsWith('hc_atom_')
+  editProviderForm.baseUrl = isHCAtom ? '' : (provider.base_url || '')
+  editProviderForm.defaultModel = isHCAtom ? '' : (provider.default_model || '')
+  const eligibleGroups = groups.value.filter((group) => isEligibleVideoProviderGroup(group, provider.provider))
+  editProviderForm.groupId = eligibleGroups.some((group) => group.id === provider.group_id)
+    ? provider.group_id
+    : (eligibleGroups[0]?.id ?? 0)
   editProviderModalOpen.value = true
 }
 
@@ -1157,10 +1200,16 @@ async function saveEditProvider() {
       display_name: editProviderForm.displayName.trim(),
       group_id: editProviderForm.groupId,
     }
-    const baseUrl = editProviderForm.baseUrl.trim()
-    if (baseUrl) payload.base_url = baseUrl
-    const defaultModel = editProviderForm.defaultModel.trim()
-    if (defaultModel) payload.default_model = defaultModel
+    if (isEditingHCAtomProvider.value) {
+      // 历史 HC 通道可能残留错误的接口/模型。显式发送空值，让后端恢复当前协议的固定值。
+      payload.base_url = ''
+      payload.default_model = ''
+    } else {
+      const baseUrl = editProviderForm.baseUrl.trim()
+      if (baseUrl) payload.base_url = baseUrl
+      const defaultModel = editProviderForm.defaultModel.trim()
+      if (defaultModel) payload.default_model = defaultModel
+    }
     if (editProviderForm.apiKey.trim()) payload.api_key = editProviderForm.apiKey.trim()
     await adminAPI.video.updateProvider(editingProvider.value.id, payload)
     appStore.showSuccess('通道已更新')

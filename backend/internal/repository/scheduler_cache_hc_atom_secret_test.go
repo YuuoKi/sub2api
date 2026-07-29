@@ -51,21 +51,38 @@ func TestSchedulerCacheHCAtomSnapshotNeverSerializesPlaintextSentinel(t *testing
 	}
 }
 
-func TestSchedulerCacheHCAtomSnapshotKeepsOnlyCatalogMappingIncludingReservedDola(t *testing.T) {
+func TestSchedulerCacheHCAtomSnapshotKeepsDispatchableCatalogMappings(t *testing.T) {
 	account := service.Account{
 		Platform: service.PlatformHCAtom,
 		Credentials: map[string]any{
 			"protocol": "hc_atom",
 			"model_mapping": map[string]any{
-				"seedream-5.0":          "doubao-seedream-5.0-pro",
-				"dola-seedream-5.0-pro": "dola-seedream-5.0-pro",
+				"seedream-5.0":  "seedream-5.0",
+				"s-gpt-image-2": "s-gpt-image-2",
 			},
 		},
 	}
 	got := buildSchedulerCacheAccount(account).Credentials
 	require.Equal(t, "hc_atom", got["protocol"])
 	require.Equal(t, map[string]any{
-		"seedream-5.0":          "doubao-seedream-5.0-pro",
-		"dola-seedream-5.0-pro": "dola-seedream-5.0-pro",
+		"seedream-5.0":  "seedream-5.0",
+		"s-gpt-image-2": "s-gpt-image-2",
 	}, got["model_mapping"])
+}
+
+func TestSchedulerCacheHCAtomSnapshotDropsMappingContainingDisabledDola(t *testing.T) {
+	account := service.Account{
+		Platform: service.PlatformHCAtom,
+		Credentials: map[string]any{
+			"protocol": "hc_atom",
+			"model_mapping": map[string]any{
+				"seedream-5.0":          "seedream-5.0",
+				"dola-seedream-5.0-pro": "dola-seedream-5.0-pro",
+			},
+		},
+	}
+
+	got := buildSchedulerCacheAccount(account).Credentials
+	require.Equal(t, "hc_atom", got["protocol"])
+	require.NotContains(t, got, "model_mapping")
 }

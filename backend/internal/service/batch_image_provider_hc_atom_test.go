@@ -27,27 +27,48 @@ import (
 func TestHCAtomBatchProvider_SubmitUsesFixedAsyncContract(t *testing.T) {
 	const referenceURL = "https://assets.example.test/reference.png"
 	tests := []struct {
-		name           string
-		model          string
-		references     []BatchImageReference
-		expectedInput  map[string]any
-		expectedParams map[string]any
+		name         string
+		model        string
+		aspectRatio  string
+		imageSize    string
+		references   []BatchImageReference
+		authHeader   string
+		expectedBody map[string]any
 	}{
 		{
-			name:       "image to image",
-			model:      HCAtomImageAsyncI2IModel,
-			references: []BatchImageReference{{FileURI: referenceURL}},
-			expectedInput: map[string]any{
-				"prompt": "A clean product hero image",
-				"images": []any{referenceURL},
+			name:        "gemini image task uses bearer and documented flat body",
+			model:       HCAtomImageGeminiModel,
+			aspectRatio: "16:9",
+			imageSize:   "2K",
+			references:  []BatchImageReference{{FileURI: referenceURL}},
+			authHeader:  "bearer",
+			expectedBody: map[string]any{
+				"model": HCAtomImageGeminiModel, "prompt": "A clean product hero image",
+				"image": referenceURL, "size": "16:9", "quality": "2K",
 			},
-			expectedParams: map[string]any{"prompt_extend": true, "n": float64(1)},
 		},
 		{
-			name:           "text to image",
-			model:          HCAtomImageAsyncT2IModel,
-			expectedInput:  map[string]any{"prompt": "A clean product hero image"},
-			expectedParams: map[string]any{"size": "1280*1280", "n": float64(1)},
+			name:        "gpt image task uses x api key",
+			model:       HCAtomImageGPTModel,
+			aspectRatio: "1:1",
+			imageSize:   "1K",
+			authHeader:  "x-api-key",
+			expectedBody: map[string]any{
+				"model": HCAtomImageGPTModel, "prompt": "A clean product hero image",
+				"size": "1024x1024", "quality": "auto", "n": float64(1),
+			},
+		},
+		{
+			name:        "s gpt image task uses x api key",
+			model:       HCAtomImageSGPTModel,
+			aspectRatio: "9:16",
+			imageSize:   "4K",
+			references:  []BatchImageReference{{FileURI: referenceURL}},
+			authHeader:  "x-api-key",
+			expectedBody: map[string]any{
+				"model": HCAtomImageSGPTModel, "prompt": "A clean product hero image",
+				"image": referenceURL, "size": "2159x3838", "quality": "auto", "n": float64(1),
+			},
 		},
 	}
 	for _, test := range tests {
@@ -57,19 +78,22 @@ func TestHCAtomBatchProvider_SubmitUsesFixedAsyncContract(t *testing.T) {
 				require.Equal(t, "https", req.URL.Scheme)
 				require.Equal(t, "api-aigc.fzyinghe.com", req.URL.Host)
 				require.Equal(t, "/image/generation/tasks", req.URL.Path)
-				require.Equal(t, "Bearer hc-test-key", req.Header.Get("Authorization"))
+				if test.authHeader == "x-api-key" {
+					require.Equal(t, "hc-test-key", req.Header.Get("x-api-key"))
+					require.Empty(t, req.Header.Get("Authorization"))
+				} else {
+					require.Equal(t, "Bearer hc-test-key", req.Header.Get("Authorization"))
+					require.Empty(t, req.Header.Get("x-api-key"))
+				}
 				require.Equal(t, "application/json", req.Header.Get("Content-Type"))
-				require.Equal(t, "enable", req.Header.Get("X-DashScope-Async"))
+				require.Empty(t, req.Header.Get("X-DashScope-Async"))
 				require.Equal(t, "hc-image:imgbatch_123", req.Header.Get("Idempotency-Key"))
 
 				var body map[string]any
 				require.NoError(t, json.NewDecoder(req.Body).Decode(&body))
-				require.Equal(t, test.model, body["model"])
-				require.Equal(t, test.expectedInput, body["input"])
-				require.Equal(t, test.expectedParams, body["parameters"])
-				require.Len(t, body, 3)
+				require.Equal(t, test.expectedBody, body)
 
-				return hcAtomHTTPResponse(http.StatusOK, `{"code":0,"msg":"ok","data":{"taskId":"hc-task-1","status":"PENDING"}}`), nil
+				return hcAtomHTTPResponse(http.StatusOK, `{"code":200,"msg":"操作成功","data":{"taskId":"hc-task-1","status":"queued"}}`), nil
 			})
 			cipher, account := hcAtomBatchTestAccount(t, "hc-test-key")
 			provider := NewHCAtomBatchImageProviderWithCredentialCipher(NewHCAtomBatchHTTPClient(&http.Client{Transport: transport}), cipher)
@@ -78,8 +102,8 @@ func TestHCAtomBatchProvider_SubmitUsesFixedAsyncContract(t *testing.T) {
 				BatchID:          "imgbatch_123",
 				Model:            test.model,
 				ResponseMimeType: "image/png",
-				AspectRatio:      "1:1",
-				ImageSize:        "2K",
+				AspectRatio:      test.aspectRatio,
+				ImageSize:        test.imageSize,
 				Items: []BatchImageInputItem{{
 					CustomID:        "cover_001",
 					Prompt:          "A clean product hero image",
@@ -88,7 +112,7 @@ func TestHCAtomBatchProvider_SubmitUsesFixedAsyncContract(t *testing.T) {
 			})
 			require.NoError(t, err)
 			require.Equal(t, "hc-task-1", got.ProviderJobName)
-			require.Equal(t, "PENDING", got.RawState)
+			require.Equal(t, "queued", got.RawState)
 		})
 	}
 }
@@ -100,12 +124,10 @@ func TestHCAtomBatchProvider_ValidatesModelReferenceContract(t *testing.T) {
 		references []BatchImageReference
 		reason     string
 	}{
-		{name: "i2i requires reference", model: HCAtomImageAsyncI2IModel, reason: "HC_ATOM_REFERENCE_IMAGE_REQUIRED"},
-		{name: "i2i rejects multiple references", model: HCAtomImageAsyncI2IModel, references: []BatchImageReference{{FileURI: "https://assets.example.test/a.png"}, {FileURI: "https://assets.example.test/b.png"}}, reason: "HC_ATOM_REFERENCE_IMAGE_REQUIRED"},
-		{name: "i2i rejects http", model: HCAtomImageAsyncI2IModel, references: []BatchImageReference{{FileURI: "http://assets.example.test/a.png"}}, reason: "HC_ATOM_REFERENCE_IMAGE_REQUIRED"},
-		{name: "i2i rejects userinfo", model: HCAtomImageAsyncI2IModel, references: []BatchImageReference{{FileURI: "https://user:pass@assets.example.test/a.png"}}, reason: "HC_ATOM_REFERENCE_IMAGE_REQUIRED"},
-		{name: "i2i rejects inline bytes", model: HCAtomImageAsyncI2IModel, references: []BatchImageReference{{FileURI: "https://assets.example.test/a.png", Data: []byte("inline")}}, reason: "HC_ATOM_REFERENCE_IMAGE_REQUIRED"},
-		{name: "t2i rejects reference", model: HCAtomImageAsyncT2IModel, references: []BatchImageReference{{FileURI: "https://assets.example.test/a.png"}}, reason: "HC_ATOM_REFERENCE_IMAGES_UNSUPPORTED"},
+		{name: "gpt rejects http", model: HCAtomImageGPTModel, references: []BatchImageReference{{FileURI: "http://assets.example.test/a.png"}}, reason: "HC_ATOM_REFERENCE_IMAGE_INVALID"},
+		{name: "gpt rejects userinfo", model: HCAtomImageGPTModel, references: []BatchImageReference{{FileURI: "https://user:pass@assets.example.test/a.png"}}, reason: "HC_ATOM_REFERENCE_IMAGE_INVALID"},
+		{name: "gemini rejects inline bytes", model: HCAtomImageGeminiModel, references: []BatchImageReference{{FileURI: "https://assets.example.test/a.png", Data: []byte("inline")}}, reason: "HC_ATOM_REFERENCE_IMAGE_INVALID"},
+		{name: "gemini rejects unsupported aspect ratio", model: HCAtomImageGeminiModel, reason: "HC_ATOM_INVALID_ASPECT_RATIO"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -114,6 +136,12 @@ func TestHCAtomBatchProvider_ValidatesModelReferenceContract(t *testing.T) {
 			_, err := provider.Submit(context.Background(), &BatchImageJob{BatchID: "imgbatch_validation", Model: test.model}, account, BatchImageInput{
 				BatchID: "imgbatch_validation",
 				Model:   test.model,
+				AspectRatio: func() string {
+					if test.reason == "HC_ATOM_INVALID_ASPECT_RATIO" {
+						return "5:7"
+					}
+					return "1:1"
+				}(),
 				Items: []BatchImageInputItem{{
 					CustomID:        "cover_001",
 					Prompt:          "A clean product hero image",
@@ -130,11 +158,12 @@ func TestHCAtomBatchHTTPClient_GetUsesFixedTaskContract(t *testing.T) {
 	client := NewHCAtomBatchHTTPClient(&http.Client{Transport: hcAtomRoundTripFunc(func(req *http.Request) (*http.Response, error) {
 		require.Equal(t, http.MethodGet, req.Method)
 		require.Equal(t, "https://api-aigc.fzyinghe.com/image/generation/tasks/hc-task-1", req.URL.String())
-		require.Equal(t, "Bearer synthetic-key", req.Header.Get("Authorization"))
-		return hcAtomHTTPResponse(http.StatusOK, `{"code":0,"msg":"ok","data":{"taskId":"hc-task-1","status":"RUNNING"}}`), nil
+		require.Equal(t, "synthetic-key", req.Header.Get("x-api-key"))
+		require.Empty(t, req.Header.Get("Authorization"))
+		return hcAtomHTTPResponse(http.StatusOK, `{"code":200,"msg":"ok","data":{"taskId":"hc-task-1","status":"RUNNING"}}`), nil
 	})})
 
-	task, err := client.Get(context.Background(), "synthetic-key", "hc-task-1")
+	task, err := client.Get(context.Background(), "synthetic-key", "hc-task-1", HCAtomAuthXAPIKey)
 	require.NoError(t, err)
 	require.Equal(t, "hc-task-1", task.TaskID)
 	require.Equal(t, "RUNNING", task.Status)
@@ -173,7 +202,7 @@ func TestHCAtomBatchProvider_OpenResultArchivesValidatedImageAsJSONL(t *testing.
 		TaskID: "hc-task-1", Status: "SUCCESS", ResultURL: "https://8.8.8.8/result.png",
 	}}, &http.Client{Transport: resultTransport}, cipher, t.TempDir())
 	jobName, customID := "hc-task-1", "item_000001"
-	r, contentType, err := provider.OpenResult(context.Background(), &BatchImageJob{BatchID: "imgbatch_archive_1", ProviderJobName: &jobName, ProviderInputRef: &customID}, account)
+	r, contentType, err := provider.OpenResult(context.Background(), &BatchImageJob{BatchID: "imgbatch_archive_1", Model: HCAtomImageGeminiModel, ProviderJobName: &jobName, ProviderInputRef: &customID}, account)
 	require.NoError(t, err)
 	defer r.Close()
 	require.Equal(t, "application/jsonl", contentType)
@@ -197,7 +226,7 @@ func TestHCAtomBatchProvider_OpenResultFailsClosedWithoutOwnedStore(t *testing.T
 	taskID, customID := "hc-task-no-store", "item_000001"
 
 	r, _, err := provider.OpenResult(context.Background(), &BatchImageJob{
-		BatchID: "imgbatch_no_owned_store", ProviderJobName: &taskID, ProviderInputRef: &customID,
+		BatchID: "imgbatch_no_owned_store", Model: HCAtomImageGeminiModel, ProviderJobName: &taskID, ProviderInputRef: &customID,
 	}, account)
 	require.Nil(t, r)
 	require.Error(t, err)
@@ -216,7 +245,7 @@ func TestHCAtomBatchProvider_OpenResultPersistsOwnedJSONLForRestartedDownloads(t
 	firstClient := &fakeHCAtomBatchClient{task: &HCAtomBatchTask{TaskID: "hc-owned-1", Status: "SUCCESS", ResultURL: "https://8.8.8.8/result.png"}}
 	first := NewHCAtomBatchImageProviderWithOwnedResultStore(firstClient, &http.Client{Transport: resultTransport}, cipher, t.TempDir())
 	taskID, customID := "hc-owned-1", "item_000001"
-	job := &BatchImageJob{BatchID: "imgbatch_owned_1", ProviderJobName: &taskID, ProviderInputRef: &customID}
+	job := &BatchImageJob{BatchID: "imgbatch_owned_1", Model: HCAtomImageGeminiModel, ProviderJobName: &taskID, ProviderInputRef: &customID}
 
 	r, _, err := first.OpenResult(context.Background(), job, account)
 	require.NoError(t, err)
@@ -246,7 +275,7 @@ func TestHCAtomBatchProvider_OpenResultRecoversDeterministicOwnedResultWithoutAc
 	cipher, account := hcAtomBatchTestAccount(t, "test")
 	dir := t.TempDir()
 	taskID, customID := "hc-recover-1", "item_000001"
-	job := &BatchImageJob{BatchID: "imgbatch_recover_1", ProviderJobName: &taskID, ProviderInputRef: &customID}
+	job := &BatchImageJob{BatchID: "imgbatch_recover_1", Model: HCAtomImageGeminiModel, ProviderJobName: &taskID, ProviderInputRef: &customID}
 	first := NewHCAtomBatchImageProviderWithOwnedResultStore(&fakeHCAtomBatchClient{task: &HCAtomBatchTask{
 		TaskID: taskID, Status: "SUCCESS", ResultURL: "https://8.8.8.8/result.png",
 	}}, &http.Client{Transport: resultTransport}, cipher, dir)
@@ -317,7 +346,7 @@ func TestHCAtomBatchProvider_StrictStatusAndBusinessEnvelopeMapping(t *testing.T
 		state string
 		want  BatchProviderInternalState
 	}{
-		{"PENDING", BatchProviderStateQueued}, {"RUNNING", BatchProviderStateRunning},
+		{"PENDING", BatchProviderStateQueued}, {"QUEUED", BatchProviderStateQueued}, {"RUNNING", BatchProviderStateRunning},
 		{"FAILED", BatchProviderStateFailed}, {"CANCELLED", BatchProviderStateCancelled},
 	} {
 		t.Run(tt.state, func(t *testing.T) {
@@ -345,7 +374,7 @@ func TestHCAtomBatchProvider_FailedStateSanitizesUpstreamSecretEcho(t *testing.T
 		ErrorCode: "TOKEN_" + sentinel,
 		ErrorMsg: "Authorization: Bearer " + sentinel +
 			" result=https://assets.example/out.png?X-Amz-Signature=" + sentinel + "&token=" + sentinel,
-	})
+	}, sentinel)
 	require.NoError(t, err)
 	require.Equal(t, BatchProviderStateFailed, status.InternalState)
 
@@ -357,6 +386,42 @@ func TestHCAtomBatchProvider_FailedStateSanitizesUpstreamSecretEcho(t *testing.T
 	require.NotContains(t, strings.ToLower(string(raw)), "token=")
 	require.Equal(t, "HC_ATOM_TASK_FAILED", status.ErrorCode)
 	require.Equal(t, "HC-ATOM task failed", status.ErrorMessage)
+}
+
+func TestHCAtomBatchProvider_FailedStateRedactsRawSelectedAPIKey(t *testing.T) {
+	selectedKey := "hc-selected-key-without-standard-prefix"
+	status, err := mapHCAtomBatchState(&HCAtomBatchTask{
+		Status:     "FAILED",
+		ErrorCode:  "AUTH_FAILED",
+		FailReason: "invalid key " + selectedKey,
+	}, selectedKey)
+	require.NoError(t, err)
+	raw, err := json.Marshal(status)
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), selectedKey)
+	require.Equal(t, "AUTH_FAILED", status.ErrorCode)
+}
+
+func TestHCAtomBatchProvider_FailedStatePreservesSafeFailReason(t *testing.T) {
+	status, err := mapHCAtomBatchState(&HCAtomBatchTask{
+		Status:     "FAILED",
+		ErrorCode:  "CONTENT_REJECTED",
+		FailReason: "The prompt did not pass content review.",
+	})
+	require.NoError(t, err)
+	require.Equal(t, BatchProviderStateFailed, status.InternalState)
+	require.Equal(t, "CONTENT_REJECTED", status.ErrorCode)
+	require.Equal(t, "The prompt did not pass content review.", status.ErrorMessage)
+}
+
+func TestHCAtomBatchHTTPClient_ParsesDocumentedFailReason(t *testing.T) {
+	client := NewHCAtomBatchHTTPClient(&http.Client{Transport: hcAtomRoundTripFunc(func(*http.Request) (*http.Response, error) {
+		return hcAtomHTTPResponse(http.StatusOK, `{"code":200,"data":{"taskId":"hc-task-failed","status":"failed","failReason":"The prompt did not pass content review."}}`), nil
+	})})
+
+	task, err := client.Get(context.Background(), "synthetic-key", "hc-task-failed")
+	require.NoError(t, err)
+	require.Equal(t, "The prompt did not pass content review.", task.FailReason)
 }
 
 // Regression target: an HTTP 200 response is not an HC business success unless
@@ -454,7 +519,7 @@ func TestHCAtomBatchProvider_RejectsDisabledDolaAndMultipleItemsBeforeCreate(t *
 	require.Equal(t, "HC_ATOM_MODEL_UNSUPPORTED", infraerrors.Reason(err))
 
 	_, err = provider.Submit(context.Background(), job, account, BatchImageInput{
-		BatchID: "imgbatch_validate", Model: "wan2.5-i2i-preview", Items: []BatchImageInputItem{{CustomID: "one", Prompt: "hero"}, {CustomID: "two", Prompt: "other"}},
+		BatchID: "imgbatch_validate", Model: HCAtomImageGPTModel, Items: []BatchImageInputItem{{CustomID: "one", Prompt: "hero"}, {CustomID: "two", Prompt: "other"}},
 	})
 	require.Error(t, err)
 	require.Equal(t, "HC_ATOM_SINGLE_ITEM_REQUIRED", infraerrors.Reason(err))
@@ -519,7 +584,7 @@ func TestHCAtomBatchProvider_OpenResultAggregatesDistinctURLsIntoOneJSONLLine(t 
 	})}, cipher, t.TempDir())
 	taskID, customID := "hc-task-many", "item_000001"
 
-	r, _, err := provider.OpenResult(context.Background(), &BatchImageJob{BatchID: "imgbatch_many", ProviderJobName: &taskID, ProviderInputRef: &customID}, account)
+	r, _, err := provider.OpenResult(context.Background(), &BatchImageJob{BatchID: "imgbatch_many", Model: HCAtomImageGeminiModel, ProviderJobName: &taskID, ProviderInputRef: &customID}, account)
 	require.NoError(t, err)
 	defer r.Close()
 	body, err := io.ReadAll(r)
@@ -812,11 +877,11 @@ func (f *fakeHCAtomBatchClient) Create(context.Context, string, string, HCAtomBa
 	}
 	return f.task, nil
 }
-func (f *fakeHCAtomBatchClient) Get(context.Context, string, string) (*HCAtomBatchTask, error) {
+func (f *fakeHCAtomBatchClient) Get(context.Context, string, string, ...string) (*HCAtomBatchTask, error) {
 	f.getCalls++
 	if f.err != nil {
 		return nil, f.err
 	}
 	return f.task, nil
 }
-func (f *fakeHCAtomBatchClient) Delete(context.Context, string, string) error { return nil }
+func (f *fakeHCAtomBatchClient) Delete(context.Context, string, string, ...string) error { return nil }

@@ -1,16 +1,26 @@
 export const HC_ATOM_IMAGE_BASE_URL = 'https://api-aigc.fzyinghe.com'
 
-export const HC_ATOM_MEDIA_ENABLED_MODELS = [
+export const HC_ATOM_TEXT_ENABLED_MODELS = [
   'gpt-5.6-sol',
   'gemini-3-flash-preview',
   'claude-opus-4-6',
-  'seedream-5.0',
-  'wan2.5-t2i-preview',
-  'wan2.5-i2i-preview',
 ] as const
 
-// Compatibility alias for existing account forms.
-export const HC_ATOM_IMAGE_ENABLED_MODELS = HC_ATOM_MEDIA_ENABLED_MODELS
+export const HC_ATOM_IMAGE_ENABLED_MODELS = [
+  'seedream-5.0',
+  'doubao-seedream-5.0-pro',
+  'gemini-3.1-flash-image-preview',
+  'gpt-image-2',
+  's-gpt-image-2',
+] as const
+
+export const HC_ATOM_MEDIA_ENABLED_MODELS = [
+  ...HC_ATOM_TEXT_ENABLED_MODELS,
+  ...HC_ATOM_IMAGE_ENABLED_MODELS,
+] as const
+
+// Authorized by HC but not dispatchable until HC publishes an endpoint.
+export const HC_ATOM_MEDIA_PENDING_MODELS = ['dola-seedream-5.0-pro'] as const
 
 export const HC_ATOM_VIDEO_V1_MODEL = 'doubao-seedance-2.0'
 export const HC_ATOM_VIDEO_V3_MODEL = 'doubao-seedance-2.0-v3'

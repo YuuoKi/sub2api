@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -105,16 +106,44 @@ func TestHCAtomResponsesChatSSECompatibility(t *testing.T) {
 }
 
 func TestHCAtomSyncImageUsesSelectedAccountAndFixedEndpoint(t *testing.T) {
-	service, account := newHCAtomForwardTestService(t, hcAtomGatewayRoundTripFunc(func(request *http.Request) (*http.Response, error) {
-		require.Equal(t, "https://ai-aigc.fzyinghe.com/v1/images/generations", request.URL.String())
-		require.Equal(t, "Bearer provider-secret", request.Header.Get("Authorization"))
-		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"created":1,"data":[{"url":"https://assets.example/result.png"}]}`))}, nil
-	}))
-	context, recorder := newHCAtomGinContext()
-	result, err := service.ForwardHCAtomSyncImage(context.Request.Context(), context, account, []byte(`{"model":"seedream-5.0","prompt":"red fox","n":1,"size":"1024x1024"}`))
-	require.NoError(t, err)
-	require.Equal(t, 1, result.ImageCount)
-	require.Contains(t, recorder.Body.String(), "result.png")
+	tests := []struct {
+		name         string
+		body         string
+		expectedBody map[string]any
+	}{
+		{
+			name: "seedream text to image normalizes studio fields",
+			body: `{"model":"seedream-5.0","prompt":"red fox","count":1,"aspect":"1:1","quality":"2K"}`,
+			expectedBody: map[string]any{
+				"model": "seedream-5.0", "prompt": "red fox", "n": float64(1), "size": "2048x2048",
+			},
+		},
+		{
+			name: "doubao image edit normalizes references",
+			body: `{"model":"doubao-seedream-5.0-pro","prompt":"change coat","count":1,"aspect":"1:1","quality":"1K","reference_images":["https://assets.example/input.png"]}`,
+			expectedBody: map[string]any{
+				"model": "doubao-seedream-5.0-pro", "prompt": "change coat", "n": float64(1), "size": "1K",
+				"image": "https://assets.example/input.png", "response_format": "url", "stream": false,
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			service, account := newHCAtomForwardTestService(t, hcAtomGatewayRoundTripFunc(func(request *http.Request) (*http.Response, error) {
+				require.Equal(t, "https://ai-aigc.fzyinghe.com/v1/images/generations", request.URL.String())
+				require.Equal(t, "Bearer provider-secret", request.Header.Get("Authorization"))
+				var got map[string]any
+				require.NoError(t, json.NewDecoder(request.Body).Decode(&got))
+				require.Equal(t, test.expectedBody, got)
+				return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"created":1,"data":[{"url":"https://assets.example/result.png"}]}`))}, nil
+			}))
+			context, recorder := newHCAtomGinContext()
+			result, err := service.ForwardHCAtomSyncImage(context.Request.Context(), context, account, []byte(test.body))
+			require.NoError(t, err)
+			require.Equal(t, 1, result.ImageCount)
+			require.Contains(t, recorder.Body.String(), "result.png")
+		})
+	}
 }
 
 func TestHCAtomForwardingFailsClosedWhenFeatureDisabled(t *testing.T) {

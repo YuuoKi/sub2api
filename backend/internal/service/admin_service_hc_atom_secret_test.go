@@ -29,12 +29,12 @@ func (c *hcAtomSecretCaptureClient) Create(_ context.Context, apiKey, _ string, 
 	return &HCAtomBatchTask{TaskID: "hc-secret-task", Status: "PENDING"}, nil
 }
 
-func (c *hcAtomSecretCaptureClient) Get(_ context.Context, apiKey, _ string) (*HCAtomBatchTask, error) {
+func (c *hcAtomSecretCaptureClient) Get(_ context.Context, apiKey, _ string, _ ...string) (*HCAtomBatchTask, error) {
 	c.apiKey = apiKey
 	return &HCAtomBatchTask{TaskID: "hc-secret-task", Status: "RUNNING"}, nil
 }
 
-func (c *hcAtomSecretCaptureClient) Delete(_ context.Context, apiKey, _ string) error {
+func (c *hcAtomSecretCaptureClient) Delete(_ context.Context, apiKey, _ string, _ ...string) error {
 	c.apiKey = apiKey
 	return nil
 }
@@ -268,10 +268,10 @@ func TestProtectHCAtomAccountCredentials_AllowsOnlyCurrentCatalogMappingsAndOwns
 		HCAtomAPIKeyMaskedField:     hcAtomSecretSentinel,
 		HCAtomAPIKeyConfiguredField: false,
 		"model_mapping": map[string]string{
-			"seedream-5.0":       "seedream-5.0",
-			"wan2.5-i2i-preview": "wan2.5-i2i-preview",
-			"gpt-5.6-sol":        "gpt-5.6-sol",
-			"claude-opus-4-6":    "claude-opus-4-6",
+			"seedream-5.0":      "seedream-5.0",
+			HCAtomImageGPTModel: "gpt-image-2",
+			"gpt-5.6-sol":       "gpt-5.6-sol",
+			"claude-opus-4-6":   "claude-opus-4-6",
 		},
 	}, cipher)
 	require.NoError(t, err)
@@ -281,8 +281,8 @@ func TestProtectHCAtomAccountCredentials_AllowsOnlyCurrentCatalogMappingsAndOwns
 	require.Equal(t, true, protected[HCAtomAPIKeyConfiguredField])
 	require.Equal(t, "********7x9Q", protected[HCAtomAPIKeyMaskedField])
 	require.NotEqual(t, hcAtomSecretSentinel, protected[HCAtomAPIKeyCiphertextField])
-	require.Equal(t, "wan2.5-i2i-preview", protected["model_mapping"].(map[string]any)["wan2.5-i2i-preview"])
-	require.True(t, isHCAtomBatchEnabledModel("wan2.5-i2i-preview"))
+	require.Equal(t, HCAtomImageGPTModel, protected["model_mapping"].(map[string]any)[HCAtomImageGPTModel])
+	require.True(t, isHCAtomBatchEnabledModel(HCAtomImageGPTModel))
 }
 
 func TestProtectHCAtomAccountCredentials_RejectsNestedModelMappingMetadata(t *testing.T) {
@@ -362,10 +362,11 @@ func TestHCAtomBatchProvider_DecryptsOnlyAfterDedicatedAccountSelection(t *testi
 
 	require.True(t, provider.SupportsAccount(account))
 	require.Empty(t, client.apiKey, "account selection must not decrypt the credential")
-	_, err = provider.Submit(context.Background(), &BatchImageJob{BatchID: "imgbatch_secret", Model: HCAtomImageAsyncT2IModel}, account, BatchImageInput{
-		BatchID: "imgbatch_secret",
-		Model:   HCAtomImageAsyncT2IModel,
-		Items:   []BatchImageInputItem{{CustomID: "item_1", Prompt: "safe synthetic prompt"}},
+	_, err = provider.Submit(context.Background(), &BatchImageJob{BatchID: "imgbatch_secret", Model: HCAtomImageGeminiModel}, account, BatchImageInput{
+		BatchID:     "imgbatch_secret",
+		Model:       HCAtomImageGeminiModel,
+		AspectRatio: "1:1",
+		Items:       []BatchImageInputItem{{CustomID: "item_1", Prompt: "safe synthetic prompt"}},
 	})
 	require.NoError(t, err)
 	require.Equal(t, hcAtomSecretSentinel, client.apiKey)

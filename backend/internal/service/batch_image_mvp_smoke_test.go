@@ -314,12 +314,12 @@ func (c *hcAtomPipelineClient) Create(_ context.Context, _ string, idempotencyKe
 	return &HCAtomBatchTask{TaskID: "hc-task-e2e", Status: "PENDING"}, nil
 }
 
-func (c *hcAtomPipelineClient) Get(context.Context, string, string) (*HCAtomBatchTask, error) {
+func (c *hcAtomPipelineClient) Get(context.Context, string, string, ...string) (*HCAtomBatchTask, error) {
 	c.getCount++
 	return &HCAtomBatchTask{TaskID: "hc-task-e2e", Status: "SUCCESS", ResultURLs: []string{"https://8.8.8.8/hc-e2e.png"}, ImageCount: 1}, nil
 }
 
-func (*hcAtomPipelineClient) Delete(context.Context, string, string) error { return nil }
+func (*hcAtomPipelineClient) Delete(context.Context, string, string, ...string) error { return nil }
 
 func batchImageSmokeResultJSONL() string {
 	return strings.Join([]string{

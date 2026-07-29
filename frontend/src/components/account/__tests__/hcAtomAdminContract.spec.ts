@@ -3,6 +3,7 @@ import {
   HC_ATOM_IMAGE_BASE_URL,
   HC_ATOM_IMAGE_ENABLED_MODELS,
   HC_ATOM_MEDIA_ENABLED_MODELS,
+  HC_ATOM_TEXT_ENABLED_MODELS,
   HC_ATOM_VIDEO_ENABLED_MODELS,
   buildHCAtomImageCredentials,
 } from '../hcAtomAdminContract'
@@ -10,15 +11,22 @@ import {
 describe('HC-ATOM image account admin contract', () => {
   it('uses the fixed relay origin and exposes the complete media and video model allowlists', () => {
     expect(HC_ATOM_IMAGE_BASE_URL).toBe('https://api-aigc.fzyinghe.com')
-    expect(HC_ATOM_MEDIA_ENABLED_MODELS).toEqual([
+    expect(HC_ATOM_TEXT_ENABLED_MODELS).toEqual([
       'gpt-5.6-sol',
       'gemini-3-flash-preview',
       'claude-opus-4-6',
-      'seedream-5.0',
-      'wan2.5-t2i-preview',
-      'wan2.5-i2i-preview',
     ])
-    expect(HC_ATOM_IMAGE_ENABLED_MODELS).toBe(HC_ATOM_MEDIA_ENABLED_MODELS)
+    expect(HC_ATOM_IMAGE_ENABLED_MODELS).toEqual([
+      'seedream-5.0',
+      'doubao-seedream-5.0-pro',
+      'gemini-3.1-flash-image-preview',
+      'gpt-image-2',
+      's-gpt-image-2',
+    ])
+    expect(HC_ATOM_MEDIA_ENABLED_MODELS).toEqual([
+      ...HC_ATOM_TEXT_ENABLED_MODELS,
+      ...HC_ATOM_IMAGE_ENABLED_MODELS,
+    ])
     expect(HC_ATOM_VIDEO_ENABLED_MODELS).toEqual([
       'doubao-seedance-2.0',
       'doubao-seedance-2.0-v3',
@@ -34,8 +42,10 @@ describe('HC-ATOM image account admin contract', () => {
         'gemini-3-flash-preview': 'gemini-3-flash-preview',
         'claude-opus-4-6': 'claude-opus-4-6',
         'seedream-5.0': 'seedream-5.0',
-        'wan2.5-t2i-preview': 'wan2.5-t2i-preview',
-        'wan2.5-i2i-preview': 'wan2.5-i2i-preview',
+        'doubao-seedream-5.0-pro': 'doubao-seedream-5.0-pro',
+        'gemini-3.1-flash-image-preview': 'gemini-3.1-flash-image-preview',
+        'gpt-image-2': 'gpt-image-2',
+        's-gpt-image-2': 's-gpt-image-2',
       },
     })
   })

@@ -176,9 +176,10 @@ describe('KeyVaultView account secret handling', () => {
     expect(modelDirectory).toContain('gemini-3-flash-preview')
     expect(modelDirectory).toContain('claude-opus-4-6')
     expect(modelDirectory).toContain('seedream-5.0')
-    expect(modelDirectory).toContain('wan2.5-t2i-preview')
-    expect(modelDirectory).toContain('wan2.5-i2i-preview')
-    expect(wrapper.find('[data-test="hc-atom-model-directory"]').text()).not.toContain('doubao-seedream-5.0-pro')
+    expect(modelDirectory).toContain('doubao-seedream-5.0-pro')
+    expect(modelDirectory).toContain('gemini-3.1-flash-image-preview')
+    expect(modelDirectory).toContain('gpt-image-2')
+    expect(modelDirectory).toContain('s-gpt-image-2')
     expect(wrapper.find('[data-test="hc-atom-model-directory"]').text()).not.toContain('dola-seedream-5.0-pro')
 
     await wrapper.find('[data-test="account-name"]').setValue('HC 图片主账号')
@@ -200,8 +201,10 @@ describe('KeyVaultView account secret handling', () => {
           'gemini-3-flash-preview': 'gemini-3-flash-preview',
           'claude-opus-4-6': 'claude-opus-4-6',
           'seedream-5.0': 'seedream-5.0',
-          'wan2.5-t2i-preview': 'wan2.5-t2i-preview',
-          'wan2.5-i2i-preview': 'wan2.5-i2i-preview',
+          'doubao-seedream-5.0-pro': 'doubao-seedream-5.0-pro',
+          'gemini-3.1-flash-image-preview': 'gemini-3.1-flash-image-preview',
+          'gpt-image-2': 'gpt-image-2',
+          's-gpt-image-2': 's-gpt-image-2',
         },
       },
     }))
@@ -305,8 +308,10 @@ describe('KeyVaultView group binding (P0)', () => {
           'gemini-3-flash-preview',
           'claude-opus-4-6',
           'seedream-5.0',
-          'wan2.5-t2i-preview',
-          'wan2.5-i2i-preview',
+          'doubao-seedream-5.0-pro',
+          'gemini-3.1-flash-image-preview',
+          'gpt-image-2',
+          's-gpt-image-2',
         ],
       },
     }))

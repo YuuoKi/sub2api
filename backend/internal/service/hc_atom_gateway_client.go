@@ -37,6 +37,9 @@ func (c *HCAtomFixedClient) Do(ctx context.Context, capability, model, apiKey st
 	if !ok {
 		return nil, errors.New("HC-ATOM model is not enabled for this capability")
 	}
+	if !validHCAtomFixedRoute(spec) {
+		return nil, errors.New("HC-ATOM model route is incomplete")
+	}
 	apiKey = strings.TrimSpace(apiKey)
 	if apiKey == "" {
 		return nil, ErrHCAtomCredentialMissing
@@ -49,7 +52,7 @@ func (c *HCAtomFixedClient) Do(ctx context.Context, capability, model, apiKey st
 	if err != nil {
 		return nil, errors.New("HC-ATOM request creation failed")
 	}
-	request.Header.Set("Authorization", "Bearer "+apiKey)
+	applyHCAtomAuthHeader(request.Header, spec.AuthScheme, apiKey)
 	request.Header.Set("Content-Type", "application/json")
 	response, err := c.client.Do(request)
 	if err != nil {
@@ -59,6 +62,22 @@ func (c *HCAtomFixedClient) Do(ctx context.Context, capability, model, apiKey st
 		return nil, errors.New("HC-ATOM returned an empty response")
 	}
 	return response, nil
+}
+
+func validHCAtomFixedRoute(spec HCAtomModelSpec) bool {
+	origin, path := strings.TrimRight(strings.TrimSpace(spec.Origin), "/"), strings.TrimSpace(spec.Path)
+	if origin != HCAtomChatOrigin && origin != HCAtomMediaOrigin {
+		return false
+	}
+	return strings.HasPrefix(path, "/") && path != "/"
+}
+
+func applyHCAtomAuthHeader(header http.Header, scheme, apiKey string) {
+	if strings.TrimSpace(scheme) == HCAtomAuthXAPIKey {
+		header.Set("x-api-key", apiKey)
+		return
+	}
+	header.Set("Authorization", "Bearer "+apiKey)
 }
 
 func replaceHCAtomRequestModel(body []byte, model string) ([]byte, error) {

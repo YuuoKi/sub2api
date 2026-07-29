@@ -791,8 +791,16 @@ func (s *BatchImagePublicService) validateSubmitRequest(req BatchImageSubmitRequ
 	if req.Provider != "" && !IsSupportedBatchImageProvider(req.Provider) {
 		return req, ErrBatchImageUnsupportedProvider
 	}
+	if req.Provider == BatchImageProviderHCAtom && !isHCAtomBatchEnabledModel(req.Model) {
+		return req, ErrBatchImageUnsupportedModel
+	}
 	if len(req.Items) == 0 {
 		return req, ErrBatchImageInvalidItems
+	}
+	if req.Provider == BatchImageProviderHCAtom {
+		if len(req.Items) != 1 || req.Items[0].OutputCount > 1 {
+			return req, ErrBatchImageInvalidItems
+		}
 	}
 	maxItems := s.maxItems()
 	if len(req.Items) > maxItems {
@@ -804,10 +812,35 @@ func (s *BatchImagePublicService) validateSubmitRequest(req BatchImageSubmitRequ
 	if req.ImageSize == "" {
 		req.ImageSize = s.defaultImageSize()
 	}
-	if !strings.EqualFold(req.ImageSize, defaultBatchImageImageSize) {
-		return req, ErrBatchImageInvalidItems
+	req.ImageSize = strings.ToUpper(req.ImageSize)
+	if req.Provider == BatchImageProviderHCAtom {
+		switch req.ImageSize {
+		case "1K", "2K", "4K":
+		default:
+			return req, ErrBatchImageInvalidItems
+		}
+		aspectRatio := req.AspectRatio
+		if aspectRatio == "" {
+			aspectRatio = "1:1"
+		}
+		switch req.Model {
+		case HCAtomImageGeminiModel:
+			if !hcAtomGeminiAspectRatioSupported(aspectRatio) {
+				return req, ErrBatchImageInvalidItems
+			}
+		case HCAtomImageGPTModel, HCAtomImageSGPTModel:
+			if _, ok := hcAtomGPTImageSize(aspectRatio, req.ImageSize); !ok {
+				return req, ErrBatchImageInvalidItems
+			}
+		default:
+			return req, ErrBatchImageUnsupportedModel
+		}
+	} else {
+		if req.ImageSize != defaultBatchImageImageSize {
+			return req, ErrBatchImageInvalidItems
+		}
+		req.ImageSize = defaultBatchImageImageSize
 	}
-	req.ImageSize = defaultBatchImageImageSize
 	req.Metadata = sanitizeBatchImageMetadata(req.Metadata)
 
 	seen := make(map[string]struct{}, len(req.Items))
@@ -871,11 +904,8 @@ func normalizeBatchImageReferenceInputs(model string, item *BatchImageSubmitItem
 	if item == nil {
 		return 0, 0, nil
 	}
-	isHCAtomI2I := strings.EqualFold(strings.TrimSpace(model), HCAtomImageAsyncI2IModel)
+	isHCAtomAsync := isHCAtomBatchEnabledModel(model)
 	if len(item.ReferenceImages) == 0 {
-		if isHCAtomI2I {
-			return 0, 0, ErrBatchImageInvalidReferenceImage
-		}
 		return 0, 0, nil
 	}
 	maxRefs := maxBatchImageReferenceImagesForModel(model)
@@ -898,7 +928,7 @@ func normalizeBatchImageReferenceInputs(model string, item *BatchImageSubmitItem
 		if len(ref.Data) > maxBatchImageReferenceImageBytes {
 			return 0, 0, ErrBatchImageInvalidReferenceImage
 		}
-		if isHCAtomI2I {
+		if isHCAtomAsync {
 			if len(ref.Data) != 0 || !isHCAtomHTTPSReferenceURL(ref.FileURI) {
 				return 0, 0, ErrBatchImageInvalidReferenceImage
 			}
@@ -939,8 +969,11 @@ func batchImageRepeatSuffixWidth(count int) int {
 
 func maxBatchImageReferenceImagesForModel(model string) int {
 	model = strings.ToLower(strings.TrimSpace(model))
-	if model == HCAtomImageAsyncI2IModel {
-		return 1
+	switch model {
+	case HCAtomImageGeminiModel:
+		return 14
+	case HCAtomImageGPTModel, HCAtomImageSGPTModel:
+		return 15
 	}
 	if strings.Contains(model, "pro-image") {
 		return 14

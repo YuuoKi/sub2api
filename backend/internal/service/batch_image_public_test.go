@@ -221,6 +221,11 @@ func TestBatchImagePublicService_Submit(t *testing.T) {
 			{name: "prompt_too_long", mutate: func(r *BatchImageSubmitRequest) { r.Items[0].Prompt = strings.Repeat("x", 9) }, want: ErrBatchImagePromptTooLong},
 			{name: "unsupported_provider", mutate: func(r *BatchImageSubmitRequest) { r.Provider = "other" }, want: ErrBatchImageUnsupportedProvider},
 			{name: "vertex_rejects_2k", mutate: func(r *BatchImageSubmitRequest) { r.Provider = BatchImageProviderVertex; r.ImageSize = "2K" }, want: ErrBatchImageInvalidItems},
+			{name: "hc_rejects_8k", mutate: func(r *BatchImageSubmitRequest) {
+				r.Provider = BatchImageProviderHCAtom
+				r.Model = HCAtomImageGeminiModel
+				r.ImageSize = "8K"
+			}, want: ErrBatchImageInvalidItems},
 			{name: "too_many_outputs_per_item", mutate: func(r *BatchImageSubmitRequest) {
 				r.Items[0].OutputCount = 5
 			}, want: ErrBatchImageInvalidItems},
@@ -552,7 +557,7 @@ func TestBatchImagePublicService_ListModels(t *testing.T) {
 		hc := &publicBatchImageProvider{name: BatchImageProviderHCAtom}
 		svc.ProviderRegistry = NewBatchImageProviderRegistry(hc)
 		account := testBatchImageMappedAccount(303, AccountTypeAPIKey, map[string]any{
-			"seedream-5.0":          "seedream-5.0",
+			HCAtomImageGeminiModel:  HCAtomImageGeminiModel,
 			"dola-seedream-5.0-pro": "dola-seedream-5.0-pro",
 		})
 		account.Platform = PlatformHCAtom
@@ -561,7 +566,7 @@ func TestBatchImagePublicService_ListModels(t *testing.T) {
 		got, err := svc.ListModels(ctx, testBatchImageOwner())
 		require.NoError(t, err)
 		require.Equal(t, []BatchImagePublicModel{{
-			ID:       "seedream-5.0",
+			ID:       HCAtomImageGeminiModel,
 			Object:   "image.batch.model",
 			Provider: BatchImageProviderHCAtom,
 		}}, got.Data)
@@ -804,15 +809,13 @@ func TestNormalizeBatchImageReferenceInputsHCAtomContracts(t *testing.T) {
 		refs  []BatchImageReferenceInput
 		want  error
 	}{
-		{name: "i2i accepts one https URL without mime", model: HCAtomImageAsyncI2IModel, refs: []BatchImageReferenceInput{{FileURI: "https://assets.example.test/reference.png"}}},
-		{name: "i2i requires one reference", model: HCAtomImageAsyncI2IModel, want: ErrBatchImageInvalidReferenceImage},
-		{name: "i2i rejects two references", model: HCAtomImageAsyncI2IModel, refs: []BatchImageReferenceInput{{FileURI: "https://assets.example.test/a.png"}, {FileURI: "https://assets.example.test/b.png"}}, want: ErrBatchImageTooManyReferenceImages},
-		{name: "i2i rejects http", model: HCAtomImageAsyncI2IModel, refs: []BatchImageReferenceInput{{FileURI: "http://assets.example.test/reference.png"}}, want: ErrBatchImageInvalidReferenceImage},
-		{name: "i2i rejects userinfo", model: HCAtomImageAsyncI2IModel, refs: []BatchImageReferenceInput{{FileURI: "https://user:pass@assets.example.test/reference.png"}}, want: ErrBatchImageInvalidReferenceImage},
-		{name: "i2i rejects missing host", model: HCAtomImageAsyncI2IModel, refs: []BatchImageReferenceInput{{FileURI: "https:///reference.png"}}, want: ErrBatchImageInvalidReferenceImage},
-		{name: "i2i rejects inline data", model: HCAtomImageAsyncI2IModel, refs: []BatchImageReferenceInput{{MimeType: "image/png", Data: []byte("inline")}}, want: ErrBatchImageInvalidReferenceImage},
-		{name: "t2i accepts no reference", model: HCAtomImageAsyncT2IModel},
-		{name: "t2i rejects reference", model: HCAtomImageAsyncT2IModel, refs: []BatchImageReferenceInput{{FileURI: "https://assets.example.test/reference.png"}}, want: ErrBatchImageTooManyReferenceImages},
+		{name: "gpt accepts no reference", model: HCAtomImageGPTModel},
+		{name: "gpt accepts multiple https URLs without mime", model: HCAtomImageGPTModel, refs: []BatchImageReferenceInput{{FileURI: "https://assets.example.test/a.png"}, {FileURI: "https://assets.example.test/b.png"}}},
+		{name: "gpt rejects http", model: HCAtomImageGPTModel, refs: []BatchImageReferenceInput{{FileURI: "http://assets.example.test/reference.png"}}, want: ErrBatchImageInvalidReferenceImage},
+		{name: "gpt rejects userinfo", model: HCAtomImageGPTModel, refs: []BatchImageReferenceInput{{FileURI: "https://user:pass@assets.example.test/reference.png"}}, want: ErrBatchImageInvalidReferenceImage},
+		{name: "gpt rejects missing host", model: HCAtomImageGPTModel, refs: []BatchImageReferenceInput{{FileURI: "https:///reference.png"}}, want: ErrBatchImageInvalidReferenceImage},
+		{name: "gpt rejects inline data", model: HCAtomImageGPTModel, refs: []BatchImageReferenceInput{{MimeType: "image/png", Data: []byte("inline")}}, want: ErrBatchImageInvalidReferenceImage},
+		{name: "gemini accepts https reference", model: HCAtomImageGeminiModel, refs: []BatchImageReferenceInput{{FileURI: "https://assets.example.test/reference.png"}}},
 		{name: "gemini keeps gs URI support", model: "gemini-2.5-flash-image", refs: []BatchImageReferenceInput{{MimeType: "image/png", FileURI: "gs://bucket/reference.png"}}},
 		{name: "gemini rejects https URI", model: "gemini-2.5-flash-image", refs: []BatchImageReferenceInput{{MimeType: "image/png", FileURI: "https://assets.example.test/reference.png"}}, want: ErrBatchImageInvalidReferenceImage},
 		{name: "gemini keeps inline support", model: "gemini-2.5-flash-image", refs: []BatchImageReferenceInput{{MimeType: "image/png", Data: []byte("inline")}}},
@@ -827,6 +830,54 @@ func TestNormalizeBatchImageReferenceInputsHCAtomContracts(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Len(t, item.ReferenceImages, count)
+		})
+	}
+}
+
+func TestBatchImagePublicValidate_HCAtomAcceptsDocumentedQualities(t *testing.T) {
+	svc, _, _, _, _ := newTestBatchImagePublicService(true)
+	for _, quality := range []string{"1K", "2K", "4K"} {
+		t.Run(quality, func(t *testing.T) {
+			req := validBatchImageSubmitRequest()
+			req.Provider = BatchImageProviderHCAtom
+			req.Model = HCAtomImageGeminiModel
+			req.ImageSize = quality
+			req.Items = req.Items[:1]
+
+			got, err := svc.validateSubmitRequest(req)
+			require.NoError(t, err)
+			require.Equal(t, quality, got.ImageSize)
+		})
+	}
+}
+
+func TestBatchImagePublicValidate_HCAtomRejectsSideEffectsBeforeSubmit(t *testing.T) {
+	svc, _, _, _, _ := newTestBatchImagePublicService(true)
+	tests := []struct {
+		name   string
+		mutate func(*BatchImageSubmitRequest)
+	}{
+		{name: "multiple_items", mutate: func(req *BatchImageSubmitRequest) {
+			req.Items = append(req.Items[:1], BatchImageSubmitItem{CustomID: "second", Prompt: "other"})
+		}},
+		{name: "multiple_outputs", mutate: func(req *BatchImageSubmitRequest) {
+			req.Items = req.Items[:1]
+			req.Items[0].OutputCount = 2
+		}},
+		{name: "unsupported_aspect", mutate: func(req *BatchImageSubmitRequest) {
+			req.Items = req.Items[:1]
+			req.AspectRatio = "5:7"
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			req := validBatchImageSubmitRequest()
+			req.Provider = BatchImageProviderHCAtom
+			req.Model = HCAtomImageGPTModel
+			test.mutate(&req)
+
+			_, err := svc.validateSubmitRequest(req)
+			require.ErrorIs(t, err, ErrBatchImageInvalidItems)
 		})
 	}
 }

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Sub2API HC-ATOM 全链路审查包</title>
+  <title>Sub2API HC-ATOM 授权图片模型审查包</title>
   <style>
     :root{color-scheme:dark;background:#081018;color:#dbeafe;font:15px/1.65 system-ui,sans-serif}
     body{max-width:1080px;margin:auto;padding:32px}.card{background:#101b2b;border:1px solid #29415d;border-radius:14px;padding:20px;margin:16px 0}
@@ -12,89 +12,84 @@
   </style>
 </head>
 <body>
-  <h1>Sub2API HC-ATOM 全链路审查包</h1>
-  <p class="ok">当前状态：代码、假链路、容器构建与广州生产部署通过；HC 调度保持默认关闭；真实 HC 调用待单独付费授权。</p>
+  <h1>Sub2API HC-ATOM 授权图片模型审查包</h1>
+  <p class="warn">当前状态：代码与假上游链路通过，待部署、待配置生产凭证，未执行真实付费生成。</p>
 
-  <section class="card"><h2>目标与执行目录</h2>
-    <p>把 HC-ATOM 的文字、同步图片、异步图片、普通视频和 Seedance V3 统一收口到 Sub2API，由 QCanvas 只持有两把能力隔离的 Sub2 Key。</p>
+  <section class="card">
+    <h2>目标、范围与执行目录</h2>
+    <p>只适配用户在 HC-ATOM 控制台授权的 6 个图片模型，不扩展到全部模型。</p>
     <p><code>D:\sub2api-trunk\.worktrees\hc-unified-chain-20260728</code></p>
   </section>
 
-  <section class="card"><h2>协议与唯一目录</h2>
-    <table><thead><tr><th>类型</th><th>公开模型</th><th>固定上游协议</th></tr></thead><tbody>
-      <tr><td>文字</td><td>gpt-5.6-sol / gemini-3-flash-preview</td><td>/v1/chat/completions</td></tr>
-      <tr><td>文字</td><td>claude-opus-4-6</td><td>/v1/messages</td></tr>
-      <tr><td>同步图片</td><td>seedream-5.0</td><td>/v1/images/generations</td></tr>
-      <tr><td>异步图片</td><td>wan2.5-t2i-preview / wan2.5-i2i-preview</td><td>/image/generation/tasks</td></tr>
-      <tr><td>普通视频</td><td>doubao-seedance-2.0</td><td>/video/generation/tasks</td></tr>
-      <tr><td>Seedance V3</td><td>doubao-seedance-2.0-v3</td><td>/v3/video/tasks</td></tr>
-    </tbody></table>
-    <p>目录记录类型、上游编码、协议、公开能力、定价策略和启用状态；公开响应不返回上游地址或编码。</p>
+  <section class="card">
+    <h2>逐模型文档核对结果</h2>
+    <table>
+      <thead><tr><th>模型</th><th>协议</th><th>鉴权</th><th>结果</th></tr></thead>
+      <tbody>
+        <tr><td>seedream-5.0</td><td>POST /v1/images/generations</td><td>Bearer</td><td class="ok">已适配，同步文生图</td></tr>
+        <tr><td>doubao-seedream-5.0-pro</td><td>POST /v1/images/generations</td><td>Bearer</td><td class="ok">已适配，同步文生图/参考图</td></tr>
+        <tr><td>gemini-3.1-flash-image-preview</td><td>POST/GET /image/generation/tasks</td><td>Bearer</td><td class="ok">已适配，异步文生图/参考图</td></tr>
+        <tr><td>gpt-image-2</td><td>POST/GET /image/generation/tasks</td><td>x-api-key</td><td class="ok">已适配，异步文生图/参考图</td></tr>
+        <tr><td>s-gpt-image-2</td><td>POST/GET /image/generation/tasks</td><td>x-api-key</td><td class="ok">已适配，异步文生图/参考图</td></tr>
+        <tr><td>dola-seedream-5.0-pro</td><td>HC 控制台显示“待配置接口地址”</td><td>无可执行文档</td><td class="blocked">禁用、隐藏、禁止调度</td></tr>
+      </tbody>
+    </table>
+    <p><code>/businessApiDoc</code> 是余额对账接口文档；生成协议以模型广场各模型“查看调用文档”为准。</p>
   </section>
 
-  <section class="card"><h2>变更清单</h2>
+  <section class="card">
+    <h2>实现与安全边界</h2>
     <ul>
-      <li>新增授权模型目录和 <code>GET /sub2api/v1/models?kind=...</code>；未授权、无价格、协议未开闸、无可用账号均不展示。</li>
-      <li>GPT/Gemini/Claude Responses 转换、同步图片、Wan 异步图片、普通视频 V1 和既有 V3 均使用固定协议。</li>
-      <li>媒体账号 Key 与视频通道 Key 继续使用独立加密域；默认只允许保存，不触发请求或自动授权。</li>
-      <li>QCanvas 双 Key 必须绑定不同能力组；媒体组不能调用视频，视频组不能调用文字/图片。</li>
-      <li>Wan T2I/I2I 请求体、异步头、轮询和取消按 HC 文档收紧；普通视频只声明已证明能力。</li>
-      <li>管理端新增 HC-ATOM 账号、媒体/视频快捷组和两把独立 Sub2 Key 的录入路径。</li>
+      <li>目录只公布 5 个可执行模型；Dola 不进入公开模型目录，也不能进入调度缓存。</li>
+      <li>通用 HC 账号映射保持 3 个文字模型与这 5 个图片模型；Dola 不进入账号能力映射。</li>
+      <li>同步模型自动规范化 <code>prompt / count / quality / reference_images</code>；Seedream 只接受文生图，Doubao 支持参考图。</li>
+      <li>异步模型使用平铺请求体，支持 1K/2K/4K、比例、参考图；GPT 两个模型会把档位换算为真实上游像素，且 4K 严格低于上游像素上限。</li>
+      <li>GPT 两个模型使用 <code>x-api-key</code>，Gemini 使用 Bearer；支持 <code>queued/running/success/failed/cancelled</code> 与结果 URL。</li>
+      <li>安全的 <code>failReason</code> 可回传，当前解密 Key、疑似密钥或签名 URL 会被脱敏；无静默官方回退。</li>
+      <li>单任务、单输出、模型、比例或协议不完整时，在账号选择、解密、计费和网络请求前失败。</li>
     </ul>
   </section>
 
-  <section class="card"><h2>验证证据</h2>
-    <pre>go test -p 1 ./internal/service -count=1
-PASS  internal/service  63.875s
+  <section class="card">
+    <h2>验证命令与结果</h2>
+    <pre>go test -buildvcs=false ./... -count=1
+PASS（全部 Go 包）
 
-go test -p 1 ./internal/handler/... -count=1
-PASS  handler / admin / dto / quotaview
-
-go test -p 1 ./internal/config ./internal/server/routes -count=1
+go build -buildvcs=false ./...
 PASS
 
-go test -p 1 -vet=off -tags unit ./internal/service -run HCAtom -count=1
+go test -buildvcs=false ./internal/service -run "HCAtom|BatchImage" -count=1
 PASS
 
-pnpm run test:run
-PASS（完整前端测试集，进程退出码 0）
+vitest（HC 账号契约、密钥库与员工开卡定向用例）
+PASS（3 files / 50 tests）
 
-pnpm run typecheck
+pnpm typecheck
 PASS
 
-pnpm run build
+pnpm build
 PASS（仅既有 chunk / browserslist 警告）
 
 git diff --check
-PASS
-
-Sub2API image: hc-b0a2895e8
-广州生产部署：sub2api healthy
-三服务及其余 6 个依赖服务全部 healthy
-HC_DISPATCH_FLAGS_OFF
-DEPLOY_OK</pre>
-    <p>假中转站覆盖六类协议、公开模型到上游编码、Wan T2I/I2I、V1/V3、凭证脱敏与默认关闸；没有真实或付费请求。</p>
+PASS</pre>
+    <p>测试使用假 HC 上游，验证模型名、接口路径、请求字段、Bearer / x-api-key、业务码 200、轮询状态、失败原因与密钥脱敏；没有使用真实 Key。</p>
   </section>
 
-  <section class="card"><h2>截图与真实路径</h2>
-    <p>本轮没有使用真实 HC Key，也没有开启生产协议，因此未伪造成功截图。已在登录态 HC 控制台只读核对模型文档；可用性截图必须留到用户授权的每协议一次最小真实任务。</p>
-  </section>
-
-  <section class="card"><h2>风险、阻塞与下一步</h2>
+  <section class="card">
+    <h2>风险、回滚与当前阻塞</h2>
     <ul>
-      <li class="blocked">生产尚未配置媒体凭证专用 32-byte hex 加密 Key，HC 媒体账号暂不能保存；不得临时生成或复用视频/JWT Key。</li>
-      <li class="warn">文字模型只有配置 Channel token 价格后才展示；图片/视频要求各自组价格为正。</li>
-      <li class="warn">真实 HC 的成功/失败响应和资产下载尚未付费验证，不能标记产品 READY。</li>
+      <li class="blocked">真实用户路径尚未验收：没有真实任务编号、预览资产或下载证据，因此不能标记“产品 READY”。</li>
+      <li class="blocked">生产环境仍需配置专用加密 Key、HC 媒体账号、媒体组价格和员工媒体 Sub2 Key，之后才能开启调度。</li>
+      <li class="warn">HC 单模型文档未证明 DELETE 取消接口；本地保持现有取消外壳，但真实取消能力需在最小付费验收时单独确认。</li>
     </ul>
-    <p>回滚：将三服务镜像恢复到部署前保留的 <code>rollback-hc-20260729T0112</code> 标签并重建 Sub2API、q-api、q-web；数据库无新增迁移。功能开关保持关闭时，新链不会产生上游请求。</p>
+    <p>回滚：回退本次提交并重新构建 Sub2API；本次没有数据库迁移，也没有修改生产数据。</p>
   </section>
 
-  <section class="card"><h2>文件索引</h2>
-    <p><code>backend/internal/service/hc_atom_catalog.go</code>、<code>hc_atom_gateway_client.go</code>、<code>hc_atom_gateway_forward.go</code>、<code>batch_image_provider_hc_atom.go</code>、<code>video_gateway_adapter.go</code>、<code>backend/internal/server/routes/gateway.go</code>、<code>frontend/src/components/account/hcAtomAdminContract.ts</code>。</p>
-  </section>
-
-  <section class="card"><h2>可复制后续提示词</h2>
-    <pre>只读检查生产 HC 开关、专用加密 Key 是否已由负责人配置、媒体组/视频组价格与授权模型；不要读取或打印任何密钥，不要发真实请求。输出可以开启的协议和仍缺的条件。</pre>
+  <section class="card">
+    <h2>文件索引与下一步</h2>
+    <p><code>backend/internal/service/hc_atom_catalog.go</code>、<code>hc_atom_sync_image.go</code>、<code>batch_image_provider_hc_atom.go</code>、<code>batch_image_public.go</code>、<code>frontend/src/components/account/hcAtomAdminContract.ts</code> 及对应测试。</p>
+    <p>下一步：部署代码但保持 HC 调度关闭；由管理员录入生产加密配置、媒体账号和价格后，每类协议最多发起一次最小真实任务。</p>
+    <p>可复制提示词：<code>部署当前 Sub2API HC 图片模型提交，保持调度关闭；先检查加密 Key、媒体账号、价格和员工媒体 Key，只报告存在性，不打印值。</code></p>
   </section>
 </body>
 </html>

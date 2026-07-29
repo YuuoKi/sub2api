@@ -20,8 +20,19 @@ const (
 	HCAtomPricingGroupImage   = "group_image"
 	HCAtomPricingGroupVideo   = "group_video"
 
-	HCAtomImageAsyncI2IModel = "wan2.5-i2i-preview"
-	HCAtomImageAsyncT2IModel = "wan2.5-t2i-preview"
+	HCAtomAuthBearer  = "bearer"
+	HCAtomAuthXAPIKey = "x_api_key"
+
+	HCAtomImageSeedreamModel       = "seedream-5.0"
+	HCAtomImageDoubaoSeedreamModel = "doubao-seedream-5.0-pro"
+	HCAtomImageGeminiModel         = "gemini-3.1-flash-image-preview"
+	HCAtomImageGPTModel            = "gpt-image-2"
+	HCAtomImageSGPTModel           = "s-gpt-image-2"
+	HCAtomImageDolaModel           = "dola-seedream-5.0-pro"
+
+	// Compatibility aliases retained for the existing batch-image harness.
+	HCAtomImageAsyncI2IModel = HCAtomImageGPTModel
+	HCAtomImageAsyncT2IModel = HCAtomImageGeminiModel
 )
 
 // HCAtomModelSpec is the single internal source of truth for HC routing. The
@@ -34,20 +45,26 @@ type HCAtomModelSpec struct {
 	Capability         string
 	Origin             string
 	Path               string
+	AuthScheme         string
 	PublicCapabilities PublicModelCapabilities
 	PricingPolicy      string
 	Enabled            bool
 }
 
 var hcAtomModelCatalog = []HCAtomModelSpec{
-	{PublicModel: "gpt-5.6-sol", UpstreamModel: "gpt-5.6-sol", DisplayName: "GPT 5.6 Sol", Kind: "text", Capability: HCAtomCapabilityChat, Origin: HCAtomChatOrigin, Path: "/v1/chat/completions", PublicCapabilities: PublicModelCapabilities{TaskMode: "sync"}, PricingPolicy: HCAtomPricingChannelToken, Enabled: true},
-	{PublicModel: "gemini-3-flash-preview", UpstreamModel: "gemini-3-flash-preview", DisplayName: "Gemini 3 Flash Preview", Kind: "text", Capability: HCAtomCapabilityChat, Origin: HCAtomChatOrigin, Path: "/v1/chat/completions", PublicCapabilities: PublicModelCapabilities{TaskMode: "sync", InputImage: true}, PricingPolicy: HCAtomPricingChannelToken, Enabled: true},
-	{PublicModel: "claude-opus-4-6", UpstreamModel: "claude-opus-4-6", DisplayName: "Claude Opus 4.6", Kind: "text", Capability: HCAtomCapabilityMessages, Origin: HCAtomChatOrigin, Path: "/v1/messages", PublicCapabilities: PublicModelCapabilities{TaskMode: "sync", InputImage: true}, PricingPolicy: HCAtomPricingChannelToken, Enabled: true},
-	{PublicModel: "seedream-5.0", UpstreamModel: "seedream-5.0", DisplayName: "Seedream 5.0", Kind: "image", Capability: HCAtomCapabilityImageSync, Origin: HCAtomChatOrigin, Path: "/v1/images/generations", PublicCapabilities: PublicModelCapabilities{TaskMode: "sync", ReferenceImages: true, AspectRatio: true, Resolution: true}, PricingPolicy: HCAtomPricingGroupImage, Enabled: true},
-	{PublicModel: HCAtomImageAsyncI2IModel, UpstreamModel: HCAtomImageAsyncI2IModel, DisplayName: "Wan 2.5 I2I Preview", Kind: "image", Capability: HCAtomCapabilityImageAsync, Origin: HCAtomMediaOrigin, Path: "/image/generation/tasks", PublicCapabilities: PublicModelCapabilities{TaskMode: "async", InputImage: true, ReferenceImages: true, AspectRatio: true, Resolution: true}, PricingPolicy: HCAtomPricingGroupImage, Enabled: true},
-	{PublicModel: HCAtomImageAsyncT2IModel, UpstreamModel: HCAtomImageAsyncT2IModel, DisplayName: "Wan 2.5 T2I Preview", Kind: "image", Capability: HCAtomCapabilityImageAsync, Origin: HCAtomMediaOrigin, Path: "/image/generation/tasks", PublicCapabilities: PublicModelCapabilities{TaskMode: "async", AspectRatio: true, Resolution: true}, PricingPolicy: HCAtomPricingGroupImage, Enabled: true},
-	{PublicModel: HCAtomVideoV1PublicModel, UpstreamModel: HCAtomVideoV1PublicModel, DisplayName: "Doubao Seedance 2.0", Kind: "video", Capability: HCAtomCapabilityVideoV1, Origin: HCAtomMediaOrigin, Path: "/video/generation/tasks", PublicCapabilities: PublicModelCapabilities{TaskMode: "async", InputImage: true, ReferenceImages: true, AspectRatio: true, DurationSeconds: true, Audio: true}, PricingPolicy: HCAtomPricingGroupVideo, Enabled: true},
-	{PublicModel: HCAtomSeedanceV3PublicModel, UpstreamModel: HCAtomSeedanceV3Model, DisplayName: "Doubao Seedance 2.0 V3", Kind: "video", Capability: HCAtomCapabilityVideoV3, Origin: HCAtomMediaOrigin, Path: HCAtomSeedanceV3Path, PublicCapabilities: PublicModelCapabilities{TaskMode: "async", InputImage: true, FirstFrame: true, LastFrame: true, ReferenceImages: true, AspectRatio: true, DurationSeconds: true, Resolution: true, Audio: true}, PricingPolicy: HCAtomPricingGroupVideo, Enabled: true},
+	{PublicModel: "gpt-5.6-sol", UpstreamModel: "gpt-5.6-sol", DisplayName: "GPT 5.6 Sol", Kind: "text", Capability: HCAtomCapabilityChat, Origin: HCAtomChatOrigin, Path: "/v1/chat/completions", AuthScheme: HCAtomAuthBearer, PublicCapabilities: PublicModelCapabilities{TaskMode: "sync"}, PricingPolicy: HCAtomPricingChannelToken, Enabled: true},
+	{PublicModel: "gemini-3-flash-preview", UpstreamModel: "gemini-3-flash-preview", DisplayName: "Gemini 3 Flash Preview", Kind: "text", Capability: HCAtomCapabilityChat, Origin: HCAtomChatOrigin, Path: "/v1/chat/completions", AuthScheme: HCAtomAuthBearer, PublicCapabilities: PublicModelCapabilities{TaskMode: "sync", InputImage: true}, PricingPolicy: HCAtomPricingChannelToken, Enabled: true},
+	{PublicModel: "claude-opus-4-6", UpstreamModel: "claude-opus-4-6", DisplayName: "Claude Opus 4.6", Kind: "text", Capability: HCAtomCapabilityMessages, Origin: HCAtomChatOrigin, Path: "/v1/messages", AuthScheme: HCAtomAuthBearer, PublicCapabilities: PublicModelCapabilities{TaskMode: "sync", InputImage: true}, PricingPolicy: HCAtomPricingChannelToken, Enabled: true},
+	{PublicModel: HCAtomImageSeedreamModel, UpstreamModel: HCAtomImageSeedreamModel, DisplayName: "Seedream 5.0", Kind: "image", Capability: HCAtomCapabilityImageSync, Origin: HCAtomChatOrigin, Path: "/v1/images/generations", AuthScheme: HCAtomAuthBearer, PublicCapabilities: PublicModelCapabilities{TaskMode: "sync", Resolution: true}, PricingPolicy: HCAtomPricingGroupImage, Enabled: true},
+	{PublicModel: HCAtomImageDoubaoSeedreamModel, UpstreamModel: HCAtomImageDoubaoSeedreamModel, DisplayName: "Doubao Seedream 5.0 Pro", Kind: "image", Capability: HCAtomCapabilityImageSync, Origin: HCAtomChatOrigin, Path: "/v1/images/generations", AuthScheme: HCAtomAuthBearer, PublicCapabilities: PublicModelCapabilities{TaskMode: "sync", InputImage: true, ReferenceImages: true, Resolution: true}, PricingPolicy: HCAtomPricingGroupImage, Enabled: true},
+	{PublicModel: HCAtomImageGeminiModel, UpstreamModel: HCAtomImageGeminiModel, DisplayName: "Gemini 3.1 Flash Image Preview", Kind: "image", Capability: HCAtomCapabilityImageAsync, Origin: HCAtomMediaOrigin, Path: "/image/generation/tasks", AuthScheme: HCAtomAuthBearer, PublicCapabilities: PublicModelCapabilities{TaskMode: "async", InputImage: true, ReferenceImages: true, AspectRatio: true, Resolution: true}, PricingPolicy: HCAtomPricingGroupImage, Enabled: true},
+	{PublicModel: HCAtomImageGPTModel, UpstreamModel: HCAtomImageGPTModel, DisplayName: "GPT Image 2", Kind: "image", Capability: HCAtomCapabilityImageAsync, Origin: HCAtomMediaOrigin, Path: "/image/generation/tasks", AuthScheme: HCAtomAuthXAPIKey, PublicCapabilities: PublicModelCapabilities{TaskMode: "async", InputImage: true, ReferenceImages: true, AspectRatio: true, Resolution: true}, PricingPolicy: HCAtomPricingGroupImage, Enabled: true},
+	{PublicModel: HCAtomImageSGPTModel, UpstreamModel: HCAtomImageSGPTModel, DisplayName: "S-GPT Image 2", Kind: "image", Capability: HCAtomCapabilityImageAsync, Origin: HCAtomMediaOrigin, Path: "/image/generation/tasks", AuthScheme: HCAtomAuthXAPIKey, PublicCapabilities: PublicModelCapabilities{TaskMode: "async", InputImage: true, ReferenceImages: true, AspectRatio: true, Resolution: true}, PricingPolicy: HCAtomPricingGroupImage, Enabled: true},
+	// The HC portal currently marks this authorized model as "待配置接口地址".
+	// Keep the catalog record for auditability, but never advertise or dispatch it.
+	{PublicModel: HCAtomImageDolaModel, UpstreamModel: HCAtomImageDolaModel, DisplayName: "Dola Seedream 5.0 Pro", Kind: "image", Capability: HCAtomCapabilityImageAsync, PricingPolicy: HCAtomPricingGroupImage, Enabled: false},
+	{PublicModel: HCAtomVideoV1PublicModel, UpstreamModel: HCAtomVideoV1PublicModel, DisplayName: "Doubao Seedance 2.0", Kind: "video", Capability: HCAtomCapabilityVideoV1, Origin: HCAtomMediaOrigin, Path: "/video/generation/tasks", AuthScheme: HCAtomAuthBearer, PublicCapabilities: PublicModelCapabilities{TaskMode: "async", InputImage: true, ReferenceImages: true, AspectRatio: true, DurationSeconds: true, Audio: true}, PricingPolicy: HCAtomPricingGroupVideo, Enabled: true},
+	{PublicModel: HCAtomSeedanceV3PublicModel, UpstreamModel: HCAtomSeedanceV3Model, DisplayName: "Doubao Seedance 2.0 V3", Kind: "video", Capability: HCAtomCapabilityVideoV3, Origin: HCAtomMediaOrigin, Path: HCAtomSeedanceV3Path, AuthScheme: HCAtomAuthBearer, PublicCapabilities: PublicModelCapabilities{TaskMode: "async", InputImage: true, FirstFrame: true, LastFrame: true, ReferenceImages: true, AspectRatio: true, DurationSeconds: true, Resolution: true, Audio: true}, PricingPolicy: HCAtomPricingGroupVideo, Enabled: true},
 }
 
 func LookupHCAtomModel(capability, publicModel string) (HCAtomModelSpec, bool) {

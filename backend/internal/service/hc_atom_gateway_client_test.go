@@ -25,19 +25,22 @@ func TestHCAtomCatalogFixedRoutes(t *testing.T) {
 		upstream     string
 		kind         string
 		endpoint     string
+		authScheme   string
 		pricing      string
 		capabilities PublicModelCapabilities
 	}{
-		{HCAtomCapabilityChat, "gpt-5.6-sol", "gpt-5.6-sol", "text", "https://ai-aigc.fzyinghe.com/v1/chat/completions", HCAtomPricingChannelToken, PublicModelCapabilities{TaskMode: "sync"}},
-		{HCAtomCapabilityChat, "gemini-3-flash-preview", "gemini-3-flash-preview", "text", "https://ai-aigc.fzyinghe.com/v1/chat/completions", HCAtomPricingChannelToken, PublicModelCapabilities{TaskMode: "sync", InputImage: true}},
-		{HCAtomCapabilityMessages, "claude-opus-4-6", "claude-opus-4-6", "text", "https://ai-aigc.fzyinghe.com/v1/messages", HCAtomPricingChannelToken, PublicModelCapabilities{TaskMode: "sync", InputImage: true}},
-		{HCAtomCapabilityImageSync, "seedream-5.0", "seedream-5.0", "image", "https://ai-aigc.fzyinghe.com/v1/images/generations", HCAtomPricingGroupImage, PublicModelCapabilities{TaskMode: "sync", ReferenceImages: true, AspectRatio: true, Resolution: true}},
-		{HCAtomCapabilityImageAsync, HCAtomImageAsyncI2IModel, HCAtomImageAsyncI2IModel, "image", "https://api-aigc.fzyinghe.com/image/generation/tasks", HCAtomPricingGroupImage, PublicModelCapabilities{TaskMode: "async", InputImage: true, ReferenceImages: true, AspectRatio: true, Resolution: true}},
-		{HCAtomCapabilityImageAsync, HCAtomImageAsyncT2IModel, HCAtomImageAsyncT2IModel, "image", "https://api-aigc.fzyinghe.com/image/generation/tasks", HCAtomPricingGroupImage, PublicModelCapabilities{TaskMode: "async", AspectRatio: true, Resolution: true}},
-		{HCAtomCapabilityVideoV1, HCAtomVideoV1PublicModel, HCAtomVideoV1PublicModel, "video", "https://api-aigc.fzyinghe.com/video/generation/tasks", HCAtomPricingGroupVideo, PublicModelCapabilities{TaskMode: "async", InputImage: true, ReferenceImages: true, AspectRatio: true, DurationSeconds: true, Audio: true}},
-		{HCAtomCapabilityVideoV3, HCAtomSeedanceV3PublicModel, HCAtomSeedanceV3Model, "video", "https://api-aigc.fzyinghe.com/v3/video/tasks", HCAtomPricingGroupVideo, PublicModelCapabilities{TaskMode: "async", InputImage: true, FirstFrame: true, LastFrame: true, ReferenceImages: true, AspectRatio: true, DurationSeconds: true, Resolution: true, Audio: true}},
+		{HCAtomCapabilityChat, "gpt-5.6-sol", "gpt-5.6-sol", "text", "https://ai-aigc.fzyinghe.com/v1/chat/completions", HCAtomAuthBearer, HCAtomPricingChannelToken, PublicModelCapabilities{TaskMode: "sync"}},
+		{HCAtomCapabilityChat, "gemini-3-flash-preview", "gemini-3-flash-preview", "text", "https://ai-aigc.fzyinghe.com/v1/chat/completions", HCAtomAuthBearer, HCAtomPricingChannelToken, PublicModelCapabilities{TaskMode: "sync", InputImage: true}},
+		{HCAtomCapabilityMessages, "claude-opus-4-6", "claude-opus-4-6", "text", "https://ai-aigc.fzyinghe.com/v1/messages", HCAtomAuthBearer, HCAtomPricingChannelToken, PublicModelCapabilities{TaskMode: "sync", InputImage: true}},
+		{HCAtomCapabilityImageSync, HCAtomImageSeedreamModel, HCAtomImageSeedreamModel, "image", "https://ai-aigc.fzyinghe.com/v1/images/generations", HCAtomAuthBearer, HCAtomPricingGroupImage, PublicModelCapabilities{TaskMode: "sync", Resolution: true}},
+		{HCAtomCapabilityImageSync, HCAtomImageDoubaoSeedreamModel, HCAtomImageDoubaoSeedreamModel, "image", "https://ai-aigc.fzyinghe.com/v1/images/generations", HCAtomAuthBearer, HCAtomPricingGroupImage, PublicModelCapabilities{TaskMode: "sync", InputImage: true, ReferenceImages: true, Resolution: true}},
+		{HCAtomCapabilityImageAsync, HCAtomImageGeminiModel, HCAtomImageGeminiModel, "image", "https://api-aigc.fzyinghe.com/image/generation/tasks", HCAtomAuthBearer, HCAtomPricingGroupImage, PublicModelCapabilities{TaskMode: "async", InputImage: true, ReferenceImages: true, AspectRatio: true, Resolution: true}},
+		{HCAtomCapabilityImageAsync, HCAtomImageGPTModel, HCAtomImageGPTModel, "image", "https://api-aigc.fzyinghe.com/image/generation/tasks", HCAtomAuthXAPIKey, HCAtomPricingGroupImage, PublicModelCapabilities{TaskMode: "async", InputImage: true, ReferenceImages: true, AspectRatio: true, Resolution: true}},
+		{HCAtomCapabilityImageAsync, HCAtomImageSGPTModel, HCAtomImageSGPTModel, "image", "https://api-aigc.fzyinghe.com/image/generation/tasks", HCAtomAuthXAPIKey, HCAtomPricingGroupImage, PublicModelCapabilities{TaskMode: "async", InputImage: true, ReferenceImages: true, AspectRatio: true, Resolution: true}},
+		{HCAtomCapabilityVideoV1, HCAtomVideoV1PublicModel, HCAtomVideoV1PublicModel, "video", "https://api-aigc.fzyinghe.com/video/generation/tasks", HCAtomAuthBearer, HCAtomPricingGroupVideo, PublicModelCapabilities{TaskMode: "async", InputImage: true, ReferenceImages: true, AspectRatio: true, DurationSeconds: true, Audio: true}},
+		{HCAtomCapabilityVideoV3, HCAtomSeedanceV3PublicModel, HCAtomSeedanceV3Model, "video", "https://api-aigc.fzyinghe.com/v3/video/tasks", HCAtomAuthBearer, HCAtomPricingGroupVideo, PublicModelCapabilities{TaskMode: "async", InputImage: true, FirstFrame: true, LastFrame: true, ReferenceImages: true, AspectRatio: true, DurationSeconds: true, Resolution: true, Audio: true}},
 	}
-	require.Len(t, HCAtomModelCatalog(), len(tests))
+	require.Len(t, HCAtomModelCatalog(), len(tests)+1)
 	for _, test := range tests {
 		t.Run(test.capability+"/"+test.model, func(t *testing.T) {
 			spec, ok := LookupHCAtomModel(test.capability, test.model)
@@ -47,6 +50,7 @@ func TestHCAtomCatalogFixedRoutes(t *testing.T) {
 			require.Equal(t, test.upstream, spec.UpstreamModel)
 			require.Equal(t, test.kind, spec.Kind)
 			require.Equal(t, test.endpoint, spec.Origin+spec.Path)
+			require.Equal(t, test.authScheme, spec.AuthScheme)
 			require.Equal(t, test.pricing, spec.PricingPolicy)
 			require.Equal(t, test.capabilities, spec.PublicCapabilities)
 
@@ -58,6 +62,10 @@ func TestHCAtomCatalogFixedRoutes(t *testing.T) {
 			require.Equal(t, test.capabilities, public.Capabilities)
 		})
 	}
+	_, ok := LookupHCAtomModel(HCAtomCapabilityImageAsync, HCAtomImageDolaModel)
+	require.False(t, ok)
+	_, ok = lookupPublicModelForTest(PublicHCAtomModels("image"), HCAtomImageDolaModel)
+	require.False(t, ok)
 }
 
 func lookupPublicModelForTest(models []PublicModel, model string) (PublicModel, bool) {
@@ -80,7 +88,8 @@ func TestHCAtomFixedClientUsesOnlyCatalogRouteAndRedacts(t *testing.T) {
 		{"gpt chat", HCAtomCapabilityChat, "gpt-5.6-sol", "https://ai-aigc.fzyinghe.com/v1/chat/completions"},
 		{"gemini chat", HCAtomCapabilityChat, "gemini-3-flash-preview", "https://ai-aigc.fzyinghe.com/v1/chat/completions"},
 		{"claude messages", HCAtomCapabilityMessages, "claude-opus-4-6", "https://ai-aigc.fzyinghe.com/v1/messages"},
-		{"sync image", HCAtomCapabilityImageSync, "seedream-5.0", "https://ai-aigc.fzyinghe.com/v1/images/generations"},
+		{"sync image", HCAtomCapabilityImageSync, HCAtomImageSeedreamModel, "https://ai-aigc.fzyinghe.com/v1/images/generations"},
+		{"sync image with references", HCAtomCapabilityImageSync, HCAtomImageDoubaoSeedreamModel, "https://ai-aigc.fzyinghe.com/v1/images/generations"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -142,7 +151,7 @@ func TestHCAtomUsageFromAnthropicSSE(t *testing.T) {
 
 func TestPublicHCAtomModelsExposeOnlySub2Contract(t *testing.T) {
 	models := PublicHCAtomModels("image")
-	require.Len(t, models, 3)
+	require.Len(t, models, 5)
 	data, err := json.Marshal(map[string]any{"object": "list", "data": models})
 	require.NoError(t, err)
 	payload := string(data)
@@ -217,14 +226,14 @@ func TestHCAtomCatalogPricingPoliciesFailClosed(t *testing.T) {
 		{
 			name:       "async image rejects disabled group capability",
 			capability: HCAtomCapabilityImageAsync,
-			model:      "wan2.5-i2i-preview",
+			model:      HCAtomImageGeminiModel,
 			group:      fullImagePrices(),
 			want:       false,
 		},
 		{
 			name:       "async image accepts group image pricing",
 			capability: HCAtomCapabilityImageAsync,
-			model:      "wan2.5-i2i-preview",
+			model:      HCAtomImageGeminiModel,
 			group: func() *Group {
 				group := fullImagePrices()
 				group.AllowBatchImageGeneration = true

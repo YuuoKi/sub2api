@@ -460,6 +460,12 @@ describe('KeyVaultView video provider management', () => {
 
     await wrapper.find('[data-test="open-create-provider"]').trigger('click')
     await wrapper.find('[data-test="provider-platform"]').setValue('hc_atom_video_v1')
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="provider-authorize-after-save"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="provider-hc-dispatch-note"]').text()).toContain('保存后即可按分组调度')
+    expect(wrapper.find('[data-test="provider-base-url-locked"]').text()).toContain('https://api-aigc.fzyinghe.com')
+    expect(wrapper.text()).toContain('HC-ATOM 中转地址由协议固定')
     await wrapper.find('[data-test="provider-quick-create-video"]').trigger('click')
     await flushPromises()
 
@@ -553,6 +559,8 @@ describe('KeyVaultView video provider management', () => {
     })
     const wrapper = await mountView()
     await switchToVideoTab(wrapper)
+
+    expect(wrapper.find('[data-test="retry-auth-provider-30"]').exists()).toBe(false)
 
     await wrapper.find('[data-test="edit-provider-30"]').trigger('click')
     await flushPromises()

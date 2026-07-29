@@ -418,18 +418,30 @@
               <p class="rounded-md bg-gray-50 px-3 py-2 text-sm text-gray-600 dark:bg-gray-800/60 dark:text-gray-300" data-test="provider-base-url-locked">
                 {{ selectedVideoPlatform?.default_base_url || '官方默认地址' }}
               </p>
-              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">当前仅支持官方直连；自定义中转尚未打通授权与调度，暂不可填。</p>
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {{ isSelectedHCAtomProvider
+                  ? 'HC-ATOM 中转地址由协议固定，不允许自定义。'
+                  : '当前仅支持官方直连；自定义中转尚未打通授权与调度，暂不可填。' }}
+              </p>
             </div>
             <div class="flex flex-col gap-2">
               <label class="flex min-h-6 items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                 <input v-model="providerForm.enabled" type="checkbox" data-test="provider-enabled" />
                 保存后启用
               </label>
-              <label class="flex min-h-6 items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+              <label
+                v-if="supportsTinyRealAuthorization"
+                class="flex min-h-6 items-center gap-2 text-sm text-gray-700 dark:text-gray-300"
+              >
                 <input v-model="providerForm.authorizeAfterSave" type="checkbox" data-test="provider-authorize-after-save" />
                 保存后自动授权一次最小真实调用
               </label>
-              <p class="text-xs text-gray-500 dark:text-gray-400">默认关闭；只有明确勾选才记录授权，保存配置本身不会触发上游调用。</p>
+              <p v-if="supportsTinyRealAuthorization" class="text-xs text-gray-500 dark:text-gray-400">
+                默认关闭；只有明确勾选才记录授权，保存配置本身不会触发上游调用。
+              </p>
+              <p v-else class="text-xs text-gray-500 dark:text-gray-400" data-test="provider-hc-dispatch-note">
+                HC-ATOM 通道保存后即可按分组调度；保存配置不会触发真实视频任务。
+              </p>
             </div>
             <div class="flex justify-end gap-2 pt-2">
               <button class="btn btn-outline" type="button" data-test="cancel-provider" @click="closeProviderModal">取消</button>
@@ -1021,6 +1033,9 @@ watch(
     providerForm.groupIds = providerForm.groupIds.filter((id) => (
       providerPlatformGroups.value.some((group) => group.id === id)
     ))
+    if (providerForm.provider !== 'seedance') {
+      providerForm.authorizeAfterSave = false
+    }
   },
 )
 
@@ -1050,6 +1065,14 @@ const editingVideoPlatform = computed(
 
 const selectedVideoPlatform = computed(
   () => videoPlatforms.value.find((platform) => platform.provider === providerForm.provider) ?? null,
+)
+
+const isSelectedHCAtomProvider = computed(
+  () => providerForm.provider.startsWith('hc_atom_'),
+)
+
+const supportsTinyRealAuthorization = computed(
+  () => providerForm.provider === 'seedance',
 )
 
 const STATIC_VIDEO_PLATFORM_LABELS: Record<string, string> = {
@@ -1128,7 +1151,7 @@ async function saveProvider() {
       // 自定义中转 base_url 尚未打通授权/调度；只允许官方默认（后端亦会拒绝覆盖）
       ...(platform?.default_model ? { default_model: platform.default_model } : {}),
     })
-    const wantAuthorize = providerForm.authorizeAfterSave
+    const wantAuthorize = providerForm.provider === 'seedance' && providerForm.authorizeAfterSave
     closeProviderModal()
     await loadProviders()
     if (wantAuthorize && created.enabled && created.api_key_configured && !created.tiny_real_authorized_at && !created.tiny_real_consumed_at) {
@@ -1151,7 +1174,11 @@ async function saveProvider() {
 }
 
 function needsVideoAuth(provider: VideoProviderAccount): boolean {
-  return provider.enabled && provider.api_key_configured && !provider.tiny_real_authorized_at && !provider.tiny_real_consumed_at
+  return provider.provider === 'seedance'
+    && provider.enabled
+    && provider.api_key_configured
+    && !provider.tiny_real_authorized_at
+    && !provider.tiny_real_consumed_at
 }
 
 function openEditProvider(provider: VideoProviderAccount) {

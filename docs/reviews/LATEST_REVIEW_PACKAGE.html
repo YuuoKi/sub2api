@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Sub2API HC-ATOM 授权图片模型审查包</title>
+  <title>Sub2API HC-ATOM 图片/视频调度审查包</title>
   <style>
     :root{color-scheme:dark;background:#081018;color:#dbeafe;font:15px/1.65 system-ui,sans-serif}
     body{max-width:1080px;margin:auto;padding:32px}.card{background:#101b2b;border:1px solid #29415d;border-radius:14px;padding:20px;margin:16px 0}
@@ -12,8 +12,8 @@
   </style>
 </head>
 <body>
-  <h1>Sub2API HC-ATOM 授权图片模型审查包</h1>
-  <p class="warn">当前状态：本地代码、全量测试与构建通过；待提交和受控部署。没有读取生产凭证，也没有执行真实付费生成。</p>
+  <h1>Sub2API HC-ATOM 图片/视频调度审查包</h1>
+  <p class="ok">当前状态：内部可用，可进入管理员实测。代码、全量测试、构建、受控部署和线上只读页面验收均已完成；没有读取生产凭证，也没有执行真实付费生成。</p>
 
   <section class="card">
     <h2>目标、范围与执行目录</h2>
@@ -29,6 +29,8 @@
       <li>图片账号目录错误混入 3 个文字模型，页面信息与“HC-ATOM（图片）”语义不一致。</li>
       <li>创建账号没有稳定的 <code>Idempotency-Key</code>，账号创建与分组绑定也不是原子操作。</li>
       <li>员工 media/video 双 Key 只检查组 ID，没有证明两组能力不同，存在错误绑定风险。</li>
+      <li>遗留 HC 视频通道可能仍绑定旧 media 组并携带错误模型；页面保存会失败且没有给出迁移路径。</li>
+      <li>HC 视频通道误显示官方 Seedance 专属的“重试授权/最小真实调用”入口，信息与实际 HC 调度机制不一致。</li>
     </ul>
   </section>
 
@@ -60,6 +62,8 @@
       <li>密钥库与通用开户弹窗都按一次打开会话复用稳定 <code>Idempotency-Key</code>；批量开户的每个逻辑账号使用独立 Key。</li>
       <li>后端在事务内完成账号和分组绑定，失败时不留下无组账号或调度缓存残影；真实 PostgreSQL 回滚测试覆盖创建和更新两条路径。</li>
       <li>员工双 Key 后端强制 media/video 两组能力互斥；错误平台、停用组、缺价或模型不完整均拒绝开卡。</li>
+      <li>编辑遗留 HC 视频通道时自动选择能力匹配的视频组，并由后端恢复固定中转地址和正确 V1/V3 模型。</li>
+      <li>只有官方 Seedance 显示最小真实调用授权；HC-ATOM 明确显示“保存后按分组调度”，保存本身不发起付费任务。</li>
       <li>HC 组图片价格可直接满足异步图片模型可见性判断，不再要求额外全局价格。</li>
       <li>同步模型自动规范化 <code>prompt / count / quality / reference_images</code>；Seedream 只接受文生图，Doubao 支持参考图。</li>
       <li>异步模型使用平铺请求体，支持 1K/2K/4K、比例、参考图；GPT 两个模型会把档位换算为真实上游像素，且 4K 严格低于上游像素上限。</li>
@@ -96,7 +100,7 @@ pnpm.cmd typecheck
 PASS
 
 pnpm.cmd build
-PASS（968 modules；仅既有 chunk / dynamic-import 警告）
+PASS（969 modules；仅既有 chunk / dynamic-import / browserslist 警告）
 
 git diff --check
 PASS</pre>
@@ -105,19 +109,30 @@ PASS</pre>
   </section>
 
   <section class="card">
+    <h2>线上部署与页面证据</h2>
+    <ul>
+      <li><code>http://114.132.50.149/api/v1/health</code> 返回 <code>{"status":"ok"}</code>，公开设置中的 <code>build_commit</code> 与本轮部署提交一致。</li>
+      <li>生产 HC 图片组为活跃 <code>hc_atom</code> 组：图片与批量图片开启，1K/2K/4K 价格完整，且只含本审查包列出的 5 个图片模型。</li>
+      <li>生产 HC 视频组为活跃 <code>hc_atom</code> 组：480p/720p/1080p 价格完整，只含 V1/V3 视频模型，不含图片模型。</li>
+      <li>浏览器复核：图片弹窗显示精确 5 模型和两类固定接口；视频通道已迁移到 HC 视频组；员工开户明确分离媒体组和视频组；HC 行不再显示 Seedance 授权按钮。</li>
+      <li>QCanvas 线上提交为 <code>d39109578f1843c91da12b242243661c31f58869</code>，Sub2API 与 QCanvas 均由 Sub2 动态目录控制可见模型。</li>
+    </ul>
+  </section>
+
+  <section class="card">
     <h2>风险、回滚与当前阻塞</h2>
     <ul>
       <li class="blocked">真实用户路径尚未验收：没有真实付费任务编号、预览资产或下载证据，因此当前只能判定“内部可用，待用户实测”，不能标记“产品 READY”。</li>
-      <li class="blocked">部署后仍需由管理员本人录入 HC 图片 Key，并为实际员工签发 media Sub2 Key；本轮不读取或代填该凭证。</li>
+      <li class="blocked">仍需由管理员本人录入 HC 图片 Key，并为实际员工签发 media/video 两把 Sub2 Key；本轮不读取或代填该凭证。</li>
       <li class="warn">HC 单模型文档未证明 DELETE 取消接口；本地保持现有取消外壳，但真实取消能力需在最小付费验收时单独确认。</li>
     </ul>
-    <p>回滚：部署前备份当前服务目录和数据库；异常时恢复备份或回退本次提交并重新构建 Sub2API。本次没有数据库迁移。</p>
+    <p>回滚：部署前已备份当前服务目录和 PostgreSQL，并保留上一版 Sub2API 镜像标签；异常时恢复备份或切回上一镜像。本次没有数据库迁移。</p>
   </section>
 
   <section class="card">
     <h2>文件索引与下一步</h2>
     <p><code>backend/internal/repository/account_repo.go</code>、<code>backend/internal/service/admin_account.go</code>、<code>api_key_service.go</code>、<code>batch_image_public.go</code>、<code>frontend/src/components/account/hcAtomAdminContract.ts</code>、<code>KeyVaultView.vue</code>、<code>StaffView.vue</code> 及对应测试。</p>
-    <p>下一步：提交并受控部署；线上复核图片/视频分组、精确 5 模型、中文错误和版本后，再通知管理员本人录入 Key 并发起一次最小真实任务。</p>
+    <p>下一步：管理员本人录入图片 Key、签发能力隔离的 media/video 两把 Sub2 Key，然后从 QCanvas 各发起一次最小图片与视频任务，验收真实任务号、轮询、预览与下载。</p>
     <p>可复制提示词：<code>检查当前 Sub2API HC 图片模型线上版本和分组能力，只报告配置存在性，不读取或打印任何 Key，不发起真实付费任务。</code></p>
   </section>
 </body>

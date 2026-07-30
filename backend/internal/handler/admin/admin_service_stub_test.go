@@ -401,6 +401,16 @@ func (s *stubAdminService) GetAccountsByIDs(ctx context.Context, ids []int64) ([
 	return out, nil
 }
 
+func (s *stubAdminService) CheckAccountConnectivity(ctx context.Context, id int64) (*service.CredentialConnectivityResult, error) {
+	return &service.CredentialConnectivityResult{
+		Status:            service.CredentialConnectivityOK,
+		Supported:         true,
+		Reachable:         true,
+		Authentication:    service.CredentialAuthAccepted,
+		GenerationStarted: false,
+	}, nil
+}
+
 func (s *stubAdminService) CreateAccount(ctx context.Context, input *service.CreateAccountInput) (*service.Account, error) {
 	s.mu.Lock()
 	s.createdAccounts = append(s.createdAccounts, input)

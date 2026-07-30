@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 )
@@ -57,10 +58,11 @@ type VideoAdminRepository interface {
 }
 
 type VideoAdminService struct {
-	repo       VideoAdminRepository
-	encryptor  VideoKeyEncryptor
-	handoff    *AssetHandoffService
-	assetStore *VideoAssetStore
+	repo               VideoAdminRepository
+	encryptor          VideoKeyEncryptor
+	handoff            *AssetHandoffService
+	assetStore         *VideoAssetStore
+	connectivityClient *http.Client
 }
 
 func NewVideoAdminService(repo VideoAdminRepository, encryptor VideoKeyEncryptor, stores ...*VideoAssetStore) *VideoAdminService {
@@ -69,10 +71,11 @@ func NewVideoAdminService(repo VideoAdminRepository, encryptor VideoKeyEncryptor
 		assetStore = stores[0]
 	}
 	return &VideoAdminService{
-		repo:       repo,
-		encryptor:  encryptor,
-		handoff:    NewAssetHandoffService(repo, NewHTTPAssetInspector(), time.Now, nil),
-		assetStore: assetStore,
+		repo:               repo,
+		encryptor:          encryptor,
+		handoff:            NewAssetHandoffService(repo, NewHTTPAssetInspector(), time.Now, nil),
+		assetStore:         assetStore,
+		connectivityClient: newCredentialConnectivityHTTPClient(),
 	}
 }
 

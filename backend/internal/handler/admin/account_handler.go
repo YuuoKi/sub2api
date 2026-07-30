@@ -1009,6 +1009,21 @@ func (h *AccountHandler) Test(c *gin.Context) {
 	}
 }
 
+// CheckConnectivity performs a non-generating endpoint/authentication probe.
+// POST /api/v1/admin/accounts/:id/connectivity-check
+func (h *AccountHandler) CheckConnectivity(c *gin.Context) {
+	accountID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || accountID <= 0 {
+		response.BadRequest(c, "Invalid account ID")
+		return
+	}
+	result, err := h.adminService.CheckAccountConnectivity(c.Request.Context(), accountID)
+	if response.ErrorFrom(c, err) {
+		return
+	}
+	response.Success(c, result)
+}
+
 // RecoverState handles unified recovery of recoverable account runtime state.
 // POST /api/v1/admin/accounts/:id/recover-state
 func (h *AccountHandler) RecoverState(c *gin.Context) {

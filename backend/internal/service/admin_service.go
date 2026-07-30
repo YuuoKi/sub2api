@@ -66,6 +66,7 @@ type AdminService interface {
 	ListOpenAISchedulableAccountsForSchedulerScore(ctx context.Context, groupID *int64) ([]Account, error)
 	GetAccount(ctx context.Context, id int64) (*Account, error)
 	GetAccountsByIDs(ctx context.Context, ids []int64) ([]*Account, error)
+	CheckAccountConnectivity(ctx context.Context, id int64) (*CredentialConnectivityResult, error)
 	CreateAccount(ctx context.Context, input *CreateAccountInput) (*Account, error)
 	UpdateAccount(ctx context.Context, id int64, input *UpdateAccountInput) (*Account, error)
 	// UpdateAccountExtra 仅对 Extra 做 JSONB 增量合并（key 级覆盖），不会影响其它字段或运行态键。
@@ -594,6 +595,7 @@ type adminServiceImpl struct {
 	privacyClientFactory   PrivacyClientFactory
 	runtimeBlocker         AccountRuntimeBlocker
 	hcAtomCredentialCipher HCAtomCredentialCipher
+	connectivityClient     *http.Client
 }
 
 type userGroupRateBatchReader interface {
@@ -640,6 +642,7 @@ func NewAdminService(
 		userSubRepo:          userSubRepo,
 		privacyClientFactory: privacyClientFactory,
 		runtimeBlocker:       runtimeBlocker,
+		connectivityClient:   newCredentialConnectivityHTTPClient(),
 	}
 }
 

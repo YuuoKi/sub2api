@@ -72,15 +72,16 @@
                 </td>
                 <td class="px-5 py-3">
                   <div class="flex flex-wrap justify-end gap-1.5">
+                    <button
+                      class="btn btn-sm btn-outline"
+                      type="button"
+                      :disabled="accountActionId === account.id"
+                      :data-test="`check-account-connectivity-${account.id}`"
+                      @click="testAccountConnectivity(account)"
+                    >
+                      {{ accountActionId === account.id ? '检查中…' : '检查连接' }}
+                    </button>
                     <template v-if="account.status === 'error'">
-                      <button
-                        class="btn btn-sm btn-outline"
-                        type="button"
-                        :disabled="accountActionId === account.id"
-                        @click="testAccountConnectivity(account)"
-                      >
-                        测试连通
-                      </button>
                       <button
                         class="btn btn-sm btn-outline"
                         type="button"
@@ -155,6 +156,15 @@
                 <td class="px-5 py-3 text-xs text-gray-500 dark:text-gray-400">{{ formatDateTime(provider.tiny_real_consumed_at) }}</td>
                 <td class="px-5 py-3">
                   <div class="flex flex-wrap justify-end gap-1.5">
+                    <button
+                      class="btn btn-sm btn-outline"
+                      type="button"
+                      :disabled="providerActionId === provider.id"
+                      :data-test="`check-provider-connectivity-${provider.id}`"
+                      @click="testProviderConnectivity(provider)"
+                    >
+                      {{ providerActionId === provider.id ? '检查中…' : '检查连接' }}
+                    </button>
                     <button
                       class="btn btn-sm btn-outline"
                       type="button"
@@ -915,18 +925,33 @@ async function removeAccount(account: Account) {
 async function testAccountConnectivity(account: Account) {
   accountActionId.value = account.id
   try {
-    const result = await adminAPI.accounts.testAccount(account.id)
-    if (result.success) {
-      const latency = typeof result.latency_ms === 'number' ? `（${result.latency_ms}ms）` : ''
-      appStore.showSuccess(result.message || `连通测试成功${latency}`)
-    } else {
-      appStore.showError(result.message || '连通测试失败')
-    }
-    await loadAccounts()
+    const result = await adminAPI.accounts.checkConnectivity(account.id)
+    showConnectivityResult(result)
   } catch (err) {
-    appStore.showError(extractApiErrorMessage(err, '连通测试失败', CONSOLE_ERROR_ZH))
+    appStore.showError(extractApiErrorMessage(err, '连接检查失败', CONSOLE_ERROR_ZH))
   } finally {
     accountActionId.value = null
+  }
+}
+
+function showConnectivityResult(result: {
+  status: 'ok' | 'warning' | 'error'
+  message: string
+  latency_ms?: number
+  generation_started: boolean
+}) {
+  const latency = typeof result.latency_ms === 'number' ? `（${result.latency_ms}ms）` : ''
+  const baseMessage = result.message || '连接检查已完成'
+  const generation = result.generation_started || baseMessage.includes('未创建生成任务')
+    ? ''
+    : '；未创建生成任务'
+  const message = `${baseMessage}${latency}${generation}`
+  if (result.status === 'ok') {
+    appStore.showSuccess(message, 5000)
+  } else if (result.status === 'warning') {
+    appStore.showWarning(message, 6000)
+  } else {
+    appStore.showError(message, 6000)
   }
 }
 
@@ -1257,6 +1282,18 @@ async function retryProviderAuth(provider: VideoProviderAccount) {
     await loadProviders()
   } catch (err) {
     appStore.showError(extractApiErrorMessage(err, '重试授权失败', CONSOLE_ERROR_ZH))
+  } finally {
+    providerActionId.value = null
+  }
+}
+
+async function testProviderConnectivity(provider: VideoProviderAccount) {
+  providerActionId.value = provider.id
+  try {
+    const result = await adminAPI.video.checkProviderConnectivity(provider.id)
+    showConnectivityResult(result)
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, '连接检查失败', CONSOLE_ERROR_ZH))
   } finally {
     providerActionId.value = null
   }

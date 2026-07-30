@@ -6,17 +6,20 @@ const mocks = vi.hoisted(() => ({
   accountsList: vi.fn(),
   accountsCreate: vi.fn(),
   accountsUpdate: vi.fn(),
+  accountsCheckConnectivity: vi.fn(),
   listProviders: vi.fn(),
   videoContract: vi.fn(),
   createProvider: vi.fn(),
   updateProvider: vi.fn(),
   deleteProvider: vi.fn(),
   authorizeTinyReal: vi.fn(),
+  checkProviderConnectivity: vi.fn(),
   groupsGetAll: vi.fn(),
   groupsCreate: vi.fn(),
   requestConfirmation: vi.fn(),
   showSuccess: vi.fn(),
   showError: vi.fn(),
+  showWarning: vi.fn(),
 }))
 
 vi.mock('@/api/admin', () => ({
@@ -25,6 +28,7 @@ vi.mock('@/api/admin', () => ({
       list: mocks.accountsList,
       create: mocks.accountsCreate,
       update: mocks.accountsUpdate,
+      checkConnectivity: mocks.accountsCheckConnectivity,
     },
     video: {
       listProviders: mocks.listProviders,
@@ -33,6 +37,7 @@ vi.mock('@/api/admin', () => ({
       updateProvider: mocks.updateProvider,
       deleteProvider: mocks.deleteProvider,
       authorizeTinyReal: mocks.authorizeTinyReal,
+      checkProviderConnectivity: mocks.checkProviderConnectivity,
     },
     groups: {
       getAll: mocks.groupsGetAll,
@@ -47,7 +52,11 @@ vi.mock('@/composables/useAppDialog', () => ({
 }))
 
 vi.mock('@/stores/app', () => ({
-  useAppStore: () => ({ showSuccess: mocks.showSuccess, showError: mocks.showError }),
+  useAppStore: () => ({
+    showSuccess: mocks.showSuccess,
+    showError: mocks.showError,
+    showWarning: mocks.showWarning,
+  }),
 }))
 
 vi.mock('vue-router', async () => {
@@ -168,6 +177,16 @@ describe('KeyVaultView account secret handling', () => {
     mocks.accountsList.mockResolvedValue({ items: [], total: 0 })
     mocks.listProviders.mockResolvedValue({ items: [] })
     mocks.groupsGetAll.mockResolvedValue([ANTHROPIC_GROUP])
+    mocks.accountsCheckConnectivity.mockResolvedValue({
+      status: 'ok',
+      message: '接口可达，凭证未被上游拒绝',
+      supported: true,
+      reachable: true,
+      authentication: 'accepted',
+      latency_ms: 12,
+      generation_started: false,
+      checked_at: '2026-07-30T00:00:00Z',
+    })
   })
 
   it('clears the plaintext API key from form state after the dialog is cancelled', async () => {
@@ -207,6 +226,32 @@ describe('KeyVaultView account secret handling', () => {
     const reopenedInput = wrapper.find('[data-test="account-api-key"]')
     expect((reopenedInput.element as HTMLInputElement).value).toBe('')
     expect(wrapper.text()).not.toContain(SECRET_KEY)
+  })
+
+  it('keeps the safe connectivity check visible for a healthy account', async () => {
+    mocks.accountsList.mockResolvedValue({
+      items: [{
+        id: 17,
+        name: 'HC 图片中转',
+        platform: 'hc_atom',
+        type: 'apikey',
+        status: 'active',
+        groups: [HC_ATOM_GROUP],
+      }],
+      total: 1,
+    })
+    const wrapper = await mountView()
+
+    const button = wrapper.find('[data-test="check-account-connectivity-17"]')
+    expect(button.exists()).toBe(true)
+    await button.trigger('click')
+    await flushPromises()
+
+    expect(mocks.accountsCheckConnectivity).toHaveBeenCalledWith(17)
+    expect(mocks.showSuccess).toHaveBeenCalledWith(
+      expect.stringContaining('未创建生成任务'),
+      5000,
+    )
   })
 
   it('reuses one account-create Idempotency-Key across retries in the same dialog', async () => {
@@ -406,6 +451,16 @@ describe('KeyVaultView video provider management', () => {
     mocks.updateProvider.mockResolvedValue({ ...PROVIDER, enabled: false })
     mocks.deleteProvider.mockResolvedValue({ message: 'ok' })
     mocks.authorizeTinyReal.mockResolvedValue({ ...PROVIDER, tiny_real_authorized_at: '2026-07-23T00:00:00Z' })
+    mocks.checkProviderConnectivity.mockResolvedValue({
+      status: 'ok',
+      message: '接口可达，凭证未被上游拒绝',
+      supported: true,
+      reachable: true,
+      authentication: 'accepted',
+      latency_ms: 18,
+      generation_started: false,
+      checked_at: '2026-07-30T00:00:00Z',
+    })
   })
 
   async function switchToVideoTab(wrapper: ReturnType<typeof mount>) {
@@ -447,6 +502,23 @@ describe('KeyVaultView video provider management', () => {
     await wrapper.find('[data-test="open-create-provider"]').trigger('click')
     expect((wrapper.find('[data-test="provider-api-key"]').element as HTMLInputElement).value).toBe('')
     expect(wrapper.text()).not.toContain(SECRET_KEY)
+  })
+
+  it('checks video connectivity from the row without authorizing or creating a task', async () => {
+    const wrapper = await mountView()
+    await switchToVideoTab(wrapper)
+
+    const button = wrapper.find('[data-test="check-provider-connectivity-3"]')
+    expect(button.exists()).toBe(true)
+    await button.trigger('click')
+    await flushPromises()
+
+    expect(mocks.checkProviderConnectivity).toHaveBeenCalledWith(3)
+    expect(mocks.authorizeTinyReal).not.toHaveBeenCalled()
+    expect(mocks.showSuccess).toHaveBeenCalledWith(
+      expect.stringContaining('未创建生成任务'),
+      5000,
+    )
   })
 
   it('keeps an HC V1 provider quick group on the V1 public alias', async () => {

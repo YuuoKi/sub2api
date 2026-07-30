@@ -125,6 +125,17 @@ func (h *VideoHandler) AuthorizeTinyReal(c *gin.Context) {
 	}
 	response.Success(c, item)
 }
+func (h *VideoHandler) CheckProviderConnectivity(c *gin.Context) {
+	id, ok := videoID(c)
+	if !ok {
+		return
+	}
+	result, err := h.service.CheckProviderConnectivity(c.Request.Context(), id)
+	if writeVideoAdminError(c, err) {
+		return
+	}
+	response.Success(c, result)
+}
 func (h *VideoHandler) ListTasks(c *gin.Context) {
 	page, size := response.ParsePagination(c)
 	items, total, err := h.service.ListTasks(c.Request.Context(), service.VideoAdminTaskFilter{Page: page, PageSize: size, Status: c.Query("status")})

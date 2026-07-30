@@ -3,7 +3,7 @@
 # then copy the tar to a Windows-visible folder.
 set -euo pipefail
 
-COMMIT="${1:-f8cc438f6}"
+COMMIT="${1:-758f5c419}"
 IMAGE="wujie-sub2api:staff-hotfix-${COMMIT}"
 LINUX_OUT="/tmp/sub2api-staff-hotfix-deploy/wujie-sub2api-staff-hotfix-${COMMIT}.tar"
 WIN_OUT="/mnt/c/Temp/sub2api-deploy/wujie-sub2api-staff-hotfix-${COMMIT}.tar"

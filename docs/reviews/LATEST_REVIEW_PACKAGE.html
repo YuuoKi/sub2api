@@ -3,97 +3,106 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Sub2API 双视频生产目录与调度审查包</title>
+  <title>Sub2API 本地分支收口审查包</title>
   <style>
     :root{color-scheme:dark;background:#081018;color:#dbeafe;font:15px/1.65 system-ui,sans-serif}
-    body{max-width:1080px;margin:auto;padding:32px}.card{background:#101b2b;border:1px solid #29415d;border-radius:14px;padding:20px;margin:16px 0}
-    h1,h2{color:#7dd3fc}code,pre{background:#07111f;border-radius:8px;padding:2px 6px}pre{padding:14px;overflow:auto}
+    body{max-width:1100px;margin:auto;padding:32px}.card{background:#101b2b;border:1px solid #29415d;border-radius:14px;padding:20px;margin:16px 0}
+    h1,h2{color:#7dd3fc}code,pre{background:#07111f;border-radius:8px;padding:2px 6px}pre{padding:14px;overflow:auto;white-space:pre-wrap}
     .ok{color:#86efac}.warn{color:#fde68a}.blocked{color:#fca5a5}table{width:100%;border-collapse:collapse}td,th{border:1px solid #29415d;padding:8px;text-align:left}
   </style>
 </head>
 <body>
-  <h1>Sub2API 双视频生产目录与调度审查包</h1>
-  <p class="ok">当前状态：内部可用，已部署；官方 Seedance 2.0 与 HC-ATOM Seedance V3 的无付费连通性检查均通过。</p>
+  <h1>Sub2API 本地分支收口审查包</h1>
+  <p class="warn"><strong>当前状态：</strong>本地合流与全部门禁通过；待将结果快进到 <code>main</code> 并显式清理冗余本地 refs。未 fetch、push、部署或调用真实供应商。</p>
 
   <section class="card">
-    <h2>目标与执行目录</h2>
-    <p>让 QCanvas 只持有 Sub2API 视频 Key，由 Sub2API 目录和供应商账号自动区分官方 Seedance 与 HC-ATOM V3 协议，并完整公布模型能力参数。</p>
-    <p><code>D:\sub2api-trunk\.worktrees\hc-unified-chain-20260728</code></p>
-    <p>实现提交：<code>4f53780</code>；配套 QCanvas 提交：<code>8639eb1</code>。</p>
+    <h2>目标与背景</h2>
+    <p>将 9 个本地分支和 5 个 worktree 收口为单一 <code>main</code>，同时保留最新 Key Vault 功能、staff 部署 checkpoint、原 main 审计提交和计费旁支恢复锚点。</p>
+    <table>
+      <tr><th>执行目录</th><td><code>D:\sub2api-trunk\.worktrees\consolidate-sub2api-20260730</code></td></tr>
+      <tr><th>整合分支</th><td><code>codex/consolidate-sub2api-20260730</code></td></tr>
+      <tr><th>整合代码 HEAD</th><td><code>74daac1e7408ae24db46885e3c9280a3917c2603</code></td></tr>
+      <tr><th>远端影响</th><td>无；远端 refs 仅作为本地快照读取</td></tr>
+    </table>
   </section>
 
   <section class="card">
     <h2>变更清单与实现细节</h2>
     <ul>
-      <li>官方公共别名固定为 <code>seedance-2-fast</code>，实际上游模型仍为 <code>doubao-seedance-2-0-260128</code>。</li>
-      <li>HC V3 公共模型为 <code>doubao-seedance-2.0-v3</code>，使用 <code>/v3/video/tasks</code>。</li>
-      <li>目录返回可选比例、时长、清晰度、音频和参考资产规则；V3 支持首帧、尾帧、参考图、参考视频、参考音频角色。</li>
-      <li>首尾帧与参考图保持互斥校验，协议不完整或未授权模型继续 fail-closed。</li>
-      <li>官方模型只有在供应商已配置、组允许、最小真实授权存在且生产开关开启时才展示。</li>
-      <li>媒体组和视频组继续使用不同 Key；3 把现有视频 Key 与两个视频供应商统一迁移到 group 9。</li>
+      <li><code>fd2aad9bc</code>：将 <code>codex/hc-key-vault-ux-20260729@d605aa51d7</code> 合入原 <code>main@8c2d2a7ed7</code>。</li>
+      <li><code>74daac1e7</code>：合入 <code>fix/staff-console-hotfix-20260726@4e0290fb3</code>，保留部署 checkpoint。</li>
+      <li>未直接合并 <code>fix/runtime-billing-blockers-20260725@cadc1b0d8</code>；该分支与最新集成线存在 9 个冲突 hunk。</li>
+      <li>以 <code>b2378efa1</code> 作为计费竞态保护的适配实现；余额、quota、独立 reset 与 nil cache 四项不变量均有当前实现和测试证据。</li>
+      <li>未新增公开 API、数据库迁移、配置契约或前端交互；本轮新增内容仅为 Git 合流记录与真相文档。</li>
     </ul>
   </section>
 
   <section class="card">
     <h2>验证命令与结果</h2>
-    <pre>go test ./internal/service ./internal/handler/... -count=1
+    <pre>go test ./internal/repository -run '^(TestAPIKeyRepository|TestUserRepository)' -count=1
 PASS
 
-go build -buildvcs=false
+go test ./internal/service -run '^(TestCheckBillingEligibility_|TestPostUsageBilling_|TestFinalizePostUsageBilling_|TestApiKeyService_Delete_|TestAPIKeyService_List_|TestAPIKeyService_GetByID_)' -count=1
 PASS
 
-QCanvas Hono API 完整测试
-PASS（退出码 0）
+go test ./... -count=1
+PASS
 
-QCanvas Web 目录/生成定向测试
-PASS（54）
+go build ./...
+PASS（使用进程级 safe.directory，同时声明主仓与整合 worktree；未改全局 Git 配置）
 
-QCanvas Web typecheck / production build
+前端全量 Vitest
+PASS
+
+vue-tsc --noEmit
+PASS
+
+eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts
+PASS
+
+vue-tsc -b
+PASS
+
+vite build
+PASS（969 modules transformed；仅既有 chunk/dynamic-import 警告）
+
+git diff --check
 PASS</pre>
-    <p class="warn">QCanvas Web 全量仍有 9 个与本轮无关的历史测试失败，已在 QCanvas 审查包逐项列出；本轮目录与生成用例均通过。</p>
+    <p>前端依赖复用了 <code>codex/hc-key-vault-ux-20260729</code> worktree 的同版本 <code>node_modules</code>；两份 <code>pnpm-lock.yaml</code> SHA-256 相同。由于本机离线 pnpm store 缺少 Airwallex tarball，未联网补包，改为直接执行相同依赖版本的 CLI 入口。</p>
+    <p>本轮没有 UI 内容变化，因此不新增截图；既有 UI/功能证据仍由被合入分支的历史审查包保存。</p>
   </section>
 
   <section class="card">
-    <h2>线上部署与证据</h2>
-    <pre>生产目录：
-/home/ubuntu/wujie/wujie-tencent-guangzhou-dualkey-d6e54a8-35d5f77
-
-部署备份：
-/home/ubuntu/wujie/backups/production-r33-20260730T174320CST
-
-容器：
-sub2api  healthy
-q-api    healthy
-q-web    healthy
-
-视频组模型：
-seedance-2-fast
-doubao-seedance-2.0-v3
-
-视频 Key group=9：3
-官方供应商 group=9：enabled / key configured
-HC V3 供应商 group=9：enabled / key configured
-
-官方检查连接：149ms，通过，未创建任务
-HC V3 检查连接：126ms，通过，未创建任务
-video_tasks：0</pre>
+    <h2>计费语义复核</h2>
+    <table>
+      <tr><th>不变量</th><th>证据</th><th>结果</th></tr>
+      <tr><td>普通用户更新不回写余额快照</td><td><code>user_repo.go</code> 与并发测试</td><td class="ok">PASS</td></tr>
+      <tr><td>API Key 普通更新不回写 quota_used</td><td><code>api_key_repo.go</code> 与 quota race 测试</td><td class="ok">PASS</td></tr>
+      <tr><td>quota reset 与 rate-limit reset 独立</td><td>双向独立性与 service quota 测试</td><td class="ok">PASS</td></tr>
+      <tr><td>nil billing cache 不 panic，资格检查读取 DB quota</td><td>billing cache 与 post/finalize 测试</td><td class="ok">PASS</td></tr>
+    </table>
+    <p>独立只读复核未发现相对 <code>cadc1b0d8</code> 的功能缺口，可以将其标记为被 <code>b2378efa1</code> 语义替代。</p>
   </section>
 
   <section class="card">
-    <h2>安全、风险与回滚</h2>
+    <h2>风险与回滚</h2>
     <ul>
-      <li>检查连接只发 GET 探针，不创建图片/视频任务；上游 Key 没有出现在前端、日志或响应中。</li>
-      <li class="warn">真实生成、轮询、预览、下载仍需用户发起一次最小付费任务后验收。</li>
-      <li class="warn">QCanvas HTTPS 使用内部证书，首次访问会出现浏览器证书提示。</li>
+      <li>未执行 fetch，远端跟踪 refs 不是远端服务器实时证明；本轮明确不清理远端分支。</li>
+      <li>没有执行真实供应商 E2E、生产部署或线上回归；本审查包只证明本地分支收口和工程门禁。</li>
+      <li>回滚锚点：<code>archive/pre-consolidation-main-20260730</code> → 原 main，<code>archive/runtime-billing-blockers-20260725</code> → 原计费旁支。</li>
+      <li>禁止 reset/clean/rebase；需要回滚时使用 <code>git revert</code> 撤销合流或文档提交。</li>
     </ul>
-    <p>回滚脚本：<code>/home/ubuntu/wujie/staging/r33-20260730/rollback-r33.sh</code>。备份包含双数据库、旧源码、旧 compose、旧 q-api Dockerfile 和旧镜像标签。</p>
   </section>
 
   <section class="card">
-    <h2>当前状态、文件索引与下一步</h2>
-    <p>当前判定：<strong>内部可用，待用户真实最小任务复核</strong>，不是“已完成付费 E2E”。</p>
-    <p>主要文件位于 <code>backend/internal/service/</code>、<code>backend/internal/handler/</code>、对应测试与本文件。</p>
-    <p>可复制提示词：<code>我刚在 QCanvas 创建了一个最小视频任务。请只读核对 Sub2API 的模型别名、实际供应商、上游任务编号、轮询状态、结果资产和计费；不要创建新任务。</code></p>
+    <h2>文件索引、下一步与后续提示词</h2>
+    <ul>
+      <li><code>docs/goals/03_CURRENT_GOAL.md</code>：当前收口目标和完成条件。</li>
+      <li><code>docs/reviews/LATEST_REVIEW_PACKAGE.html</code>：本单一自包含审查包。</li>
+      <li><code>docs/goals/SUB2API_RELEASE_20260728.md</code>：计费与 HC-ATOM 适配来源。</li>
+    </ul>
+    <p>下一步：提交两份文档，以 <code>--ff-only</code> 更新 <code>main</code>，逐个移除已确认干净的旧 worktree，再删除已被包含或已归档的本地分支，最后刷新本页状态。</p>
+    <p><strong>可复制后续提示词：</strong><code>请只读核对 D:\sub2api-trunk 最终 Git 状态：确认仅剩 main 和主工作树，两个 archive 标签可解析，main 包含 d605aa51d7、4e0290fb3、8c2d2a7ed7，并且没有 fetch、push 或部署记录。</code></p>
   </section>
 </body>
 </html>

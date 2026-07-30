@@ -1,41 +1,51 @@
-# 当前目标：视频连通性修复与受控连续生产调度
+# 当前目标：Sub2API 本地分支收口
 
 日期：2026-07-30
-分支：`codex/hc-key-vault-ux-20260729`
-执行目录：`D:\sub2api-trunk\.worktrees\hc-unified-chain-20260728`
-状态：**本地实现与验证通过 / 用户已授权受控部署和真实调度 / 尚未执行付费生成**
+整合分支：`codex/consolidate-sub2api-20260730`
+整合目录：`D:\sub2api-trunk\.worktrees\consolidate-sub2api-20260730`
+整合代码 HEAD：`74daac1e7408ae24db46885e3c9280a3917c2603`
+状态：**本地合流与验证通过，待 main 快进和冗余 refs 清理**
 
 ## 目标
 
-让当前生产密钥库中的两条视频通道可安全、持续地正常使用：
+- 以 `codex/hc-key-vault-ux-20260729@d605aa51d7` 为完整功能源。
+- 保留原 `main@8c2d2a7ed7` 的审计与本地制品卫生提交。
+- 保留 `fix/staff-console-hotfix-20260726@4e0290fb3` 的部署 checkpoint。
+- 将本地 9 个分支、5 个 worktree 收口为仅保留 `main` 和主工作树。
+- 不 fetch、push、部署，不修改远端分支，不调用真实付费供应商。
 
-- 修复“检查连接”误用脱敏管理列表、导致所有视频通道误报凭证不可用的问题；
-- 管理列表继续不返回密文或明文 Key，连通性接口仅按 ID 在服务端读取并解密凭证；
-- 保留现有一次性 smoke 门禁，同时增加显式、默认关闭的连续生产调度门禁；
-- 官方 Seedance 2.0 与 HC-ATOM Seedance V3 分别使用自身适配器和调度前置校验；
-- 开启生产门禁前完成假上游、计费、幂等、失败和回滚验证。
+## 已确认事实
 
-当前授权视频通道固定为：
+- `fd2aad9bc` 已将 Key Vault 完整功能线合入整合分支。
+- `74daac1e7` 已将 staff 部署 checkpoint 合入整合分支。
+- `fix/runtime-billing-blockers-20260725@cadc1b0d8` 不直接 merge。
+- 现有 `b2378efa1` 已语义覆盖余额原子更新、API Key quota、独立 reset 与 nil billing cache 防护；定向测试和独立复核均未发现缺口。
+- 两个恢复标签已经创建：
+  - `archive/pre-consolidation-main-20260730`
+  - `archive/runtime-billing-blockers-20260725`
 
-1. 官方 Seedance 2.0：`seedance / doubao-seedance-2-0-260128`
-2. HC-ATOM Seedance V3：`hc_atom_seedance_v3 / doubao-seedance-2.0-v3`
+## 验收门禁
+
+- 后端计费定向测试：PASS。
+- `go test ./... -count=1`：PASS。
+- `go build ./...`：PASS。
+- 前端全量 Vitest：PASS。
+- `vue-tsc --noEmit`：PASS。
+- ESLint 只读检查：PASS。
+- `vue-tsc -b` 与 Vite production build：PASS。
+- `git diff --check`：PASS。
 
 ## 硬边界
 
-- 不读取、打印或提交上游 Key、token、cookie、生产连接串；
-- 工程和部署验收不主动创建付费任务；由用户在部署后从 QCanvas 发起真实任务；
-- 不静默回退官方平台或其他模型；
-- 不删除生产数据、卷、备份或历史回滚镜像；
-- 连续生产开关必须默认关闭，且可通过单次配置回滚关闭；
-- 不能复用或篡改名为 `VIDEO_SINGLE_SMOKE_AUTHORIZED` 的一次性语义。
+- 不读取、打印、提交或截图任何 key、token、cookie、生产连接串。
+- 不触发真实图片或视频任务。
+- 不执行 fetch、push、部署、reset、clean 或 rebase。
+- 任一最终 Git 验收失败时停止删除 refs，并在审查包中标记“已阻塞”。
 
-## 验收
+## 完成条件
 
-1. 管理列表响应继续只有 masked key，不包含 encrypted/plain key；
-2. 两条通道的连通性检查均能读取真实服务端密文并使用 GET 安全探针；
-3. 连通性测试使用假上游，不创建生成任务，不泄露 Key；
-4. 连续生产开关关闭时行为与现状一致；开启时不消耗一次性 smoke gate；
-5. Seedance 与 HC V3 每个任务均经过 provider、group、model、价格、预算、凭证和幂等校验；
-6. 后端定向测试、生产编译、前端测试、类型检查和生产构建通过；
-7. 部署前备份数据库、配置和旧镜像，部署失败自动回滚；
-8. 线上健康、版本、目录和安全连通性通过后，再通知用户从 QCanvas 发起最小真实任务。
+1. `main` 以 `--ff-only` 前移到已验证整合结果。
+2. 显式移除四个旧关联 worktree。
+3. 删除八个冗余本地分支和临时整合分支。
+4. 最终仅剩 `main` 与 `D:\sub2api-trunk` 主工作树。
+5. 两个 archive 标签可解析到原始 SHA，主工作树干净。

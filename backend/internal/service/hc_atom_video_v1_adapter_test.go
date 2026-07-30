@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/stretchr/testify/require"
@@ -213,4 +214,30 @@ func TestAuthorizedHCAtomVideoModelsAllowsV3ProductionWithoutSmokeGate(t *testin
 
 	require.Len(t, models, 1)
 	require.Equal(t, HCAtomSeedanceV3PublicModel, models[0].Model)
+}
+
+func TestAuthorizedHCAtomVideoModelsIncludesOfficialSeedanceProductionAlias(t *testing.T) {
+	price := 0.2
+	authorizedAt := time.Now().UTC()
+	repo := &videoCatalogRepoStub{providers: []VideoProviderAccount{{
+		ID: 12, GroupID: 9, Provider: "seedance", Enabled: true, APIKeyConfigured: true,
+		BaseURL: SeedanceBaseURL, DefaultModel: SeedanceModel, TinyRealAuthorizedAt: &authorizedAt,
+	}}}
+	cfg := &config.Config{VideoGateway: config.VideoGatewayConfig{SeedanceProductionEnabled: true}}
+	service := NewVideoGatewayService(repo, NewSingleSmokeAuthorization(false), cfg, nil, nil)
+	group := &Group{
+		ID: 9, Platform: PlatformHCAtom, Status: StatusActive,
+		VideoPrice480P: &price, VideoPrice720P: &price, VideoPrice1080P: &price,
+		ModelsListConfig: GroupModelsListConfig{Enabled: true, Models: []string{SeedancePublicModel}},
+	}
+
+	models := service.AuthorizedHCAtomVideoModels(
+		context.Background(), VideoTaskScope{UserID: 1, APIKeyID: 2, GroupID: 9}, group,
+	)
+
+	require.Len(t, models, 1)
+	require.Equal(t, SeedancePublicModel, models[0].Model)
+	require.Equal(t, []int{4}, models[0].Capabilities.DurationSecondsValues)
+	require.Equal(t, []string{"720p"}, models[0].Capabilities.ResolutionValues)
+	require.False(t, models[0].Capabilities.InputImage)
 }

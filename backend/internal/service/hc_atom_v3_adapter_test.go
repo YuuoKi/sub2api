@@ -138,6 +138,21 @@ func TestHCAtomV3PollCancelAndRejectUnsafeInputs(t *testing.T) {
 	if err := ValidateHCAtomV3Request(VideoCreateRequest{Content: []VideoContentItem{{Type: "audio_url", AudioURL: &VideoContentURL{URL: "asset://asset-123"}}}}); err != nil {
 		t.Fatalf("asset URL rejected: %v", err)
 	}
+	if err := ValidateHCAtomV3Request(VideoCreateRequest{Content: []VideoContentItem{
+		{Type: "text", Text: "a paper boat"},
+		{Type: "image_url", Role: "first_frame", ImageURL: &VideoContentURL{URL: "asset://asset-first"}},
+		{Type: "image_url", Role: "last_frame", ImageURL: &VideoContentURL{URL: "asset://asset-last"}},
+		{Type: "video_url", Role: "reference_video", VideoURL: &VideoContentURL{URL: "asset://asset-video"}},
+		{Type: "audio_url", Role: "reference_audio", AudioURL: &VideoContentURL{URL: "asset://asset-audio"}},
+	}}); err != nil {
+		t.Fatalf("supported media roles rejected: %v", err)
+	}
+	if err := ValidateHCAtomV3Request(VideoCreateRequest{Content: []VideoContentItem{
+		{Type: "image_url", Role: "first_frame", ImageURL: &VideoContentURL{URL: "asset://asset-first"}},
+		{Type: "image_url", Role: "reference_image", ImageURL: &VideoContentURL{URL: "asset://asset-reference"}},
+	}}); err == nil {
+		t.Fatal("mutually exclusive frame and reference image roles accepted")
+	}
 }
 
 func TestHCAtomV3AdapterRejectsNonAllowlistedOriginBeforeNetworkAndRedactsSecret(t *testing.T) {

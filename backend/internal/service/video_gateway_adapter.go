@@ -19,6 +19,7 @@ import (
 
 const (
 	SeedanceModel               = "doubao-seedance-2-0-260128"
+	SeedancePublicModel         = "seedance-2-fast"
 	SeedanceBaseURL             = "https://ark.cn-beijing.volces.com/api/v3"
 	HCAtomSeedanceV3Provider    = "hc_atom_seedance_v3"
 	HCAtomVideoV1Provider       = "hc_atom_video_v1"
@@ -282,29 +283,51 @@ func normalizeHCAtomV3Content(input VideoCreateRequest) ([]VideoContentItem, err
 	if len(content) == 0 {
 		return nil, errors.New("hc atom content is required")
 	}
+	firstFrameCount, lastFrameCount, referenceImageCount := 0, 0, 0
 	for _, item := range content {
+		role := strings.TrimSpace(item.Role)
 		switch item.Type {
 		case "text":
-			if strings.TrimSpace(item.Text) == "" || strings.TrimSpace(item.Role) != "" || item.ImageURL != nil || item.VideoURL != nil || item.AudioURL != nil {
+			if strings.TrimSpace(item.Text) == "" || role != "" || item.ImageURL != nil || item.VideoURL != nil || item.AudioURL != nil {
 				return nil, errors.New("hc atom text content is invalid")
 			}
 		case "image_url", "video_url", "audio_url":
 			var media *VideoContentURL
 			if item.Type == "image_url" {
 				media = item.ImageURL
+				switch role {
+				case "":
+				case "first_frame":
+					firstFrameCount++
+				case "last_frame":
+					lastFrameCount++
+				case "reference_image":
+					referenceImageCount++
+				default:
+					return nil, errors.New("hc atom image role is unsupported")
+				}
 			}
 			if item.Type == "video_url" {
 				media = item.VideoURL
+				if role != "" && role != "reference_video" {
+					return nil, errors.New("hc atom video role is unsupported")
+				}
 			}
 			if item.Type == "audio_url" {
 				media = item.AudioURL
+				if role != "" && role != "reference_audio" {
+					return nil, errors.New("hc atom audio role is unsupported")
+				}
 			}
-			if media == nil || strings.TrimSpace(item.Role) != "" || strings.TrimSpace(item.Text) != "" || (item.Type != "image_url" && item.ImageURL != nil) || (item.Type != "video_url" && item.VideoURL != nil) || (item.Type != "audio_url" && item.AudioURL != nil) || validateHCAtomMediaURL(media.URL) != nil {
+			if media == nil || strings.TrimSpace(item.Text) != "" || (item.Type != "image_url" && item.ImageURL != nil) || (item.Type != "video_url" && item.VideoURL != nil) || (item.Type != "audio_url" && item.AudioURL != nil) || validateHCAtomMediaURL(media.URL) != nil {
 				return nil, errors.New("hc atom media content is invalid")
 			}
 		default:
 			return nil, errors.New("hc atom content type is unsupported")
 		}
+	}
+	if firstFrameCount > 1 || lastFrameCount > 1 || ((firstFrameCount > 0 || lastFrameCount > 0) && referenceImageCount > 0) {
+		return nil, errors.New("hc atom frame and reference image roles are mutually exclusive")
 	}
 	return content, nil
 }

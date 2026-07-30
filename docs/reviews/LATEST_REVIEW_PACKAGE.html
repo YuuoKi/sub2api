@@ -13,7 +13,7 @@
 </head>
 <body>
   <h1>Sub2API HC-ATOM 图片/视频调度审查包</h1>
-  <p class="warn">当前状态：既有 HC 调度链在线内部可用；本轮“检查连接”功能已完成本地代码、假上游测试、类型检查和生产构建，尚未部署。没有读取生产凭证，也没有执行真实付费生成。</p>
+  <p class="ok">当前状态：内部可用，待用户实测。本轮“检查连接”已部署到广州生产 Sub2API，线上版本为 <code>59385eadfc338034acf887e037558534b109de16</code>。部署验收没有读取或打印生产凭证，也没有执行真实付费生成。</p>
 
   <section class="card">
     <h2>目标、范围与执行目录</h2>
@@ -144,7 +144,9 @@ PASS（969 modules；仅既有构建警告）</pre>
   <section class="card">
     <h2>线上部署与页面证据</h2>
     <ul>
-      <li><code>http://114.132.50.149/api/v1/health</code> 返回 <code>{"status":"ok"}</code>，公开设置中的 <code>build_commit</code> 与本轮部署提交一致。</li>
+      <li><code>http://114.132.50.149/health</code> 返回 <code>{"status":"ok"}</code>，公开配置为 <code>广州内部版 2026.07.30-r31</code>，<code>build_commit=59385eadfc338034acf887e037558534b109de16</code>。</li>
+      <li>生产仅重建 <code>wujie-production-sub2api-1</code>；部署后容器为 healthy，QCanvas、Caddy、Agents Bridge、PostgreSQL 与 Redis 容器均保持运行。</li>
+      <li>公网静态资源 <code>/assets/KeyVaultView-cSuK5e1m.js</code> 已包含常驻“检查连接”按钮及账号/视频通道调用处理；未认证 POST 探针接口返回 401，证明路由上线且受管理员鉴权保护。</li>
       <li>生产 HC 图片组为活跃 <code>hc_atom</code> 组：图片与批量图片开启，1K/2K/4K 价格完整，且只含本审查包列出的 5 个图片模型。</li>
       <li>生产 HC 视频组为活跃 <code>hc_atom</code> 组：480p/720p/1080p 价格完整，只含 V1/V3 视频模型，不含图片模型。</li>
       <li>浏览器复核：图片弹窗显示精确 5 模型和两类固定接口；视频通道已迁移到 HC 视频组；员工开户明确分离媒体组和视频组；HC 行不再显示 Seedance 授权按钮。</li>
@@ -158,9 +160,9 @@ PASS（969 modules；仅既有构建警告）</pre>
       <li class="blocked">真实用户路径尚未验收：没有真实付费任务编号、预览资产或下载证据，因此当前只能判定“内部可用，待用户实测”，不能标记“产品 READY”。</li>
       <li class="blocked">仍需由管理员本人录入 HC 图片 Key，并为实际员工签发 media/video 两把 Sub2 Key；本轮不读取或代填该凭证。</li>
       <li class="warn">HC 单模型文档未证明 DELETE 取消接口；本地保持现有取消外壳，但真实取消能力需在最小付费验收时单独确认。</li>
-      <li class="warn">本轮“检查连接”尚未部署，线上页面暂时不会出现新按钮；需另行授权部署后才能在生产密钥库实测。</li>
+      <li class="warn">浏览器若仍显示 <code>2026.07.29-r30</code>，属于旧标签页缓存；公网根页面和静态资源已是 r31，使用 <code>Ctrl+F5</code> 强制刷新后再实测按钮。</li>
     </ul>
-    <p>回滚：部署前已备份当前服务目录和 PostgreSQL，并保留上一版 Sub2API 镜像标签；异常时恢复备份或切回上一镜像。本次没有数据库迁移。</p>
+    <p>回滚：备份目录为 <code>/home/ubuntu/wujie/backups/key-connectivity-20260730T070851Z</code>，旧镜像标签为 <code>wujie-sub2api:rollback-20260730T070851Z</code>；异常时切回该镜像。本次没有数据库迁移。</p>
   </section>
 
   <section class="card">

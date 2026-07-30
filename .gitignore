@@ -129,12 +129,19 @@ backend/cmd/server/server
 deploy/docker-compose.override.yml
 .gocache/
 vite.config.js
+# Local-only Codex worktrees and disposable build/deploy artifacts.
+.worktrees/
+.deploy/
+.gocache-*/
+.pnpm-store/
 docs/*
 !docs/PAYMENT.md
 !docs/PAYMENT_CN.md
 !docs/ADMIN_PAYMENT_INTEGRATION_API.md
 !docs/legal/
 !docs/legal/*.md
+!docs/audit/
+!docs/audit/*.md
 .serena/
 .codex/
 frontend/coverage/

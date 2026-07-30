@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Sub2API HC-ATOM 图片/视频调度审查包</title>
+  <title>Sub2API 双视频生产目录与调度审查包</title>
   <style>
     :root{color-scheme:dark;background:#081018;color:#dbeafe;font:15px/1.65 system-ui,sans-serif}
     body{max-width:1080px;margin:auto;padding:32px}.card{background:#101b2b;border:1px solid #29415d;border-radius:14px;padding:20px;margin:16px 0}
@@ -12,164 +12,88 @@
   </style>
 </head>
 <body>
-  <h1>Sub2API HC-ATOM 图片/视频调度审查包</h1>
-  <p class="ok">当前状态：内部可用，待用户实测。本轮“检查连接”已部署到广州生产 Sub2API，线上版本为 <code>59385eadfc338034acf887e037558534b109de16</code>。部署验收没有读取或打印生产凭证，也没有执行真实付费生成。</p>
+  <h1>Sub2API 双视频生产目录与调度审查包</h1>
+  <p class="ok">当前状态：内部可用，已部署；官方 Seedance 2.0 与 HC-ATOM Seedance V3 的无付费连通性检查均通过。</p>
 
   <section class="card">
-    <h2>目标、范围与执行目录</h2>
-    <p>修复密钥库、员工双 Key 和模型目录的分组隔离，只开放用户确认授权且协议完整的 5 个图片模型，不扩展到全部模型。</p>
+    <h2>目标与执行目录</h2>
+    <p>让 QCanvas 只持有 Sub2API 视频 Key，由 Sub2API 目录和供应商账号自动区分官方 Seedance 与 HC-ATOM V3 协议，并完整公布模型能力参数。</p>
     <p><code>D:\sub2api-trunk\.worktrees\hc-unified-chain-20260728</code></p>
+    <p>实现提交：<code>4f53780</code>；配套 QCanvas 提交：<code>8639eb1</code>。</p>
   </section>
 
   <section class="card">
-    <h2>2026-07-30 密钥连通性检查</h2>
+    <h2>变更清单与实现细节</h2>
     <ul>
-      <li>密钥库的健康账号、异常账号和视频通道行均常驻显示“检查连接”，不再只在账号异常时出现。</li>
-      <li>新增管理员接口：<code>POST /api/v1/admin/accounts/:id/connectivity-check</code> 与 <code>POST /api/v1/admin/video/providers/:id/connectivity-check</code>。</li>
-      <li>HC 图片检查分别以 GET 探测同步接口 <code>/v1/images/generations</code> 和异步任务接口 <code>/image/generation/tasks/{不存在的探针号}</code>；同时兼容已授权图片模型使用的 Bearer 与 x-api-key 鉴权。</li>
-      <li>官方 Seedance、HC Video V1、HC Seedance V3 分别查询自己的固定任务轮询地址；所有探针均为 GET，不会 POST 创建图片或视频任务。</li>
-      <li>结果明确区分成功、警告和失败：401/403 或业务鉴权错误为凭证被拒绝；网络失败为不可达；限流和服务端异常标记“鉴权未确认”，不伪报成功。</li>
-      <li>上游响应最多读取 8 KiB，禁止重定向；若响应意外包含当前明文 Key，立即失败且不向前端回显。</li>
-      <li>非 HC 通用账号没有通用零费用鉴权接口，因此按钮只报告“不支持安全探针”，不会退回旧的真实模型 SSE 测试。</li>
-      <li class="warn">“检查连接”证明接口可达且凭证未被拒绝，不等同于真实生成成功；真实出图/出视频仍需用户另行授权最小付费任务。</li>
-    </ul>
-  </section>
-
-  <section class="card">
-    <h2>截图问题与根因</h2>
-    <ul>
-      <li>分组名称全局唯一，但旧页面只加载活跃且当前平台可见的分组；同名分组被隐藏时仍会占名，导致“无可用分组”与 <code>group name already exists</code> 同时出现。</li>
-      <li>图片账号只按平台过滤，没有按价格、模型和图片能力过滤，因此可能把视频组放进图片账号。</li>
-      <li>图片账号目录错误混入 3 个文字模型，页面信息与“HC-ATOM（图片）”语义不一致。</li>
-      <li>创建账号没有稳定的 <code>Idempotency-Key</code>，账号创建与分组绑定也不是原子操作。</li>
-      <li>员工 media/video 双 Key 只检查组 ID，没有证明两组能力不同，存在错误绑定风险。</li>
-      <li>遗留 HC 视频通道可能仍绑定旧 media 组并携带错误模型；页面保存会失败且没有给出迁移路径。</li>
-      <li>HC 视频通道误显示官方 Seedance 专属的“重试授权/最小真实调用”入口，信息与实际 HC 调度机制不一致。</li>
-    </ul>
-  </section>
-
-  <section class="card">
-    <h2>逐模型文档核对结果</h2>
-    <table>
-      <thead><tr><th>模型</th><th>协议</th><th>鉴权</th><th>结果</th></tr></thead>
-      <tbody>
-        <tr><td>seedream-5.0</td><td>POST /v1/images/generations</td><td>Bearer</td><td class="ok">已适配，同步文生图</td></tr>
-        <tr><td>doubao-seedream-5.0-pro</td><td>POST /v1/images/generations</td><td>Bearer</td><td class="ok">已适配，同步文生图/参考图</td></tr>
-        <tr><td>gemini-3.1-flash-image-preview</td><td>POST/GET /image/generation/tasks</td><td>Bearer</td><td class="ok">已适配，异步文生图/参考图</td></tr>
-        <tr><td>gpt-image-2</td><td>POST/GET /image/generation/tasks</td><td>x-api-key</td><td class="ok">已适配，异步文生图/参考图</td></tr>
-        <tr><td>s-gpt-image-2</td><td>POST/GET /image/generation/tasks</td><td>x-api-key</td><td class="ok">已适配，异步文生图/参考图</td></tr>
-        <tr><td>dola-seedream-5.0-pro</td><td>HC 控制台显示“待配置接口地址”</td><td>无可执行文档</td><td class="blocked">禁用、隐藏、禁止调度</td></tr>
-      </tbody>
-    </table>
-    <p><code>/businessApiDoc</code> 是余额对账接口文档；生成协议以模型广场各模型“查看调用文档”为准。</p>
-  </section>
-
-  <section class="card">
-    <h2>改动清单与安全边界</h2>
-    <ul>
-      <li>图片弹窗只显示 5 个授权图片模型；文字、视频和 Dola 不进入图片账号目录。</li>
-      <li>图片组必须是活跃 HC 组、允许图片与批量图片、配置 1K/2K/4K 正价格、包含精确 5 个图片模型且不包含视频模型。</li>
-      <li>视频组必须是活跃 HC 组、配置 480p/720p/1080p 正价格、包含当前通道对应的 V1 或 V3 视频模型且不包含任何图片模型。</li>
-      <li>快速建组会复用同名且能力正确的现有组；名称冲突、停用组或能力不匹配均给出中文原因。相同活跃 toast 在短时间内只显示一次。</li>
-      <li>分组加载失败不会伪装成“当前没有分组”，账号与视频通道保存前会再次验证所选组。</li>
-      <li>HC 图片账号在 API 层也禁止无分组创建或显式清空分组；真实数据库故障不会被误报成“分组不存在”。</li>
-      <li>密钥库与通用开户弹窗都按一次打开会话复用稳定 <code>Idempotency-Key</code>；批量开户的每个逻辑账号使用独立 Key。</li>
-      <li>后端在事务内完成账号和分组绑定，失败时不留下无组账号或调度缓存残影；真实 PostgreSQL 回滚测试覆盖创建和更新两条路径。</li>
-      <li>员工双 Key 后端强制 media/video 两组能力互斥；错误平台、停用组、缺价或模型不完整均拒绝开卡。</li>
-      <li>编辑遗留 HC 视频通道时自动选择能力匹配的视频组，并由后端恢复固定中转地址和正确 V1/V3 模型。</li>
-      <li>只有官方 Seedance 显示最小真实调用授权；HC-ATOM 明确显示“保存后按分组调度”，保存本身不发起付费任务。</li>
-      <li>HC 组图片价格可直接满足异步图片模型可见性判断，不再要求额外全局价格。</li>
-      <li>同步模型自动规范化 <code>prompt / count / quality / reference_images</code>；Seedream 只接受文生图，Doubao 支持参考图。</li>
-      <li>异步模型使用平铺请求体，支持 1K/2K/4K、比例、参考图；GPT 两个模型会把档位换算为真实上游像素，且 4K 严格低于上游像素上限。</li>
-      <li>GPT 两个模型使用 <code>x-api-key</code>，Gemini 使用 Bearer；支持 <code>queued/running/success/failed/cancelled</code> 与结果 URL。</li>
-      <li>安全的 <code>failReason</code> 可回传，当前解密 Key、疑似密钥或签名 URL 会被脱敏；无静默官方回退。</li>
-      <li>单任务、单输出、模型、比例或协议不完整时，在账号选择、解密、计费和网络请求前失败。</li>
+      <li>官方公共别名固定为 <code>seedance-2-fast</code>，实际上游模型仍为 <code>doubao-seedance-2-0-260128</code>。</li>
+      <li>HC V3 公共模型为 <code>doubao-seedance-2.0-v3</code>，使用 <code>/v3/video/tasks</code>。</li>
+      <li>目录返回可选比例、时长、清晰度、音频和参考资产规则；V3 支持首帧、尾帧、参考图、参考视频、参考音频角色。</li>
+      <li>首尾帧与参考图保持互斥校验，协议不完整或未授权模型继续 fail-closed。</li>
+      <li>官方模型只有在供应商已配置、组允许、最小真实授权存在且生产开关开启时才展示。</li>
+      <li>媒体组和视频组继续使用不同 Key；3 把现有视频 Key 与两个视频供应商统一迁移到 group 9。</li>
     </ul>
   </section>
 
   <section class="card">
     <h2>验证命令与结果</h2>
-    <pre>cd backend
-go test ./internal/service -count=1
-PASS（65.079s）
-
-go test ./internal/handler/admin ./internal/repository -count=1
-PASS（4.621s / 5.484s）
-
-go test -tags=unit ./internal/service -count=1
-PASS（包含 HC 账号组校验、员工双 Key、同步/异步图片与脱敏）
-
-WSL Docker + PostgreSQL 18 / Redis 8:
-go test -tags=integration ./internal/repository -run TestAccountRepository_CreateWithGroups_RollsBackAccountWhenBindingFails -count=1 -v
+    <pre>go test ./internal/service ./internal/handler/... -count=1
 PASS
 
-go test -tags=integration ./internal/repository -run TestAccountRepository_UpdateWithGroups_RollsBackFieldsAndBindings -count=1 -v
+go build -buildvcs=false
 PASS
 
-cd ../frontend
-node_modules\.bin\vitest.CMD run --reporter=dot
-PASS（全量前端测试）
+QCanvas Hono API 完整测试
+PASS（退出码 0）
 
-pnpm.cmd typecheck
-PASS
+QCanvas Web 目录/生成定向测试
+PASS（54）
 
-pnpm.cmd build
-PASS（969 modules；仅既有 chunk / dynamic-import / browserslist 警告）
-
-git diff --check
-PASS
-
-本轮连通性定向验证：
-go test -p 1 -tags unit ./internal/service -run "Test(AccountConnectivity|CredentialConnectivity|VideoConnectivity|UnsupportedAccountConnectivity)" -count=1
-PASS（图片账号、官方 Seedance、HC V1、HC V3；全部为假上游 GET）
-
-go test -p 1 ./internal/service ./internal/handler/admin ./internal/server/routes ./internal/server/middleware -run "^$" -count=1
-PASS（生产编译边界）
-
-vitest run src/views/admin/console/__tests__/KeyVaultView.secret.spec.ts
-PASS（19 tests）
-
-vue-tsc --noEmit
-PASS
-
-eslint 定向检查
-PASS
-
-pnpm.cmd run build
-PASS（969 modules；仅既有构建警告）</pre>
-    <p>测试使用假 HC 上游，验证模型名、接口路径、请求字段、Bearer / x-api-key、业务码 200、轮询状态、失败原因、密钥脱敏、分组能力与事务回滚；没有使用真实 Key。</p>
-    <p>QCanvas 证据固定到提交 <code>d39109578f1843c91da12b242243661c31f58869</code>：<code>apps/web/src/config/useModelOptions.ts</code> 消费 Sub2 动态目录，<code>apps/web/src/ui/studio-v2/shell/store/createGenerationSlice.ts</code> 强制图片生成走 <code>/public/draw</code>，<code>apps/hono-api/src/modules/sub2api/sub2api.image-gateway.service.ts</code> 只走 Sub2 并失败关闭；API 定向 109 个用例、Web 定向 20 个用例、API/Web build 和 Web typecheck 均通过。</p>
+QCanvas Web typecheck / production build
+PASS</pre>
+    <p class="warn">QCanvas Web 全量仍有 9 个与本轮无关的历史测试失败，已在 QCanvas 审查包逐项列出；本轮目录与生成用例均通过。</p>
   </section>
 
   <section class="card">
-    <h2>线上部署与页面证据</h2>
+    <h2>线上部署与证据</h2>
+    <pre>生产目录：
+/home/ubuntu/wujie/wujie-tencent-guangzhou-dualkey-d6e54a8-35d5f77
+
+部署备份：
+/home/ubuntu/wujie/backups/production-r33-20260730T174320CST
+
+容器：
+sub2api  healthy
+q-api    healthy
+q-web    healthy
+
+视频组模型：
+seedance-2-fast
+doubao-seedance-2.0-v3
+
+视频 Key group=9：3
+官方供应商 group=9：enabled / key configured
+HC V3 供应商 group=9：enabled / key configured
+
+官方检查连接：149ms，通过，未创建任务
+HC V3 检查连接：126ms，通过，未创建任务
+video_tasks：0</pre>
+  </section>
+
+  <section class="card">
+    <h2>安全、风险与回滚</h2>
     <ul>
-      <li><code>http://114.132.50.149/health</code> 返回 <code>{"status":"ok"}</code>，公开配置为 <code>广州内部版 2026.07.30-r31</code>，<code>build_commit=59385eadfc338034acf887e037558534b109de16</code>。</li>
-      <li>生产仅重建 <code>wujie-production-sub2api-1</code>；部署后容器为 healthy，QCanvas、Caddy、Agents Bridge、PostgreSQL 与 Redis 容器均保持运行。</li>
-      <li>公网静态资源 <code>/assets/KeyVaultView-cSuK5e1m.js</code> 已包含常驻“检查连接”按钮及账号/视频通道调用处理；未认证 POST 探针接口返回 401，证明路由上线且受管理员鉴权保护。</li>
-      <li>生产 HC 图片组为活跃 <code>hc_atom</code> 组：图片与批量图片开启，1K/2K/4K 价格完整，且只含本审查包列出的 5 个图片模型。</li>
-      <li>生产 HC 视频组为活跃 <code>hc_atom</code> 组：480p/720p/1080p 价格完整，只含 V1/V3 视频模型，不含图片模型。</li>
-      <li>浏览器复核：图片弹窗显示精确 5 模型和两类固定接口；视频通道已迁移到 HC 视频组；员工开户明确分离媒体组和视频组；HC 行不再显示 Seedance 授权按钮。</li>
-      <li>QCanvas 线上提交为 <code>d39109578f1843c91da12b242243661c31f58869</code>，Sub2API 与 QCanvas 均由 Sub2 动态目录控制可见模型。</li>
+      <li>检查连接只发 GET 探针，不创建图片/视频任务；上游 Key 没有出现在前端、日志或响应中。</li>
+      <li class="warn">真实生成、轮询、预览、下载仍需用户发起一次最小付费任务后验收。</li>
+      <li class="warn">QCanvas HTTPS 使用内部证书，首次访问会出现浏览器证书提示。</li>
     </ul>
+    <p>回滚脚本：<code>/home/ubuntu/wujie/staging/r33-20260730/rollback-r33.sh</code>。备份包含双数据库、旧源码、旧 compose、旧 q-api Dockerfile 和旧镜像标签。</p>
   </section>
 
   <section class="card">
-    <h2>风险、回滚与当前阻塞</h2>
-    <ul>
-      <li class="blocked">真实用户路径尚未验收：没有真实付费任务编号、预览资产或下载证据，因此当前只能判定“内部可用，待用户实测”，不能标记“产品 READY”。</li>
-      <li class="blocked">仍需由管理员本人录入 HC 图片 Key，并为实际员工签发 media/video 两把 Sub2 Key；本轮不读取或代填该凭证。</li>
-      <li class="warn">HC 单模型文档未证明 DELETE 取消接口；本地保持现有取消外壳，但真实取消能力需在最小付费验收时单独确认。</li>
-      <li class="warn">浏览器若仍显示 <code>2026.07.29-r30</code>，属于旧标签页缓存；公网根页面和静态资源已是 r31，使用 <code>Ctrl+F5</code> 强制刷新后再实测按钮。</li>
-    </ul>
-    <p>回滚：备份目录为 <code>/home/ubuntu/wujie/backups/key-connectivity-20260730T070851Z</code>，旧镜像标签为 <code>wujie-sub2api:rollback-20260730T070851Z</code>；异常时切回该镜像。本次没有数据库迁移。</p>
-  </section>
-
-  <section class="card">
-    <h2>文件索引与下一步</h2>
-    <p><code>backend/internal/service/credential_connectivity.go</code>、<code>backend/internal/handler/admin/account_handler.go</code>、<code>backend/internal/handler/admin/video_handler.go</code>、<code>frontend/src/api/admin/accounts.ts</code>、<code>frontend/src/api/admin/video.ts</code>、<code>KeyVaultView.vue</code> 及对应测试；既有调度链文件索引保持不变。</p>
-    <p>下一步：管理员本人录入图片 Key、签发能力隔离的 media/video 两把 Sub2 Key，然后从 QCanvas 各发起一次最小图片与视频任务，验收真实任务号、轮询、预览与下载。</p>
-    <p>可复制提示词：<code>检查当前 Sub2API HC 图片模型线上版本和分组能力，只报告配置存在性，不读取或打印任何 Key，不发起真实付费任务。</code></p>
+    <h2>当前状态、文件索引与下一步</h2>
+    <p>当前判定：<strong>内部可用，待用户真实最小任务复核</strong>，不是“已完成付费 E2E”。</p>
+    <p>主要文件位于 <code>backend/internal/service/</code>、<code>backend/internal/handler/</code>、对应测试与本文件。</p>
+    <p>可复制提示词：<code>我刚在 QCanvas 创建了一个最小视频任务。请只读核对 Sub2API 的模型别名、实际供应商、上游任务编号、轮询状态、结果资产和计费；不要创建新任务。</code></p>
   </section>
 </body>
 </html>

@@ -7,12 +7,13 @@ import (
 )
 
 const (
-	VideoStatusQueued    = "queued"
-	VideoStatusSubmitted = "submitted"
-	VideoStatusRunning   = "running"
-	VideoStatusSucceeded = "succeeded"
-	VideoStatusFailed    = "failed"
-	VideoStatusCancelled = "cancelled"
+	VideoStatusQueued         = "queued"
+	VideoStatusSubmitted      = "submitted"
+	VideoStatusRunning        = "running"
+	VideoStatusSucceeded      = "succeeded"
+	VideoStatusFailed         = "failed"
+	VideoStatusCancelled      = "cancelled"
+	VideoStatusReviewRequired = "review_required"
 
 	VideoReservationReserved = "reserved"
 	VideoReservationReleased = "released"
@@ -25,30 +26,30 @@ const (
 	VideoPricingSourceConfig                         = "config.video_gateway"
 	VideoPricingVersionSeedanceCompletionTokensUSDV1 = "seedance_completion_tokens_usd_v1"
 
-	VideoProviderMock                     = "mock"
-	VideoModelMockVideoV1                 = "mock-video-v1"
-	VideoPricingSourceInternalSimulation  = "internal_simulation"
-	VideoPricingVersionSimulationV1       = "simulation-v1"
-	VideoReservationNone                  = "none"
-	VideoSimulationTaskTypeTextToVideo    = "text_to_video"
-	VideoSimulationDurationSeconds        = 4
-	VideoSimulationResolution             = "720p"
-	VideoSimulationListMaxItems           = 100
-	VideoSimulationListPromptMaxBytes     = 4 * 1024
+	VideoProviderMock                    = "mock"
+	VideoModelMockVideoV1                = "mock-video-v1"
+	VideoPricingSourceInternalSimulation = "internal_simulation"
+	VideoPricingVersionSimulationV1      = "simulation-v1"
+	VideoReservationNone                 = "none"
+	VideoSimulationTaskTypeTextToVideo   = "text_to_video"
+	VideoSimulationDurationSeconds       = 4
+	VideoSimulationResolution            = "720p"
+	VideoSimulationListMaxItems          = 100
+	VideoSimulationListPromptMaxBytes    = 4 * 1024
 )
 
 var (
-	ErrVideoTaskNotFound               = errors.New("video task not found")
-	ErrVideoTaskTerminalConflict       = errors.New("video task terminal status conflicts with requested status")
-	ErrVideoTaskForbidden              = errors.New("video task is outside employee scope")
-	ErrVideoProviderNotFound           = errors.New("video provider not found")
-	ErrVideoCancelConflict             = errors.New("video task cannot be cancelled after dispatch started")
-	ErrVideoPricingSnapshotInvalid     = errors.New("video pricing snapshot is invalid")
-	ErrVideoSimulationAPIKeyInactive       = errors.New("video simulation api key is inactive")
-	ErrVideoSimulationAPIKeyNotOwned       = errors.New("video simulation api key is not owned by caller")
-	ErrVideoSimulationCreationKeyConflict  = errors.New("video simulation creation_key conflicts with an existing task")
-	ErrVideoSimulationResultNotReady       = errors.New("video simulation result is not ready")
-	ErrVideoSimulationPromptTooLarge       = errors.New("video simulation prompt exceeds maximum size")
+	ErrVideoTaskNotFound                  = errors.New("video task not found")
+	ErrVideoTaskTerminalConflict          = errors.New("video task terminal status conflicts with requested status")
+	ErrVideoTaskForbidden                 = errors.New("video task is outside employee scope")
+	ErrVideoProviderNotFound              = errors.New("video provider not found")
+	ErrVideoCancelConflict                = errors.New("video task cannot be cancelled after dispatch started")
+	ErrVideoPricingSnapshotInvalid        = errors.New("video pricing snapshot is invalid")
+	ErrVideoSimulationAPIKeyInactive      = errors.New("video simulation api key is inactive")
+	ErrVideoSimulationAPIKeyNotOwned      = errors.New("video simulation api key is not owned by caller")
+	ErrVideoSimulationCreationKeyConflict = errors.New("video simulation creation_key conflicts with an existing task")
+	ErrVideoSimulationResultNotReady      = errors.New("video simulation result is not ready")
+	ErrVideoSimulationPromptTooLarge      = errors.New("video simulation prompt exceeds maximum size")
 )
 
 // VideoTaskEvent is an append-only lifecycle record for video_tasks.
@@ -103,6 +104,8 @@ type VideoProviderAccount struct {
 	TinyRealAuthorizedAt *time.Time `json:"tiny_real_authorized_at,omitempty"`
 	TinyRealAuthorizedBy int64      `json:"tiny_real_authorized_by,omitempty"`
 	TinyRealConsumedAt   *time.Time `json:"tiny_real_consumed_at,omitempty"`
+	LatestErrorMessage   string     `json:"latest_error_message,omitempty"`
+	LatestErrorAt        *time.Time `json:"latest_error_at,omitempty"`
 }
 
 type VideoTask struct {
@@ -114,6 +117,7 @@ type VideoTask struct {
 	Model                                string
 	TaskType                             string
 	Prompt                               string
+	CreateRequest                        VideoCreateRequest
 	Status                               string
 	UpstreamTaskID                       string
 	ResultURL                            string
@@ -159,6 +163,7 @@ type VideoTask struct {
 	AuthorizationConsumedBy              *int64
 	LocalAssetPath                       string
 	LocalAssetSavedAt                    *time.Time
+	CancelOutcome                        string
 }
 
 type VideoTaskFinalization struct {
@@ -207,6 +212,9 @@ type VideoGatewayRuntimeRepository interface {
 	ListEnabledVideoProviders(context.Context, int64) ([]VideoProviderAccount, error)
 	GetVideoProvider(context.Context, int64, int64) (*VideoProviderAccount, error)
 	BeginRealDispatch(context.Context, int64, int64) (bool, error)
+	BeginHCAtomV3Dispatch(context.Context, int64, int64) (bool, error)
+	BeginProductionDispatch(context.Context, int64, int64, string, string, string) (bool, error)
 	MarkVideoSubmitted(context.Context, int64, int64, string) error
+	MarkVideoDispatchUncertain(context.Context, int64, int64, string, string) error
 	UpdateVideoProgress(context.Context, int64, int64, string) error
 }

@@ -103,6 +103,7 @@ var backendModeAllowedAdminRequests = []backendModeRequestRule{
 	{http.MethodPost, "/api/v1/admin/users/:id/api-keys"},
 	{http.MethodPost, "/api/v1/admin/users/:id/qcanvas-key-pair"},
 	{http.MethodPost, "/api/v1/admin/users/:id/balance"},
+	{http.MethodGet, "/api/v1/admin/api-keys/:id/reveal"},
 	{http.MethodPut, "/api/v1/admin/api-keys/:id"},
 	{http.MethodDelete, "/api/v1/admin/api-keys/:id"},
 
@@ -151,6 +152,7 @@ var backendModeAllowedAdminRequests = []backendModeRequestRule{
 	{http.MethodGet, "/api/v1/admin/accounts/:id"},
 	{http.MethodPut, "/api/v1/admin/accounts/:id"},
 	{http.MethodDelete, "/api/v1/admin/accounts/:id"},
+	{http.MethodPost, "/api/v1/admin/accounts/:id/connectivity-check"},
 	{http.MethodGet, "/api/v1/admin/accounts/:id/stats"},
 	{http.MethodGet, "/api/v1/admin/accounts/:id/usage"},
 	{http.MethodGet, "/api/v1/admin/accounts/:id/today-stats"},
@@ -240,6 +242,7 @@ var backendModeAllowedAdminRequests = []backendModeRequestRule{
 	{http.MethodPost, "/api/v1/admin/video/providers"},
 	{http.MethodPut, "/api/v1/admin/video/providers/:id"},
 	{http.MethodDelete, "/api/v1/admin/video/providers/:id"},
+	{http.MethodPost, "/api/v1/admin/video/providers/:id/connectivity-check"},
 	{http.MethodGet, "/api/v1/admin/video/tasks"},
 	{http.MethodGet, "/api/v1/admin/video/tasks/:id"},
 	{http.MethodGet, "/api/v1/admin/video/tasks/:id/local-asset"},
@@ -315,8 +318,6 @@ var backendModeAllowedAdminRequests = []backendModeRequestRule{
 	{http.MethodPut, "/api/v1/admin/ops/settings/metric-thresholds"},
 	{http.MethodPost, "/api/v1/admin/ops/system-logs/cleanup"},
 	{http.MethodGet, "/api/v1/admin/system/version"},
-	{http.MethodGet, "/api/v1/admin/system/check-updates"},
-	{http.MethodGet, "/api/v1/admin/system/rollback-versions"},
 }
 
 var backendModeAllowedUserRequests = map[string]string{

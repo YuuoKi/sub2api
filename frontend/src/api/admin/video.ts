@@ -1,9 +1,12 @@
 import { apiClient } from '../client'
+import { createIdempotencyKey } from '@/utils/idempotencyKey'
+import type { CredentialConnectivityResult } from './accounts'
 
 export interface VideoProviderAccount {
   id: number; group_id: number; group_name: string; provider: string; display_name: string
   enabled: boolean; api_key_configured: boolean; masked_key: string; base_url: string; default_model: string
   tiny_real_authorized_at?: string; tiny_real_authorized_by?: number; tiny_real_consumed_at?: string
+  latest_error_message?: string; latest_error_at?: string
 }
 export interface VideoProviderPayload {
   group_id?: number; provider?: string; display_name?: string; enabled?: boolean; api_key?: string
@@ -56,6 +59,9 @@ const createProvider = async (payload: VideoProviderPayload) => (await apiClient
 const updateProvider = async (id: number, payload: VideoProviderPayload) => (await apiClient.put<VideoProviderAccount>(`/admin/video/providers/${id}`, payload)).data
 const deleteProvider = async (id: number) => (await apiClient.delete<{ message: string }>(`/admin/video/providers/${id}`)).data
 const authorizeTinyReal = async (id: number) => (await apiClient.post<VideoProviderAccount>(`/admin/video/providers/${id}/tiny-real-authorization`, { confirmation: 'tiny_real' })).data
+const checkProviderConnectivity = async (id: number) => (
+  await apiClient.post<CredentialConnectivityResult>(`/admin/video/providers/${id}/connectivity-check`)
+).data
 const listTasks = async (page = 1, pageSize = 20, status = '') => (await apiClient.get<VideoTaskPage>('/admin/video/tasks', { params: { page, page_size: pageSize, status: status || undefined } })).data
 const getTask = async (id: number) => (await apiClient.get<VideoTaskAdmin>(`/admin/video/tasks/${id}`)).data
 export const createAssetHandoff = async (id: number, assetKind: AssetHandoffKind) => (
@@ -93,7 +99,7 @@ export const startQCanvasAssetHandoffTransfer = (
   if (ticket.trim().length < 20) throw new Error('交接票据格式无效')
   const targetURL = buildQCanvasAssetHandoffTargetURL(qcanvasBaseURL)
   const targetOrigin = new URL(targetURL).origin
-  const nonce = sourceWindow.crypto.randomUUID()
+  const nonce = createIdempotencyKey(sourceWindow.crypto)
   targetWindow.name = buildQCanvasAssetHandoffWindowName(sourceWindow.location.origin, nonce)
   let timeoutId = 0
   const cleanup = (): void => {
@@ -113,4 +119,4 @@ export const startQCanvasAssetHandoffTransfer = (
   return cleanup
 }
 const systemCheck = async () => (await apiClient.get<VideoSystemCheck>('/admin/video/system-check')).data
-export default { contract, listProviders, createProvider, updateProvider, deleteProvider, authorizeTinyReal, listTasks, getTask, createAssetHandoff, systemCheck }
+export default { contract, listProviders, createProvider, updateProvider, deleteProvider, authorizeTinyReal, checkProviderConnectivity, listTasks, getTask, createAssetHandoff, systemCheck }

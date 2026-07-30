@@ -5,6 +5,7 @@
 
 import { apiClient } from '../client'
 import type { ApiKey } from '@/types'
+import { createIdempotencyKey } from '@/utils/idempotencyKey'
 
 export interface UpdateApiKeyGroupResult {
   api_key: ApiKey
@@ -42,6 +43,8 @@ export interface AdminCreateApiKeyPayload {
 export interface AdminCreateQCanvasKeyPairPayload {
   video_group_id: number
   media_group_id: number
+  /** Explicit opt-in to mint QCanvas dual keys for an admin user. */
+  allow_admin_target?: boolean
 }
 
 export interface QCanvasKeyPairResponse {
@@ -61,7 +64,7 @@ export interface QCanvasKeyPairResponse {
 export async function createApiKeyForUser(
   userId: number,
   payload: AdminCreateApiKeyPayload,
-  idempotencyKey: string = crypto.randomUUID()
+  idempotencyKey: string = createIdempotencyKey()
 ): Promise<ApiKey> {
   const { data } = await apiClient.post<ApiKey>(`/admin/users/${userId}/api-keys`, payload, {
     headers: { 'Idempotency-Key': idempotencyKey }
@@ -77,7 +80,7 @@ export async function createApiKeyForUser(
 export async function createQCanvasKeyPairForUser(
   userId: number,
   payload: AdminCreateQCanvasKeyPairPayload,
-  idempotencyKey: string = crypto.randomUUID()
+  idempotencyKey: string = createIdempotencyKey()
 ): Promise<QCanvasKeyPairResponse> {
   const { data } = await apiClient.post<QCanvasKeyPairResponse>(`/admin/users/${userId}/qcanvas-key-pair`, payload, {
     headers: { 'Idempotency-Key': idempotencyKey }
@@ -133,13 +136,23 @@ export async function deleteApiKey(id: number): Promise<{ message: string }> {
   return data
 }
 
+/**
+ * Reveal the full plaintext API key for an administrator.
+ * Writes a server-side audit log; list endpoints never return the secret.
+ */
+export async function revealApiKey(id: number): Promise<ApiKey> {
+  const { data } = await apiClient.get<ApiKey>(`/admin/api-keys/${id}/reveal`)
+  return data
+}
+
 export const apiKeysAPI = {
   updateApiKeyGroup,
   createApiKeyForUser,
-	createQCanvasKeyPairForUser,
+  createQCanvasKeyPairForUser,
   updateApiKeyFields,
   resetApiKeyRateLimitUsage,
-  deleteApiKey
+  deleteApiKey,
+  revealApiKey,
 }
 
 export default apiKeysAPI

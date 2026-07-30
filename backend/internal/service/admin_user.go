@@ -268,7 +268,7 @@ func (s *adminServiceImpl) ensureNotLastAdmin(ctx context.Context) error {
 		return fmt.Errorf("count admin users: %w", err)
 	}
 	if result == nil || result.Total <= 1 {
-		return errors.New("cannot demote the last admin user")
+		return infraerrors.BadRequest("CANNOT_DEMOTE_LAST_ADMIN", "不能降级最后一个管理员账号（避免锁出管理端）")
 	}
 	return nil
 }
@@ -336,7 +336,7 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 
 	// Protect admin users: cannot disable admin accounts
 	if user.Role == "admin" && input.Status == "disabled" {
-		return nil, errors.New("cannot disable admin user")
+		return nil, infraerrors.BadRequest("CANNOT_DISABLE_ADMIN_USER", "不能停用管理员账号（避免把自己锁出管理端）")
 	}
 
 	oldConcurrency := user.Concurrency
@@ -465,7 +465,7 @@ func (s *adminServiceImpl) DeleteUser(ctx context.Context, id int64) error {
 		return err
 	}
 	if user.Role == "admin" {
-		return errors.New("cannot delete admin user")
+		return infraerrors.BadRequest("CANNOT_DELETE_ADMIN_USER", "不能删除管理员账号（避免把自己锁出管理端）")
 	}
 
 	apiKeys, err := s.listUserAPIKeysForDeletion(ctx, id)
@@ -589,24 +589,50 @@ func (s *adminServiceImpl) UpdateUserBalance(ctx context.Context, userID int64, 
 	}
 
 	oldBalance := user.Balance
+	var balanceDiff float64
 
 	switch operation {
 	case "set":
-		user.Balance = balance
+		if balance < 0 {
+			return nil, fmt.Errorf("balance cannot be negative, current balance: %.2f, requested operation would result in: %.2f", oldBalance, balance)
+		}
+		balanceDiff = balance - oldBalance
+		if balanceDiff != 0 {
+			if err := s.userRepo.SetBalance(ctx, userID, balance); err != nil {
+				return nil, err
+			}
+		}
 	case "add":
-		user.Balance += balance
+		newBalance := oldBalance + balance
+		if newBalance < 0 {
+			return nil, fmt.Errorf("balance cannot be negative, current balance: %.2f, requested operation would result in: %.2f", oldBalance, newBalance)
+		}
+		balanceDiff = balance
+		if balanceDiff != 0 {
+			if err := s.userRepo.UpdateBalance(ctx, userID, balance); err != nil {
+				return nil, err
+			}
+		}
 	case "subtract":
-		user.Balance -= balance
+		newBalance := oldBalance - balance
+		if newBalance < 0 {
+			return nil, fmt.Errorf("balance cannot be negative, current balance: %.2f, requested operation would result in: %.2f", oldBalance, newBalance)
+		}
+		balanceDiff = -balance
+		if balanceDiff != 0 {
+			if err := s.userRepo.UpdateBalance(ctx, userID, -balance); err != nil {
+				return nil, err
+			}
+		}
+	default:
+		return nil, fmt.Errorf("unsupported balance operation: %s", operation)
 	}
 
-	if user.Balance < 0 {
-		return nil, fmt.Errorf("balance cannot be negative, current balance: %.2f, requested operation would result in: %.2f", oldBalance, user.Balance)
-	}
-
-	if err := s.userRepo.Update(ctx, user); err != nil {
+	updated, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
 		return nil, err
 	}
-	balanceDiff := user.Balance - oldBalance
+
 	if s.authCacheInvalidator != nil && balanceDiff != 0 {
 		s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, userID)
 	}
@@ -625,7 +651,7 @@ func (s *adminServiceImpl) UpdateUserBalance(ctx context.Context, userID int64, 
 		code, err := GenerateRedeemCode()
 		if err != nil {
 			logger.LegacyPrintf("service.admin", "failed to generate adjustment redeem code: %v", err)
-			return user, nil
+			return updated, nil
 		}
 
 		adjustmentRecord := &RedeemCode{
@@ -633,7 +659,7 @@ func (s *adminServiceImpl) UpdateUserBalance(ctx context.Context, userID int64, 
 			Type:   AdjustmentTypeAdminBalance,
 			Value:  balanceDiff,
 			Status: StatusUsed,
-			UsedBy: &user.ID,
+			UsedBy: &updated.ID,
 			Notes:  notes,
 		}
 		now := time.Now()
@@ -644,7 +670,7 @@ func (s *adminServiceImpl) UpdateUserBalance(ctx context.Context, userID int64, 
 		}
 	}
 
-	return user, nil
+	return updated, nil
 }
 
 func (s *adminServiceImpl) GetUserAPIKeys(ctx context.Context, userID int64, page, pageSize int, sortBy, sortOrder string) ([]APIKey, int64, error) {

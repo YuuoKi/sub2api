@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/buildinfo"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/sysutil"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
@@ -19,6 +20,7 @@ import (
 
 // SystemHandler handles system-related operations
 type SystemHandler struct {
+	buildInfo buildinfo.Info
 	updateSvc systemUpdateService
 	lockSvc   *service.SystemOperationLockService
 }
@@ -31,26 +33,34 @@ type systemUpdateService interface {
 	RollbackToVersion(ctx context.Context, version string) error
 }
 
-// NewSystemHandler creates a new SystemHandler
-func NewSystemHandler(updateSvc systemUpdateService, lockSvc *service.SystemOperationLockService) *SystemHandler {
+// NewSystemHandler creates a new SystemHandler.
+// buildInfo is the sole source for GET /version. Self-update routes are no longer mounted.
+func NewSystemHandler(buildInfo buildinfo.Info, updateSvc systemUpdateService, lockSvc *service.SystemOperationLockService) *SystemHandler {
 	return &SystemHandler{
+		buildInfo: buildInfo,
 		updateSvc: updateSvc,
 		lockSvc:   lockSvc,
 	}
 }
 
-// GetVersion returns the current version
+// GetVersion returns the immutable deploy identity.
 // GET /api/v1/admin/system/version
 func (h *SystemHandler) GetVersion(c *gin.Context) {
-	info, _ := h.updateSvc.CheckUpdate(c.Request.Context(), false)
 	response.Success(c, gin.H{
-		"version": info.CurrentVersion,
+		"version":      h.buildInfo.Version,
+		"build_commit": h.buildInfo.BuildCommit,
+		"build_date":   h.buildInfo.BuildDate,
 	})
 }
 
-// CheckUpdates checks for available updates
+// CheckUpdates checks for available updates.
+// Unmounted in Guangzhou hard cutover; retained for legacy unit tests only.
 // GET /api/v1/admin/system/check-updates
 func (h *SystemHandler) CheckUpdates(c *gin.Context) {
+	if h.updateSvc == nil {
+		response.Error(c, http.StatusNotFound, "self-update is disabled")
+		return
+	}
 	force := c.Query("force") == "true"
 	info, err := h.updateSvc.CheckUpdate(c.Request.Context(), force)
 	if err != nil {
@@ -60,9 +70,14 @@ func (h *SystemHandler) CheckUpdates(c *gin.Context) {
 	response.Success(c, info)
 }
 
-// PerformUpdate downloads and applies the update
+// PerformUpdate downloads and applies the update.
+// Unmounted in Guangzhou hard cutover; retained for legacy unit tests only.
 // POST /api/v1/admin/system/update
 func (h *SystemHandler) PerformUpdate(c *gin.Context) {
+	if h.updateSvc == nil {
+		response.Error(c, http.StatusNotFound, "self-update is disabled")
+		return
+	}
 	operationID := buildSystemOperationID(c, "update")
 	payload := gin.H{"operation_id": operationID}
 	executeAdminIdempotentJSON(c, "admin.system.update", payload, service.DefaultSystemOperationIdempotencyTTL(), func(ctx context.Context) (any, error) {
@@ -105,9 +120,14 @@ func (h *SystemHandler) PerformUpdate(c *gin.Context) {
 	})
 }
 
-// GetRollbackVersions lists versions available for rollback
+// GetRollbackVersions lists versions available for rollback.
+// Unmounted in Guangzhou hard cutover; retained for legacy unit tests only.
 // GET /api/v1/admin/system/rollback-versions
 func (h *SystemHandler) GetRollbackVersions(c *gin.Context) {
+	if h.updateSvc == nil {
+		response.Error(c, http.StatusNotFound, "self-update is disabled")
+		return
+	}
 	versions, err := h.updateSvc.ListRollbackVersions(c.Request.Context())
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, err.Error())
@@ -119,11 +139,13 @@ func (h *SystemHandler) GetRollbackVersions(c *gin.Context) {
 }
 
 // Rollback restores a previous version.
-// Without a body (or with an empty version) it restores the local .backup binary
-// left by the last in-place update. With {"version": "x.y.z"} it downloads and
-// installs that specific release (must be one of the recent rollback versions).
+// Unmounted in Guangzhou hard cutover; retained for legacy unit tests only.
 // POST /api/v1/admin/system/rollback
 func (h *SystemHandler) Rollback(c *gin.Context) {
+	if h.updateSvc == nil {
+		response.Error(c, http.StatusNotFound, "self-update is disabled")
+		return
+	}
 	var req struct {
 		Version string `json:"version"`
 	}
@@ -172,7 +194,8 @@ func (h *SystemHandler) Rollback(c *gin.Context) {
 	})
 }
 
-// RestartService restarts the systemd service
+// RestartService restarts the systemd service.
+// Kept as a separate ops endpoint (not part of the VersionBadge self-update surface).
 // POST /api/v1/admin/system/restart
 func (h *SystemHandler) RestartService(c *gin.Context) {
 	operationID := buildSystemOperationID(c, "restart")
@@ -187,9 +210,6 @@ func (h *SystemHandler) RestartService(c *gin.Context) {
 			release("", succeeded)
 		}()
 
-		// RestartService validates that this runtime can actually schedule a
-		// restart before the endpoint acknowledges the request. The utility
-		// delays process exit briefly so the JSON response can still flush.
 		if err := sysutil.RestartService(); err != nil {
 			return nil, fmt.Errorf("schedule service restart: %w", err)
 		}

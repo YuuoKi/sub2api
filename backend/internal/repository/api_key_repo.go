@@ -261,18 +261,17 @@ func (r *apiKeyRepository) Update(ctx context.Context, key *service.APIKey) erro
 	// 同时显式设置 updated_at，避免二次查询带来的并发可见性问题。
 	client := clientFromContext(ctx, r.client)
 	now := time.Now()
+	// quota_used / usage_* / window_* are billing counters updated only via
+	// Increment* or ResetRateLimitUsage. A Get→mutate→Update path must never
+	// rewind those counters from a stale snapshot.
 	builder := client.APIKey.Update().
 		Where(apikey.IDEQ(key.ID), apikey.DeletedAtIsNil()).
 		SetName(key.Name).
 		SetStatus(key.Status).
 		SetQuota(key.Quota).
-		SetQuotaUsed(key.QuotaUsed).
 		SetRateLimit5h(key.RateLimit5h).
 		SetRateLimit1d(key.RateLimit1d).
 		SetRateLimit7d(key.RateLimit7d).
-		SetUsage5h(key.Usage5h).
-		SetUsage1d(key.Usage1d).
-		SetUsage7d(key.Usage7d).
 		SetUpdatedAt(now)
 	if key.GroupID != nil {
 		builder.SetGroupID(*key.GroupID)
@@ -285,23 +284,6 @@ func (r *apiKeyRepository) Update(ctx context.Context, key *service.APIKey) erro
 		builder.SetExpiresAt(*key.ExpiresAt)
 	} else {
 		builder.ClearExpiresAt()
-	}
-
-	// Rate limit window start times
-	if key.Window5hStart != nil {
-		builder.SetWindow5hStart(*key.Window5hStart)
-	} else {
-		builder.ClearWindow5hStart()
-	}
-	if key.Window1dStart != nil {
-		builder.SetWindow1dStart(*key.Window1dStart)
-	} else {
-		builder.ClearWindow1dStart()
-	}
-	if key.Window7dStart != nil {
-		builder.SetWindow7dStart(*key.Window7dStart)
-	} else {
-		builder.ClearWindow7dStart()
 	}
 
 	// IP 限制字段
@@ -837,6 +819,64 @@ func (r *apiKeyRepository) ResetRateLimitWindows(ctx context.Context, id int64) 
 		WHERE id = $1 AND deleted_at IS NULL`,
 		id)
 	return err
+}
+
+// ResetRateLimitUsage forcibly clears all rate-limit usage counters and window
+// start times for an API key (admin reset). It does not rewrite quota_used.
+func (r *apiKeyRepository) ResetRateLimitUsage(ctx context.Context, id int64) error {
+	client := clientFromContext(ctx, r.client)
+	affected, err := client.APIKey.Update().
+		Where(apikey.IDEQ(id), apikey.DeletedAtIsNil()).
+		SetUsage5h(0).
+		SetUsage1d(0).
+		SetUsage7d(0).
+		ClearWindow5hStart().
+		ClearWindow1dStart().
+		ClearWindow7dStart().
+		SetUpdatedAt(time.Now()).
+		Save(ctx)
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return service.ErrAPIKeyNotFound
+	}
+	return nil
+}
+
+// ResetQuotaUsed clears only the billing quota counter for an API key.
+// Rate-limit usage and windows are intentionally left untouched.
+func (r *apiKeyRepository) ResetQuotaUsed(ctx context.Context, id int64) error {
+	client := clientFromContext(ctx, r.client)
+	affected, err := client.APIKey.Update().
+		Where(apikey.IDEQ(id), apikey.DeletedAtIsNil()).
+		SetQuotaUsed(0).
+		SetUpdatedAt(time.Now()).
+		Save(ctx)
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return service.ErrAPIKeyNotFound
+	}
+	return nil
+}
+
+// MarkQuotaExhausted sets only the API key status to quota_exhausted.
+func (r *apiKeyRepository) MarkQuotaExhausted(ctx context.Context, id int64) error {
+	client := clientFromContext(ctx, r.client)
+	affected, err := client.APIKey.Update().
+		Where(apikey.IDEQ(id), apikey.DeletedAtIsNil()).
+		SetStatus(service.StatusAPIKeyQuotaExhausted).
+		SetUpdatedAt(time.Now()).
+		Save(ctx)
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return service.ErrAPIKeyNotFound
+	}
+	return nil
 }
 
 // GetRateLimitData returns the current rate limit usage and window start times for an API key.

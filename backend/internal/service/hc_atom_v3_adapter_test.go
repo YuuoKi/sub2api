@@ -1,0 +1,308 @@
+package service
+
+import (
+	"context"
+	"errors"
+	"io"
+	"net"
+	"net/http"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/stretchr/testify/require"
+)
+
+func TestHCAtomV3CreateUsesFixedEndpointBearerAndV3Payload(t *testing.T) {
+	secret := "hc-test-secret"
+	client := &http.Client{Transport: videoRoundTripperFunc(func(r *http.Request) (*http.Response, error) {
+		if r.Method != http.MethodPost || r.URL.String() != "https://api-aigc.fzyinghe.com/v3/video/tasks" {
+			t.Fatalf("request=%s %s", r.Method, r.URL)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer "+secret {
+			t.Fatalf("authorization=%q", got)
+		}
+		body, _ := io.ReadAll(r.Body)
+		want := `{"model":"doubao-seedance-2-0-260128","content":[{"type":"text","text":"a paper boat"},{"type":"image_url","image_url":{"url":"https://assets.example.test/boat.png"}}],"ratio":"16:9","generate_audio":true,"return_last_frame":true,"watermark":false,"duration":8,"resolution":"1080p"}`
+		if string(body) != want {
+			t.Fatalf("body=%s", body)
+		}
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"id":"hc-1","status":"queued"}`)), Header: make(http.Header)}, nil
+	})}
+	adapter := NewHCAtomV3Adapter(client, HCAtomSeedanceV3BaseURL, secret)
+	adapter.assetClient = &http.Client{Transport: videoRoundTripperFunc(func(r *http.Request) (*http.Response, error) {
+		if r.Method != http.MethodHead || r.URL.String() != "https://assets.example.test/boat.png" {
+			t.Fatalf("asset probe=%s %s", r.Method, r.URL)
+		}
+		return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody, Header: make(http.Header)}, nil
+	})}
+	created, err := adapter.Create(context.Background(), VideoCreateRequest{
+		Model: HCAtomSeedanceV3PublicModel, Content: []VideoContentItem{{Type: "text", Text: "a paper boat"}, {Type: "image_url", ImageURL: &VideoContentURL{URL: "https://assets.example.test/boat.png"}}},
+		Ratio: "16:9", GenerateAudio: true, ReturnLastFrame: true, Watermark: false, Duration: 8, Resolution: "1080p",
+	})
+	if err != nil || created.UpstreamTaskID != "hc-1" || created.Status != VideoStatusSubmitted {
+		t.Fatalf("created=%#v err=%v", created, err)
+	}
+}
+
+func TestHCAtomV3CreateFailsClosedWhenRemoteMediaCannotBeSafelyProbed(t *testing.T) {
+	upstreamCalls := 0
+	adapter := NewHCAtomV3Adapter(&http.Client{Transport: videoRoundTripperFunc(func(*http.Request) (*http.Response, error) {
+		upstreamCalls++
+		return nil, errors.New("upstream must not be called")
+	})}, HCAtomSeedanceV3BaseURL, "secret")
+	adapter.assetClient = &http.Client{Transport: videoRoundTripperFunc(func(*http.Request) (*http.Response, error) {
+		return nil, errors.New("asset host resolves to a non-public address")
+	})}
+
+	_, err := adapter.Create(context.Background(), VideoCreateRequest{
+		Content: []VideoContentItem{{Type: "image_url", ImageURL: &VideoContentURL{URL: "https://assets.example.test/private-redirect.png"}}},
+	})
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "safely accessible")
+	require.Equal(t, 0, upstreamCalls)
+}
+
+func TestHCAtomV3DefaultAssetProbeRejectsPrivateRedirectHop(t *testing.T) {
+	adapter := NewHCAtomV3Adapter(nil, HCAtomSeedanceV3BaseURL, "secret")
+	require.NotNil(t, adapter.assetClient)
+	require.NotNil(t, adapter.assetClient.CheckRedirect)
+	request, err := http.NewRequest(http.MethodHead, "https://127.0.0.1/hidden.png", nil)
+	require.NoError(t, err)
+	require.Error(t, adapter.assetClient.CheckRedirect(request, nil))
+}
+
+func TestHCAtomV3AssetProbeRejectsHostnameResolvingToPrivateAddressBeforeDial(t *testing.T) {
+	upstreamCalls := 0
+	dialCalls := 0
+	adapter := NewHCAtomV3Adapter(&http.Client{Transport: videoRoundTripperFunc(func(*http.Request) (*http.Response, error) {
+		upstreamCalls++
+		return nil, errors.New("upstream must not be called")
+	})}, HCAtomSeedanceV3BaseURL, "secret")
+	adapter.assetClient = newPublicAssetHTTPClientWithNetwork(
+		time.Second,
+		func(context.Context, string) ([]net.IPAddr, error) {
+			return []net.IPAddr{{IP: net.ParseIP("127.0.0.1")}}, nil
+		},
+		func(context.Context, string, string) (net.Conn, error) {
+			dialCalls++
+			return nil, errors.New("dial must not be called")
+		},
+	)
+
+	_, err := adapter.Create(context.Background(), VideoCreateRequest{
+		Content: []VideoContentItem{{Type: "image_url", ImageURL: &VideoContentURL{URL: "https://assets.example.test/private-dns.png"}}},
+	})
+
+	require.ErrorIs(t, err, ErrHCAtomMediaURLUnreachable)
+	require.Equal(t, 0, upstreamCalls)
+	require.Equal(t, 0, dialCalls)
+}
+
+func TestHCAtomV3PollCancelAndRejectUnsafeInputs(t *testing.T) {
+	requests := 0
+	client := &http.Client{Transport: videoRoundTripperFunc(func(r *http.Request) (*http.Response, error) {
+		requests++
+		switch requests {
+		case 1:
+			if r.Method != http.MethodGet || r.URL.Path != "/v3/video/tasks/hc-1" {
+				t.Fatalf("poll=%s %s", r.Method, r.URL)
+			}
+			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"id":"hc-1","status":"succeeded","content":{"video_url":"https://cdn.example.test/v.mp4","last_frame_url":"https://cdn.example.test/v.jpg"},"usage":{"completion_tokens":12,"total_tokens":15}}`)), Header: make(http.Header)}, nil
+		case 2:
+			if r.Method != http.MethodDelete || r.URL.Path != "/v3/video/tasks/hc-1" {
+				t.Fatalf("cancel=%s %s", r.Method, r.URL)
+			}
+			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"id":"hc-1","status":"cancelled"}`)), Header: make(http.Header)}, nil
+		default:
+			return nil, errors.New("unexpected network call")
+		}
+	})}
+	adapter := NewHCAtomV3Adapter(client, HCAtomSeedanceV3BaseURL, "secret")
+	polled, err := adapter.Poll(context.Background(), "hc-1")
+	if err != nil || polled.Status != VideoStatusSucceeded || polled.CompletionTokens == nil || *polled.CompletionTokens != 12 || polled.LastFrameURL == "" {
+		t.Fatalf("poll=%#v err=%v", polled, err)
+	}
+	cancelled, err := adapter.Cancel(context.Background(), "hc-1")
+	if err != nil || cancelled.Status != VideoStatusCancelled {
+		t.Fatalf("cancel=%#v err=%v", cancelled, err)
+	}
+	if err := ValidateHCAtomV3Request(VideoCreateRequest{Content: []VideoContentItem{{Type: "image_url", ImageURL: &VideoContentURL{URL: "data:image/png;base64,AAAA"}}}}); err == nil {
+		t.Fatal("base64 accepted")
+	}
+	if err := ValidateHCAtomV3Request(VideoCreateRequest{Content: []VideoContentItem{{Type: "video_url", VideoURL: &VideoContentURL{URL: "https://127.0.0.1/v.mp4"}}}}); err == nil {
+		t.Fatal("private URL accepted")
+	}
+	if err := ValidateHCAtomV3Request(VideoCreateRequest{Content: []VideoContentItem{{Type: "audio_url", AudioURL: &VideoContentURL{URL: "asset://asset-123"}}}}); err != nil {
+		t.Fatalf("asset URL rejected: %v", err)
+	}
+	if err := ValidateHCAtomV3Request(VideoCreateRequest{Content: []VideoContentItem{
+		{Type: "text", Text: "a paper boat"},
+		{Type: "image_url", Role: "first_frame", ImageURL: &VideoContentURL{URL: "asset://asset-first"}},
+		{Type: "image_url", Role: "last_frame", ImageURL: &VideoContentURL{URL: "asset://asset-last"}},
+		{Type: "video_url", Role: "reference_video", VideoURL: &VideoContentURL{URL: "asset://asset-video"}},
+		{Type: "audio_url", Role: "reference_audio", AudioURL: &VideoContentURL{URL: "asset://asset-audio"}},
+	}}); err != nil {
+		t.Fatalf("supported media roles rejected: %v", err)
+	}
+	if err := ValidateHCAtomV3Request(VideoCreateRequest{Content: []VideoContentItem{
+		{Type: "image_url", Role: "first_frame", ImageURL: &VideoContentURL{URL: "asset://asset-first"}},
+		{Type: "image_url", Role: "reference_image", ImageURL: &VideoContentURL{URL: "asset://asset-reference"}},
+	}}); err == nil {
+		t.Fatal("mutually exclusive frame and reference image roles accepted")
+	}
+}
+
+func TestHCAtomV3AdapterRejectsNonAllowlistedOriginBeforeNetworkAndRedactsSecret(t *testing.T) {
+	secret := "hc-secret-123"
+	calls := 0
+	adapter := NewHCAtomV3Adapter(&http.Client{Transport: videoRoundTripperFunc(func(*http.Request) (*http.Response, error) { calls++; return nil, errors.New(secret) })}, "http://api-aigc.fzyinghe.com", secret)
+	_, err := adapter.Create(context.Background(), VideoCreateRequest{Prompt: "x"})
+	if err == nil || strings.Contains(err.Error(), secret) || calls != 0 {
+		t.Fatalf("err=%v calls=%d", err, calls)
+	}
+}
+
+func TestHCAtomV3IsAnEnabledFixedVideoProvider(t *testing.T) {
+	spec, ok := lookupVideoProvider(HCAtomSeedanceV3Provider)
+	if !ok || !spec.AdapterReady || spec.DefaultBaseURL != HCAtomSeedanceV3BaseURL || spec.DefaultModel != HCAtomSeedanceV3PublicModel {
+		t.Fatalf("provider=%#v found=%v", spec, ok)
+	}
+}
+
+func TestHCAtomV3StatusDoesNotAcceptArkOnlyAliases(t *testing.T) {
+	_, err := normalizeHCAtomV3Status("processing")
+	if err == nil {
+		t.Fatal("processing must be a protocol error for HC V3")
+	}
+}
+
+func TestHCAtomV3RejectsCanonicalPrivateURLVariantsAndBadAssetIDs(t *testing.T) {
+	for _, raw := range []string{"https://localhost./x", "https://127.0.0.1./x", "https://127.1/x", "https://127.0.1/x", "https://127.0x0.1/x", "https://127.0.0x1/x", "https://100.64.0.1/x", "https://[fe80::1%25eth0]/x", "https://2130706433/x", "https://0177.0.0.1/x", "https://0x7f000001/x", "asset://asset-", "asset://asset-a/b"} {
+		if err := validateHCAtomMediaURL(raw); err == nil {
+			t.Fatalf("accepted %q", raw)
+		}
+	}
+	if err := validateHCAtomMediaURL("asset://asset_a"); err == nil {
+		t.Fatal("bad prefix accepted")
+	}
+}
+
+func TestHCAtomV3CreateAcceptedButInvalidBodyIsTransportUncertain(t *testing.T) {
+	adapter := NewHCAtomV3Adapter(&http.Client{Transport: videoRoundTripperFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("{")), Header: make(http.Header)}, nil
+	})}, HCAtomSeedanceV3BaseURL, "secret")
+	_, err := adapter.Create(context.Background(), VideoCreateRequest{Prompt: "x"})
+	var uncertain *VideoProviderTransportError
+	if !errors.As(err, &uncertain) {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestHCAtomV3CreateUnknownStatusRetainsUpstreamIDAsUncertain(t *testing.T) {
+	adapter := NewHCAtomV3Adapter(&http.Client{Transport: videoRoundTripperFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"id":"hc-known","status":"processing"}`)), Header: make(http.Header)}, nil
+	})}, HCAtomSeedanceV3BaseURL, "secret")
+	_, err := adapter.Create(context.Background(), VideoCreateRequest{Prompt: "x"})
+	var uncertain *VideoProviderTransportError
+	if !errors.As(err, &uncertain) || uncertain.UpstreamTaskID != "hc-known" {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestHCAtomV3CreateContractKeepsLegacyPromptAndAllowsV3Fields(t *testing.T) {
+	repo := &workerRepoStub{provider: VideoProviderAccount{
+		ID: 10, GroupID: 9, Provider: HCAtomSeedanceV3Provider, Enabled: true,
+		BaseURL: HCAtomSeedanceV3BaseURL, DefaultModel: HCAtomSeedanceV3PublicModel,
+	}}
+	cfg := &config.Config{VideoGateway: config.VideoGatewayConfig{WorkerEnabled: true, HCAtomV3DispatchEnabled: true, SeedanceCNYPerMillionTokens: 2, USDCNYExchangeRate: 7, TinyRealEstimateCNY: .7, TinyRealMaximumCNY: 1.4}}
+	created, err := NewVideoGatewayService(repo, NewSingleSmokeAuthorization(true), cfg, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}).CreateTask(context.Background(), VideoTaskCreateCommand{Scope: VideoTaskScope{UserID: 1, APIKeyID: 2, GroupID: 9}, ProviderAccountID: 10, Prompt: "legacy prompt", Duration: 8, Resolution: "1080p", Ratio: "16:9", GenerateAudio: true})
+	if err != nil || created == nil || created.Model != HCAtomSeedanceV3PublicModel || created.DurationSeconds != 8 || len(created.CreateRequest.Content) != 1 || created.CreateRequest.Content[0].Text != "legacy prompt" {
+		t.Fatalf("created=%#v err=%v", created, err)
+	}
+}
+
+func TestHCAtomV3CreateRejectsNonPublicModelAlias(t *testing.T) {
+	repo := &workerRepoStub{provider: VideoProviderAccount{ID: 10, GroupID: 9, Provider: HCAtomSeedanceV3Provider, Enabled: true}}
+	cfg := &config.Config{VideoGateway: config.VideoGatewayConfig{WorkerEnabled: true, HCAtomV3DispatchEnabled: true, SeedanceCNYPerMillionTokens: 2, USDCNYExchangeRate: 7, TinyRealEstimateCNY: .7, TinyRealMaximumCNY: 1.4}}
+	_, err := NewVideoGatewayService(repo, NewSingleSmokeAuthorization(true), cfg, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}).CreateTask(context.Background(), VideoTaskCreateCommand{Scope: VideoTaskScope{UserID: 1, APIKeyID: 2, GroupID: 9}, ProviderAccountID: 10, Model: "unapproved-model", Prompt: "x", Duration: 8, Resolution: "720p"})
+	if !errors.Is(err, ErrVideoProviderNotFound) {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+type hcAtomClientStub struct {
+	cancel  *VideoProviderTask
+	err     error
+	creates int
+}
+
+func (s *hcAtomClientStub) Create(context.Context, VideoCreateRequest) (*VideoProviderTask, error) {
+	s.creates++
+	return nil, s.err
+}
+func (s *hcAtomClientStub) Poll(context.Context, string) (*VideoProviderTask, error) { return nil, nil }
+func (s *hcAtomClientStub) Cancel(context.Context, string) (*VideoProviderTask, error) {
+	return s.cancel, s.err
+}
+
+func TestHCAtomDispatchedCancelFinalizesOnlyAfterConfirmedUpstreamCancel(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		client        *hcAtomClientStub
+		wantFinalized int
+	}{
+		{"confirmed", &hcAtomClientStub{cancel: &VideoProviderTask{Status: VideoStatusCancelled}}, 1},
+		{"delete_failure", &hcAtomClientStub{err: errors.New("timeout")}, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := &workerRepoStub{task: &VideoTask{ID: 7, APIKeyID: 2, GroupID: 9, ProviderAccountID: 10, Provider: HCAtomSeedanceV3Provider, Status: VideoStatusSubmitted, UpstreamTaskID: "hc-7", Version: 3, CreatedBy: 1, ReservationState: VideoReservationReserved, ReservedCostUSD: .2}, provider: VideoProviderAccount{ID: 10, GroupID: 9, Provider: HCAtomSeedanceV3Provider, BaseURL: HCAtomSeedanceV3BaseURL, EncryptedAPIKey: "cipher"}}
+			svc := NewVideoGatewayService(repo, nil, &config.Config{}, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{})
+			svc.ConfigureProviderClientFactory(keyDecryptStub{}, func(string, string, string) VideoProviderClient { return tc.client })
+			_, _ = svc.CancelTask(context.Background(), 7, VideoTaskScope{UserID: 1, APIKeyID: 2, GroupID: 9})
+			if len(repo.finalized) != tc.wantFinalized {
+				t.Fatalf("finalized=%#v", repo.finalized)
+			}
+			if tc.wantFinalized == 1 && repo.finalized[0].Settlement != VideoSettlementRelease {
+				t.Fatalf("finalization=%#v", repo.finalized[0])
+			}
+			if tc.wantFinalized == 1 && repo.task.CancelOutcome != "upstream_confirmed" {
+				t.Fatalf("outcome=%q", repo.task.CancelOutcome)
+			}
+		})
+	}
+}
+
+func TestHCAtomQueuedCancelReportsLocalPreDispatch(t *testing.T) {
+	repo := &workerRepoStub{task: &VideoTask{ID: 7, APIKeyID: 2, GroupID: 9, Provider: HCAtomSeedanceV3Provider, Status: VideoStatusQueued, CreatedBy: 1}}
+	task, err := NewVideoGatewayService(repo, nil, nil, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}).CancelTask(context.Background(), 7, VideoTaskScope{UserID: 1, APIKeyID: 2, GroupID: 9})
+	if err != nil || task.CancelOutcome != "local_pre_dispatch" {
+		t.Fatalf("task=%#v err=%v", task, err)
+	}
+}
+
+func TestVideoWorkerTransportFailureDoesNotInventIDOrRetry(t *testing.T) {
+	repo := &workerRepoStub{begin: true, task: &VideoTask{ID: 7, GroupID: 9, ProviderAccountID: 10, Provider: HCAtomSeedanceV3Provider, Status: VideoStatusQueued, Version: 1, CreatedBy: 1, ReservationState: VideoReservationReserved, ReservedCostUSD: .2}, provider: VideoProviderAccount{ID: 10, GroupID: 9, Provider: HCAtomSeedanceV3Provider, BaseURL: HCAtomSeedanceV3BaseURL, EncryptedAPIKey: "cipher"}}
+	client := &hcAtomClientStub{err: &VideoProviderTransportError{err: errors.New("connection reset")}}
+	w := NewVideoGatewayWorker(repo, keyDecryptStub{}, func(string, string, string) VideoProviderClient { return client }, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}, &config.Config{VideoGateway: config.VideoGatewayConfig{HCAtomV3DispatchEnabled: true}}, NewSingleSmokeAuthorization(true))
+	if err := w.RunOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if client.creates != 1 || len(repo.finalized) != 0 || repo.task.Status != VideoStatusReviewRequired || repo.task.UpstreamTaskID != "" {
+		t.Fatalf("creates=%d finalized=%#v task=%#v", client.creates, repo.finalized, repo.task)
+	}
+}
+
+func TestVideoWorkerUnknownStatusWithIDHoldsReviewAndDoesNotReplay(t *testing.T) {
+	repo := &workerRepoStub{begin: true, task: &VideoTask{ID: 8, GroupID: 9, ProviderAccountID: 10, Provider: HCAtomSeedanceV3Provider, Status: VideoStatusQueued, Version: 1, CreatedBy: 1, ReservationState: VideoReservationReserved, ReservedCostUSD: .2}, provider: VideoProviderAccount{ID: 10, GroupID: 9, Provider: HCAtomSeedanceV3Provider, BaseURL: HCAtomSeedanceV3BaseURL, EncryptedAPIKey: "cipher"}}
+	client := &hcAtomClientStub{err: &VideoProviderTransportError{err: errors.New("unknown status"), UpstreamTaskID: "hc-known"}}
+	w := NewVideoGatewayWorker(repo, keyDecryptStub{}, func(string, string, string) VideoProviderClient { return client }, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}, &config.Config{VideoGateway: config.VideoGatewayConfig{HCAtomV3DispatchEnabled: true}}, NewSingleSmokeAuthorization(true))
+	require.NoError(t, w.RunOnce(context.Background()))
+	require.Equal(t, VideoStatusReviewRequired, repo.task.Status)
+	require.Equal(t, "hc-known", repo.task.UpstreamTaskID)
+	require.Empty(t, repo.finalized)
+	require.NoError(t, w.RunOnce(context.Background()))
+	require.Equal(t, 1, client.creates)
+}

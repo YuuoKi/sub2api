@@ -16,6 +16,7 @@ import (
 	"time"
 
 	_ "github.com/Wei-Shaw/sub2api/ent/runtime"
+	"github.com/Wei-Shaw/sub2api/internal/buildinfo"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
@@ -62,7 +63,8 @@ func main() {
 	flag.Parse()
 
 	if *showVersion {
-		log.Printf("Sub2API %s (commit: %s, built: %s)\n", Version, Commit, Date)
+		info := buildinfo.New(Version, Commit, Date, BuildType)
+		log.Println(info.CLIString())
 		return
 	}
 
@@ -143,10 +145,7 @@ func runMainServer() {
 		log.Println("⚠️  WARNING: Running in SIMPLE mode - billing and quota checks are DISABLED")
 	}
 
-	buildInfo := handler.BuildInfo{
-		Version:   Version,
-		BuildType: BuildType,
-	}
+	buildInfo := handler.BuildInfo(buildinfo.New(Version, Commit, Date, BuildType))
 
 	app, err := initializeApplication(buildInfo)
 	if err != nil {

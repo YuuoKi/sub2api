@@ -8,6 +8,8 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -147,6 +149,56 @@ func TestBatchImageDownloadService_StreamZip(t *testing.T) {
 		require.ErrorIs(t, err, ErrBatchImageZipTooManyItems)
 		require.Empty(t, buf.Bytes())
 	})
+}
+
+func TestBatchImageDownloadService_HCAtomOwnedResultSurvivesFeatureAndAccountRemoval(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	batchID := "imgbatch_owned_download"
+	customID := "cover_001"
+	ownedDir := filepath.Join(root, "hc_atom")
+	require.NoError(t, os.MkdirAll(ownedDir, 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(ownedDir, batchID+".jsonl"), []byte(
+		`{"custom_id":"cover_001","response":{"candidates":[{"content":{"parts":[{"inlineData":{"mimeType":"image/png","data":"Zmlyc3Q="}}]}}]}}`+"\n",
+	), 0o600))
+
+	repo := newFakeBatchImageRepository()
+	apiKeyID := int64(22)
+	repo.jobs[batchID] = &BatchImageJob{
+		BatchID:           batchID,
+		UserID:            11,
+		APIKeyID:          &apiKeyID,
+		AccountID:         nil,
+		Provider:          BatchImageProviderHCAtom,
+		Model:             "seedream-5.0",
+		Status:            BatchImageJobStatusCompleted,
+		ProviderOutputRef: batchImageStringPtr(hcAtomOwnedResultRef(batchID)),
+		ItemCount:         1,
+		SuccessCount:      1,
+	}
+	mime, ext := "image/png", "png"
+	repo.items[batchID] = []CreateBatchImageItemParams{{
+		JobID: batchID, CustomID: customID, Status: BatchImageItemStatusSuccess,
+		MimeType: &mime, FileExtension: &ext, ImageCount: 1,
+	}}
+	cfg := &config.Config{BatchImage: config.BatchImageConfig{
+		HCAtomEnabled: false, HCAtomOwnedResultDir: root,
+		MaxDownloadItemsZip: 10, MaxDownloadDurationSeconds: 60,
+	}}
+	svc := NewBatchImageDownloadService(repo, nil, nil, cfg)
+
+	stream, err := svc.OpenItemContent(ctx, testBatchImageOwner(), batchID, customID, 0)
+	require.NoError(t, err)
+	body, err := io.ReadAll(stream.Reader)
+	require.NoError(t, err)
+	require.NoError(t, stream.Reader.Close())
+	require.Equal(t, []byte("first"), body)
+
+	var zipped bytes.Buffer
+	result, err := svc.StreamZip(ctx, testBatchImageOwner(), batchID, BatchImageZipOptions{}, &zipped)
+	require.NoError(t, err)
+	require.Equal(t, 1, result.FileCount)
+	require.Equal(t, []byte("first"), readZipFiles(t, zipped.Bytes())["images/cover_001.png"])
 }
 
 func TestExtractBatchImagePartsFromResultLine(t *testing.T) {

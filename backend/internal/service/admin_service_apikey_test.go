@@ -62,6 +62,9 @@ func (s *userRepoStubForGroupUpdate) ListWithFilters(context.Context, pagination
 func (s *userRepoStubForGroupUpdate) UpdateBalance(context.Context, int64, float64) error {
 	panic("unexpected")
 }
+func (s *userRepoStubForGroupUpdate) SetBalance(context.Context, int64, float64) error {
+	panic("unexpected")
+}
 func (s *userRepoStubForGroupUpdate) DeductBalance(context.Context, int64, float64) error {
 	panic("unexpected")
 }
@@ -189,6 +192,12 @@ func (s *apiKeyRepoStubForGroupUpdate) IncrementRateLimitUsage(context.Context, 
 	panic("unexpected")
 }
 func (s *apiKeyRepoStubForGroupUpdate) ResetRateLimitWindows(context.Context, int64) error {
+	panic("unexpected")
+}
+func (s *apiKeyRepoStubForGroupUpdate) ResetRateLimitUsage(context.Context, int64) error {
+	panic("unexpected")
+}
+func (s *apiKeyRepoStubForGroupUpdate) ResetQuotaUsed(context.Context, int64) error {
 	panic("unexpected")
 }
 func (s *apiKeyRepoStubForGroupUpdate) GetRateLimitData(context.Context, int64) (*APIKeyRateLimitData, error) {

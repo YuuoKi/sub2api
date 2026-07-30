@@ -15,6 +15,14 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 )
 
+type accountCreateWithGroupsRepository interface {
+	CreateWithGroups(ctx context.Context, account *Account, groupIDs []int64) error
+}
+
+type accountUpdateWithGroupsRepository interface {
+	UpdateWithGroups(ctx context.Context, account *Account, groupIDs []int64) error
+}
+
 // Account management implementations
 func (s *adminServiceImpl) ListAccounts(ctx context.Context, page, pageSize int, platform, accountType, status, search string, groupID int64, privacyMode string, sortBy, sortOrder string) ([]Account, int64, error) {
 	params := pagination.PaginationParams{Page: page, PageSize: pageSize, SortBy: sortBy, SortOrder: sortOrder}
@@ -100,6 +108,19 @@ func (s *adminServiceImpl) normalizeLANAdminAccountExtra(extra map[string]any) m
 }
 
 func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccountInput) (*Account, error) {
+	if input == nil {
+		return nil, infraerrors.BadRequest("INVALID_ACCOUNT", "account input is required")
+	}
+	if input.Platform == PlatformHCAtom {
+		if input.Type != AccountTypeAPIKey {
+			return nil, infraerrors.BadRequest("HC_ATOM_ACCOUNT_TYPE_INVALID", "HC-ATOM accounts require apikey type")
+		}
+		protected, err := s.protectHCAtomAdminCredentials(nil, input.Credentials)
+		if err != nil {
+			return nil, err
+		}
+		input.Credentials = protected
+	}
 	// 绑定分组
 	groupIDs := input.GroupIDs
 	// 如果没有指定分组,自动绑定对应平台的默认分组
@@ -114,6 +135,17 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 				}
 			}
 		}
+	}
+	if input.Platform == PlatformHCAtom && len(groupIDs) == 0 {
+		return nil, infraerrors.BadRequest("HC_ATOM_IMAGE_GROUP_REQUIRED",
+			"HC-ATOM image accounts must bind an authorized image group")
+	}
+	if len(groupIDs) > 0 {
+		validatedGroupIDs, err := s.validateAccountGroupIDs(ctx, input.Platform, groupIDs)
+		if err != nil {
+			return nil, err
+		}
+		groupIDs = validatedGroupIDs
 	}
 
 	// 检查混合渠道风险（除非用户已确认）
@@ -170,15 +202,28 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 		}
 		account.LoadFactor = input.LoadFactor
 	}
-	if err := s.accountRepo.Create(ctx, account); err != nil {
-		return nil, err
-	}
-
-	// 绑定分组
 	if len(groupIDs) > 0 {
-		if err := s.accountRepo.BindGroups(ctx, account.ID, groupIDs); err != nil {
-			return nil, err
+		if repo, ok := s.accountRepo.(accountCreateWithGroupsRepository); ok {
+			if err := repo.CreateWithGroups(ctx, account, groupIDs); err != nil {
+				return nil, err
+			}
+		} else {
+			if err := s.accountRepo.Create(ctx, account); err != nil {
+				return nil, err
+			}
+			if err := s.accountRepo.BindGroups(ctx, account.ID, groupIDs); err != nil {
+				if cleanupErr := s.accountRepo.Delete(ctx, account.ID); cleanupErr != nil {
+					slog.Error("create_account_group_bind_cleanup_failed",
+						"account_id", account.ID,
+						"bind_error", err,
+						"cleanup_error", cleanupErr,
+					)
+				}
+				return nil, err
+			}
 		}
+	} else if err := s.accountRepo.Create(ctx, account); err != nil {
+		return nil, err
 	}
 
 	// OAuth 账号：创建后异步设置隐私。
@@ -210,9 +255,24 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 }
 
 func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *UpdateAccountInput) (*Account, error) {
+	if input == nil {
+		return nil, infraerrors.BadRequest("INVALID_ACCOUNT", "account input is required")
+	}
 	account, err := s.accountRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
+	}
+	if account.Platform == PlatformHCAtom {
+		if input.Type != "" && input.Type != AccountTypeAPIKey {
+			return nil, infraerrors.BadRequest("HC_ATOM_ACCOUNT_TYPE_INVALID", "HC-ATOM accounts require apikey type")
+		}
+		if input.Credentials != nil {
+			protected, protectErr := s.protectHCAtomAdminCredentials(account.Credentials, input.Credentials)
+			if protectErr != nil {
+				return nil, protectErr
+			}
+			input.Credentials = protected
+		}
 	}
 	// 安全/身份不变量(影子账号):通用更新路径被 edit/re-auth/refresh/batch 共用,
 	// 必须在此守住,否则仅在创建时的保证可被这些路径绕过。
@@ -343,9 +403,11 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 
 	// 先验证分组是否存在（在任何写操作之前）
 	if input.GroupIDs != nil {
-		if err := s.validateGroupIDsExist(ctx, *input.GroupIDs); err != nil {
+		validatedGroupIDs, err := s.validateAccountGroupIDs(ctx, account.Platform, *input.GroupIDs)
+		if err != nil {
 			return nil, err
 		}
+		input.GroupIDs = &validatedGroupIDs
 
 		// 检查混合渠道风险（除非用户已确认）
 		if !input.SkipMixedChannelCheck {
@@ -355,7 +417,20 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 		}
 	}
 
-	if err := s.accountRepo.Update(ctx, account); err != nil {
+	if input.GroupIDs != nil {
+		if repo, ok := s.accountRepo.(accountUpdateWithGroupsRepository); ok {
+			if err := repo.UpdateWithGroups(ctx, account, *input.GroupIDs); err != nil {
+				return nil, err
+			}
+		} else {
+			if err := s.accountRepo.Update(ctx, account); err != nil {
+				return nil, err
+			}
+			if err := s.accountRepo.BindGroups(ctx, account.ID, *input.GroupIDs); err != nil {
+				return nil, err
+			}
+		}
+	} else if err := s.accountRepo.Update(ctx, account); err != nil {
 		return nil, err
 	}
 
@@ -363,13 +438,6 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	// 影子自身 proxy 不可独立编辑(见上),故对影子的更新不触发传播。
 	if input.ProxyID != nil && !account.IsCredentialShadow() {
 		if err := s.propagateProxyToShadows(ctx, id, account.ProxyID); err != nil {
-			return nil, err
-		}
-	}
-
-	// 绑定分组
-	if input.GroupIDs != nil {
-		if err := s.accountRepo.BindGroups(ctx, account.ID, *input.GroupIDs); err != nil {
 			return nil, err
 		}
 	}
@@ -384,6 +452,21 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 
 // UpdateAccountExtra 仅对 Extra JSONB 做 key 级合并，避免覆盖其它运行态键
 // （如 model_rate_limits / passive_usage_* 等）。
+func (s *adminServiceImpl) protectHCAtomAdminCredentials(existing, incoming map[string]any) (map[string]any, error) {
+	protected, err := ProtectHCAtomAccountCredentials(existing, incoming, s.hcAtomCredentialCipher)
+	if err == nil {
+		return protected, nil
+	}
+	if errors.Is(err, ErrHCAtomCredentialKeyUnavailable) {
+		return nil, infraerrors.New(http.StatusServiceUnavailable, "HC_ATOM_CREDENTIAL_ENCRYPTION_UNAVAILABLE",
+			"HC-ATOM credential encryption is not configured")
+	}
+	if errors.Is(err, ErrHCAtomCredentialMissing) {
+		return nil, infraerrors.BadRequest("HC_ATOM_API_KEY_REQUIRED", "HC-ATOM account API key is required")
+	}
+	return nil, infraerrors.BadRequest("HC_ATOM_CREDENTIAL_INVALID", "HC-ATOM account credential is invalid")
+}
+
 func (s *adminServiceImpl) UpdateAccountExtra(ctx context.Context, id int64, updates map[string]any) error {
 	updates = s.normalizeLANAdminAccountExtra(updates)
 	if len(updates) == 0 {
@@ -437,6 +520,14 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 			if acc != nil && acc.IsCredentialShadow() {
 				return nil, infraerrors.Newf(http.StatusBadRequest, "SPARK_SHADOW_NO_CREDENTIALS",
 					"spark shadow account %d cannot hold credentials; manage credentials on the parent account", acc.ID)
+			}
+			if acc != nil && acc.Platform == PlatformHCAtom {
+				// HC credentials require per-account encryption and preservation
+				// of the existing ciphertext. A single bulk JSON merge cannot
+				// safely provide those semantics, so fail closed and require the
+				// dedicated single-account update path.
+				return nil, infraerrors.Newf(http.StatusBadRequest, "HC_ATOM_BULK_CREDENTIAL_UPDATE_FORBIDDEN",
+					"HC-ATOM account %d credentials cannot be updated in bulk; update the account individually", acc.ID)
 			}
 		}
 	}
@@ -909,6 +1000,52 @@ func (s *adminServiceImpl) validateGroupIDsExist(ctx context.Context, groupIDs [
 		}
 	}
 	return nil
+}
+
+func (s *adminServiceImpl) validateAccountGroupIDs(ctx context.Context, platform string, groupIDs []int64) ([]int64, error) {
+	normalized := make([]int64, 0, len(groupIDs))
+	seen := make(map[int64]struct{}, len(groupIDs))
+	for _, groupID := range groupIDs {
+		if groupID <= 0 {
+			return nil, infraerrors.BadRequest("ACCOUNT_GROUP_INVALID", "account group id must be positive")
+		}
+		if _, ok := seen[groupID]; ok {
+			continue
+		}
+		seen[groupID] = struct{}{}
+		normalized = append(normalized, groupID)
+	}
+	if platform != PlatformHCAtom {
+		if err := s.validateGroupIDsExist(ctx, normalized); err != nil {
+			return nil, err
+		}
+		return normalized, nil
+	}
+	if len(normalized) == 0 {
+		return nil, infraerrors.BadRequest("HC_ATOM_IMAGE_GROUP_REQUIRED",
+			"HC-ATOM image accounts must bind an authorized image group")
+	}
+	for _, groupID := range normalized {
+		group, err := s.groupRepo.GetByID(ctx, groupID)
+		if err != nil {
+			if errors.Is(err, ErrGroupNotFound) {
+				return nil, infraerrors.BadRequest("ACCOUNT_GROUP_NOT_FOUND", fmt.Sprintf("group %d does not exist", groupID))
+			}
+			return nil, fmt.Errorf("get account group %d: %w", groupID, err)
+		}
+		if !group.IsActive() {
+			return nil, infraerrors.BadRequest("ACCOUNT_GROUP_NOT_ACTIVE", fmt.Sprintf("group %d is not active", groupID))
+		}
+		if group.Platform != platform {
+			return nil, infraerrors.BadRequest("ACCOUNT_GROUP_PLATFORM_MISMATCH",
+				fmt.Sprintf("group %d belongs to %s, not %s", groupID, group.Platform, platform))
+		}
+		if !qcanvasMediaGroupValid(group) {
+			return nil, infraerrors.BadRequest("HC_ATOM_IMAGE_GROUP_INVALID",
+				fmt.Sprintf("group %d does not provide the authorized HC-ATOM image capability", groupID))
+		}
+	}
+	return normalized, nil
 }
 
 // CheckMixedChannelRisk checks whether target groups contain mixed channels for the current account platform.

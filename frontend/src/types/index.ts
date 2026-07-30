@@ -233,6 +233,8 @@ export interface PublicSettings {
   google_oauth_enabled: boolean
   backend_mode_enabled: boolean
   version: string
+  build_commit?: string
+  build_date?: string
   // 服务器全局时区（IANA 名称与当前 UTC 偏移），高峰时段等服务端本地时间窗口的展示标注用；
   // 可选：注入的 __APP_CONFIG__ 旧缓存可能缺失
   server_timezone?: string
@@ -498,7 +500,7 @@ export interface PaginationConfig {
 
 // ==================== API Key & Group Types ====================
 
-export type GroupPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'grok'
+export type GroupPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'grok' | 'hc_atom'
 
 export type SubscriptionType = 'standard' | 'subscription'
 
@@ -590,9 +592,12 @@ export interface ApiKey {
   id: number
   user_id: number
   key: string
+  /** Non-secret last-4 hint from admin list endpoints (never the full secret). */
+  key_hint?: string
   name: string
   group_id: number | null
-  status: 'active' | 'inactive' | 'quota_exhausted' | 'expired'
+  // Admin/service use `disabled`; some user-facing forms still treat it as inactive.
+  status: 'active' | 'inactive' | 'disabled' | 'quota_exhausted' | 'expired'
   ip_whitelist: string[]
   ip_blacklist: string[]
   last_used_at: string | null
@@ -740,7 +745,7 @@ export interface UpdateGroupRequest {
 
 // ==================== Account & Proxy Types ====================
 
-export type AccountPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'grok'
+export type AccountPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'grok' | 'hc_atom'
 export type AccountType = 'oauth' | 'setup-token' | 'apikey' | 'upstream' | 'bedrock' | 'service_account'
 export type OAuthAddMethod = 'oauth' | 'setup-token'
 export type ProxyProtocol = 'http' | 'https' | 'socks5' | 'socks5h'

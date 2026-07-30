@@ -76,6 +76,7 @@ import {
 } from '@/api/user/video_simulation'
 import type { ApiKey } from '@/types'
 import { extractApiErrorMessage } from '@/utils/apiError'
+import { createIdempotencyKey } from '@/utils/idempotencyKey'
 
 const contract = ref<VideoSimulationContract | null>(null)
 const contractError = ref('')
@@ -121,7 +122,7 @@ async function onSubmit() {
   createdTaskId.value = null
   // One creation_key per Create click (intentional submit). Retries after failure
   // mint a new key on the next click so each user action is a distinct attempt.
-  const creationKey = crypto.randomUUID()
+  const creationKey = createIdempotencyKey()
   try {
     const task = await createSimulationTask({
       api_key_id: Number(apiKeyId.value),

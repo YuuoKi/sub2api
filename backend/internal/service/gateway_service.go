@@ -642,6 +642,7 @@ type GatewayService struct {
 	balanceNotifyService  *BalanceNotifyService
 	userPlatformQuotaRepo UserPlatformQuotaRepository
 	generationCollector   *GenerationContentCollector
+	hcAtomClient          hcAtomRoundTripClient
 }
 
 // NewGatewayService creates a new GatewayService
@@ -709,6 +710,7 @@ func NewGatewayService(
 		resolver:              resolver,
 		balanceNotifyService:  balanceNotifyService,
 		userPlatformQuotaRepo: userPlatformQuotaRepo,
+		hcAtomClient:          &http.Client{Timeout: 60 * time.Second},
 	}
 	svc.userGroupRateResolver = newUserGroupRateResolver(
 		userGroupRateRepo,

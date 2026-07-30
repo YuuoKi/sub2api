@@ -45,6 +45,8 @@ type apiKeyRepoStub struct {
 	updateLastUsed         func(ctx context.Context, id int64, usedAt time.Time) error
 	touchedIDs             []int64
 	touchedUsedAts         []time.Time
+	resetQuotaUsedIDs      []int64
+	resetRateLimitIDs      []int64
 }
 
 // 以下方法在本测试中不应被调用，使用 panic 确保测试失败时能快速定位问题
@@ -85,6 +87,10 @@ func (s *apiKeyRepoStub) GetByKeyForAuth(ctx context.Context, key string) (*APIK
 func (s *apiKeyRepoStub) Update(ctx context.Context, key *APIKey) error {
 	if key != nil {
 		s.updatedKeys = append(s.updatedKeys, *key)
+		if s.updateErr == nil {
+			clone := *key
+			s.apiKey = &clone
+		}
 	}
 	return s.updateErr
 }
@@ -226,6 +232,27 @@ func (s *apiKeyRepoStub) IncrementRateLimitUsage(ctx context.Context, id int64, 
 
 func (s *apiKeyRepoStub) ResetRateLimitWindows(ctx context.Context, id int64) error {
 	panic("unexpected ResetRateLimitWindows call")
+}
+
+func (s *apiKeyRepoStub) ResetRateLimitUsage(ctx context.Context, id int64) error {
+	s.resetRateLimitIDs = append(s.resetRateLimitIDs, id)
+	if s.apiKey != nil {
+		s.apiKey.Usage5h = 0
+		s.apiKey.Usage1d = 0
+		s.apiKey.Usage7d = 0
+		s.apiKey.Window5hStart = nil
+		s.apiKey.Window1dStart = nil
+		s.apiKey.Window7dStart = nil
+	}
+	return nil
+}
+
+func (s *apiKeyRepoStub) ResetQuotaUsed(ctx context.Context, id int64) error {
+	s.resetQuotaUsedIDs = append(s.resetQuotaUsedIDs, id)
+	if s.apiKey != nil {
+		s.apiKey.QuotaUsed = 0
+	}
+	return nil
 }
 
 func (s *apiKeyRepoStub) GetRateLimitData(ctx context.Context, id int64) (*APIKeyRateLimitData, error) {

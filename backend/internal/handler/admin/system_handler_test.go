@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/buildinfo"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -88,7 +89,7 @@ func newSystemHandlerTestRouter(t *testing.T, updateSvc *systemHandlerUpdateServ
 		ProcessingTimeout:  time.Second,
 		SystemOperationTTL: time.Minute,
 	})
-	handler := NewSystemHandler(updateSvc, lockSvc)
+	handler := NewSystemHandler(buildinfo.New("0.1.132", "testcommit", "2026-07-25", "source"), updateSvc, lockSvc)
 
 	router := gin.New()
 	router.POST("/api/v1/admin/system/update", handler.PerformUpdate)

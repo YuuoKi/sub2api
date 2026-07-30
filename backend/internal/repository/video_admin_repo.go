@@ -19,7 +19,13 @@ func NewVideoAdminRepository(db *sql.DB) service.VideoAdminRepository {
 
 const videoAdminProviderColumns = `p.id, p.group_id, COALESCE(g.name,''), p.provider, p.display_name, p.enabled,
 	'', p.masked_key, p.base_url, p.default_model, p.tiny_real_authorized_at,
-	COALESCE(p.tiny_real_authorized_by,0), p.tiny_real_consumed_at`
+	COALESCE(p.tiny_real_authorized_by,0), p.tiny_real_consumed_at,
+	COALESCE((SELECT vt.provider_error_message FROM video_tasks vt
+		WHERE vt.provider_account_id=p.id AND vt.provider_error_message<>''
+		ORDER BY vt.created_at DESC,vt.id DESC LIMIT 1),''),
+	(SELECT vt.updated_at FROM video_tasks vt
+		WHERE vt.provider_account_id=p.id AND vt.provider_error_message<>''
+		ORDER BY vt.created_at DESC,vt.id DESC LIMIT 1)`
 
 type videoProviderScanner interface{ Scan(...any) error }
 
@@ -27,7 +33,7 @@ func scanVideoAdminProvider(row videoProviderScanner) (*service.VideoProviderAcc
 	var item service.VideoProviderAccount
 	err := row.Scan(&item.ID, &item.GroupID, &item.GroupName, &item.Provider, &item.DisplayName, &item.Enabled,
 		&item.EncryptedAPIKey, &item.MaskedKey, &item.BaseURL, &item.DefaultModel, &item.TinyRealAuthorizedAt,
-		&item.TinyRealAuthorizedBy, &item.TinyRealConsumedAt)
+		&item.TinyRealAuthorizedBy, &item.TinyRealConsumedAt, &item.LatestErrorMessage, &item.LatestErrorAt)
 	if err != nil {
 		return nil, err
 	}
@@ -51,6 +57,22 @@ func (r *videoAdminRepository) ListVideoProviders(ctx context.Context) ([]servic
 	}
 	return items, rows.Err()
 }
+
+func (r *videoAdminRepository) GetVideoProviderCredential(ctx context.Context, id int64) (*service.VideoProviderAccount, error) {
+	var item service.VideoProviderAccount
+	err := r.db.QueryRowContext(ctx, `SELECT id, provider, encrypted_api_key, base_url, default_model
+		FROM video_provider_accounts WHERE id=$1`, id).Scan(
+		&item.ID, &item.Provider, &item.EncryptedAPIKey, &item.BaseURL, &item.DefaultModel,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, service.ErrVideoProviderNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
 func (r *videoAdminRepository) CreateVideoProvider(ctx context.Context, item service.VideoProviderAccount) (*service.VideoProviderAccount, error) {
 	valid, conflict, err := r.validateVideoProviderTarget(ctx, item.GroupID, item.Provider, item.DefaultModel, 0)
 	if err != nil {

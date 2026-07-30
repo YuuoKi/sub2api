@@ -1842,26 +1842,8 @@ func getContextInt64(c *gin.Context, key string) (int64, bool) {
 }
 
 func (h *OpenAIGatewayHandler) submitUsageRecordTask(parent context.Context, task service.UsageRecordTask) {
-	if task == nil {
-		return
-	}
-	task = wrapUsageRecordTaskContext(parent, task)
-	if h.usageRecordWorkerPool != nil {
-		h.usageRecordWorkerPool.Submit(task)
-		return
-	}
-	// 回退路径：worker 池未注入时同步执行，避免退回到无界 goroutine 模式。
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			logger.L().With(
-				zap.String("component", "handler.openai_gateway.responses"),
-				zap.Any("panic", recovered),
-			).Error("openai.usage_record_task_panic_recovered")
-		}
-	}()
-	task(ctx)
+	// Billing usage must never be silently dropped; reuse mandatory sync-fallback semantics.
+	h.submitMandatoryUsageRecordTask(parent, task)
 }
 
 func (h *OpenAIGatewayHandler) submitOpenAIUsageRecordTask(parent context.Context, result *service.OpenAIForwardResult, task service.UsageRecordTask) {

@@ -5,11 +5,57 @@ import (
 	"database/sql"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/stretchr/testify/require"
 )
+
+func TestListVideoProvidersReturnsLatestSanitizedProviderError(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	repo := &videoAdminRepository{db: db}
+	latestAt := time.Date(2026, 7, 27, 1, 2, 3, 0, time.UTC)
+	mock.ExpectQuery(`SELECT[\s\S]+provider_error_message[\s\S]+FROM video_provider_accounts`).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "group_id", "group_name", "provider", "display_name", "enabled",
+			"encrypted_api_key", "masked_key", "base_url", "default_model",
+			"tiny_real_authorized_at", "tiny_real_authorized_by", "tiny_real_consumed_at",
+			"latest_error_message", "latest_error_at",
+		}).AddRow(
+			int64(7), int64(9), "视频组", service.HCAtomSeedanceV3Provider, "HC V3", true,
+			"", "hc-a…7z", service.HCAtomSeedanceV3BaseURL, service.HCAtomSeedanceV3PublicModel,
+			nil, int64(0), nil, "upstream provider dispatch failed", latestAt,
+		))
+
+	items, err := repo.ListVideoProviders(context.Background())
+
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	require.Equal(t, "upstream provider dispatch failed", items[0].LatestErrorMessage)
+	require.Equal(t, latestAt, *items[0].LatestErrorAt)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestGetVideoProviderCredentialLoadsCiphertextWithoutChangingSanitizedList(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	repo := &videoAdminRepository{db: db}
+	mock.ExpectQuery(`SELECT id, provider, encrypted_api_key, base_url, default_model[\s\S]+FROM video_provider_accounts WHERE id=\$1`).
+		WithArgs(int64(7)).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "provider", "encrypted_api_key", "base_url", "default_model"}).
+			AddRow(int64(7), service.HCAtomSeedanceV3Provider, "ciphertext", service.HCAtomSeedanceV3BaseURL, service.HCAtomSeedanceV3PublicModel))
+
+	item, err := repo.GetVideoProviderCredential(context.Background(), 7)
+
+	require.NoError(t, err)
+	require.Equal(t, "ciphertext", item.EncryptedAPIKey)
+	require.Equal(t, service.HCAtomSeedanceV3Provider, item.Provider)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
 
 func TestCreateVideoProviderDetectsConflictOnCustomModel(t *testing.T) {
 	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))

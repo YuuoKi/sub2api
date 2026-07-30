@@ -99,12 +99,18 @@ describe('Gate 2 remaining UX contract', () => {
     expect(overview).not.toContain('listBackupJobs')
   })
 
-  it('uses the staff capability only for non-interactive service identities and one-shot dual keys', () => {
+  it('lists human/tool staff, creates tool owners by default, and issues one-shot dual keys', () => {
     const staff = source('src/views/admin/console/StaffView.vue')
     expect(staff).toContain('data-test="create-service-identity"')
+    // New employees are still created as tool; list/reuse accept human OR tool (no tool-only hard filter).
     expect(staff).toContain("member_type: 'tool'")
+    expect(staff).toContain("memberType === 'human'")
+    expect(staff).toContain("memberType === 'tool'")
+    expect(staff).toContain('isEmployeeMemberType')
+    expect(staff).not.toContain("user.member_type === 'tool'")
     expect(staff).toContain("role: 'user'")
     expect(staff).toContain('createQCanvasKeyPairForUser')
+    expect(staff).toContain('EMAIL_EXISTS')
     expect(staff).not.toContain('InitialCredentialDialog')
     expect(staff).not.toContain('issueForm.quota')
   })

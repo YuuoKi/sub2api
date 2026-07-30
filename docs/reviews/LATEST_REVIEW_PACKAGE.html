@@ -3,80 +3,97 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Sub2API QCanvas 双 Key 开卡审查包</title>
+  <title>Sub2API 双视频生产目录与调度审查包</title>
   <style>
-    body{max-width:980px;margin:32px auto;padding:0 20px;background:#0f1720;color:#e5edf5;font:15px/1.65 "Segoe UI","Microsoft YaHei",sans-serif}
-    h1,h2{color:#7dd3bc} h1{font-size:26px} h2{margin-top:28px;border-bottom:1px solid #334155;padding-bottom:6px}
-    code,pre{font-family:Consolas,monospace;background:#182431} pre{padding:12px;overflow:auto;border:1px solid #334155;border-radius:6px}
-    table{width:100%;border-collapse:collapse} th,td{border:1px solid #334155;padding:8px;vertical-align:top;text-align:left}
-    .pass{color:#86efac}.wait{color:#fbbf24}.blocked{color:#fca5a5}.muted{color:#9fb0c0}
+    :root{color-scheme:dark;background:#081018;color:#dbeafe;font:15px/1.65 system-ui,sans-serif}
+    body{max-width:1080px;margin:auto;padding:32px}.card{background:#101b2b;border:1px solid #29415d;border-radius:14px;padding:20px;margin:16px 0}
+    h1,h2{color:#7dd3fc}code,pre{background:#07111f;border-radius:8px;padding:2px 6px}pre{padding:14px;overflow:auto}
+    .ok{color:#86efac}.warn{color:#fde68a}.blocked{color:#fca5a5}table{width:100%;border-collapse:collapse}td,th{border:1px solid #29415d;padding:8px;text-align:left}
   </style>
 </head>
 <body>
-  <h1>Sub2API × QCanvas 双 Key 开卡审查包</h1>
-  <p><strong>日期：</strong>2026-07-19　<strong>执行目录：</strong><code>D:\sub2api-trunk</code></p>
-  <p><strong>当前状态：</strong><span class="pass">SUB2_GATE=PASS</span>；<span class="wait">联合 Docker Compose 由 QCanvas 总包任务执行，当前不在本仓库重复启动</span>。</p>
+  <h1>Sub2API 双视频生产目录与调度审查包</h1>
+  <p class="ok">当前状态：内部可用，已部署；官方 Seedance 2.0 与 HC-ATOM Seedance V3 的无付费连通性检查均通过。</p>
 
-  <h2>目标与合同</h2>
-  <p>管理员为同一 Sub2API user 原子签发两张逻辑 Key：<code>video</code> 绑定视频路由组，<code>media</code> 绑定 LLM/图片路由组。两个 group_id 必须不同且可用；两张 Key 共用同一用户余额，消费继续按 user_id 汇总。保留原单 Key 开卡。</p>
+  <section class="card">
+    <h2>目标与执行目录</h2>
+    <p>让 QCanvas 只持有 Sub2API 视频 Key，由 Sub2API 目录和供应商账号自动区分官方 Seedance 与 HC-ATOM V3 协议，并完整公布模型能力参数。</p>
+    <p><code>D:\sub2api-trunk\.worktrees\hc-unified-chain-20260728</code></p>
+    <p>实现提交：<code>4f53780</code>；配套 QCanvas 提交：<code>8639eb1</code>。</p>
+  </section>
 
-  <h2>实现</h2>
-  <table>
-    <tr><th>层</th><th>事实</th></tr>
-    <tr><td>后端接口</td><td><code>POST /api/v1/admin/users/:id/qcanvas-key-pair</code>；独立幂等作用域；首次返回两把明文，重放只返回脱敏元数据。</td></tr>
-    <tr><td>事务</td><td>repository 在一个 Ent 事务内创建 video/media 两条记录；第二条失败时整体回滚。</td></tr>
-    <tr><td>校验</td><td>用户存在、两个 group_id 为正且不同、组存在/启用、用户可绑定。</td></tr>
-    <tr><td>员工页</td><td>新增 QCanvas 双 Key 入口、两组选择、首次复制与关闭即清空；卡名显示逻辑角色与实际组。</td></tr>
-    <tr><td>计费</td><td>未新增余额或第二账本；员工总览继续读取 user 聚合成本，两张 Key 的消费合并。</td></tr>
-  </table>
+  <section class="card">
+    <h2>变更清单与实现细节</h2>
+    <ul>
+      <li>官方公共别名固定为 <code>seedance-2-fast</code>，实际上游模型仍为 <code>doubao-seedance-2-0-260128</code>。</li>
+      <li>HC V3 公共模型为 <code>doubao-seedance-2.0-v3</code>，使用 <code>/v3/video/tasks</code>。</li>
+      <li>目录返回可选比例、时长、清晰度、音频和参考资产规则；V3 支持首帧、尾帧、参考图、参考视频、参考音频角色。</li>
+      <li>首尾帧与参考图保持互斥校验，协议不完整或未授权模型继续 fail-closed。</li>
+      <li>官方模型只有在供应商已配置、组允许、最小真实授权存在且生产开关开启时才展示。</li>
+      <li>媒体组和视频组继续使用不同 Key；3 把现有视频 Key 与两个视频供应商统一迁移到 group 9。</li>
+    </ul>
+  </section>
 
-  <h2>定向验证</h2>
-  <pre>go test ./internal/handler/admin -run 'TestAdminQCanvasKeyPair|TestExecuteAdminIdempotentJSONConcurrentRetryOnlyOneSideEffect'  PASS
-go test ./internal/repository -run '^$'                                                         PASS
-go test ./internal/server/routes -run 'TestGatewayRoutesOpenAIResponsesCompactPathIsRegistered|TestGatewayRoutesGrokAllowsCLICompatibilityEntrypoints'  PASS
-go test ./internal/handler -run 'TestGatewayEnsureForwardErrorResponse_ResponsesRouteAfterWrittenEmitsResponseFailed|TestOpenAIUpstreamEndpoint_ViaGetUpstreamEndpoint'  PASS
-go test ./internal/service -run '^TestAPIKeyService_CreateQCanvasKeyPair$' -count=1                    PASS
-go build ./cmd/server                                                                             PASS
-vitest StaffView.keyOnce.spec.ts                                                                  10/10 PASS
-vue-tsc -b                                                                                        PASS
-eslint apiKeys.ts StaffView.vue StaffView.keyOnce.spec.ts                                         PASS
-git diff --check                                                                                  PASS</pre>
-  <p class="muted">一次 service 包定向测试被既有无关 WIP 阻断：<code>openai_account_scheduler_test.go:1178 undefined: withLANAdminOpenAIQuotaAutoPauseDisabled</code>。按任务边界记录后停止追踪，未为全绿修改无关代码。</p>
-  <p><strong>精确快照修正：</strong>旧候选 <code>127ef5915add93f31f21bbce674a1789691facdd</code> 的 StaffView/组件测试 hunk 错位；替换候选 <code>f3d86f7a95bcb0e4cfd99378bac865d842e8e716</code> 又发现 <code>CreateQCanvasKeyPair</code> 被错插到排序回调内部，两者均不能交付。本提交直接以父提交 <code>1218e69e1e3478f7d85ea0b16011ee82e66dbf54</code> 为基底重建同一双 Key 前后端，并在精确隔离源码树中通过 service 定向测试、<code>go build ./cmd/server</code>、<code>vue-tsc -b</code> 与 10 项 StaffView 测试；它是旧 SHA 的替换提交，不是追加补丁。</p>
+  <section class="card">
+    <h2>验证命令与结果</h2>
+    <pre>go test ./internal/service ./internal/handler/... -count=1
+PASS
 
-  <h2>/responses 只读结论</h2>
-  <p>已核对 <code>/v1/responses</code>、<code>/responses</code>、Codex 兼容入口、Bearer 鉴权及 Responses/SSE 错误终止。客户端断开后 Sub2API 会继续 drain 上游以收集完整 usage；这不是 fallback，也不能表述为“已取消上游或停止计费”。</p>
+go build -buildvcs=false
+PASS
 
-  <h2>跨仓状态与 Docker</h2>
-  <p>QCanvas 相关代码门已 PASS，本地提交短 SHA：<code>e648a06</code>。QCanvas 总包任务负责唯一一次隔离 Compose：全新 project、数据库、网络、卷和临时安全配置；不读取真实 env，不调用真实 Provider。Sub2API 本任务不另起 Compose。</p>
-  <p>本地 Docker 版本已只读确认：Docker Desktop 4.82.0、Engine 29.6.1、Compose v5.3.0、context <code>desktop-linux</code>。这不是运行烟测通过证明。</p>
+QCanvas Hono API 完整测试
+PASS（退出码 0）
 
-  <h2>风险与边界</h2>
-  <ul>
-    <li>普通/并发幂等重放不会增发；现有幂等框架仍有“业务事务提交后、幂等成功标记前进程崩溃”的历史窗口，本轮未扩 schema 重构。</li>
-    <li>未调用真实付费 Provider，不能据此证明供应商侧可用性或取消计费。</li>
-    <li>未执行腾讯云部署、域名/证书配置或公网开放；腾讯云广州实际部署等待后续明确授权。</li>
-    <li>工作树保留大量用户既有 WIP；本轮提交必须用精确 hunk 隔离，不纳入 LAN/服务身份等无关改动。</li>
-  </ul>
+QCanvas Web 目录/生成定向测试
+PASS（54）
 
-  <h2>回滚</h2>
-  <p>本轮只创建本地提交、不 push。需要回滚时由维护者对该精确提交执行非破坏性的 <code>git revert &lt;commit&gt;</code>；数据库没有新增表或迁移，回滚不会删除既有用户/Key/账单数据。</p>
+QCanvas Web typecheck / production build
+PASS</pre>
+    <p class="warn">QCanvas Web 全量仍有 9 个与本轮无关的历史测试失败，已在 QCanvas 审查包逐项列出；本轮目录与生成用例均通过。</p>
+  </section>
 
-  <h2>文件索引</h2>
-  <pre>backend/internal/handler/admin/apikey_handler.go
-backend/internal/handler/admin/apikey_lifecycle_test.go
-backend/internal/repository/api_key_repo.go
-backend/internal/repository/api_key_repo_integration_test.go
-backend/internal/repository/usage_log_repo_integration_test.go
-backend/internal/server/routes/admin.go
-backend/internal/service/api_key_service.go
-backend/internal/service/api_key_qcanvas_pair_test.go
-frontend/src/api/admin/apiKeys.ts
-frontend/src/views/admin/console/StaffView.vue
-frontend/src/views/admin/console/__tests__/StaffView.keyOnce.spec.ts
-docs/reviews/LATEST_REVIEW_PACKAGE.html</pre>
+  <section class="card">
+    <h2>线上部署与证据</h2>
+    <pre>生产目录：
+/home/ubuntu/wujie/wujie-tencent-guangzhou-dualkey-d6e54a8-35d5f77
 
-  <h2>后续唯一动作</h2>
-  <p>将本地精确 commit SHA 与上述文件清单回传 QCanvas 总包任务，由其执行一次联合隔离 Compose、生成两仓无密钥源码快照及 SHA-256 元数据。未取得该证据前不得标记生产 READY。</p>
+部署备份：
+/home/ubuntu/wujie/backups/production-r33-20260730T174320CST
+
+容器：
+sub2api  healthy
+q-api    healthy
+q-web    healthy
+
+视频组模型：
+seedance-2-fast
+doubao-seedance-2.0-v3
+
+视频 Key group=9：3
+官方供应商 group=9：enabled / key configured
+HC V3 供应商 group=9：enabled / key configured
+
+官方检查连接：149ms，通过，未创建任务
+HC V3 检查连接：126ms，通过，未创建任务
+video_tasks：0</pre>
+  </section>
+
+  <section class="card">
+    <h2>安全、风险与回滚</h2>
+    <ul>
+      <li>检查连接只发 GET 探针，不创建图片/视频任务；上游 Key 没有出现在前端、日志或响应中。</li>
+      <li class="warn">真实生成、轮询、预览、下载仍需用户发起一次最小付费任务后验收。</li>
+      <li class="warn">QCanvas HTTPS 使用内部证书，首次访问会出现浏览器证书提示。</li>
+    </ul>
+    <p>回滚脚本：<code>/home/ubuntu/wujie/staging/r33-20260730/rollback-r33.sh</code>。备份包含双数据库、旧源码、旧 compose、旧 q-api Dockerfile 和旧镜像标签。</p>
+  </section>
+
+  <section class="card">
+    <h2>当前状态、文件索引与下一步</h2>
+    <p>当前判定：<strong>内部可用，待用户真实最小任务复核</strong>，不是“已完成付费 E2E”。</p>
+    <p>主要文件位于 <code>backend/internal/service/</code>、<code>backend/internal/handler/</code>、对应测试与本文件。</p>
+    <p>可复制提示词：<code>我刚在 QCanvas 创建了一个最小视频任务。请只读核对 Sub2API 的模型别名、实际供应商、上游任务编号、轮询状态、结果资产和计费；不要创建新任务。</code></p>
+  </section>
 </body>
 </html>

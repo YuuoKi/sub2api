@@ -1271,6 +1271,13 @@ func (r *stubApiKeyRepo) IncrementRateLimitUsage(ctx context.Context, id int64, 
 func (r *stubApiKeyRepo) ResetRateLimitWindows(ctx context.Context, id int64) error {
 	return nil
 }
+
+func (r *stubApiKeyRepo) ResetRateLimitUsage(ctx context.Context, id int64) error {
+	return nil
+}
+func (r *stubApiKeyRepo) ResetQuotaUsed(ctx context.Context, id int64) error {
+	return nil
+}
 func (r *stubApiKeyRepo) GetRateLimitData(ctx context.Context, id int64) (*service.APIKeyRateLimitData, error) {
 	return nil, nil
 }

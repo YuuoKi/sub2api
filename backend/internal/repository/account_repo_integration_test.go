@@ -4,6 +4,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/accountgroup"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -94,6 +96,68 @@ func (s *AccountRepoSuite) SetupTest() {
 
 func TestAccountRepoSuite(t *testing.T) {
 	suite.Run(t, new(AccountRepoSuite))
+}
+
+func TestAccountRepository_CreateWithGroups_RollsBackAccountWhenBindingFails(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := newAccountRepositoryWithSQL(client, integrationDB, nil)
+	name := fmt.Sprintf("atomic-create-bind-failure-%d", time.Now().UnixNano())
+	account := &service.Account{
+		Name:        name,
+		Platform:    service.PlatformHCAtom,
+		Type:        service.AccountTypeAPIKey,
+		Status:      service.StatusActive,
+		Credentials: map[string]any{},
+		Extra:       map[string]any{},
+		Concurrency: 1,
+		Priority:    1,
+		Schedulable: true,
+	}
+	t.Cleanup(func() {
+		_, _ = integrationDB.ExecContext(ctx, `DELETE FROM scheduler_outbox WHERE account_id IN (SELECT id FROM accounts WHERE name = $1)`, name)
+		_, _ = integrationDB.ExecContext(ctx, `DELETE FROM account_groups WHERE account_id IN (SELECT id FROM accounts WHERE name = $1)`, name)
+		_, _ = integrationDB.ExecContext(ctx, `DELETE FROM accounts WHERE name = $1`, name)
+	})
+
+	err := repo.CreateWithGroups(ctx, account, []int64{int64(^uint64(0) >> 1)})
+	require.Error(t, err)
+
+	var count int
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT COUNT(*) FROM accounts WHERE name = $1`, name).Scan(&count))
+	require.Zero(t, count, "failed group binding must roll back the account insert")
+}
+
+func TestAccountRepository_UpdateWithGroups_RollsBackFieldsAndBindings(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := newAccountRepositoryWithSQL(client, integrationDB, nil)
+	suffix := time.Now().UnixNano()
+	group := mustCreateGroup(t, client, &service.Group{Name: fmt.Sprintf("atomic-update-group-%d", suffix)})
+	account := mustCreateAccount(t, client, &service.Account{Name: fmt.Sprintf("atomic-update-account-%d", suffix)})
+	mustBindAccountToGroup(t, client, account.ID, group.ID, 1)
+	originalName := account.Name
+	t.Cleanup(func() {
+		_, _ = integrationDB.ExecContext(ctx, `DELETE FROM scheduler_outbox WHERE account_id = $1`, account.ID)
+		_, _ = integrationDB.ExecContext(ctx, `DELETE FROM account_groups WHERE account_id = $1`, account.ID)
+		_, _ = integrationDB.ExecContext(ctx, `DELETE FROM accounts WHERE id = $1`, account.ID)
+		_, _ = integrationDB.ExecContext(ctx, `DELETE FROM groups WHERE id = $1`, group.ID)
+	})
+
+	account.Name = originalName + "-changed"
+	err := repo.UpdateWithGroups(ctx, account, []int64{int64(^uint64(0) >> 1)})
+	require.Error(t, err)
+
+	var persistedName string
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT name FROM accounts WHERE id = $1`, account.ID).Scan(&persistedName))
+	require.Equal(t, originalName, persistedName, "failed binding must roll back account field updates")
+
+	var oldBindingCount int
+	require.NoError(t, integrationDB.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM account_groups WHERE account_id = $1 AND group_id = $2`,
+		account.ID, group.ID,
+	).Scan(&oldBindingCount))
+	require.Equal(t, 1, oldBindingCount, "failed binding must preserve the previous group")
 }
 
 // --- Create / GetByID / Update / Delete ---

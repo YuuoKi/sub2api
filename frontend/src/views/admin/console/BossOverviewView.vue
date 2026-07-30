@@ -30,10 +30,13 @@
 
       <!-- 核心指标：紧凑数字行，无装饰圆环 -->
       <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <div
+        <component
+          :is="card.to ? RouterLink : 'div'"
           v-for="card in statCards"
           :key="card.label"
+          :to="card.to"
           class="rounded-lg border border-gray-200 bg-white px-4 py-3 dark:border-dark-700 dark:bg-dark-800"
+          :class="card.to ? 'block cursor-pointer transition-colors hover:border-gray-300 hover:bg-gray-50 dark:hover:border-dark-600 dark:hover:bg-dark-700/50' : ''"
         >
           <div class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ card.label }}</div>
           <div
@@ -43,7 +46,7 @@
             <AnimatedNumber :value="card.value" :format="card.format" />
           </div>
           <div class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{{ card.hint }}</div>
-        </div>
+        </component>
       </section>
 
       <!-- 花费趋势 + 模型分布；无数据时整块换成紧凑三步上手引导卡 -->
@@ -257,6 +260,7 @@ type StatCard = {
   hint: string
   format?: (value: number) => string
   tone?: 'default' | 'amber' | 'red'
+  to?: string
 }
 
 const statCards = computed<StatCard[]>(() => {
@@ -286,8 +290,9 @@ const statCards = computed<StatCard[]>(() => {
     {
       label: '异常上游',
       value: errorAccounts.value,
-      hint: '状态异常的上游账号数',
+      hint: '状态异常的上游账号数，点击查看',
       tone: errorAccounts.value > 0 ? 'red' : 'default',
+      to: '/admin/console/key-vault',
     },
   ]
 })
@@ -400,11 +405,11 @@ async function loadAll() {
   loading.value = true
   const { start, end } = getConsoleRange(rangeKey.value)
   try {
-    const [trendRes, modelsRes, rankingRes, accountsRes] = await Promise.all([
+    const [trendRes, modelsRes, rankingRes, errorAccountsRes] = await Promise.all([
       adminAPI.dashboard.getUsageTrend({ start_date: start, end_date: end, granularity: 'day' }),
       adminAPI.dashboard.getModelStats({ start_date: start, end_date: end }),
       adminAPI.dashboard.getUserSpendingRanking({ start_date: start, end_date: end, limit: 20 }),
-      adminAPI.accounts.list(1, 100),
+      adminAPI.accounts.list(1, 1, { status: 'error' }),
     ])
     trend.value = trendRes.trend || []
     models.value = modelsRes.models || []
@@ -414,7 +419,9 @@ async function loadAll() {
       requests: rankingRes.total_requests || 0,
       tokens: rankingRes.total_tokens || 0,
     }
-    errorAccounts.value = (accountsRes.items || []).filter((account) => account.status === 'error').length
+    errorAccounts.value = typeof errorAccountsRes.total === 'number'
+      ? errorAccountsRes.total
+      : (errorAccountsRes.items || []).filter((account) => account.status === 'error').length
     loadFailed.value = false
   } catch (err) {
     loadFailed.value = true

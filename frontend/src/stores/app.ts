@@ -7,11 +7,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { Toast, ToastType, PublicSettings } from '@/types'
 import { i18n } from '@/i18n'
-import {
-  checkUpdates as checkUpdatesAPI,
-  type VersionInfo,
-  type ReleaseInfo
-} from '@/api/admin/system'
+import { getVersion as getVersionAPI, type VersionInfo } from '@/api/admin/system'
 import { getPublicSettings as fetchPublicSettingsAPI } from '@/api/auth'
 import { DEFAULT_PRODUCT_NAME, resolveProductName } from '@/utils/productMode'
 
@@ -36,14 +32,16 @@ export const useAppStore = defineStore('app', () => {
   const cachedPublicSettings = ref<PublicSettings | null>(null)
   let publicSettingsRequest: Promise<PublicSettings | null> | null = null
 
-  // Version cache state
+  // Version cache state (immutable deploy identity — no self-update)
   const versionLoaded = ref<boolean>(false)
   const versionLoading = ref<boolean>(false)
   const currentVersion = ref<string>('')
+  const buildCommit = ref<string>('')
+  const buildDate = ref<string>('')
   const latestVersion = ref<string>('')
   const hasUpdate = ref<boolean>(false)
   const buildType = ref<string>('source')
-  const releaseInfo = ref<ReleaseInfo | null>(null)
+  const releaseInfo = ref<null>(null)
 
   // Auto-incrementing ID for toasts
   let toastIdCounter = 0
@@ -109,6 +107,10 @@ export const useAppStore = defineStore('app', () => {
    * @returns Toast ID for manual dismissal
    */
   function showToast(type: ToastType, message: string, duration?: number): string {
+    const duplicate = toasts.value.find((toast) => toast.type === type && toast.message === message)
+    if (duplicate) {
+      return duplicate.id
+    }
     const id = `toast-${++toastIdCounter}`
     const toast: Toast = {
       id,
@@ -238,38 +240,37 @@ export const useAppStore = defineStore('app', () => {
 
   // ==================== Version Management ====================
 
+  function applyBuildIdentity(version: string, commit = '', date = ''): VersionInfo {
+    currentVersion.value = version
+    buildCommit.value = commit
+    buildDate.value = date
+    latestVersion.value = ''
+    hasUpdate.value = false
+    buildType.value = 'source'
+    releaseInfo.value = null
+    versionLoaded.value = true
+    return {
+      version,
+      build_commit: commit,
+      build_date: date,
+      current_version: version,
+      latest_version: '',
+      has_update: false,
+      build_type: 'source',
+      cached: true
+    }
+  }
+
   /**
-   * Fetch version info (uses cache unless force=true)
-   * @param force - Force refresh from API
+   * Load immutable deploy identity. Never calls check-updates.
+   * Prefers public settings / HTML injection; falls back to GET /admin/system/version.
    */
   async function fetchVersion(force = false): Promise<VersionInfo | null> {
-    // Return cached data if available and not forcing refresh
     if (versionLoaded.value && !force) {
       return {
-        current_version: currentVersion.value,
-        latest_version: latestVersion.value,
-        has_update: hasUpdate.value,
-        build_type: buildType.value,
-        release_info: releaseInfo.value || undefined,
-        cached: true
-      }
-    }
-
-    // Prevent duplicate requests
-    if (versionLoading.value) {
-      return null
-    }
-
-    // 内部部署（lan_admin）：不调用 check-updates（无外网发行服务器可问，也不该引导更新），
-    // 版本号取公共设置里的短版本，hasUpdate 恒为 false。
-    if (lanAdminModeEnabled.value) {
-      currentVersion.value = cachedPublicSettings.value?.version || ''
-      latestVersion.value = ''
-      hasUpdate.value = false
-      buildType.value = 'source'
-      releaseInfo.value = null
-      versionLoaded.value = true
-      return {
+        version: currentVersion.value,
+        build_commit: buildCommit.value,
+        build_date: buildDate.value,
         current_version: currentVersion.value,
         latest_version: '',
         has_update: false,
@@ -278,16 +279,23 @@ export const useAppStore = defineStore('app', () => {
       }
     }
 
+    if (versionLoading.value) {
+      return null
+    }
+
+    const fromSettings = cachedPublicSettings.value
+    if (fromSettings?.version) {
+      return applyBuildIdentity(
+        fromSettings.version,
+        fromSettings.build_commit || '',
+        fromSettings.build_date || ''
+      )
+    }
+
     versionLoading.value = true
     try {
-      const data = await checkUpdatesAPI(force)
-      currentVersion.value = data.current_version
-      latestVersion.value = data.latest_version
-      hasUpdate.value = data.has_update
-      buildType.value = data.build_type || 'source'
-      releaseInfo.value = data.release_info || null
-      versionLoaded.value = true
-      return data
+      const data = await getVersionAPI()
+      return applyBuildIdentity(data.version, data.build_commit || '', data.build_date || '')
     } catch (error) {
       console.error('Failed to fetch version:', error)
       return null
@@ -297,7 +305,7 @@ export const useAppStore = defineStore('app', () => {
   }
 
   /**
-   * Clear version cache (e.g., after update)
+   * Clear version cache
    */
   function clearVersionCache(): void {
     versionLoaded.value = false
@@ -317,6 +325,14 @@ export const useAppStore = defineStore('app', () => {
     siteName.value = resolveProductName(config.site_name)
     siteLogo.value = config.site_logo || ''
     siteVersion.value = config.version || ''
+    if (config.version) {
+      currentVersion.value = config.version
+      buildCommit.value = config.build_commit || ''
+      buildDate.value = config.build_date || ''
+      hasUpdate.value = false
+      latestVersion.value = ''
+      versionLoaded.value = true
+    }
     contactInfo.value = config.contact_info || ''
     apiBaseUrl.value = config.api_base_url || ''
     docUrl.value = config.doc_url || ''
@@ -380,6 +396,8 @@ export const useAppStore = defineStore('app', () => {
         backend_mode_enabled: false,
 		lan_admin_mode_enabled: false,
         version: siteVersion.value,
+        build_commit: buildCommit.value,
+        build_date: buildDate.value,
         balance_low_notify_enabled: false,
         account_quota_notify_enabled: false,
         balance_low_notify_threshold: 0,
@@ -468,6 +486,8 @@ export const useAppStore = defineStore('app', () => {
     versionLoaded,
     versionLoading,
     currentVersion,
+    buildCommit,
+    buildDate,
     latestVersion,
     hasUpdate,
     buildType,

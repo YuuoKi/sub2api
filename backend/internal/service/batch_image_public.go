@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -206,7 +207,7 @@ func (s *BatchImagePublicService) Submit(ctx context.Context, owner BatchImageOw
 	}
 	// 与 ListModels 使用同一鉴权谓词（AllowBatchImageGeneration + Platform==Gemini），
 	// 避免两个入口校验口径不一致留下防御纵深缺口。
-	if err := s.ensureGroupAllowsBatchImage(ctx, owner.GroupID); err != nil {
+	if err := s.ensureGroupAllowsBatchImageForProvider(ctx, owner.GroupID, normalized.Provider); err != nil {
 		return nil, err
 	}
 	requestHash := HashBatchImageSubmitRequest(normalized)
@@ -622,9 +623,17 @@ func (s *BatchImagePublicService) ListModels(ctx context.Context, owner BatchIma
 	if err := s.ensureGroupAllowsBatchImage(ctx, owner.GroupID); err != nil {
 		return nil, err
 	}
+	var ownerGroup *Group
+	if owner.GroupID != nil && *owner.GroupID > 0 {
+		var err error
+		ownerGroup, err = s.GroupRepo.GetByIDLite(ctx, *owner.GroupID)
+		if err != nil || ownerGroup == nil {
+			return nil, ErrBatchImageSettlementPricingMissing
+		}
+	}
 
 	modelsByProvider := make(map[string]map[string]struct{})
-	for _, providerName := range batchImageProviderSelectionOrder("") {
+	for _, providerName := range batchImageProviderCatalogOrder() {
 		provider, ok := s.ProviderRegistry.Get(providerName)
 		if !ok || provider == nil {
 			continue
@@ -639,7 +648,10 @@ func (s *BatchImagePublicService) ListModels(ctx context.Context, owner BatchIma
 				continue
 			}
 			for _, model := range batchImageModelsFromAccountMapping(&account) {
-				if _, err := s.Pricing.BatchImageUnitPrice(ctx, &BatchImageJob{Provider: providerName, Model: model}); err != nil {
+				if providerName == BatchImageProviderHCAtom && !isHCAtomBatchEnabledModel(model) {
+					continue
+				}
+				if !s.batchImageCatalogPricingConfigured(ctx, ownerGroup, providerName, model) {
 					continue
 				}
 				if !account.IsModelSupported(model) {
@@ -654,7 +666,7 @@ func (s *BatchImagePublicService) ListModels(ctx context.Context, owner BatchIma
 	}
 
 	out := make([]BatchImagePublicModel, 0)
-	for _, providerName := range batchImageProviderSelectionOrder("") {
+	for _, providerName := range batchImageProviderCatalogOrder() {
 		models := make([]string, 0, len(modelsByProvider[providerName]))
 		for model := range modelsByProvider[providerName] {
 			models = append(models, model)
@@ -669,6 +681,19 @@ func (s *BatchImagePublicService) ListModels(ctx context.Context, owner BatchIma
 		}
 	}
 	return &BatchImagePublicModelsResponse{Object: "list", Data: out}, nil
+}
+
+func (s *BatchImagePublicService) batchImageCatalogPricingConfigured(ctx context.Context, group *Group, provider, model string) bool {
+	if provider == BatchImageProviderHCAtom && group != nil && group.Platform == PlatformHCAtom {
+		return group.ImagePrice1K != nil && *group.ImagePrice1K > 0 &&
+			group.ImagePrice2K != nil && *group.ImagePrice2K > 0 &&
+			group.ImagePrice4K != nil && *group.ImagePrice4K > 0
+	}
+	if s.Pricing == nil {
+		return false
+	}
+	_, err := s.Pricing.BatchImageUnitPrice(ctx, &BatchImageJob{Provider: provider, Model: model})
+	return err == nil
 }
 
 func (s *BatchImagePublicService) ListItems(ctx context.Context, owner BatchImageOwner, batchID string, query BatchImageItemsQuery) (*BatchImagePublicItemsResponse, error) {
@@ -787,8 +812,16 @@ func (s *BatchImagePublicService) validateSubmitRequest(req BatchImageSubmitRequ
 	if req.Provider != "" && !IsSupportedBatchImageProvider(req.Provider) {
 		return req, ErrBatchImageUnsupportedProvider
 	}
+	if req.Provider == BatchImageProviderHCAtom && !isHCAtomBatchEnabledModel(req.Model) {
+		return req, ErrBatchImageUnsupportedModel
+	}
 	if len(req.Items) == 0 {
 		return req, ErrBatchImageInvalidItems
+	}
+	if req.Provider == BatchImageProviderHCAtom {
+		if len(req.Items) != 1 || req.Items[0].OutputCount > 1 {
+			return req, ErrBatchImageInvalidItems
+		}
 	}
 	maxItems := s.maxItems()
 	if len(req.Items) > maxItems {
@@ -800,10 +833,35 @@ func (s *BatchImagePublicService) validateSubmitRequest(req BatchImageSubmitRequ
 	if req.ImageSize == "" {
 		req.ImageSize = s.defaultImageSize()
 	}
-	if !strings.EqualFold(req.ImageSize, defaultBatchImageImageSize) {
-		return req, ErrBatchImageInvalidItems
+	req.ImageSize = strings.ToUpper(req.ImageSize)
+	if req.Provider == BatchImageProviderHCAtom {
+		switch req.ImageSize {
+		case "1K", "2K", "4K":
+		default:
+			return req, ErrBatchImageInvalidItems
+		}
+		aspectRatio := req.AspectRatio
+		if aspectRatio == "" {
+			aspectRatio = "1:1"
+		}
+		switch req.Model {
+		case HCAtomImageGeminiModel:
+			if !hcAtomGeminiAspectRatioSupported(aspectRatio) {
+				return req, ErrBatchImageInvalidItems
+			}
+		case HCAtomImageGPTModel, HCAtomImageSGPTModel:
+			if _, ok := hcAtomGPTImageSize(aspectRatio, req.ImageSize); !ok {
+				return req, ErrBatchImageInvalidItems
+			}
+		default:
+			return req, ErrBatchImageUnsupportedModel
+		}
+	} else {
+		if req.ImageSize != defaultBatchImageImageSize {
+			return req, ErrBatchImageInvalidItems
+		}
+		req.ImageSize = defaultBatchImageImageSize
 	}
-	req.ImageSize = defaultBatchImageImageSize
 	req.Metadata = sanitizeBatchImageMetadata(req.Metadata)
 
 	seen := make(map[string]struct{}, len(req.Items))
@@ -864,7 +922,11 @@ func (s *BatchImagePublicService) validateSubmitRequest(req BatchImageSubmitRequ
 }
 
 func normalizeBatchImageReferenceInputs(model string, item *BatchImageSubmitItem) (int, int, error) {
-	if item == nil || len(item.ReferenceImages) == 0 {
+	if item == nil {
+		return 0, 0, nil
+	}
+	isHCAtomAsync := isHCAtomBatchEnabledModel(model)
+	if len(item.ReferenceImages) == 0 {
 		return 0, 0, nil
 	}
 	maxRefs := maxBatchImageReferenceImagesForModel(model)
@@ -878,9 +940,6 @@ func normalizeBatchImageReferenceInputs(model string, item *BatchImageSubmitItem
 		ref.Type = truncateBatchImageMessage(strings.TrimSpace(ref.Type), 40)
 		ref.MimeType = normalizeBatchImageReferenceMimeType(ref.MimeType)
 		ref.FileURI = strings.TrimSpace(ref.FileURI)
-		if ref.MimeType == "" {
-			return 0, 0, ErrBatchImageInvalidReferenceImage
-		}
 		if len(ref.Data) == 0 && ref.FileURI == "" {
 			return 0, 0, ErrBatchImageInvalidReferenceImage
 		}
@@ -890,8 +949,17 @@ func normalizeBatchImageReferenceInputs(model string, item *BatchImageSubmitItem
 		if len(ref.Data) > maxBatchImageReferenceImageBytes {
 			return 0, 0, ErrBatchImageInvalidReferenceImage
 		}
-		if ref.FileURI != "" && !strings.HasPrefix(ref.FileURI, "gs://") {
-			return 0, 0, ErrBatchImageInvalidReferenceImage
+		if isHCAtomAsync {
+			if len(ref.Data) != 0 || !isHCAtomHTTPSReferenceURL(ref.FileURI) {
+				return 0, 0, ErrBatchImageInvalidReferenceImage
+			}
+		} else {
+			if ref.MimeType == "" {
+				return 0, 0, ErrBatchImageInvalidReferenceImage
+			}
+			if ref.FileURI != "" && !strings.HasPrefix(ref.FileURI, "gs://") {
+				return 0, 0, ErrBatchImageInvalidReferenceImage
+			}
 		}
 		inlineBytes += len(ref.Data)
 		out = append(out, ref)
@@ -922,6 +990,12 @@ func batchImageRepeatSuffixWidth(count int) int {
 
 func maxBatchImageReferenceImagesForModel(model string) int {
 	model = strings.ToLower(strings.TrimSpace(model))
+	switch model {
+	case HCAtomImageGeminiModel:
+		return 14
+	case HCAtomImageGPTModel, HCAtomImageSGPTModel:
+		return 15
+	}
 	if strings.Contains(model, "pro-image") {
 		return 14
 	}
@@ -929,6 +1003,12 @@ func maxBatchImageReferenceImagesForModel(model string) int {
 		return 3
 	}
 	return 0
+}
+
+func isHCAtomHTTPSReferenceURL(rawURL string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	return err == nil && parsed != nil && strings.EqualFold(parsed.Scheme, "https") &&
+		parsed.User == nil && parsed.Hostname() != ""
 }
 
 func (s *BatchImagePublicService) selectProviderAndAccount(ctx context.Context, owner BatchImageOwner, requestedProvider, model string) (BatchImageProvider, *Account, error) {
@@ -975,6 +1055,10 @@ func (s *BatchImagePublicService) listCandidateAccounts(ctx context.Context, gro
 }
 
 func (s *BatchImagePublicService) ensureGroupAllowsBatchImage(ctx context.Context, groupID *int64) error {
+	return s.ensureGroupAllowsBatchImageForProvider(ctx, groupID, "")
+}
+
+func (s *BatchImagePublicService) ensureGroupAllowsBatchImageForProvider(ctx context.Context, groupID *int64, requestedProvider string) error {
 	if groupID == nil || *groupID <= 0 {
 		return nil
 	}
@@ -988,7 +1072,10 @@ func (s *BatchImagePublicService) ensureGroupAllowsBatchImage(ctx context.Contex
 	if !group.AllowBatchImageGeneration {
 		return ErrBatchImageGroupDisabled
 	}
-	if group.Platform != PlatformGemini {
+	if group.Platform != PlatformGemini && group.Platform != PlatformHCAtom {
+		return ErrBatchImageGroupDisabled
+	}
+	if requestedProvider = strings.TrimSpace(requestedProvider); requestedProvider != "" && group.Platform != batchImageProviderPlatform(requestedProvider) {
 		return ErrBatchImageGroupDisabled
 	}
 	return nil
@@ -1258,6 +1345,8 @@ func batchImageProviderPlatform(provider string) string {
 	switch provider {
 	case BatchImageProviderGeminiAPI, BatchImageProviderVertex:
 		return PlatformGemini
+	case BatchImageProviderHCAtom:
+		return PlatformHCAtom
 	default:
 		return PlatformGemini
 	}
@@ -1267,7 +1356,14 @@ func batchImageProviderSelectionOrder(requestedProvider string) []string {
 	if strings.TrimSpace(requestedProvider) != "" {
 		return []string{strings.TrimSpace(requestedProvider)}
 	}
+	// HC-ATOM is an explicitly selected provider. Keeping it out of the
+	// legacy default order prevents an omitted provider from silently crossing
+	// from Gemini/Vertex to the relay.
 	return []string{BatchImageProviderGeminiAPI, BatchImageProviderVertex}
+}
+
+func batchImageProviderCatalogOrder() []string {
+	return []string{BatchImageProviderGeminiAPI, BatchImageProviderVertex, BatchImageProviderHCAtom}
 }
 
 func batchImageModelsFromAccountMapping(account *Account) []string {

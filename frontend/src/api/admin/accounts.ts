@@ -4,6 +4,7 @@
  */
 
 import { apiClient } from '../client'
+import { createIdempotencyKey } from '@/utils/idempotencyKey'
 import type {
   Account,
   CreateAccountRequest,
@@ -133,8 +134,13 @@ export async function getById(id: number): Promise<Account> {
  * @param accountData - Account data
  * @returns Created account
  */
-export async function create(accountData: CreateAccountRequest): Promise<Account> {
-  const { data } = await apiClient.post<Account>('/admin/accounts', accountData)
+export async function create(
+  accountData: CreateAccountRequest,
+  idempotencyKey: string = createIdempotencyKey()
+): Promise<Account> {
+  const { data } = await apiClient.post<Account>('/admin/accounts', accountData, {
+    headers: { 'Idempotency-Key': idempotencyKey }
+  })
   return data
 }
 
@@ -194,6 +200,28 @@ export async function testAccount(id: number): Promise<{
     message: string
     latency_ms?: number
   }>(`/admin/accounts/${id}/test`)
+  return data
+}
+
+export interface CredentialConnectivityResult {
+  status: 'ok' | 'warning' | 'error'
+  message: string
+  supported: boolean
+  reachable: boolean
+  authentication: 'accepted' | 'rejected' | 'unverified'
+  latency_ms: number
+  http_status?: number
+  generation_started: boolean
+  checked_at: string
+}
+
+/**
+ * Check endpoint and credential acceptance without creating a generation task.
+ */
+export async function checkConnectivity(id: number): Promise<CredentialConnectivityResult> {
+  const { data } = await apiClient.post<CredentialConnectivityResult>(
+    `/admin/accounts/${id}/connectivity-check`,
+  )
   return data
 }
 
@@ -814,6 +842,7 @@ export const accountsAPI = {
   delete: deleteAccount,
   toggleStatus,
   testAccount,
+  checkConnectivity,
   refreshCredentials,
   applyOAuthCredentials,
   getStats,

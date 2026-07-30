@@ -49,6 +49,9 @@ func (s *GatewayService) forwardAsResponsesWithResponseCapture(
 	responseSink *cappedSink,
 ) (capturedResult *ForwardResult, capturedErr error) {
 	defer func() { fillResponseSample(capturedResult, responseSink) }()
+	if account != nil && account.Platform == PlatformHCAtom {
+		return s.forwardHCAtomResponses(ctx, c, account, body)
+	}
 	startTime := time.Now()
 
 	// 1. Parse Responses request

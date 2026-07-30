@@ -56,6 +56,9 @@ type APIKey struct {
 	ID          int64      `json:"id"`
 	UserID      int64      `json:"user_id"`
 	Key         string     `json:"key"`
+	// KeyHint is a non-secret display fragment (e.g. last 4 chars) for admin lists.
+	// It is set when Key is stripped; never contains the full secret.
+	KeyHint     string     `json:"key_hint,omitempty"`
 	Name        string     `json:"name"`
 	GroupID     *int64     `json:"group_id"`
 	Status      string     `json:"status"`

@@ -63,7 +63,7 @@ function createPublicSettings(overrides: Partial<PublicSettings> = {}): PublicSe
 
 // Mock API 模块
 vi.mock('@/api/admin/system', () => ({
-  checkUpdates: vi.fn(),
+  getVersion: vi.fn(),
 }))
 
 vi.mock('@/api/auth', () => ({
@@ -92,7 +92,7 @@ describe('useAppStore', () => {
   })
 
   it('distinguishes immutable LAN administrator mode from mutable backend mode', () => {
-    ;(window as any).__APP_CONFIG__ = createPublicSettings({
+    (window as any).__APP_CONFIG__ = createPublicSettings({
       backend_mode_enabled: true,
       lan_admin_mode_enabled: false,
     })
@@ -205,6 +205,15 @@ describe('useAppStore', () => {
 
       expect(id1).not.toBe(id2)
       expect(id2).not.toBe(id3)
+    })
+
+    it('相同类型和内容的活动 toast 只显示一次', () => {
+      const store = useAppStore()
+      const first = store.showError('分组名已存在')
+      const second = store.showError('分组名已存在')
+
+      expect(second).toBe(first)
+      expect(store.toasts).toHaveLength(1)
     })
   })
 

@@ -174,9 +174,8 @@ func (r *inMemoryIdempotencyRepo) DeleteExpired(_ context.Context, now time.Time
 func TestIdempotencyCoordinator_RequireKey(t *testing.T) {
 	resetIdempotencyMetricsForTest()
 	repo := newInMemoryIdempotencyRepo()
-	cfg := DefaultIdempotencyConfig()
-	cfg.ObserveOnly = false
-	coordinator := NewIdempotencyCoordinator(repo, cfg)
+	require.False(t, DefaultIdempotencyConfig().ObserveOnly, "default observe_only must be false so RequireKey is enforced")
+	coordinator := NewIdempotencyCoordinator(repo, DefaultIdempotencyConfig())
 
 	_, err := coordinator.Execute(context.Background(), IdempotencyExecuteOptions{
 		Scope:      "test.scope",
@@ -561,8 +560,23 @@ func TestIdempotencyCoordinator_ExecuteNilExecutorAndNoKeyPassThrough(t *testing
 	require.Error(t, err)
 	require.Equal(t, "IDEMPOTENCY_EXECUTOR_NIL", infraerrors.Reason(err))
 
+	// Default observe_only=false: RequireKey rejects missing Idempotency-Key.
+	_, err = coordinator.Execute(context.Background(), IdempotencyExecuteOptions{
+		Scope:      "scope",
+		RequireKey: true,
+		Payload:    map[string]any{"a": 1},
+	}, func(ctx context.Context) (any, error) {
+		return map[string]any{"ok": true}, nil
+	})
+	require.Error(t, err)
+	require.Equal(t, infraerrors.Code(err), infraerrors.Code(ErrIdempotencyKeyRequired))
+
+	// Explicit observe_only still allows missing-key pass-through.
+	observeCfg := DefaultIdempotencyConfig()
+	observeCfg.ObserveOnly = true
+	observeCoordinator := NewIdempotencyCoordinator(repo, observeCfg)
 	called := 0
-	result, err := coordinator.Execute(context.Background(), IdempotencyExecuteOptions{
+	result, err := observeCoordinator.Execute(context.Background(), IdempotencyExecuteOptions{
 		Scope:      "scope",
 		RequireKey: true,
 		Payload:    map[string]any{"a": 1},

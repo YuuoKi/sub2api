@@ -74,7 +74,7 @@ func DefaultIdempotencyConfig() IdempotencyConfig {
 		ProcessingTimeout:    30 * time.Second,
 		FailedRetryBackoff:   5 * time.Second,
 		MaxStoredResponseLen: 64 * 1024,
-		ObserveOnly:          true, // 默认先观察再强制，避免老客户端立刻中断
+		ObserveOnly:          false, // 默认强制：RequireKey 时缺少 Idempotency-Key 直接拒绝
 	}
 }
 

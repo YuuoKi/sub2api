@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -220,6 +221,11 @@ func TestBatchImagePublicService_Submit(t *testing.T) {
 			{name: "prompt_too_long", mutate: func(r *BatchImageSubmitRequest) { r.Items[0].Prompt = strings.Repeat("x", 9) }, want: ErrBatchImagePromptTooLong},
 			{name: "unsupported_provider", mutate: func(r *BatchImageSubmitRequest) { r.Provider = "other" }, want: ErrBatchImageUnsupportedProvider},
 			{name: "vertex_rejects_2k", mutate: func(r *BatchImageSubmitRequest) { r.Provider = BatchImageProviderVertex; r.ImageSize = "2K" }, want: ErrBatchImageInvalidItems},
+			{name: "hc_rejects_8k", mutate: func(r *BatchImageSubmitRequest) {
+				r.Provider = BatchImageProviderHCAtom
+				r.Model = HCAtomImageGeminiModel
+				r.ImageSize = "8K"
+			}, want: ErrBatchImageInvalidItems},
 			{name: "too_many_outputs_per_item", mutate: func(r *BatchImageSubmitRequest) {
 				r.Items[0].OutputCount = 5
 			}, want: ErrBatchImageInvalidItems},
@@ -546,6 +552,70 @@ func TestBatchImagePublicService_ListModels(t *testing.T) {
 		require.NotContains(t, ids, "gemini-3.1-flash-lite-image")
 	})
 
+	t.Run("does not advertise disabled HC Dola model", func(t *testing.T) {
+		svc, _, _, _, _ := newTestBatchImagePublicService(true)
+		hc := &publicBatchImageProvider{name: BatchImageProviderHCAtom}
+		svc.ProviderRegistry = NewBatchImageProviderRegistry(hc)
+		account := testBatchImageMappedAccount(303, AccountTypeAPIKey, map[string]any{
+			HCAtomImageGeminiModel:  HCAtomImageGeminiModel,
+			"dola-seedream-5.0-pro": "dola-seedream-5.0-pro",
+		})
+		account.Platform = PlatformHCAtom
+		svc.AccountRepo = &publicBatchImageAccountRepo{accounts: []Account{account}}
+
+		got, err := svc.ListModels(ctx, testBatchImageOwner())
+		require.NoError(t, err)
+		require.Equal(t, []BatchImagePublicModel{{
+			ID:       HCAtomImageGeminiModel,
+			Object:   "image.batch.model",
+			Provider: BatchImageProviderHCAtom,
+		}}, got.Data)
+	})
+
+	t.Run("uses HC group image prices for the three async models", func(t *testing.T) {
+		svc, _, _, _, _ := newTestBatchImagePublicService(true)
+		hc := &publicBatchImageProvider{name: BatchImageProviderHCAtom}
+		svc.ProviderRegistry = NewBatchImageProviderRegistry(hc)
+		svc.Pricing = &fakeBatchImagePricingResolver{
+			unitPrice: 0.25,
+			missingModels: map[string]bool{
+				HCAtomImageGeminiModel: true,
+				HCAtomImageGPTModel:    true,
+				HCAtomImageSGPTModel:   true,
+			},
+		}
+		account := testBatchImageMappedAccount(303, AccountTypeAPIKey, map[string]any{
+			HCAtomImageGeminiModel:         HCAtomImageGeminiModel,
+			HCAtomImageGPTModel:            HCAtomImageGPTModel,
+			HCAtomImageSGPTModel:           HCAtomImageSGPTModel,
+			HCAtomImageSeedreamModel:       HCAtomImageSeedreamModel,
+			HCAtomImageDoubaoSeedreamModel: HCAtomImageDoubaoSeedreamModel,
+			HCAtomImageDolaModel:           HCAtomImageDolaModel,
+		})
+		account.Platform = PlatformHCAtom
+		svc.AccountRepo = &publicBatchImageAccountRepo{accounts: []Account{account}}
+		groupID := int64(77)
+		price1K, price2K, price4K := 0.10, 0.20, 0.40
+		svc.GroupRepo = &publicBatchImageGroupRepo{groups: map[int64]*Group{
+			groupID: {
+				ID:                        groupID,
+				Platform:                  PlatformHCAtom,
+				AllowBatchImageGeneration: true,
+				ImagePrice1K:              &price1K,
+				ImagePrice2K:              &price2K,
+				ImagePrice4K:              &price4K,
+			},
+		}}
+
+		got, err := svc.ListModels(ctx, BatchImageOwner{UserID: 11, APIKeyID: 22, GroupID: &groupID})
+		require.NoError(t, err)
+		require.Equal(t, []BatchImagePublicModel{
+			{ID: HCAtomImageGeminiModel, Object: "image.batch.model", Provider: BatchImageProviderHCAtom},
+			{ID: HCAtomImageGPTModel, Object: "image.batch.model", Provider: BatchImageProviderHCAtom},
+			{ID: HCAtomImageSGPTModel, Object: "image.batch.model", Provider: BatchImageProviderHCAtom},
+		}, got.Data)
+	})
+
 	t.Run("rejects when group disables batch image", func(t *testing.T) {
 		svc, _, _, _, _ := newTestBatchImagePublicService(true)
 		groupID := int64(7)
@@ -774,6 +844,157 @@ func validBatchImageSubmitRequest() BatchImageSubmitRequest {
 			{CustomID: "cover_002", Prompt: "clean"},
 		},
 	}
+}
+
+func TestNormalizeBatchImageReferenceInputsHCAtomContracts(t *testing.T) {
+	tests := []struct {
+		name  string
+		model string
+		refs  []BatchImageReferenceInput
+		want  error
+	}{
+		{name: "gpt accepts no reference", model: HCAtomImageGPTModel},
+		{name: "gpt accepts multiple https URLs without mime", model: HCAtomImageGPTModel, refs: []BatchImageReferenceInput{{FileURI: "https://assets.example.test/a.png"}, {FileURI: "https://assets.example.test/b.png"}}},
+		{name: "gpt rejects http", model: HCAtomImageGPTModel, refs: []BatchImageReferenceInput{{FileURI: "http://assets.example.test/reference.png"}}, want: ErrBatchImageInvalidReferenceImage},
+		{name: "gpt rejects userinfo", model: HCAtomImageGPTModel, refs: []BatchImageReferenceInput{{FileURI: "https://user:pass@assets.example.test/reference.png"}}, want: ErrBatchImageInvalidReferenceImage},
+		{name: "gpt rejects missing host", model: HCAtomImageGPTModel, refs: []BatchImageReferenceInput{{FileURI: "https:///reference.png"}}, want: ErrBatchImageInvalidReferenceImage},
+		{name: "gpt rejects inline data", model: HCAtomImageGPTModel, refs: []BatchImageReferenceInput{{MimeType: "image/png", Data: []byte("inline")}}, want: ErrBatchImageInvalidReferenceImage},
+		{name: "gemini accepts https reference", model: HCAtomImageGeminiModel, refs: []BatchImageReferenceInput{{FileURI: "https://assets.example.test/reference.png"}}},
+		{name: "gemini keeps gs URI support", model: "gemini-2.5-flash-image", refs: []BatchImageReferenceInput{{MimeType: "image/png", FileURI: "gs://bucket/reference.png"}}},
+		{name: "gemini rejects https URI", model: "gemini-2.5-flash-image", refs: []BatchImageReferenceInput{{MimeType: "image/png", FileURI: "https://assets.example.test/reference.png"}}, want: ErrBatchImageInvalidReferenceImage},
+		{name: "gemini keeps inline support", model: "gemini-2.5-flash-image", refs: []BatchImageReferenceInput{{MimeType: "image/png", Data: []byte("inline")}}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			item := &BatchImageSubmitItem{ReferenceImages: test.refs}
+			count, _, err := normalizeBatchImageReferenceInputs(test.model, item)
+			if test.want != nil {
+				require.ErrorIs(t, err, test.want)
+				return
+			}
+			require.NoError(t, err)
+			require.Len(t, item.ReferenceImages, count)
+		})
+	}
+}
+
+func TestBatchImagePublicValidate_HCAtomAcceptsDocumentedQualities(t *testing.T) {
+	svc, _, _, _, _ := newTestBatchImagePublicService(true)
+	for _, quality := range []string{"1K", "2K", "4K"} {
+		t.Run(quality, func(t *testing.T) {
+			req := validBatchImageSubmitRequest()
+			req.Provider = BatchImageProviderHCAtom
+			req.Model = HCAtomImageGeminiModel
+			req.ImageSize = quality
+			req.Items = req.Items[:1]
+
+			got, err := svc.validateSubmitRequest(req)
+			require.NoError(t, err)
+			require.Equal(t, quality, got.ImageSize)
+		})
+	}
+}
+
+func TestBatchImagePublicValidate_HCAtomRejectsSideEffectsBeforeSubmit(t *testing.T) {
+	svc, _, _, _, _ := newTestBatchImagePublicService(true)
+	tests := []struct {
+		name   string
+		mutate func(*BatchImageSubmitRequest)
+	}{
+		{name: "multiple_items", mutate: func(req *BatchImageSubmitRequest) {
+			req.Items = append(req.Items[:1], BatchImageSubmitItem{CustomID: "second", Prompt: "other"})
+		}},
+		{name: "multiple_outputs", mutate: func(req *BatchImageSubmitRequest) {
+			req.Items = req.Items[:1]
+			req.Items[0].OutputCount = 2
+		}},
+		{name: "unsupported_aspect", mutate: func(req *BatchImageSubmitRequest) {
+			req.Items = req.Items[:1]
+			req.AspectRatio = "5:7"
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			req := validBatchImageSubmitRequest()
+			req.Provider = BatchImageProviderHCAtom
+			req.Model = HCAtomImageGPTModel
+			test.mutate(&req)
+
+			_, err := svc.validateSubmitRequest(req)
+			require.ErrorIs(t, err, ErrBatchImageInvalidItems)
+		})
+	}
+}
+
+func TestBatchImageProviderSelectionOrder_DoesNotSilentlyFallbackToHCAtom(t *testing.T) {
+	require.Equal(t,
+		[]string{BatchImageProviderGeminiAPI, BatchImageProviderVertex},
+		batchImageProviderSelectionOrder(""),
+	)
+	require.Equal(t,
+		[]string{BatchImageProviderHCAtom},
+		batchImageProviderSelectionOrder(BatchImageProviderHCAtom),
+	)
+}
+
+func TestBatchImagePublicSubmit_HCAtomRejectsGeminiOnlyGroupBeforeAccountSelection(t *testing.T) {
+	svc, repo, _, gemini, _ := newTestBatchImagePublicService(true)
+	hc := &publicBatchImageProvider{name: BatchImageProviderHCAtom}
+	svc.ProviderRegistry = NewBatchImageProviderRegistry(gemini, hc)
+	svc.AccountRepo = &publicBatchImageAccountRepo{accounts: []Account{{
+		ID:          303,
+		Platform:    PlatformHCAtom,
+		Type:        AccountTypeAPIKey,
+		Status:      StatusActive,
+		Schedulable: true,
+		Credentials: map[string]any{"api_key": "test-only"},
+	}}}
+	groupID := int64(77)
+	svc.GroupRepo = &publicBatchImageGroupRepo{groups: map[int64]*Group{
+		groupID: {ID: groupID, Platform: PlatformGemini, AllowBatchImageGeneration: true},
+	}}
+	req := validBatchImageSubmitRequest()
+	req.Provider = BatchImageProviderHCAtom
+	req.Model = HCAtomImageGeminiModel
+	req.Items = req.Items[:1]
+
+	_, err := svc.Submit(context.Background(), BatchImageOwner{UserID: 11, APIKeyID: 22, GroupID: &groupID}, req, "hc-group-mismatch")
+
+	require.ErrorIs(t, err, ErrBatchImageGroupDisabled)
+	require.Empty(t, repo.jobs)
+	require.Empty(t, hc.submits)
+}
+
+func TestBatchImagePublicCancel_HCAtomBusinessFailureKeepsHeldJobSubmitted(t *testing.T) {
+	cipher, account := hcAtomBatchTestAccount(t, "test-only")
+	account.ID = 303
+	account.Status = StatusActive
+	account.Schedulable = true
+	provider := NewHCAtomBatchImageProviderWithCredentialCipher(NewHCAtomBatchHTTPClient(&http.Client{Transport: hcAtomRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		require.Equal(t, http.MethodDelete, req.Method)
+		return hcAtomHTTPResponse(http.StatusOK, `{"code":40001,"msg":"not cancelled","data":{}}`), nil
+	})}), cipher)
+	repo := newFakeBatchImageRepository()
+	billing := &fakeBatchImageBillingRepo{}
+	apiKeyID, accountID := int64(22), account.ID
+	holdAmount, holdID := 0.5, BatchImageHoldRequestID("imgbatch_hc_cancel")
+	repo.jobs["imgbatch_hc_cancel"] = &BatchImageJob{
+		BatchID: "imgbatch_hc_cancel", UserID: 11, APIKeyID: &apiKeyID, AccountID: &accountID,
+		Provider: BatchImageProviderHCAtom, Model: "seedream-5.0", Status: BatchImageJobStatusSubmitted,
+		ProviderJobName: batchImageStringPtr("hc-task-cancel"), HoldAmount: &holdAmount, HoldID: &holdID,
+		RequestHash: batchImageStringPtr("request-hash"), CreatedAt: time.Now(),
+	}
+	svc := &BatchImagePublicService{
+		Repo: repo, AccountRepo: &publicBatchImageAccountRepo{accounts: []Account{*account}},
+		ProviderRegistry: NewBatchImageProviderRegistry(provider), BillingRepo: billing,
+	}
+
+	_, err := svc.Cancel(context.Background(), testBatchImageOwner(), "imgbatch_hc_cancel")
+
+	require.ErrorIs(t, err, ErrBatchImageCancelFailed)
+	require.Equal(t, BatchImageJobStatusSubmitted, repo.jobs["imgbatch_hc_cancel"].Status)
+	require.Empty(t, billing.releases)
+	require.Empty(t, repo.events["imgbatch_hc_cancel"])
 }
 
 func testBatchImageAccount(id int64, accountType string) Account {

@@ -66,6 +66,7 @@ type AdminService interface {
 	ListOpenAISchedulableAccountsForSchedulerScore(ctx context.Context, groupID *int64) ([]Account, error)
 	GetAccount(ctx context.Context, id int64) (*Account, error)
 	GetAccountsByIDs(ctx context.Context, ids []int64) ([]*Account, error)
+	CheckAccountConnectivity(ctx context.Context, id int64) (*CredentialConnectivityResult, error)
 	CreateAccount(ctx context.Context, input *CreateAccountInput) (*Account, error)
 	UpdateAccount(ctx context.Context, id int64, input *UpdateAccountInput) (*Account, error)
 	// UpdateAccountExtra 仅对 Extra 做 JSONB 增量合并（key 级覆盖），不会影响其它字段或运行态键。
@@ -575,24 +576,26 @@ var ErrRPMStatusUnavailable = infraerrors.New(http.StatusNotImplemented, "RPM_ST
 
 // adminServiceImpl implements AdminService
 type adminServiceImpl struct {
-	userRepo             UserRepository
-	groupRepo            GroupRepository
-	accountRepo          AccountRepository
-	proxyRepo            ProxyRepository
-	apiKeyRepo           APIKeyRepository
-	redeemCodeRepo       RedeemCodeRepository
-	userGroupRateRepo    UserGroupRateRepository
-	userRPMCache         UserRPMCache
-	billingCacheService  *BillingCacheService
-	proxyProber          ProxyExitInfoProber
-	proxyLatencyCache    ProxyLatencyCache
-	authCacheInvalidator APIKeyAuthCacheInvalidator
-	entClient            *dbent.Client // 用于开启数据库事务
-	settingService       *SettingService
-	defaultSubAssigner   DefaultSubscriptionAssigner
-	userSubRepo          UserSubscriptionRepository
-	privacyClientFactory PrivacyClientFactory
-	runtimeBlocker       AccountRuntimeBlocker
+	userRepo               UserRepository
+	groupRepo              GroupRepository
+	accountRepo            AccountRepository
+	proxyRepo              ProxyRepository
+	apiKeyRepo             APIKeyRepository
+	redeemCodeRepo         RedeemCodeRepository
+	userGroupRateRepo      UserGroupRateRepository
+	userRPMCache           UserRPMCache
+	billingCacheService    *BillingCacheService
+	proxyProber            ProxyExitInfoProber
+	proxyLatencyCache      ProxyLatencyCache
+	authCacheInvalidator   APIKeyAuthCacheInvalidator
+	entClient              *dbent.Client // 用于开启数据库事务
+	settingService         *SettingService
+	defaultSubAssigner     DefaultSubscriptionAssigner
+	userSubRepo            UserSubscriptionRepository
+	privacyClientFactory   PrivacyClientFactory
+	runtimeBlocker         AccountRuntimeBlocker
+	hcAtomCredentialCipher HCAtomCredentialCipher
+	connectivityClient     *http.Client
 }
 
 type userGroupRateBatchReader interface {
@@ -639,5 +642,51 @@ func NewAdminService(
 		userSubRepo:          userSubRepo,
 		privacyClientFactory: privacyClientFactory,
 		runtimeBlocker:       runtimeBlocker,
+		connectivityClient:   newCredentialConnectivityHTTPClient(),
 	}
+}
+
+func ProvideAdminService(
+	userRepo UserRepository,
+	groupRepo GroupRepository,
+	accountRepo AccountRepository,
+	proxyRepo ProxyRepository,
+	apiKeyRepo APIKeyRepository,
+	redeemCodeRepo RedeemCodeRepository,
+	userGroupRateRepo UserGroupRateRepository,
+	userRPMCache UserRPMCache,
+	billingCacheService *BillingCacheService,
+	proxyProber ProxyExitInfoProber,
+	proxyLatencyCache ProxyLatencyCache,
+	authCacheInvalidator APIKeyAuthCacheInvalidator,
+	entClient *dbent.Client,
+	settingService *SettingService,
+	defaultSubAssigner DefaultSubscriptionAssigner,
+	userSubRepo UserSubscriptionRepository,
+	privacyClientFactory PrivacyClientFactory,
+	runtimeBlocker AccountRuntimeBlocker,
+	hcAtomCredentialCipher HCAtomCredentialCipher,
+) AdminService {
+	svc := NewAdminService(
+		userRepo,
+		groupRepo,
+		accountRepo,
+		proxyRepo,
+		apiKeyRepo,
+		redeemCodeRepo,
+		userGroupRateRepo,
+		userRPMCache,
+		billingCacheService,
+		proxyProber,
+		proxyLatencyCache,
+		authCacheInvalidator,
+		entClient,
+		settingService,
+		defaultSubAssigner,
+		userSubRepo,
+		privacyClientFactory,
+		runtimeBlocker,
+	)
+	svc.(*adminServiceImpl).hcAtomCredentialCipher = hcAtomCredentialCipher
+	return svc
 }

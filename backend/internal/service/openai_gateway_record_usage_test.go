@@ -136,6 +136,10 @@ type openAIRecordUsageUserRepoStub struct {
 	lastCtxErr  error
 }
 
+func (s *openAIRecordUsageUserRepoStub) SetBalance(ctx context.Context, id int64, balance float64) error {
+	return nil
+}
+
 func (s *openAIRecordUsageUserRepoStub) DeductBalance(ctx context.Context, id int64, amount float64) error {
 	s.deductCalls++
 	s.lastAmount = amount

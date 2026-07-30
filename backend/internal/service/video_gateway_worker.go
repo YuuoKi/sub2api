@@ -3,7 +3,9 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -14,7 +16,7 @@ import (
 type VideoGatewayWorker struct {
 	repo          VideoGatewayRuntimeRepository
 	encryptor     VideoKeyEncryptor
-	clientFactory func(string, string) *SeedanceAdapter
+	clientFactory func(string, string, string) VideoProviderClient
 	authCache     VideoAuthCacheInvalidator
 	billingCache  VideoBillingCacheInvalidator
 	cfg           *config.Config
@@ -22,7 +24,7 @@ type VideoGatewayWorker struct {
 	archiver      VideoAssetArchiver
 }
 
-func NewVideoGatewayWorker(repo VideoGatewayRuntimeRepository, encryptor VideoKeyEncryptor, factory func(string, string) *SeedanceAdapter, authCache VideoAuthCacheInvalidator, billingCache VideoBillingCacheInvalidator, cfg *config.Config, gate *SingleSmokeAuthorization, archivers ...VideoAssetArchiver) *VideoGatewayWorker {
+func NewVideoGatewayWorker(repo VideoGatewayRuntimeRepository, encryptor VideoKeyEncryptor, factory func(string, string, string) VideoProviderClient, authCache VideoAuthCacheInvalidator, billingCache VideoBillingCacheInvalidator, cfg *config.Config, gate *SingleSmokeAuthorization, archivers ...VideoAssetArchiver) *VideoGatewayWorker {
 	var archiver VideoAssetArchiver
 	if len(archivers) > 0 {
 		archiver = archivers[0]
@@ -54,7 +56,7 @@ func (w *VideoGatewayWorker) RunOnce(ctx context.Context) error {
 		return errors.New("video provider credential decryption failed")
 	}
 	if task.Status != VideoStatusQueued {
-		polled, pollErr := w.clientFactory(provider.BaseURL, key).Poll(ctx, task.UpstreamTaskID)
+		polled, pollErr := w.clientFactory(provider.Provider, provider.BaseURL, key).Poll(ctx, task.UpstreamTaskID)
 		if pollErr != nil {
 			return pollErr
 		}
@@ -102,7 +104,8 @@ func (w *VideoGatewayWorker) RunOnce(ctx context.Context) error {
 			Currency: "USD", Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()}, polled))
 		return err
 	}
-	if w.gate == nil || !w.gate.Allowed() {
+	productionDispatch := videoProductionDispatchEnabled(w.cfg, provider.Provider)
+	if !productionDispatch && (w.gate == nil || !w.gate.Allowed()) {
 		finalizeErr := w.finalize(ctx, task, VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version, Status: VideoStatusFailed,
 			ProviderErrorCode: "process_gate_denied", ProviderErrorMessage: "process safety gate denied dispatch", ErrorMessage: "process safety gate denied dispatch", Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()})
 		if finalizeErr != nil {
@@ -110,27 +113,69 @@ func (w *VideoGatewayWorker) RunOnce(ctx context.Context) error {
 		}
 		return ErrVideoRealDispatchDenied
 	}
-	started, err := w.repo.BeginRealDispatch(ctx, task.ID, task.Version)
+	var started bool
+	if productionDispatch {
+		spec, ok := lookupVideoProvider(provider.Provider)
+		if !ok || !spec.AdapterReady || provider.BaseURL != spec.DefaultBaseURL || provider.DefaultModel != spec.DefaultModel {
+			started = false
+		} else {
+			started, err = w.repo.BeginProductionDispatch(ctx, task.ID, task.Version, spec.Provider, spec.DefaultBaseURL, spec.DefaultModel)
+		}
+	} else {
+		started, err = w.repo.BeginRealDispatch(ctx, task.ID, task.Version)
+		if provider.Provider == HCAtomVideoV1Provider && (!w.cfg.VideoGateway.HCAtomV1DispatchEnabled || !w.cfg.HCAtom.VideoV1Enabled) {
+			started = false
+			err = nil
+		}
+		if provider.Provider == HCAtomSeedanceV3Provider {
+			if !w.cfg.VideoGateway.HCAtomV3DispatchEnabled {
+				started = false
+				err = nil
+			} else {
+				started, err = w.repo.BeginHCAtomV3Dispatch(ctx, task.ID, task.Version)
+			}
+		}
+	}
 	if err != nil {
 		return err
 	}
 	if !started {
+		errorCode := "gate_consumed"
+		errorMessage := "single smoke authorization already consumed"
+		if productionDispatch {
+			errorCode = "production_dispatch_conflict"
+			errorMessage = "production dispatch claim was rejected"
+		}
 		finalizeErr := w.finalize(ctx, task, VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version, Status: VideoStatusFailed,
-			ProviderErrorCode: "gate_consumed", ProviderErrorMessage: "single smoke authorization already consumed", ErrorMessage: "single smoke authorization already consumed", Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()})
+			ProviderErrorCode: errorCode, ProviderErrorMessage: errorMessage, ErrorMessage: errorMessage, Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()})
 		return finalizeErr
 	}
-	if err = w.gate.Consume(); err != nil {
-		return w.finalize(ctx, task, VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version + 1, Status: VideoStatusFailed,
-			ProviderErrorCode: "process_gate_denied", ProviderErrorMessage: "process safety gate denied dispatch", ErrorMessage: "process safety gate denied dispatch", Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()})
-	}
-	created, err := w.clientFactory(provider.BaseURL, key).Create(ctx, VideoCreateRequest{Prompt: task.Prompt, Duration: task.DurationSeconds, Resolution: task.Resolution, ReturnLastFrame: true})
-	if err != nil {
-		finalizeErr := w.finalize(ctx, task, VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version + 1, Status: VideoStatusFailed,
-			ErrorMessage: "upstream provider dispatch failed", ProviderErrorCode: "provider_dispatch_failed", ProviderErrorMessage: "upstream provider dispatch failed", Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()})
-		if finalizeErr != nil {
-			return finalizeErr
+	if !productionDispatch {
+		if err = w.gate.Consume(); err != nil {
+			return w.finalize(ctx, task, VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version + 1, Status: VideoStatusFailed,
+				ProviderErrorCode: "process_gate_denied", ProviderErrorMessage: "process safety gate denied dispatch", ErrorMessage: "process safety gate denied dispatch", Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()})
 		}
-		return nil
+	}
+	request := task.CreateRequest
+	if request.Prompt == "" && len(request.Content) == 0 {
+		request = VideoCreateRequest{Prompt: task.Prompt, Duration: task.DurationSeconds, Resolution: task.Resolution, ReturnLastFrame: true}
+	}
+	if provider.Provider == HCAtomVideoV1Provider && strings.TrimSpace(request.IdempotencyKey) == "" {
+		request.IdempotencyKey = strings.TrimSpace(task.CreationKey)
+		if request.IdempotencyKey == "" {
+			request.IdempotencyKey = fmt.Sprintf("sub2api-video-%d", task.ID)
+		}
+	}
+	created, err := w.clientFactory(provider.Provider, provider.BaseURL, key).Create(ctx, request)
+	if err != nil {
+		if errors.Is(err, ErrHCAtomMediaURLUnreachable) {
+			return w.finalize(ctx, task, VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version + 1, Status: VideoStatusFailed, ErrorMessage: "media URL is not safely accessible", ProviderErrorCode: "invalid_media_url", ProviderErrorMessage: "media URL is not safely accessible", Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()})
+		}
+		var transportErr *VideoProviderTransportError
+		if errors.As(err, &transportErr) {
+			return w.repo.MarkVideoDispatchUncertain(ctx, task.ID, task.Version+1, "provider_dispatch_uncertain", transportErr.UpstreamTaskID)
+		}
+		return w.finalize(ctx, task, VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version + 1, Status: VideoStatusFailed, ErrorMessage: "upstream provider dispatch failed", ProviderErrorCode: "provider_dispatch_failed", ProviderErrorMessage: "upstream provider dispatch failed", Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()})
 	}
 	for {
 		if persistErr := w.repo.MarkVideoSubmitted(ctx, task.ID, task.Version+1, created.UpstreamTaskID); persistErr == nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 )
@@ -47,6 +48,7 @@ type VideoSystemCheck struct {
 
 type VideoAdminRepository interface {
 	ListVideoProviders(context.Context) ([]VideoProviderAccount, error)
+	GetVideoProviderCredential(context.Context, int64) (*VideoProviderAccount, error)
 	CreateVideoProvider(context.Context, VideoProviderAccount) (*VideoProviderAccount, error)
 	UpdateVideoProvider(context.Context, int64, VideoProviderAdminUpdate) (*VideoProviderAccount, error)
 	DeleteVideoProvider(context.Context, int64) error
@@ -57,10 +59,11 @@ type VideoAdminRepository interface {
 }
 
 type VideoAdminService struct {
-	repo       VideoAdminRepository
-	encryptor  VideoKeyEncryptor
-	handoff    *AssetHandoffService
-	assetStore *VideoAssetStore
+	repo               VideoAdminRepository
+	encryptor          VideoKeyEncryptor
+	handoff            *AssetHandoffService
+	assetStore         *VideoAssetStore
+	connectivityClient *http.Client
 }
 
 func NewVideoAdminService(repo VideoAdminRepository, encryptor VideoKeyEncryptor, stores ...*VideoAssetStore) *VideoAdminService {
@@ -69,10 +72,11 @@ func NewVideoAdminService(repo VideoAdminRepository, encryptor VideoKeyEncryptor
 		assetStore = stores[0]
 	}
 	return &VideoAdminService{
-		repo:       repo,
-		encryptor:  encryptor,
-		handoff:    NewAssetHandoffService(repo, NewHTTPAssetInspector(), time.Now, nil),
-		assetStore: assetStore,
+		repo:               repo,
+		encryptor:          encryptor,
+		handoff:            NewAssetHandoffService(repo, NewHTTPAssetInspector(), time.Now, nil),
+		assetStore:         assetStore,
+		connectivityClient: newCredentialConnectivityHTTPClient(),
 	}
 }
 
@@ -129,7 +133,24 @@ func (s *VideoAdminService) UpdateProvider(ctx context.Context, id int64, in Vid
 		masked := maskVideoSecret(*in.APIKey)
 		in.EncryptedAPIKey, in.MaskedKey = &encrypted, &masked
 	}
-	canonical, _ := lookupVideoProvider("seedance")
+	providers, err := s.repo.ListVideoProviders(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var current *VideoProviderAccount
+	for i := range providers {
+		if providers[i].ID == id {
+			current = &providers[i]
+			break
+		}
+	}
+	if current == nil {
+		return nil, ErrVideoProviderNotFound
+	}
+	canonical, ok := lookupVideoProvider(current.Provider)
+	if !ok {
+		return nil, ErrVideoAdminInvalidRequest
+	}
 	if in.BaseURL != nil {
 		trimmed := strings.TrimSpace(*in.BaseURL)
 		if trimmed == "" {

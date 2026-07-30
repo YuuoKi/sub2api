@@ -10,13 +10,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestProvideServiceBuildInfo(t *testing.T) {
+func TestServiceBuildInfoAlias(t *testing.T) {
 	in := handler.BuildInfo{
-		Version:   "v-test",
-		BuildType: "release",
+		Version:     "广州内部版 2026.07.25-r151",
+		BuildCommit: "abc123",
+		BuildDate:   "2026-07-25T00:00:00Z",
+		BuildType:   "release",
 	}
-	out := provideServiceBuildInfo(in)
+	out := service.BuildInfo(in)
 	require.Equal(t, in.Version, out.Version)
+	require.Equal(t, in.BuildCommit, out.BuildCommit)
+	require.Equal(t, in.BuildDate, out.BuildDate)
 	require.Equal(t, in.BuildType, out.BuildType)
 }
 

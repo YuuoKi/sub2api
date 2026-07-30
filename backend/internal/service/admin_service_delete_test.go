@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/stretchr/testify/require"
 )
@@ -120,11 +121,30 @@ func (s *userRepoStub) UpdateUserLastActiveAt(ctx context.Context, userID int64,
 }
 
 func (s *userRepoStub) UpdateBalance(ctx context.Context, id int64, amount float64) error {
-	panic("unexpected UpdateBalance call")
+	if s.user == nil {
+		return ErrUserNotFound
+	}
+	s.user.Balance += amount
+	if amount > 0 {
+		s.user.TotalRecharged += amount
+	}
+	return nil
+}
+
+func (s *userRepoStub) SetBalance(ctx context.Context, id int64, balance float64) error {
+	if s.user == nil {
+		return ErrUserNotFound
+	}
+	s.user.Balance = balance
+	return nil
 }
 
 func (s *userRepoStub) DeductBalance(ctx context.Context, id int64, amount float64) error {
-	panic("unexpected DeductBalance call")
+	if s.user == nil {
+		return ErrUserNotFound
+	}
+	s.user.Balance -= amount
+	return nil
 }
 
 func (s *userRepoStub) UpdateConcurrency(ctx context.Context, id int64, amount int) error {
@@ -567,7 +587,7 @@ func TestAdminService_DeleteUser_AdminGuard(t *testing.T) {
 
 	err := svc.DeleteUser(context.Background(), 1)
 	require.Error(t, err)
-	require.ErrorContains(t, err, "cannot delete admin user")
+	require.Equal(t, "CANNOT_DELETE_ADMIN_USER", infraerrors.Reason(err))
 	require.Empty(t, repo.deletedIDs)
 }
 

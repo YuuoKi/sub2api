@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -27,7 +28,7 @@ func (r *videoGatewayRepository) ListEnabledVideoProviders(ctx context.Context, 
 	if err != nil {
 		return nil, err
 	}
-	rows, err := db.QueryContext(ctx, `SELECT id, group_id, provider, display_name, enabled, '', masked_key, '', default_model
+	rows, err := db.QueryContext(ctx, `SELECT id, group_id, provider, display_name, enabled, '', masked_key, base_url, default_model
 		FROM video_provider_accounts WHERE enabled=TRUE AND group_id=$1 ORDER BY id`, groupID)
 	if err != nil {
 		return nil, err
@@ -39,6 +40,7 @@ func (r *videoGatewayRepository) ListEnabledVideoProviders(ctx context.Context, 
 		if err := rows.Scan(&item.ID, &item.GroupID, &item.Provider, &item.DisplayName, &item.Enabled, &item.EncryptedAPIKey, &item.MaskedKey, &item.BaseURL, &item.DefaultModel); err != nil {
 			return nil, err
 		}
+		item.APIKeyConfigured = strings.TrimSpace(item.MaskedKey) != ""
 		items = append(items, item)
 	}
 	return items, rows.Err()
@@ -50,9 +52,11 @@ func (r *videoGatewayRepository) GetVideoProvider(ctx context.Context, id, group
 		return nil, err
 	}
 	var item service.VideoProviderAccount
-	err = db.QueryRowContext(ctx, `SELECT id, group_id, provider, display_name, enabled, encrypted_api_key, masked_key, base_url, default_model
+	err = db.QueryRowContext(ctx, `SELECT id, group_id, provider, display_name, enabled, encrypted_api_key, masked_key, base_url, default_model,
+		tiny_real_authorized_at, COALESCE(tiny_real_authorized_by,0), tiny_real_consumed_at
 		FROM video_provider_accounts WHERE id=$1 AND group_id=$2`, id, groupID).Scan(&item.ID, &item.GroupID, &item.Provider, &item.DisplayName, &item.Enabled,
-		&item.EncryptedAPIKey, &item.MaskedKey, &item.BaseURL, &item.DefaultModel)
+		&item.EncryptedAPIKey, &item.MaskedKey, &item.BaseURL, &item.DefaultModel,
+		&item.TinyRealAuthorizedAt, &item.TinyRealAuthorizedBy, &item.TinyRealConsumedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, service.ErrVideoProviderNotFound
 	}
@@ -115,6 +119,63 @@ func (r *videoGatewayRepository) BeginRealDispatch(ctx context.Context, id, vers
 	return true, nil
 }
 
+func (r *videoGatewayRepository) BeginHCAtomV3Dispatch(ctx context.Context, id, version int64) (bool, error) {
+	db, err := r.requireDB()
+	if err != nil {
+		return false, err
+	}
+	result, err := db.ExecContext(ctx, `UPDATE video_tasks task SET real_dispatch_count=1, dispatch_state='dispatching', version=task.version+1, updated_at=NOW() FROM video_provider_accounts provider, groups candidate WHERE task.id=$1 AND task.version=$2 AND task.status='queued' AND task.real_dispatch_count=0 AND provider.id=task.provider_account_id AND provider.group_id=task.group_id AND candidate.id=task.group_id AND candidate.status='active' AND candidate.subscription_type='standard' AND candidate.deleted_at IS NULL AND provider.enabled=TRUE AND provider.provider=$3 AND provider.base_url=$4 AND provider.default_model=$5`, id, version, service.HCAtomSeedanceV3Provider, service.HCAtomSeedanceV3BaseURL, service.HCAtomSeedanceV3PublicModel)
+	if err != nil {
+		return false, err
+	}
+	n, err := result.RowsAffected()
+	return n == 1, err
+}
+
+func (r *videoGatewayRepository) BeginProductionDispatch(ctx context.Context, id, version int64, providerName, baseURL, model string) (bool, error) {
+	db, err := r.requireDB()
+	if err != nil {
+		return false, err
+	}
+	result, err := db.ExecContext(ctx, `UPDATE video_tasks task SET
+		real_dispatch_count=1, dispatch_state='dispatching', version=task.version+1, updated_at=NOW()
+		FROM video_provider_accounts provider, groups candidate, api_keys key, users owner
+		WHERE task.id=$1 AND task.version=$2 AND task.status='queued'
+		AND task.real_dispatch_count=0 AND task.dispatch_state='pending'
+		AND task.reservation_state=$6 AND task.reserved_cost_usd>0
+		AND task.pricing_cny_per_million_completion_tokens>0
+		AND task.pricing_usd_cny_exchange_rate>0 AND task.pricing_maximum_cny>0
+		AND task.provider=$3 AND task.model=$5
+		AND provider.id=task.provider_account_id AND provider.group_id=task.group_id
+		AND provider.enabled=TRUE AND provider.provider=$3
+		AND provider.base_url=$4 AND provider.default_model=$5
+		AND provider.encrypted_api_key<>''
+		AND ($3<>'seedance' OR provider.tiny_real_authorized_at IS NOT NULL)
+		AND candidate.id=task.group_id AND candidate.status='active'
+		AND candidate.subscription_type='standard' AND candidate.deleted_at IS NULL
+		AND ($3<>'hc_atom_seedance_v3' OR (
+			candidate.platform='hc_atom'
+			AND COALESCE((candidate.models_list_config->>'enabled')::boolean,FALSE)=TRUE
+			AND candidate.models_list_config->'models' ? $5
+			AND CASE task.resolution
+				WHEN '480p' THEN candidate.video_price_480p
+				WHEN '720p' THEN candidate.video_price_720p
+				WHEN '1080p' THEN candidate.video_price_1080p
+				ELSE NULL
+			END > 0
+		))
+		AND key.id=task.api_key_id AND key.user_id=task.created_by
+		AND key.group_id=task.group_id AND key.status=$7
+		AND key.deleted_at IS NULL AND (key.expires_at IS NULL OR key.expires_at>NOW())
+		AND owner.id=task.created_by AND owner.status='active' AND owner.deleted_at IS NULL`,
+		id, version, providerName, baseURL, model, service.VideoReservationReserved, service.StatusAPIKeyActive)
+	if err != nil {
+		return false, err
+	}
+	n, err := result.RowsAffected()
+	return n == 1, err
+}
+
 func (r *videoGatewayRepository) MarkVideoSubmitted(ctx context.Context, id, version int64, upstreamTaskID string) error {
 	db, err := r.requireDB()
 	if err != nil {
@@ -122,6 +183,25 @@ func (r *videoGatewayRepository) MarkVideoSubmitted(ctx context.Context, id, ver
 	}
 	result, err := db.ExecContext(ctx, `UPDATE video_tasks SET status='submitted', dispatch_state='accepted', upstream_task_id=$3,
 		version=version+1, worker_claimed_at=NULL, worker_claimed_until=NULL, updated_at=NOW() WHERE id=$1 AND version=$2`, id, version, upstreamTaskID)
+	if err != nil {
+		return err
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n != 1 {
+		return service.ErrVideoTaskTerminalConflict
+	}
+	return nil
+}
+
+func (r *videoGatewayRepository) MarkVideoDispatchUncertain(ctx context.Context, id, version int64, code, upstreamTaskID string) error {
+	db, err := r.requireDB()
+	if err != nil {
+		return err
+	}
+	result, err := db.ExecContext(ctx, `UPDATE video_tasks SET status='review_required', dispatch_state='uncertain', upstream_task_id=CASE WHEN $4 <> '' THEN $4 ELSE upstream_task_id END, provider_error_code=$3, provider_error_message='provider dispatch outcome requires review', error_message='provider dispatch outcome requires review', version=version+1, worker_claimed_at=NULL, worker_claimed_until=NULL, updated_at=NOW() WHERE id=$1 AND version=$2 AND status='queued' AND real_dispatch_count=1`, id, version, code, upstreamTaskID)
 	if err != nil {
 		return err
 	}
@@ -237,7 +317,9 @@ func (r *videoGatewayRepository) ReserveAndCreateTask(ctx context.Context, task 
 		}
 		return err
 	}
-	if !enabled || provider != "seedance" || strings.TrimSpace(model) != "" && model != service.SeedanceModel {
+	if !enabled || (provider != "seedance" && provider != service.HCAtomSeedanceV3Provider) ||
+		(provider == "seedance" && strings.TrimSpace(model) != "" && model != service.SeedanceModel) ||
+		(provider == service.HCAtomSeedanceV3Provider && strings.TrimSpace(model) != "" && model != service.HCAtomSeedanceV3PublicModel) {
 		return service.ErrVideoProviderNotFound
 	}
 	usage5h, start5h = videoRateWindow(now, usage5h, start5h, 5*time.Hour, false)
@@ -268,16 +350,20 @@ func (r *videoGatewayRepository) ReserveAndCreateTask(ctx context.Context, task 
 	task.ReservationWindow5h = &start5h.Time
 	task.ReservationWindow1d = &start1d.Time
 	task.ReservationWindow7d = &start7d.Time
+	requestPayload, err := json.Marshal(task.CreateRequest)
+	if err != nil {
+		return err
+	}
 	err = tx.QueryRowContext(ctx, `INSERT INTO video_tasks
-		(provider_account_id, provider, model, task_type, prompt, status, creation_key, created_by,
+		(provider_account_id, provider, model, task_type, prompt, request_payload, status, creation_key, created_by,
 		 api_key_id, group_id, duration_seconds, resolution, reserved_cost_usd, reservation_state,
 		 reserved_at, reservation_window_5h_start, reservation_window_1d_start, reservation_window_7d_start,
 		 balance_before_usd, currency, pricing_source, pricing_version,
 		 pricing_cny_per_million_completion_tokens, pricing_usd_cny_exchange_rate, pricing_maximum_cny)
-		VALUES ($1,$2,$3,$4,$5,$6,NULLIF($7,''),$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
-		 NULLIF($21,''),NULLIF($22,''),$23,$24,$25)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,NULLIF($8,''),$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,
+		 NULLIF($22,''),NULLIF($23,''),$24,$25,$26)
 		RETURNING id, version, created_at, updated_at`,
-		task.ProviderAccountID, task.Provider, task.Model, task.TaskType, task.Prompt,
+		task.ProviderAccountID, task.Provider, task.Model, task.TaskType, task.Prompt, requestPayload,
 		task.Status, task.CreationKey, task.CreatedBy, task.APIKeyID, task.GroupID,
 		task.DurationSeconds, task.Resolution, maximumUSD, service.VideoReservationReserved, now,
 		start5h.Time, start1d.Time, start7d.Time, balance, task.Currency, task.PricingSource, task.PricingVersion,
@@ -341,7 +427,7 @@ func videoRateWindow(now time.Time, usage float64, start sql.NullTime, duration 
 }
 
 const videoTaskColumns = `id, COALESCE(api_key_id, 0), COALESCE(group_id, 0), provider_account_id,
-	provider, model, task_type, prompt, status, upstream_task_id, result_url, last_frame_url, duration_seconds,
+	provider, model, task_type, prompt, request_payload, status, upstream_task_id, result_url, last_frame_url, duration_seconds,
 	resolution, usage_total_tokens, cost_amount, currency, pricing_source, pricing_version,
 	pricing_cny_per_million_completion_tokens, pricing_usd_cny_exchange_rate, pricing_maximum_cny, real_dispatch_count,
 	provider_error_code, provider_error_message, error_message, COALESCE(creation_key, ''),
@@ -716,8 +802,9 @@ func scanVideoTask(scanner videoRowScanner) (*service.VideoTask, error) {
 	var pricingSource, pricingVersion, upstreamModel, upstreamResolution, billingModel, billingResolution, localAssetPath sql.NullString
 	var pricingCNYPerMillionCompletionTokens, pricingUSDCNYExchangeRate, pricingMaximumCNY sql.NullFloat64
 	var balanceBefore, balanceAfter, balanceDelta sql.NullFloat64
+	var requestPayload []byte
 	if err := scanner.Scan(&task.ID, &task.APIKeyID, &task.GroupID, &task.ProviderAccountID,
-		&task.Provider, &task.Model, &task.TaskType, &task.Prompt, &task.Status, &task.UpstreamTaskID, &task.ResultURL,
+		&task.Provider, &task.Model, &task.TaskType, &task.Prompt, &requestPayload, &task.Status, &task.UpstreamTaskID, &task.ResultURL,
 		&task.LastFrameURL, &task.DurationSeconds, &task.Resolution, &usage, &task.CostAmount,
 		&task.Currency, &pricingSource, &pricingVersion, &pricingCNYPerMillionCompletionTokens,
 		&pricingUSDCNYExchangeRate, &pricingMaximumCNY, &task.RealDispatchCount, &task.ProviderErrorCode, &task.ProviderErrorMessage,
@@ -732,6 +819,11 @@ func scanVideoTask(scanner videoRowScanner) (*service.VideoTask, error) {
 	}
 	if usage.Valid {
 		task.UsageTotalTokens = &usage.Int64
+	}
+	if len(requestPayload) != 0 && string(requestPayload) != "{}" {
+		if err := json.Unmarshal(requestPayload, &task.CreateRequest); err != nil {
+			return nil, fmt.Errorf("video request payload is invalid")
+		}
 	}
 	if pricingSource.Valid {
 		task.PricingSource = pricingSource.String

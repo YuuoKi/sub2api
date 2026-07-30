@@ -25,6 +25,7 @@ type BatchImageCleanupService struct {
 	ProviderRegistry *BatchImageProviderRegistry
 	AccountResolver  BatchImageAccountResolver
 	Config           *config.Config
+	OwnedResultStore *HCAtomOwnedResultStore
 
 	cancel context.CancelFunc
 	done   chan struct{}
@@ -32,11 +33,16 @@ type BatchImageCleanupService struct {
 }
 
 func NewBatchImageCleanupService(repo BatchImageRepository, accountRepo AccountRepository, cfg *config.Config) *BatchImageCleanupService {
+	ownedResultDir := ""
+	if cfg != nil {
+		ownedResultDir = cfg.BatchImage.HCAtomOwnedResultDir
+	}
 	return &BatchImageCleanupService{
 		Repo:             repo,
 		ProviderRegistry: NewBatchImageProviderRegistryFromConfig(cfg),
 		AccountResolver:  &BatchImageAccountRepositoryResolver{Repo: accountRepo},
 		Config:           cfg,
+		OwnedResultStore: NewHCAtomOwnedResultStore(ownedResultDir),
 	}
 }
 
@@ -229,6 +235,12 @@ func (s *BatchImageCleanupService) cleanupJob(ctx context.Context, job *BatchIma
 }
 
 func (s *BatchImageCleanupService) callProviderCleanup(ctx context.Context, job *BatchImageJob, target CleanupTarget) error {
+	if target == CleanupTargetOutput && s != nil && s.OwnedResultStore != nil {
+		handled, err := s.OwnedResultStore.DeleteReferenced(job)
+		if handled || err != nil {
+			return err
+		}
+	}
 	if s == nil || s.ProviderRegistry == nil || s.AccountResolver == nil {
 		return ErrBatchImageCleanupFailed
 	}

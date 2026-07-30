@@ -29,6 +29,11 @@
               placeholder="按姓名或邮箱搜索"
               @keyup.enter="loadStaff"
             />
+            <select v-model="statusFilter" class="input sm:max-w-[9rem]" data-test="staff-status-filter" @change="loadStaff">
+              <option value="all">全部状态</option>
+              <option value="active">在用</option>
+              <option value="disabled">已停用</option>
+            </select>
           </div>
           <div class="text-xs text-gray-500 dark:text-gray-400">共 {{ filteredUsers.length }} 个员工</div>
         </div>
@@ -38,6 +43,7 @@
               <tr>
                 <th class="px-5 py-3 font-medium">成员</th>
                 <th class="px-5 py-3 font-medium">状态</th>
+                <th class="px-5 py-3 font-medium">余额</th>
                 <th class="px-5 py-3 font-medium">今日花费</th>
                 <th class="px-5 py-3 font-medium">累计花费</th>
                 <th class="px-5 py-3 text-right font-medium">操作</th>
@@ -56,7 +62,13 @@
                       <div class="min-w-0">
                         <div class="flex items-center gap-2 font-medium text-gray-900 dark:text-white">
                           {{ staffDisplayName(user.username, user.email) }}
-                          <span v-if="user.role === 'admin'" class="text-xs text-gray-400 dark:text-gray-500">管理员</span>
+                          <span
+                            class="inline-flex rounded-md px-1.5 py-0.5 text-xs font-medium"
+                            :class="memberTypeBadgeClass(user.member_type, user.role)"
+                            data-test="member-type-badge"
+                          >
+                            {{ memberTypeLabel(user.member_type, user.role) }}
+                          </span>
                         </div>
                         <div class="truncate text-xs text-gray-500 dark:text-gray-400">{{ user.email }}</div>
                       </div>
@@ -70,16 +82,47 @@
                       {{ user.status === 'active' ? '在用' : '已停用' }}
                     </span>
                   </td>
+                  <td class="px-5 py-3 tabular-nums text-gray-900 dark:text-white" data-test="row-balance">
+                    {{ formatAccountUsd(user.balance ?? 0) }}
+                  </td>
                   <td class="px-5 py-3 tabular-nums text-gray-700 dark:text-gray-200">{{ formatMoney(usageMap[user.id]?.today_actual_cost, usdCnyRate) }}</td>
                   <td class="px-5 py-3 tabular-nums text-gray-900 dark:text-white">{{ formatMoney(usageMap[user.id]?.total_actual_cost, usdCnyRate) }}</td>
                   <td class="px-5 py-3">
-                    <div class="flex justify-end gap-1.5" @click.stop>
+                    <div class="flex flex-wrap justify-end gap-1.5" @click.stop>
                       <button class="btn btn-sm btn-outline" type="button" data-test="row-recharge" @click="openRecharge(user)">
                         充值
                       </button>
                       <RouterLink class="btn btn-sm btn-outline" :to="`/admin/console/ai-records?user_id=${user.id}`" data-test="row-view-spend">
                         查看花费
                       </RouterLink>
+                      <button
+                        v-if="user.role !== 'admin'"
+                        class="btn btn-sm btn-outline"
+                        type="button"
+                        data-test="row-toggle-status"
+                        :disabled="userActionBusy"
+                        @click="toggleUserStatus(user)"
+                      >
+                        {{ user.status === 'active' ? '停用' : '启用' }}
+                      </button>
+                      <span
+                        v-else
+                        class="inline-flex items-center rounded-md px-2 py-1 text-xs text-gray-500 dark:text-gray-400"
+                        data-test="row-admin-protected"
+                        title="管理员账号不能停用或删除，避免锁出管理端"
+                      >
+                        管理员（不可停用/删除）
+                      </span>
+                      <button
+                        v-if="user.role !== 'admin'"
+                        class="btn btn-sm btn-outline !text-red-600 dark:!text-red-400"
+                        type="button"
+                        data-test="row-delete-user"
+                        :disabled="userActionBusy"
+                        @click="deleteStaffUser(user)"
+                      >
+                        离职删除
+                      </button>
                       <button class="btn btn-sm btn-outline" type="button" @click="toggleExpand(user)">
                         {{ expandedUserId === user.id ? '收起' : '查看卡片' }}
                       </button>
@@ -88,7 +131,7 @@
                 </tr>
                 <!-- 展开：员工的 API 卡 -->
                 <tr v-if="expandedUserId === user.id">
-                  <td colspan="5" class="bg-gray-50/60 px-5 py-4 dark:bg-dark-900/40">
+                  <td colspan="6" class="bg-gray-50/60 px-5 py-4 dark:bg-dark-900/40">
                     <div v-if="keysLoading" class="py-4 text-center text-sm text-gray-500 dark:text-gray-400">加载卡片中…</div>
                     <template v-else>
                       <div v-if="!userKeys.length" class="py-4 text-center text-sm text-gray-500 dark:text-gray-400">
@@ -110,7 +153,26 @@
                         <tbody class="divide-y divide-gray-100 dark:divide-dark-700">
                           <tr v-for="key in userKeys" :key="key.id">
                             <td class="px-3 py-2 font-medium text-gray-900 dark:text-white">{{ key.name || '未命名' }}</td>
-                            <td class="px-3 py-2 font-mono text-xs text-gray-500 dark:text-gray-400">{{ maskKey() }}</td>
+                            <td class="px-3 py-2 font-mono text-xs text-gray-500 dark:text-gray-400">
+                              <div class="flex flex-wrap items-center gap-2">
+                                <span data-test="key-mask">{{ maskKey(key) }}</span>
+                                <template v-if="revealedKeys[key.id]">
+                                  <span class="break-all text-gray-900 dark:text-white" data-test="key-revealed">{{ revealedKeys[key.id] }}</span>
+                                  <button class="btn btn-sm btn-outline" type="button" data-test="key-copy" @click="copyRevealedKey(key.id)">复制</button>
+                                  <button class="btn btn-sm btn-outline" type="button" data-test="key-hide" @click="hideRevealedKey(key.id)">隐藏</button>
+                                </template>
+                                <button
+                                  v-else
+                                  class="btn btn-sm btn-outline"
+                                  type="button"
+                                  data-test="key-reveal"
+                                  :disabled="keyActionBusy"
+                                  @click="revealKey(key)"
+                                >
+                                  查看
+                                </button>
+                              </div>
+                            </td>
                             <td class="px-3 py-2">
                               <span class="inline-flex rounded-md px-2 py-0.5 text-xs font-medium" :class="keyStatusClass(key.status)">
                                 {{ keyStatusLabel(key.status) }}
@@ -132,15 +194,39 @@
                             <td class="px-3 py-2 text-xs tabular-nums text-gray-900 dark:text-white">{{ formatMoney(keyUsageMap[key.id]?.total_actual_cost, usdCnyRate) }}</td>
                             <td class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">{{ formatDateTime(key.last_used_at) }}</td>
                             <td class="px-3 py-2">
-                              <div class="flex justify-end gap-1.5">
+                              <div class="flex flex-wrap justify-end gap-1.5">
                                 <button
+                                  v-if="key.status === 'quota_exhausted' || (key.quota > 0 && (key.quota_used || 0) >= key.quota)"
                                   class="btn btn-sm btn-outline"
                                   type="button"
+                                  data-test="key-reset-quota"
+                                  :disabled="keyActionBusy"
+                                  @click="resetKeyQuota(key)"
+                                >
+                                  重置额度
+                                </button>
+                                <button
+                                  v-if="canToggleKeyStatus(key)"
+                                  class="btn btn-sm btn-outline"
+                                  type="button"
+                                  data-test="key-toggle-status"
                                   :disabled="keyActionBusy"
                                   @click="toggleKeyStatus(key)"
                                 >
                                   {{ key.status === 'active' ? '停用' : '启用' }}
                                 </button>
+                                <span
+                                  v-else-if="key.status === 'quota_exhausted'"
+                                  class="text-xs text-amber-600 dark:text-amber-300"
+                                >
+                                  请先重置额度
+                                </span>
+                                <span
+                                  v-else-if="key.status === 'expired'"
+                                  class="text-xs text-red-600 dark:text-red-300"
+                                >
+                                  已过期（需改有效期）
+                                </span>
                                 <button
                                   class="btn btn-sm btn-outline !text-red-600 dark:!text-red-400"
                                   type="button"
@@ -160,7 +246,7 @@
                 </tr>
               </template>
               <tr v-if="!loading && !filteredUsers.length">
-                <td colspan="5" class="px-5 py-10 text-center text-sm text-gray-500 dark:text-gray-400">
+                <td colspan="6" class="px-5 py-10 text-center text-sm text-gray-500 dark:text-gray-400">
                   还没有员工。点右上角「新增员工」开第一张卡。
                 </td>
               </tr>
@@ -170,35 +256,79 @@
       </section>
 
       <!-- 新增员工：一个弹窗办完（建账号 → 开双 Key → 充值 → 明文展示一次） -->
-      <div v-if="staffModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="closeStaffModal">
-        <div class="w-full max-w-md rounded-lg border border-gray-200 bg-white p-6 shadow-xl dark:border-dark-700 dark:bg-dark-800">
+      <!-- 无损：遮罩/Escape 不关闭；Key 展示后仅「我已安全保存，完成」可关 -->
+      <div
+        v-if="staffModalOpen"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+        data-test="staff-modal-backdrop"
+      >
+        <div
+          class="w-full max-w-md rounded-lg border border-gray-200 bg-white p-6 shadow-xl dark:border-dark-700 dark:bg-dark-800"
+          role="dialog"
+          aria-modal="true"
+          @keydown.escape.prevent.stop
+        >
           <template v-if="!issuedQCanvasPair">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">新增员工</h2>
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              提交后自动建好账号、开出视频 / LLM 两把 Key 并按金额充值，明文 Key 只显示一次。
+              提交后自动建好账号，并为视频与图片能力分别开 Key；两把 Key 必须绑定不同分组，明文只显示一次。
             </p>
             <form class="mt-5 space-y-4" data-test="service-identity-form" @submit.prevent="submitStaff">
-              <div>
-                <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">员工姓名</label>
-                <input v-model="staffForm.username" class="input" maxlength="50" placeholder="例如：张三" />
+              <label class="flex items-start gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-dark-700" data-test="admin-self-issue">
+                <input v-model="staffForm.issueForAdminSelf" class="mt-0.5" type="checkbox" />
+                <span>
+                  <span class="font-medium text-gray-900 dark:text-white">给我自己（管理员）开一张 QCanvas 卡</span>
+                  <span class="mt-0.5 block text-xs text-gray-500 dark:text-gray-400">
+                    会给当前管理员账号签发双 Key；拿到后去 QCanvas 注册页粘贴即可。
+                  </span>
+                </span>
+              </label>
+              <template v-if="!staffForm.issueForAdminSelf">
+                <div>
+                  <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">员工姓名</label>
+                  <input v-model="staffForm.username" class="input" maxlength="50" placeholder="例如：张三" />
+                </div>
+                <div>
+                  <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">邮箱</label>
+                  <input v-model="staffForm.email" class="input" data-test="service-identity-email" type="email" required placeholder="zhangsan@wujie.local（仅作唯一标识）" />
+                </div>
+              </template>
+              <p v-else class="rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-600 dark:bg-dark-900 dark:text-gray-300" data-test="admin-self-owner">
+                将开给管理员：{{ authStore.user?.email || authStore.user?.username || `#${authStore.user?.id}` }}
+              </p>
+              <div class="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">视频能力组</label>
+                  <select v-model.number="staffForm.videoGroupId" class="input" data-test="wizard-video-group" required>
+                    <option :value="0" disabled>选择视频通道所在组</option>
+                    <option v-for="group in videoGroups" :key="group.id" :value="group.id">
+                      {{ group.name }} · {{ groupPlatformLabel(group.platform) }}
+                    </option>
+                  </select>
+                </div>
+                <div>
+                  <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">图片能力组</label>
+                  <select v-model.number="staffForm.mediaGroupId" class="input" data-test="wizard-media-group" required>
+                    <option :value="0" disabled>选择媒体账号所在组</option>
+                    <option v-for="group in mediaGroups" :key="group.id" :value="group.id">
+                      {{ group.name }} · {{ groupPlatformLabel(group.platform) }}
+                    </option>
+                  </select>
+                </div>
               </div>
               <div>
-                <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">邮箱</label>
-                <input v-model="staffForm.email" class="input" data-test="service-identity-email" type="email" required placeholder="zhangsan@wujie.local（仅作唯一标识）" />
-              </div>
-              <div>
-                <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">所在分组</label>
-                <select v-model.number="staffForm.groupId" class="input" data-test="wizard-group" required>
-                  <option :value="0" disabled>选择分组，如「视频组、后期组、AI 组」</option>
-                  <option v-for="group in eligibleGroups" :key="group.id" :value="group.id">
-                    {{ group.name }}
-                  </option>
-                </select>
+                <p
+                  v-if="staffForm.videoGroupId > 0 && staffForm.videoGroupId === staffForm.mediaGroupId"
+                  class="text-xs text-red-600 dark:text-red-300"
+                  data-test="wizard-group-conflict"
+                >
+                  视频与图片 Key 必须选择不同分组。
+                </p>
                 <p v-if="groupsLoading" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                   正在加载可用组…
                 </p>
-                <p v-else-if="!eligibleGroups.length" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  没有可选分组，先在下方新建一个：
+                <p v-else-if="!videoGroups.length || !mediaGroups.length" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  视频组和图片组必须各有一个可用分组，请在下方补齐：
                 </p>
                 <div class="mt-2 flex flex-wrap items-center gap-2">
                   <input
@@ -212,11 +342,23 @@
                     class="btn btn-sm btn-primary"
                     type="button"
                     :disabled="creatingGroup || !quickGroupName.trim()"
-                    data-test="staff-quick-group-create"
-                    @click="quickCreateGroup(quickGroupName)"
+                    data-test="staff-quick-video-group-create"
+                    @click="quickCreateGroup(quickGroupName, 'video')"
                   >
-                    {{ creatingGroup ? '创建中…' : '创建并选中' }}
+                    {{ creatingGroup ? '创建中…' : '建视频组并选中' }}
                   </button>
+                  <button
+                    class="btn btn-sm btn-primary"
+                    type="button"
+                    :disabled="creatingGroup || !quickGroupName.trim()"
+                    data-test="staff-quick-media-group-create"
+                    @click="quickCreateGroup(quickGroupName, 'media')"
+                  >
+                    {{ creatingGroup ? '创建中…' : '建 HC 媒体组并选中' }}
+                  </button>
+                  <RouterLink class="text-xs text-teal-600 hover:underline dark:text-teal-300" to="/admin/groups" data-test="staff-groups-manage-link">
+                    管理/删除分组
+                  </RouterLink>
                 </div>
               </div>
               <div>
@@ -235,8 +377,8 @@
                 </p>
               </div>
               <div class="flex justify-end gap-2 pt-2">
-                <button class="btn btn-outline" type="button" @click="closeStaffModal">取消</button>
-                <button class="btn btn-primary" type="submit" data-test="wizard-submit" :disabled="submitting || groupsLoading || staffForm.groupId <= 0">
+                <button class="btn btn-outline" type="button" data-test="wizard-cancel" @click="cancelStaffModal">取消</button>
+                <button class="btn btn-primary" type="submit" data-test="wizard-submit" :disabled="submitting || groupsLoading || !staffGroupsReady">
                   {{ submitting ? '开通中…' : '开卡' }}
                 </button>
               </div>
@@ -247,21 +389,30 @@
           <template v-else>
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">开卡成功</h2>
             <p v-if="issuedQCanvasPair.video.key && issuedQCanvasPair.media.key" class="mt-1 text-xs text-amber-600 dark:text-amber-300">
-              两把完整 Key 只显示这一次，请立刻复制并交给员工。关掉后只能看到脱敏元数据。
+              两把完整 Key 请立刻复制。关掉后可在「查看卡片」里点「查看」再次取出（会记审计）。
             </p>
             <p v-else class="mt-1 text-xs text-amber-600 dark:text-amber-300">
               该请求已重放，明文 Key 不再返回；请不要把重试当作重新开卡。
             </p>
             <div v-if="issuedQCanvasPair.video.key && issuedQCanvasPair.media.key" class="mt-4 space-y-3">
               <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-dark-700 dark:bg-dark-900">
-                <div class="text-xs text-gray-500">视频 Key · {{ selectedGroupName(staffForm.groupId) }}</div>
+                <div class="text-xs text-gray-500" data-test="wizard-video-group-name">视频 Key · {{ selectedGroupName(staffForm.videoGroupId) }}</div>
                 <div class="mt-1 break-all font-mono text-sm text-gray-900 dark:text-white" data-test="wizard-video-key">{{ issuedQCanvasPair.video.key }}</div>
               </div>
               <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-dark-700 dark:bg-dark-900">
-                <div class="text-xs text-gray-500">LLM / 图片 Key · {{ selectedGroupName(staffForm.groupId) }}</div>
+                <div class="text-xs text-gray-500" data-test="wizard-media-group-name">图片 Key · {{ selectedGroupName(staffForm.mediaGroupId) }}</div>
                 <div class="mt-1 break-all font-mono text-sm text-gray-900 dark:text-white" data-test="wizard-media-key">{{ issuedQCanvasPair.media.key }}</div>
               </div>
             </div>
+            <p
+              v-if="issuedForAdminSelf && issuedQCanvasPair.video.key && issuedQCanvasPair.media.key"
+              class="mt-3 rounded-md border border-teal-200 bg-teal-50 px-3 py-2 text-xs text-teal-800 dark:border-teal-500/30 dark:bg-teal-500/10 dark:text-teal-200"
+              data-test="wizard-qcanvas-register-tip"
+            >
+              用这两把 Key 去
+              <a class="font-medium underline" :href="qcanvasRegisterURL" target="_blank" rel="noopener noreferrer">{{ qcanvasRegisterURL }}</a>
+              注册 QCanvas（手机号 + 密码 + 粘贴双 Key）。
+            </p>
             <p v-if="rechargeResult" class="mt-3 text-xs text-gray-600 dark:text-gray-300" data-test="wizard-recharge-result">
               {{ rechargeResult }}
             </p>
@@ -270,15 +421,24 @@
                 <Icon name="copy" size="sm" />
                 {{ qcanvasPairCopied ? '已复制' : '复制两把 Key' }}
               </button>
-              <button class="btn btn-outline" type="button" data-test="wizard-done" @click="closeStaffModal">完成</button>
+              <button class="btn btn-outline" type="button" data-test="wizard-done" @click="completeStaffModal">我已安全保存，完成</button>
             </div>
           </template>
         </div>
       </div>
 
-      <!-- 行内充值弹窗 -->
-      <div v-if="rechargeModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="rechargeModalOpen = false">
-        <div class="w-full max-w-sm rounded-lg border border-gray-200 bg-white p-6 shadow-xl dark:border-dark-700 dark:bg-dark-800">
+      <!-- 行内充值弹窗：遮罩/Escape 不关闭，避免误清表单 -->
+      <div
+        v-if="rechargeModalOpen"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+        data-test="recharge-modal-backdrop"
+      >
+        <div
+          class="w-full max-w-sm rounded-lg border border-gray-200 bg-white p-6 shadow-xl dark:border-dark-700 dark:bg-dark-800"
+          role="dialog"
+          aria-modal="true"
+          @keydown.escape.prevent.stop
+        >
           <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
             给 {{ staffDisplayName(rechargeTarget?.username, rechargeTarget?.email) }} 充值
           </h2>
@@ -289,7 +449,7 @@
               <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">按 1 美元 ≈ ¥{{ usdCnyRate }} 入账，立即生效。</p>
             </div>
             <div class="flex justify-end gap-2 pt-2">
-              <button class="btn btn-outline" type="button" @click="rechargeModalOpen = false">取消</button>
+              <button class="btn btn-outline" type="button" data-test="recharge-cancel" @click="cancelRechargeModal">取消</button>
               <button class="btn btn-primary" type="submit" data-test="recharge-submit" :disabled="recharging">
                 {{ recharging ? '充值中…' : '确认充值' }}
               </button>
@@ -302,7 +462,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -310,9 +470,20 @@ import { adminAPI } from '@/api/admin'
 import type { AdminGroup, AdminUser, ApiKey } from '@/types'
 import type { BatchApiKeyUsageStats, BatchUserUsageStats } from '@/api/admin/dashboard'
 import { useAppStore } from '@/stores/app'
+import { useAuthStore } from '@/stores/auth'
 import { extractApiErrorMessage } from '@/utils/apiError'
+import { createIdempotencyKey } from '@/utils/idempotencyKey'
+import { useClipboard } from '@/composables/useClipboard'
 import { requestConfirmation } from '@/composables/useAppDialog'
 import { DEFAULT_USD_CNY_RATE } from '@/composables/useDisplayCurrency'
+import {
+  HC_ATOM_MEDIA_ENABLED_MODELS,
+  HC_ATOM_MEDIA_GROUP_PRICES,
+  HC_ATOM_VIDEO_ENABLED_MODELS,
+  HC_ATOM_VIDEO_GROUP_PRICES,
+  isHCAtomImageGroup,
+  isHCAtomVideoGroup,
+} from '@/components/account/hcAtomAdminContract'
 import {
   CONSOLE_ERROR_ZH,
   formatAccountUsd,
@@ -325,17 +496,101 @@ import {
 } from './consoleUtils'
 
 const appStore = useAppStore()
+const authStore = useAuthStore()
+
+/** Guangzhou QCanvas public entry (bare-IP HTTPS). */
+const QCANVAS_ORIGIN = 'https://114.132.50.149'
+const qcanvasRegisterURL = `${QCANVAS_ORIGIN}/register`
 
 const loading = ref(false)
 const search = ref('')
+const statusFilter = ref<'all' | 'active' | 'disabled'>('all')
 const users = ref<AdminUser[]>([])
 const usageMap = ref<Record<number, BatchUserUsageStats>>({})
+const userActionBusy = ref(false)
 // 后端 /admin/dashboard/stats 与 /admin/dashboard/users-ranking 均未提供实时汇率字段；
 // 使用系统默认汇率展示，不臆造动态汇率。
 const usdCnyRate = ref(DEFAULT_USD_CNY_RATE)
 
+function isEmployeeMemberType(memberType: AdminUser['member_type']): boolean {
+  return memberType === 'human' || memberType === 'tool'
+}
+
+function isListableStaff(user: AdminUser): boolean {
+  if (user.role !== 'admin' && isEmployeeMemberType(user.member_type)) return true
+  // Current admin may manage their own QCanvas dual keys from this page.
+  return user.role === 'admin' && authStore.user?.id === user.id
+}
+
+function memberTypeLabel(memberType: AdminUser['member_type'], role?: AdminUser['role']): string {
+  if (role === 'admin') return '管理员'
+  if (memberType === 'tool') return '工具账号'
+  if (memberType === 'human') return '员工账号'
+  return '未知类型'
+}
+
+function memberTypeBadgeClass(memberType: AdminUser['member_type'], role?: AdminUser['role']): string {
+  if (role === 'admin') {
+    return 'bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300'
+  }
+  if (memberType === 'tool') {
+    return 'bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300'
+  }
+  if (memberType === 'human') {
+    return 'bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300'
+  }
+  return 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-gray-300'
+}
+
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase()
+}
+
+/** Axios interceptor rejects with a flat `{ status, code, reason, message }` — not `error.response.status`. */
+function isEmailConflictError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false
+  const e = err as { status?: number; reason?: string }
+  // Prefer EMAIL_EXISTS; do not treat bare gateway 409 without reason as email conflict.
+  return e.reason === 'EMAIL_EXISTS'
+}
+
+const STAFF_PAGE_SIZE = 100
+
+type IssuedQCanvasKeyPair = { video: ApiKey; media: ApiKey }
+
+async function listStaffPages(options: {
+  search?: string
+  status?: 'active' | 'disabled'
+}): Promise<{ items: AdminUser[]; total: number }> {
+  const merged: AdminUser[] = []
+  let page = 1
+  let total = 0
+  while (true) {
+    const res = await adminAPI.users.list(page, STAFF_PAGE_SIZE, {
+      search: options.search,
+      status: options.status,
+      include_subscriptions: false,
+      sort_by: 'created_at',
+      sort_order: 'asc',
+    })
+    const items = res.items || []
+    total = typeof res.total === 'number' ? res.total : merged.length + items.length
+    merged.push(...items)
+    if (items.length < STAFF_PAGE_SIZE || merged.length >= total) break
+    page += 1
+  }
+  return { items: merged, total }
+}
+
+function hasUsableQCanvasPairKeys(pair: IssuedQCanvasKeyPair | null | undefined): boolean {
+  if (!pair) return false
+  const videoKey = typeof pair.video?.key === 'string' ? pair.video.key.trim() : ''
+  const mediaKey = typeof pair.media?.key === 'string' ? pair.media.key.trim() : ''
+  return videoKey.length > 0 && mediaKey.length > 0
+}
+
 const filteredUsers = computed(() => {
-  return users.value.filter((user) => user.role !== 'admin' && user.member_type === 'tool')
+  return users.value.filter((user) => isListableStaff(user))
 })
 
 // ---- 员工列表 ----
@@ -343,13 +598,11 @@ const filteredUsers = computed(() => {
 async function loadStaff() {
   loading.value = true
   try {
-    const res = await adminAPI.users.list(1, 100, {
+    const res = await listStaffPages({
       search: search.value.trim() || undefined,
-      include_subscriptions: false,
-      sort_by: 'created_at',
-      sort_order: 'asc',
+      status: statusFilter.value === 'all' ? undefined : statusFilter.value,
     })
-    users.value = (res.items || []).filter((user) => user.role !== 'admin' && user.member_type === 'tool')
+    users.value = (res.items || []).filter((user) => isListableStaff(user))
     if (users.value.length) {
       const usage = await adminAPI.dashboard.getBatchUsersUsage(users.value.map((user) => user.id))
       const map: Record<number, BatchUserUsageStats> = {}
@@ -367,21 +620,73 @@ async function loadStaff() {
   }
 }
 
+async function toggleUserStatus(user: AdminUser) {
+  const next = user.status === 'active' ? 'disabled' : 'active'
+  if (next === 'disabled') {
+    const confirmed = await requestConfirmation({
+      message: `确定停用「${staffDisplayName(user.username, user.email)}」？停用后其 API 卡调用会失败，可随时再启用。`,
+      danger: true,
+    })
+    if (!confirmed) return
+  }
+  userActionBusy.value = true
+  try {
+    await adminAPI.users.toggleStatus(user.id, next)
+    appStore.showSuccess(next === 'active' ? '员工已启用' : '员工已停用')
+    await loadStaff()
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, '切换员工状态失败', CONSOLE_ERROR_ZH))
+  } finally {
+    userActionBusy.value = false
+  }
+}
+
+async function deleteStaffUser(user: AdminUser) {
+  if (user.role === 'admin') {
+    appStore.showError('不能删除管理员账号')
+    return
+  }
+  const confirmed = await requestConfirmation({
+    message: `确定离职删除「${staffDisplayName(user.username, user.email)}」？将软删除该账号并吊销其名下全部 API 卡；历史账单与用量仍可查询。`,
+    confirmText: '确认删除',
+    danger: true,
+  })
+  if (!confirmed) return
+  userActionBusy.value = true
+  try {
+    await adminAPI.users.delete(user.id)
+    appStore.showSuccess('员工已删除')
+    if (expandedUserId.value === user.id) {
+      expandedUserId.value = null
+      revealedKeys.value = {}
+    }
+    await loadStaff()
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, '删除员工失败', CONSOLE_ERROR_ZH))
+  } finally {
+    userActionBusy.value = false
+  }
+}
+
 // ---- 新增员工（一个弹窗：建账号 → 开双 Key → 充值 → 明文展示一次） ----
 
 const staffModalOpen = ref(false)
 const submitting = ref(false)
 const wizardUser = ref<AdminUser | null>(null)
 const rechargeResult = ref('')
+/** Stable for one open session; reused on submit retries until cancel/complete. */
+const staffIdempotencyKey = ref<string | null>(null)
 const staffForm = reactive({
   username: '',
   email: '',
-  groupId: 0,
+  videoGroupId: 0,
+  mediaGroupId: 0,
   rechargeAmount: 0,
+  issueForAdminSelf: false,
 })
 
-type IssuedQCanvasKeyPair = { video: ApiKey; media: ApiKey }
 const issuedQCanvasPair = ref<IssuedQCanvasKeyPair | null>(null)
+const issuedForAdminSelf = ref(false)
 const qcanvasPairCopied = ref(false)
 
 const activeGroups = ref<AdminGroup[]>([])
@@ -389,12 +694,79 @@ const groupsLoading = ref(true)
 const creatingGroup = ref(false)
 const quickGroupName = ref('')
 
+// Recharge modal state declared early so Escape guard can observe both modals.
+const rechargeModalOpen = ref(false)
+const rechargeTarget = ref<AdminUser | null>(null)
+const rechargeAmount = ref<number>(0)
+const recharging = ref(false)
+
+function hasFilledStaffForm(): boolean {
+  return (
+    staffForm.username.trim().length > 0
+    || staffForm.email.trim().length > 0
+    || Number(staffForm.rechargeAmount) > 0
+    || quickGroupName.value.trim().length > 0
+  )
+}
+
+function resetStaffModalState() {
+  staffModalOpen.value = false
+  wizardUser.value = null
+  rechargeResult.value = ''
+  issuedQCanvasPair.value = null
+  issuedForAdminSelf.value = false
+  qcanvasPairCopied.value = false
+  staffIdempotencyKey.value = null
+  staffForm.username = ''
+  staffForm.email = ''
+  staffForm.videoGroupId = 0
+  staffForm.mediaGroupId = 0
+  staffForm.rechargeAmount = 0
+  staffForm.issueForAdminSelf = false
+  quickGroupName.value = ''
+}
+
+function blockEscapeWhileModalOpen(event: KeyboardEvent) {
+  if (event.key !== 'Escape') return
+  if (!staffModalOpen.value && !rechargeModalOpen.value) return
+  event.preventDefault()
+  event.stopPropagation()
+}
+
+watch([staffModalOpen, rechargeModalOpen], ([staffOpen, rechargeOpen]) => {
+  if (staffOpen || rechargeOpen) {
+    window.addEventListener('keydown', blockEscapeWhileModalOpen, true)
+  } else {
+    window.removeEventListener('keydown', blockEscapeWhileModalOpen, true)
+  }
+})
+
 // 新员工还没有任何专属授权：专属组与订阅组一律不可选（内部 member_type='tool' 照传，界面只用「员工」说法）
 const eligibleGroups = computed(() => {
   return activeGroups.value.filter(
     (group) => group.status === 'active' && group.subscription_type !== 'subscription' && !group.is_exclusive,
   )
 })
+const videoGroups = computed(() => eligibleGroups.value.filter(isHCAtomVideoGroup))
+const mediaGroups = computed(() => eligibleGroups.value.filter(isHCAtomImageGroup))
+
+const staffGroupsReady = computed(() => (
+  videoGroups.value.some((group) => group.id === staffForm.videoGroupId)
+  && mediaGroups.value.some((group) => group.id === staffForm.mediaGroupId)
+  && staffForm.videoGroupId !== staffForm.mediaGroupId
+))
+
+function groupPlatformLabel(platform: AdminGroup['platform']): string {
+  const labels: Partial<Record<AdminGroup['platform'], string>> = {
+    anthropic: 'Claude',
+    openai: 'OpenAI',
+    gemini: 'Gemini',
+    antigravity: 'Antigravity',
+    grok: 'Grok',
+    hc_atom: 'HC-ATOM',
+  }
+  return labels[platform] ?? platform
+}
 
 function selectedGroupName(groupID: number): string {
   return activeGroups.value.find((group) => group.id === groupID)?.name ?? `组 #${groupID}`
@@ -403,7 +775,7 @@ function selectedGroupName(groupID: number): string {
 async function loadActiveGroups() {
   groupsLoading.value = true
   try {
-    activeGroups.value = await adminAPI.groups.getAll()
+    activeGroups.value = await adminAPI.groups.getAllIncludingInactive()
   } catch (err) {
     activeGroups.value = []
     appStore.showError(extractApiErrorMessage(err, '加载分组失败', CONSOLE_ERROR_ZH))
@@ -415,54 +787,87 @@ async function loadActiveGroups() {
 function openCreateStaff() {
   staffForm.username = ''
   staffForm.email = ''
-  staffForm.groupId = eligibleGroups.value[0]?.id ?? 0
+  staffForm.videoGroupId = videoGroups.value[0]?.id ?? 0
+  staffForm.mediaGroupId = mediaGroups.value[0]?.id ?? 0
   staffForm.rechargeAmount = 0
+  staffForm.issueForAdminSelf = false
   wizardUser.value = null
   rechargeResult.value = ''
   issuedQCanvasPair.value = null
+  issuedForAdminSelf.value = false
   qcanvasPairCopied.value = false
   quickGroupName.value = ''
+  // One key per formal open; retries reuse until cancel/complete.
+  // Must not use bare crypto.randomUUID — HTTP admin entry is not a secure context.
+  staffIdempotencyKey.value = createIdempotencyKey()
   staffModalOpen.value = true
 }
 
-function closeStaffModal() {
-  staffModalOpen.value = false
-  wizardUser.value = null
-  rechargeResult.value = ''
-  issuedQCanvasPair.value = null
-  qcanvasPairCopied.value = false
+async function cancelStaffModal() {
+  // Keys already shown: cancel is not offered; refuse any accidental path.
+  if (issuedQCanvasPair.value) return
+  if (hasFilledStaffForm()) {
+    const confirmed = await requestConfirmation({
+      message: '表单已填写内容，确定取消并清空吗？未提交的开卡信息将丢失。',
+      confirmText: '确定清空',
+      cancelText: '继续填写',
+    })
+    if (!confirmed) return
+  }
+  resetStaffModalState()
 }
 
-async function quickCreateGroup(name: string) {
+function completeStaffModal() {
+  // Only explicit 「我已安全保存，完成」 may close after keys are shown.
+  if (!issuedQCanvasPair.value) return
+  resetStaffModalState()
+}
+
+async function quickCreateGroup(name: string, target: 'video' | 'media') {
   const trimmed = name.trim()
   if (!trimmed || creatingGroup.value) return
+  const existing = activeGroups.value.find((group) => group.name === trimmed)
+  if (existing) {
+    const eligible = target === 'video' ? isHCAtomVideoGroup(existing) : isHCAtomImageGroup(existing)
+    if (eligible) {
+      if (target === 'video') staffForm.videoGroupId = existing.id
+      else staffForm.mediaGroupId = existing.id
+      quickGroupName.value = ''
+      appStore.showSuccess(`分组「${existing.name}」已存在，已直接选中`)
+    } else {
+      appStore.showError(`分组名「${trimmed}」已被其他平台或能力占用，请换一个明确的名称`)
+    }
+    return
+  }
   creatingGroup.value = true
   try {
     // 后端建组契约要求全量字段（缺失会 500）；与密钥库内联建组同一模板
+    const isMedia = target === 'media'
+    const models = [...(isMedia ? HC_ATOM_MEDIA_ENABLED_MODELS : HC_ATOM_VIDEO_ENABLED_MODELS)]
     const created = await adminAPI.groups.create({
       name: trimmed,
       description: '',
-      platform: 'openai',
+      platform: 'hc_atom',
       rate_multiplier: 1,
       is_exclusive: false,
       subscription_type: 'standard',
       daily_limit_usd: null,
       weekly_limit_usd: null,
       monthly_limit_usd: null,
-      allow_image_generation: trimmed === 'media',
-      allow_batch_image_generation: false,
+      allow_image_generation: isMedia,
+      allow_batch_image_generation: isMedia,
       image_rate_independent: false,
       image_rate_multiplier: 1,
       batch_image_discount_multiplier: 0.5,
       batch_image_hold_multiplier: 0.6,
-      image_price_1k: null,
-      image_price_2k: null,
-      image_price_4k: null,
+      image_price_1k: isMedia ? HC_ATOM_MEDIA_GROUP_PRICES.image_price_1k : null,
+      image_price_2k: isMedia ? HC_ATOM_MEDIA_GROUP_PRICES.image_price_2k : null,
+      image_price_4k: isMedia ? HC_ATOM_MEDIA_GROUP_PRICES.image_price_4k : null,
       video_rate_independent: false,
       video_rate_multiplier: 1,
-      video_price_480p: null,
-      video_price_720p: null,
-      video_price_1080p: null,
+      video_price_480p: isMedia ? null : HC_ATOM_VIDEO_GROUP_PRICES.video_price_480p,
+      video_price_720p: isMedia ? null : HC_ATOM_VIDEO_GROUP_PRICES.video_price_720p,
+      video_price_1080p: isMedia ? null : HC_ATOM_VIDEO_GROUP_PRICES.video_price_1080p,
       peak_rate_enabled: false,
       peak_start: '',
       peak_end: '',
@@ -473,6 +878,7 @@ async function quickCreateGroup(name: string) {
       allow_messages_dispatch: false,
       require_oauth_only: false,
       require_privacy_set: false,
+      models_list_config: { enabled: true, models },
       model_routing_enabled: false,
       supported_model_scopes: ['claude', 'gemini_text', 'gemini_image'],
       mcp_xml_inject: true,
@@ -480,7 +886,11 @@ async function quickCreateGroup(name: string) {
       rpm_limit: 0,
     })
     await loadActiveGroups()
-    staffForm.groupId = created.id
+    if (target === 'video') {
+      staffForm.videoGroupId = created.id
+    } else {
+      staffForm.mediaGroupId = created.id
+    }
     quickGroupName.value = ''
     appStore.showSuccess(`分组「${created.name}」已创建并选中`)
   } catch (err) {
@@ -490,56 +900,115 @@ async function quickCreateGroup(name: string) {
   }
 }
 
-// 顺序执行：建账号（已建过则跳过，允许失败后原地重试）→ 开双 Key（同组，后端已放开）→ 充值（金额 > 0 时）
-// 邮箱已存在（409）时复用既有员工继续签发：这是「上次签发失败」/「卡被删光」后的唯一补开路径
-async function findStaffByEmail(email: string): Promise<AdminUser | null> {
-  const res = await adminAPI.users.list(1, 100, {
-    search: email,
-    include_subscriptions: false,
-    sort_by: 'created_at',
-    sort_order: 'asc',
-  })
-  const normalized = email.toLowerCase()
+// 顺序执行：建账号（已建过则跳过，允许失败后原地重试）→ 开双 Key（不同能力组）→ 充值（金额 > 0 时）
+// 邮箱已存在（EMAIL_EXISTS）时：精确匹配后按状态复用或显式失败；禁止自动转换 human↔tool
+async function findAccountByExactEmail(email: string): Promise<AdminUser | null> {
+  const trimmed = email.trim()
+  const normalized = normalizeEmail(trimmed)
+  const res = await listStaffPages({ search: trimmed })
   return (
-    (res.items || []).find(
-      (user) => user.email.toLowerCase() === normalized && user.member_type === 'tool' && user.role !== 'admin',
-    ) ?? null
+    (res.items || []).find((user) => normalizeEmail(user.email) === normalized) ?? null
   )
 }
 
+async function resolveConflictOwner(email: string): Promise<AdminUser | null> {
+  const existing = await findAccountByExactEmail(email)
+  if (!existing) {
+    appStore.showError('该邮箱已被占用，但找不到精确匹配的账号，请换一个邮箱或联系管理员')
+    return null
+  }
+  if (existing.role === 'admin') {
+    appStore.showError('该邮箱属于管理员账号，不能用于员工开卡')
+    return null
+  }
+  if (existing.status === 'disabled') {
+    appStore.showError('该邮箱对应账号已停用，无法开卡，请先启用后再试')
+    return null
+  }
+  if (!isEmployeeMemberType(existing.member_type) || existing.status !== 'active') {
+    appStore.showError('该邮箱已被占用，且不是可复用的在职员工/工具账号，请换一个邮箱')
+    return null
+  }
+  // 复用原 owner；不改写 member_type（禁止 human↔tool 自动转换）
+  return existing
+}
+
 async function submitStaff() {
-  if (!eligibleGroups.value.some((group) => group.id === staffForm.groupId)) {
-    appStore.showError('请先选择所在分组；没有可用分组时先新建一个')
+  if (submitting.value) return
+  if (!videoGroups.value.some((group) => group.id === staffForm.videoGroupId)) {
+    appStore.showError('请先选择有效的视频能力组；没有可用分组时先新建一个')
     return
+  }
+  if (!mediaGroups.value.some((group) => group.id === staffForm.mediaGroupId)) {
+    appStore.showError('请先选择有效的图片能力组；没有可用分组时先新建一个')
+    return
+  }
+  if (staffForm.videoGroupId === staffForm.mediaGroupId) {
+    appStore.showError('视频与图片 Key 必须绑定不同分组')
+    return
+  }
+  if (staffForm.issueForAdminSelf) {
+    if (!authStore.user?.id || authStore.user.role !== 'admin') {
+      appStore.showError('当前登录不是管理员，无法给自己开卡')
+      return
+    }
   }
   submitting.value = true
   rechargeResult.value = ''
   try {
+    // 创建成功但后续签发失败时保留 wizardUser；重试不得再次 create
     if (!wizardUser.value) {
-      try {
-        const res = await adminAPI.users.create({
-          email: staffForm.email.trim(),
-          username: staffForm.username.trim() || undefined,
-          member_type: 'tool',
-          role: 'user',
-        })
-        wizardUser.value = res.user
-      } catch (createErr) {
-        if ((createErr as { response?: { status?: number } })?.response?.status !== 409) throw createErr
-        const existing = await findStaffByEmail(staffForm.email.trim())
-        if (!existing) {
-          appStore.showError('该邮箱已被占用，且不是可补开的员工账号，请换一个邮箱')
-          return
+      if (staffForm.issueForAdminSelf) {
+        const me = authStore.user!
+        wizardUser.value = {
+          id: me.id,
+          email: me.email,
+          username: me.username,
+          role: 'admin',
+          member_type: 'human',
+          status: me.status === 'disabled' ? 'disabled' : 'active',
+          balance: me.balance ?? 0,
+        } as AdminUser
+      } else {
+        try {
+          const res = await adminAPI.users.create({
+            email: staffForm.email.trim(),
+            username: staffForm.username.trim() || undefined,
+            member_type: 'tool',
+            role: 'user',
+          })
+          wizardUser.value = res.user
+        } catch (createErr) {
+          if (!isEmailConflictError(createErr)) throw createErr
+          const existing = await resolveConflictOwner(staffForm.email)
+          if (!existing) return
+          wizardUser.value = existing
         }
-        wizardUser.value = existing
       }
     }
     const owner = wizardUser.value
-    issuedQCanvasPair.value = await adminAPI.apiKeys.createQCanvasKeyPairForUser(
+    if (!staffIdempotencyKey.value) {
+      // openCreateStaff always sets this; refuse silent regenerate mid-session.
+      throw new Error('开卡会话缺少幂等键，请关闭后重新打开弹窗再试')
+    }
+    const pair = await adminAPI.apiKeys.createQCanvasKeyPairForUser(
       owner.id,
-      { video_group_id: staffForm.groupId, media_group_id: staffForm.groupId },
-      crypto.randomUUID(),
+      {
+        video_group_id: staffForm.videoGroupId,
+        media_group_id: staffForm.mediaGroupId,
+        allow_admin_target: staffForm.issueForAdminSelf || owner.role === 'admin',
+      },
+      staffIdempotencyKey.value,
     )
+    // Blank idempotent replay must never enter Done-as-success UI.
+    if (!hasUsableQCanvasPairKeys(pair)) {
+      appStore.showError(
+        '开卡失败：幂等重放未返回明文 Key，不能当作开卡成功。请保留此账号信息后联系管理员确认是否已开出，或关闭后换会话重试。',
+      )
+      return
+    }
+    issuedQCanvasPair.value = pair
+    issuedForAdminSelf.value = staffForm.issueForAdminSelf || owner.role === 'admin'
     const amount = Number(staffForm.rechargeAmount) || 0
     if (amount > 0) {
       try {
@@ -561,15 +1030,28 @@ async function submitStaff() {
 
 // ---- 行内充值 ----
 
-const rechargeModalOpen = ref(false)
-const rechargeTarget = ref<AdminUser | null>(null)
-const rechargeAmount = ref<number>(0)
-const recharging = ref(false)
-
 function openRecharge(user: AdminUser) {
   rechargeTarget.value = user
   rechargeAmount.value = 0
   rechargeModalOpen.value = true
+}
+
+function closeRechargeModal() {
+  rechargeModalOpen.value = false
+  rechargeTarget.value = null
+  rechargeAmount.value = 0
+}
+
+async function cancelRechargeModal() {
+  if (Number(rechargeAmount.value) > 0) {
+    const confirmed = await requestConfirmation({
+      message: '充值金额已填写，确定取消并清空吗？',
+      confirmText: '确定清空',
+      cancelText: '继续填写',
+    })
+    if (!confirmed) return
+  }
+  closeRechargeModal()
 }
 
 async function submitRecharge() {
@@ -582,8 +1064,9 @@ async function submitRecharge() {
   try {
     const updated = await adminAPI.users.updateBalance(rechargeTarget.value.id, amount, 'add', '行内充值')
     appStore.showSuccess(`已充值 $${amount.toFixed(2)}，当前余额 $${Number(updated.balance ?? 0).toFixed(2)}`)
-    rechargeModalOpen.value = false
-    rechargeTarget.value = null
+    closeRechargeModal()
+    // Refresh list so the balance column matches server truth immediately.
+    await loadStaff()
   } catch (err) {
     appStore.showError(extractApiErrorMessage(err, '充值失败', CONSOLE_ERROR_ZH))
   } finally {
@@ -601,8 +1084,10 @@ const keyUsageMap = ref<Record<number, BatchApiKeyUsageStats>>({})
 async function toggleExpand(user: AdminUser) {
   if (expandedUserId.value === user.id) {
     expandedUserId.value = null
+    revealedKeys.value = {}
     return
   }
+  revealedKeys.value = {}
   expandedUserId.value = user.id
   await loadUserKeys(user.id)
 }
@@ -629,11 +1114,66 @@ async function loadUserKeys(userId: number) {
   }
 }
 
-// 管理员列表/详情接口约定不会回显明文或部分明文（apiKeyDTOWithoutSecret 直接清空 key），
-// 但这里绝不能"失败开放"：即便后端某天意外携带了非空 key，也只显示统一占位符，
-// 不对其做任何 slice/展示。完整 Key 只能来自开卡响应弹窗（issuedQCanvasPair）。
-function maskKey(): string {
-  return '已发放·不再显示'
+// List endpoints never return the full secret. Show a non-secret hint + reveal button.
+// Even if a DTO unexpectedly leaks `key`, never render any substring of it here.
+function maskKey(key: ApiKey): string {
+  if (typeof key.key === 'string' && key.key.trim().length > 0) {
+    return '已发放·点击查看'
+  }
+  const hint = typeof key.key_hint === 'string' ? key.key_hint.trim() : ''
+  if (hint.length > 0) {
+    return `••••${hint}`
+  }
+  return '已发放·点击查看'
+}
+
+const revealedKeys = ref<Record<number, string>>({})
+
+async function revealKey(key: ApiKey) {
+  keyActionBusy.value = true
+  try {
+    const full = await adminAPI.apiKeys.revealApiKey(key.id)
+    const secret = typeof full.key === 'string' ? full.key.trim() : ''
+    if (!secret) {
+      appStore.showError('未取到明文 Key，请稍后重试')
+      return
+    }
+    revealedKeys.value = { ...revealedKeys.value, [key.id]: secret }
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, '查看 Key 失败', CONSOLE_ERROR_ZH))
+  } finally {
+    keyActionBusy.value = false
+  }
+}
+
+function hideRevealedKey(keyId: number) {
+  const next = { ...revealedKeys.value }
+  delete next[keyId]
+  revealedKeys.value = next
+}
+
+async function copyRevealedKey(keyId: number) {
+  const secret = revealedKeys.value[keyId]
+  if (!secret) return
+  const ok = await copyToClipboard(secret)
+  if (ok) appStore.showSuccess('已复制 Key')
+}
+
+async function resetKeyQuota(key: ApiKey) {
+  const confirmed = await requestConfirmation({
+    message: `确定重置卡「${key.name || '未命名'}」的已用额度？重置后可继续调用。`,
+  })
+  if (!confirmed) return
+  keyActionBusy.value = true
+  try {
+    await adminAPI.apiKeys.updateApiKeyFields(key.id, { reset_quota: true })
+    appStore.showSuccess('额度已重置')
+    if (expandedUserId.value) await loadUserKeys(expandedUserId.value)
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, '重置额度失败', CONSOLE_ERROR_ZH))
+  } finally {
+    keyActionBusy.value = false
+  }
 }
 
 function keyStatusLabel(status: ApiKey['status']): string {
@@ -662,9 +1202,22 @@ function keyStatusClass(status: ApiKey['status']): string {
 
 const keyActionBusy = ref(false)
 
+/** Only active/disabled(/legacy inactive) may toggle; exhausted/expired need dedicated recovery. */
+function canToggleKeyStatus(key: ApiKey): boolean {
+  return key.status === 'active' || key.status === 'disabled' || key.status === 'inactive'
+}
+
 async function toggleKeyStatus(key: ApiKey) {
+  if (!canToggleKeyStatus(key)) {
+    appStore.showError(
+      key.status === 'quota_exhausted'
+        ? '额度用完的卡请先点「重置额度」，不要直接启用'
+        : '已过期的卡不能直接启用，请先延长有效期',
+    )
+    return
+  }
   // admin 契约只接受 active/disabled（不要发 inactive，后端会 400）
-  const next = key.status === 'active' ? 'disabled' : 'active'
+  const next: 'active' | 'disabled' = key.status === 'active' ? 'disabled' : 'active'
   if (next === 'disabled') {
     const confirmed = await requestConfirmation({
       message: `确定停用卡「${key.name || '未命名'}」？停用后该卡调用会立即失败。`,
@@ -702,18 +1255,22 @@ async function removeKey(key: ApiKey) {
   }
 }
 
+const { copyToClipboard } = useClipboard()
+
 async function copyIssuedQCanvasPair() {
   if (!issuedQCanvasPair.value?.video.key || !issuedQCanvasPair.value.media.key) return
-  try {
-    await navigator.clipboard.writeText(`video=${issuedQCanvasPair.value.video.key}\nmedia=${issuedQCanvasPair.value.media.key}`)
-    qcanvasPairCopied.value = true
-  } catch {
-    appStore.showError('复制失败，请手动复制两把 Key')
-  }
+  const ok = await copyToClipboard(
+    `video=${issuedQCanvasPair.value.video.key}\nmedia=${issuedQCanvasPair.value.media.key}`,
+  )
+  if (ok) qcanvasPairCopied.value = true
 }
 
 onMounted(() => {
   void loadStaff()
   void loadActiveGroups()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', blockEscapeWhileModalOpen, true)
 })
 </script>

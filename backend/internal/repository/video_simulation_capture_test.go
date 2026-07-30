@@ -85,7 +85,7 @@ func TestListSimulationTasksForOwnerAppliesLimit(t *testing.T) {
 	mock.ExpectQuery(`(?is)LIMIT\s+\$3`).
 		WithArgs(int64(7), service.VideoProviderMock, service.VideoSimulationListMaxItems).
 		WillReturnRows(videoTaskRows(now).AddRow(
-			int64(5), int64(21), int64(22), int64(2), "mock", "mock-video-v1", "text_to_video", "prompt", "queued",
+			int64(5), int64(21), int64(22), int64(2), "mock", "mock-video-v1", "text_to_video", "prompt", "{}", "queued",
 			"", "", "", 4, "720p", nil, 0, "USD", "internal_simulation", "simulation-v1", nil, nil, nil, 0, "", "", "", "list-mock-5", int64(1), "pending", int64(7),
 			now, now, nil, 0, "none", nil, nil, nil, nil, 0, nil, nil, nil, nil, nil, nil, 0, nil, nil, nil, nil, nil, nil,
 		))

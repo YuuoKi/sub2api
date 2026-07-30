@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"html"
+	"log/slog"
 	"sort"
 	"strconv"
 	"strings"
@@ -76,12 +77,21 @@ type APIKeyRepository interface {
 
 	// Quota methods
 	IncrementQuotaUsed(ctx context.Context, id int64, amount float64) (float64, error)
+	// ResetQuotaUsed clears only quota_used (admin/manual reset).
+	ResetQuotaUsed(ctx context.Context, id int64) error
 	UpdateLastUsed(ctx context.Context, id int64, usedAt time.Time) error
 
 	// Rate limit methods
 	IncrementRateLimitUsage(ctx context.Context, id int64, cost float64) error
 	ResetRateLimitWindows(ctx context.Context, id int64) error
+	// ResetRateLimitUsage clears all usage counters/windows (admin/manual reset).
+	ResetRateLimitUsage(ctx context.Context, id int64) error
 	GetRateLimitData(ctx context.Context, id int64) (*APIKeyRateLimitData, error)
+}
+
+// apiKeyQuotaStatusMarker marks a key exhausted without rewriting usage counters.
+type apiKeyQuotaStatusMarker interface {
+	MarkQuotaExhausted(ctx context.Context, id int64) error
 }
 
 type apiKeyAllByUserIDLister interface {
@@ -177,9 +187,12 @@ type CreateAPIKeyRequest struct {
 // CreateQCanvasKeyPairRequest expresses the two logical credentials QCanvas
 // needs. The group IDs are administrator-selected routing/billing groups; the
 // video/media meanings are deliberately not inferred from group names.
+// AllowAdminTarget must be explicitly true to mint keys for an admin user;
+// disabled users are always rejected.
 type CreateQCanvasKeyPairRequest struct {
-	VideoGroupID int64 `json:"video_group_id"`
-	MediaGroupID int64 `json:"media_group_id"`
+	VideoGroupID     int64 `json:"video_group_id"`
+	MediaGroupID     int64 `json:"media_group_id"`
+	AllowAdminTarget bool  `json:"allow_admin_target"`
 }
 
 // QCanvasKeyPair is returned only by the initial dual-key issuance response.
@@ -503,30 +516,55 @@ func (s *APIKeyService) CreateQCanvasKeyPair(ctx context.Context, userID int64, 
 	if req.VideoGroupID <= 0 || req.MediaGroupID <= 0 {
 		return nil, infraerrors.BadRequest("QC_KEY_PAIR_GROUP_REQUIRED", "video_group_id and media_group_id must be positive")
 	}
+	if req.VideoGroupID == req.MediaGroupID {
+		return nil, infraerrors.BadRequest("QC_KEY_PAIR_GROUPS_MUST_DIFFER", "video_group_id and media_group_id must reference two distinct groups")
+	}
 
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("get user: %w", err)
 	}
+	if user.Status == StatusDisabled {
+		return nil, infraerrors.BadRequest("QC_KEY_PAIR_TARGET_DISABLED", "不能为已停用账号签发 QCanvas 双 Key")
+	}
+	if user.Role == RoleAdmin && !req.AllowAdminTarget {
+		return nil, infraerrors.BadRequest("QC_KEY_PAIR_TARGET_ADMIN", "不能为管理员账号签发 QCanvas 双 Key")
+	}
+	if user.Role == RoleAdmin && req.AllowAdminTarget {
+		slog.Info("admin.qcanvas_key_pair.allow_admin_target",
+			"audit", true,
+			"target_user_id", userID,
+			"video_group_id", req.VideoGroupID,
+			"media_group_id", req.MediaGroupID,
+		)
+	}
 
-	validateGroup := func(groupID int64) error {
+	validateGroup := func(groupID int64) (*Group, error) {
 		group, groupErr := s.groupRepo.GetByID(ctx, groupID)
 		if groupErr != nil {
-			return fmt.Errorf("get group: %w", groupErr)
+			return nil, fmt.Errorf("get group: %w", groupErr)
 		}
 		if !group.IsActive() {
-			return infraerrors.BadRequest("QC_KEY_PAIR_GROUP_NOT_ACTIVE", "selected group is not active")
+			return nil, infraerrors.BadRequest("QC_KEY_PAIR_GROUP_NOT_ACTIVE", "selected group is not active")
 		}
 		if !s.canUserBindGroup(ctx, user, group) {
-			return ErrGroupNotAllowed
+			return nil, ErrGroupNotAllowed
 		}
-		return nil
+		return group, nil
 	}
-	if err := validateGroup(req.VideoGroupID); err != nil {
+	videoGroup, err := validateGroup(req.VideoGroupID)
+	if err != nil {
 		return nil, err
 	}
-	if err := validateGroup(req.MediaGroupID); err != nil {
+	mediaGroup, err := validateGroup(req.MediaGroupID)
+	if err != nil {
 		return nil, err
+	}
+	if !qcanvasVideoGroupValid(videoGroup) {
+		return nil, infraerrors.BadRequest("QC_KEY_PAIR_VIDEO_GROUP_INVALID", "selected video group does not provide HC-ATOM video capability")
+	}
+	if !qcanvasMediaGroupValid(mediaGroup) {
+		return nil, infraerrors.BadRequest("QC_KEY_PAIR_MEDIA_GROUP_INVALID", "selected media group does not provide the authorized HC-ATOM image capability")
 	}
 
 	videoSecret, err := s.GenerateKey()
@@ -553,6 +591,69 @@ func (s *APIKeyService) CreateQCanvasKeyPair(ctx context.Context, userID int64, 
 	s.compileAPIKeyIPRules(video)
 	s.compileAPIKeyIPRules(media)
 	return &QCanvasKeyPair{Video: video, Media: media}, nil
+}
+
+func qcanvasGroupModels(group *Group) map[string]struct{} {
+	models := make(map[string]struct{})
+	if group == nil || !group.ModelsListConfig.Enabled {
+		return models
+	}
+	for _, model := range group.ModelsListConfig.Models {
+		if normalized := strings.TrimSpace(model); normalized != "" {
+			models[normalized] = struct{}{}
+		}
+	}
+	return models
+}
+
+func qcanvasVideoGroupValid(group *Group) bool {
+	if group == nil || group.Platform != PlatformHCAtom || !group.IsActive() ||
+		group.VideoPrice480P == nil || *group.VideoPrice480P <= 0 ||
+		group.VideoPrice720P == nil || *group.VideoPrice720P <= 0 ||
+		group.VideoPrice1080P == nil || *group.VideoPrice1080P <= 0 {
+		return false
+	}
+	models := qcanvasGroupModels(group)
+	_, v1 := models[HCAtomVideoV1PublicModel]
+	_, v3 := models[HCAtomSeedanceV3PublicModel]
+	for _, image := range []string{
+		HCAtomImageSeedreamModel,
+		HCAtomImageDoubaoSeedreamModel,
+		HCAtomImageGeminiModel,
+		HCAtomImageGPTModel,
+		HCAtomImageSGPTModel,
+	} {
+		if _, mixed := models[image]; mixed {
+			return false
+		}
+	}
+	return v1 || v3
+}
+
+func qcanvasMediaGroupValid(group *Group) bool {
+	if group == nil || group.Platform != PlatformHCAtom || !group.IsActive() ||
+		!group.AllowImageGeneration || !group.AllowBatchImageGeneration ||
+		group.ImagePrice1K == nil || *group.ImagePrice1K <= 0 ||
+		group.ImagePrice2K == nil || *group.ImagePrice2K <= 0 ||
+		group.ImagePrice4K == nil || *group.ImagePrice4K <= 0 {
+		return false
+	}
+	models := qcanvasGroupModels(group)
+	if len(models) != 5 {
+		return false
+	}
+	for _, image := range []string{
+		HCAtomImageSeedreamModel,
+		HCAtomImageDoubaoSeedreamModel,
+		HCAtomImageGeminiModel,
+		HCAtomImageGPTModel,
+		HCAtomImageSGPTModel,
+	} {
+		if _, ok := models[image]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 // List 获取用户的API Key列表
@@ -812,7 +913,8 @@ func (s *APIKeyService) Update(ctx context.Context, id int64, userID int64, req 
 			apiKey.Status = StatusActive
 		}
 	}
-	if req.ResetQuota != nil && *req.ResetQuota {
+	resetQuota := req.ResetQuota != nil && *req.ResetQuota
+	if resetQuota {
 		apiKey.QuotaUsed = 0
 		// If resetting quota and status was quota_exhausted, reactivate
 		if apiKey.Status == StatusAPIKeyQuotaExhausted {
@@ -848,28 +950,45 @@ func (s *APIKeyService) Update(ctx context.Context, id int64, userID int64, req 
 		apiKey.RateLimit7d = *req.RateLimit7d
 	}
 	resetRateLimit := req.ResetRateLimitUsage != nil && *req.ResetRateLimitUsage
-	if resetRateLimit {
-		apiKey.Usage5h = 0
-		apiKey.Usage1d = 0
-		apiKey.Usage7d = 0
-		apiKey.Window5hStart = nil
-		apiKey.Window1dStart = nil
-		apiKey.Window7dStart = nil
+
+	// Refuse "active" when the key is still unusable by quota or expiry.
+	// UI should recover via reset_quota / expires_at; this is the fail-closed backstop.
+	if apiKey.Status == StatusActive {
+		if apiKey.Quota > 0 && apiKey.QuotaUsed >= apiKey.Quota {
+			return nil, infraerrors.BadRequest("CANNOT_ACTIVATE_QUOTA_EXHAUSTED", "额度仍用尽，请先重置额度再启用")
+		}
+		if apiKey.ExpiresAt != nil && !time.Now().Before(*apiKey.ExpiresAt) {
+			return nil, infraerrors.BadRequest("CANNOT_ACTIVATE_EXPIRED", "密钥已过期，请先延长有效期再启用")
+		}
 	}
 
+	if resetQuota {
+		if err := s.apiKeyRepo.ResetQuotaUsed(ctx, apiKey.ID); err != nil {
+			return nil, fmt.Errorf("reset api key quota usage: %w", err)
+		}
+	}
 	if err := s.apiKeyRepo.Update(ctx, apiKey); err != nil {
 		return nil, fmt.Errorf("update api key: %w", err)
 	}
+	if resetRateLimit {
+		if err := s.apiKeyRepo.ResetRateLimitUsage(ctx, apiKey.ID); err != nil {
+			return nil, fmt.Errorf("reset api key rate limit usage: %w", err)
+		}
+	}
 
 	s.InvalidateAuthCacheByKey(ctx, apiKey.Key)
-	s.compileAPIKeyIPRules(apiKey)
 
 	// Invalidate Redis rate limit cache so reset takes effect immediately
 	if resetRateLimit && s.rateLimitCacheInvalid != nil {
 		_ = s.rateLimitCacheInvalid.InvalidateAPIKeyRateLimit(ctx, apiKey.ID)
 	}
 
-	return apiKey, nil
+	fresh, err := s.apiKeyRepo.GetByID(ctx, apiKey.ID)
+	if err != nil {
+		return nil, fmt.Errorf("reload api key after update: %w", err)
+	}
+	s.compileAPIKeyIPRules(fresh)
+	return fresh, nil
 }
 
 // Delete 删除API Key
@@ -1081,25 +1200,25 @@ func (s *APIKeyService) UpdateQuotaUsed(ctx context.Context, apiKeyID int64, cos
 		return nil
 	}
 
-	// Use repository to atomically increment quota_used
+	// Fallback path for repos that only expose IncrementQuotaUsed: still avoid
+	// Get→Update rewriting quota_used from a stale snapshot.
 	newQuotaUsed, err := s.apiKeyRepo.IncrementQuotaUsed(ctx, apiKeyID, cost)
 	if err != nil {
 		return fmt.Errorf("increment quota used: %w", err)
 	}
 
-	// Check if quota is now exhausted and update status if needed
 	apiKey, err := s.apiKeyRepo.GetByID(ctx, apiKeyID)
 	if err != nil {
 		return nil // Don't fail the request, just log
 	}
 
-	// If quota is set and now exhausted, update status
 	if apiKey.Quota > 0 && newQuotaUsed >= apiKey.Quota {
-		apiKey.Status = StatusAPIKeyQuotaExhausted
-		if err := s.apiKeyRepo.Update(ctx, apiKey); err != nil {
-			return nil // Don't fail the request
+		if marker, ok := s.apiKeyRepo.(apiKeyQuotaStatusMarker); ok {
+			_ = marker.MarkQuotaExhausted(ctx, apiKeyID)
+		} else {
+			apiKey.Status = StatusAPIKeyQuotaExhausted
+			_ = s.apiKeyRepo.Update(ctx, apiKey) // Update no longer rewrites quota_used
 		}
-		// Invalidate cache so next request sees the new status
 		s.InvalidateAuthCacheByKey(ctx, apiKey.Key)
 	}
 

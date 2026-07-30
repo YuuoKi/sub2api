@@ -126,6 +126,7 @@ func registerAdminVideoRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	video.POST("/providers", h.Admin.Video.CreateProvider)
 	video.PUT("/providers/:id", h.Admin.Video.UpdateProvider)
 	video.DELETE("/providers/:id", h.Admin.Video.DeleteProvider)
+	video.POST("/providers/:id/connectivity-check", h.Admin.Video.CheckProviderConnectivity)
 	video.POST("/providers/:id/tiny-real-authorization", h.Admin.Video.AuthorizeTinyReal)
 	video.GET("/tasks", h.Admin.Video.ListTasks)
 	video.GET("/tasks/:id", h.Admin.Video.GetTask)
@@ -168,6 +169,7 @@ func registerContentModerationRoutes(admin *gin.RouterGroup, h *handler.Handlers
 func registerAdminAPIKeyRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	apiKeys := admin.Group("/api-keys")
 	{
+		apiKeys.GET("/:id/reveal", h.Admin.APIKey.Reveal)
 		apiKeys.PUT("/:id", h.Admin.APIKey.UpdateGroup)
 		apiKeys.DELETE("/:id", h.Admin.APIKey.Delete)
 	}
@@ -342,6 +344,7 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		accounts.POST("/sync/crs/preview", h.Admin.Account.PreviewFromCRS)
 		accounts.PUT("/:id", h.Admin.Account.Update)
 		accounts.DELETE("/:id", h.Admin.Account.Delete)
+		accounts.POST("/:id/connectivity-check", h.Admin.Account.CheckConnectivity)
 		accounts.POST("/:id/test", h.Admin.Account.Test)
 		accounts.POST("/:id/recover-state", h.Admin.Account.RecoverState)
 		accounts.POST("/:id/refresh", h.Admin.Account.Refresh)
@@ -582,11 +585,9 @@ func registerBackupRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 func registerSystemRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	system := admin.Group("/system")
 	{
+		// Immutable deploy identity only. Self-update / online rollback removed (Guangzhou hard cutover).
 		system.GET("/version", h.Admin.System.GetVersion)
-		system.GET("/check-updates", h.Admin.System.CheckUpdates)
-		system.GET("/rollback-versions", h.Admin.System.GetRollbackVersions)
-		system.POST("/update", h.Admin.System.PerformUpdate)
-		system.POST("/rollback", h.Admin.System.Rollback)
+		// Restart remains a separate ops action; it is not exposed on the VersionBadge surface.
 		system.POST("/restart", h.Admin.System.RestartService)
 	}
 }

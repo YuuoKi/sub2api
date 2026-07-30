@@ -27,11 +27,17 @@ func NewVideoGatewayHandler(s *service.VideoGatewayService) *VideoGatewayHandler
 }
 
 type videoCreateBody struct {
-	ProviderAccountID int64  `json:"provider_account_id" binding:"required"`
-	Prompt            string `json:"prompt" binding:"required"`
-	Duration          int    `json:"duration" binding:"required"`
-	Resolution        string `json:"resolution" binding:"required"`
-	CreationKey       string `json:"creation_key"`
+	ProviderAccountID int64                      `json:"provider_account_id" binding:"required"`
+	Model             string                     `json:"model"`
+	Prompt            string                     `json:"prompt"`
+	Content           []service.VideoContentItem `json:"content"`
+	Ratio             string                     `json:"ratio"`
+	GenerateAudio     bool                       `json:"generate_audio"`
+	ReturnLastFrame   bool                       `json:"return_last_frame"`
+	Watermark         bool                       `json:"watermark"`
+	Duration          int                        `json:"duration"`
+	Resolution        string                     `json:"resolution"`
+	CreationKey       string                     `json:"creation_key"`
 }
 
 func videoScope(c *gin.Context) (service.VideoTaskScope, bool) {
@@ -56,6 +62,20 @@ func (h *VideoGatewayHandler) Providers(c *gin.Context) {
 	response.Success(c, items)
 }
 
+func (h *VideoGatewayHandler) Models(c *gin.Context) {
+	scope, ok := videoScope(c)
+	if !ok {
+		return
+	}
+	key, ok := middleware.GetAPIKeyFromContext(c)
+	if !ok || key == nil {
+		response.Error(c, http.StatusForbidden, "complete employee API-key scope is required")
+		return
+	}
+	items := h.service.AuthorizedHCAtomVideoModels(c.Request.Context(), scope, key.Group)
+	c.JSON(http.StatusOK, gin.H{"object": "list", "data": items})
+}
+
 func (h *VideoGatewayHandler) Create(c *gin.Context) {
 	scope, ok := videoScope(c)
 	if !ok {
@@ -67,7 +87,8 @@ func (h *VideoGatewayHandler) Create(c *gin.Context) {
 		return
 	}
 	task, err := h.service.CreateTask(c.Request.Context(), service.VideoTaskCreateCommand{Scope: scope, ProviderAccountID: body.ProviderAccountID,
-		Prompt: body.Prompt, Duration: body.Duration, Resolution: body.Resolution,
+		Model: body.Model, Prompt: body.Prompt, Content: body.Content, Ratio: body.Ratio, GenerateAudio: body.GenerateAudio,
+		ReturnLastFrame: body.ReturnLastFrame, Watermark: body.Watermark, Duration: body.Duration, Resolution: body.Resolution,
 		CreationKey: body.CreationKey})
 	if err != nil {
 		writeVideoError(c, err)
@@ -142,7 +163,7 @@ func (h *VideoGatewayHandler) withTask(c *gin.Context, cancel bool) {
 	}
 	payload := videoTaskResponse(task)
 	if cancel {
-		payload["cancel_outcome"] = "local_pre_dispatch"
+		payload["cancel_outcome"] = task.CancelOutcome
 	}
 	response.Success(c, payload)
 }

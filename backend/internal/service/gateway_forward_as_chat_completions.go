@@ -47,6 +47,16 @@ func (s *GatewayService) forwardAsChatCompletionsWithResponseCapture(
 	responseSink *cappedSink,
 ) (capturedResult *ForwardResult, capturedErr error) {
 	defer func() { fillResponseSample(capturedResult, responseSink) }()
+	if account != nil && account.Platform == PlatformHCAtom {
+		var request struct {
+			Model  string `json:"model"`
+			Stream bool   `json:"stream"`
+		}
+		if err := json.Unmarshal(body, &request); err != nil {
+			return nil, errors.New("parse HC-ATOM chat request")
+		}
+		return s.forwardHCAtomPassthrough(ctx, c, account, body, request.Model, request.Stream, HCAtomCapabilityChat)
+	}
 	startTime := time.Now()
 
 	// 1. Parse Chat Completions request

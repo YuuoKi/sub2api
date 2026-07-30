@@ -22,11 +22,10 @@ import (
 )
 
 const (
-	defaultBatchImageZipMaxItems          = 200
-	defaultBatchImageZipMaxBytes          = 512 * 1024 * 1024
-	defaultBatchImageDownloadDuration     = 10 * time.Minute
-	defaultBatchImageDownloadConcurrency  = 1
-	batchImageDownloadScannerMaxLineBytes = 16 * 1024 * 1024
+	defaultBatchImageZipMaxItems         = 200
+	defaultBatchImageZipMaxBytes         = 512 * 1024 * 1024
+	defaultBatchImageDownloadDuration    = 10 * time.Minute
+	defaultBatchImageDownloadConcurrency = 1
 )
 
 var errBatchImageDownloadSizeExceeded = errors.New("batch image download size limit exceeded")
@@ -76,6 +75,7 @@ type BatchImageDownloadService struct {
 	AccountResolver  BatchImageAccountResolver
 	Limiter          BatchImageDownloadLimiter
 	Config           *config.Config
+	OwnedResultStore *HCAtomOwnedResultStore
 }
 
 type batchImageDownloadLimitWriter struct {
@@ -97,12 +97,17 @@ func (w *batchImageDownloadLimitWriter) Write(p []byte) (int, error) {
 }
 
 func NewBatchImageDownloadService(repo BatchImageRepository, accountRepo AccountRepository, limiter BatchImageDownloadLimiter, cfg *config.Config) *BatchImageDownloadService {
+	ownedResultDir := ""
+	if cfg != nil {
+		ownedResultDir = cfg.BatchImage.HCAtomOwnedResultDir
+	}
 	return &BatchImageDownloadService{
 		Repo:             repo,
 		ProviderRegistry: NewBatchImageProviderRegistryFromConfig(cfg),
 		AccountResolver:  &BatchImageAccountRepositoryResolver{Repo: accountRepo},
 		Limiter:          limiter,
 		Config:           cfg,
+		OwnedResultStore: NewHCAtomOwnedResultStore(ownedResultDir),
 	}
 }
 
@@ -136,11 +141,7 @@ func (s *BatchImageDownloadService) OpenItemContent(ctx context.Context, owner B
 		}
 	}()
 
-	provider, account, err := s.providerAndAccount(ctx, job)
-	if err != nil {
-		return nil, err
-	}
-	r, _, err := provider.OpenResult(ctx, job, account)
+	r, err := s.openResult(ctx, job)
 	if err != nil {
 		return nil, ErrBatchImageResultMissing.WithCause(err)
 	}
@@ -211,11 +212,7 @@ func (s *BatchImageDownloadService) StreamZip(ctx context.Context, owner BatchIm
 		defer func() { _ = permit.Release(ctx) }()
 	}
 
-	provider, account, err := s.providerAndAccount(ctx, job)
-	if err != nil {
-		return nil, err
-	}
-	r, _, err := provider.OpenResult(ctx, job, account)
+	r, err := s.openResult(ctx, job)
 	if err != nil {
 		return nil, ErrBatchImageResultMissing.WithCause(err)
 	}
@@ -281,7 +278,7 @@ func (s *BatchImageDownloadService) writeZipImages(ctx context.Context, zipWrite
 		missing[item.CustomID] = struct{}{}
 	}
 	scanner := bufio.NewScanner(resultReader)
-	scanner.Buffer(make([]byte, 0, 64*1024), batchImageDownloadScannerMaxLineBytes)
+	scanner.Buffer(make([]byte, 0, 64*1024), batchImageJSONLMaxLineBytes)
 
 	result := &BatchImageZipResult{}
 	var manifestFiles []batchImageZipManifestFile
@@ -382,6 +379,24 @@ func (s *BatchImageDownloadService) providerAndAccount(ctx context.Context, job 
 		return nil, nil, ErrBatchImageProviderUnsupportedAccount
 	}
 	return provider, account, nil
+}
+
+func (s *BatchImageDownloadService) openResult(ctx context.Context, job *BatchImageJob) (io.ReadCloser, error) {
+	if s != nil && s.OwnedResultStore != nil {
+		r, ok, err := s.OwnedResultStore.OpenReferenced(job)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			return r, nil
+		}
+	}
+	provider, account, err := s.providerAndAccount(ctx, job)
+	if err != nil {
+		return nil, err
+	}
+	r, _, err := provider.OpenResult(ctx, job, account)
+	return r, err
 }
 
 func (s *BatchImageDownloadService) acquirePermit(ctx context.Context, userID int64, kind string) (BatchImageDownloadPermit, error) {
@@ -495,7 +510,7 @@ func extractBatchImageInlineImages(raw any) []BatchImageInlineImage {
 
 func findBatchImageLineImages(r io.Reader, customID string) (*BatchImageLineImages, error) {
 	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 0, 64*1024), batchImageDownloadScannerMaxLineBytes)
+	scanner.Buffer(make([]byte, 0, 64*1024), batchImageJSONLMaxLineBytes)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" {

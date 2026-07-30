@@ -27,10 +27,11 @@ describe('UserDashboardQuickActions Studio V2 entry', () => {
     routerPush.mockReset()
     refreshBatchImageAccess.mockReset()
     vi.restoreAllMocks()
+    vi.unstubAllEnvs()
   })
 
-  it('builds the projects page with a local default and an explicit override', () => {
-    expect(buildQCanvasProjectsURL()).toBe('http://127.0.0.1:5174/projects')
+  it('requires an explicit QCanvas base URL and accepts a valid override', () => {
+    expect(() => buildQCanvasProjectsURL()).toThrow('未配置')
     expect(buildQCanvasProjectsURL('https://studio.internal.example')).toBe(
       'https://studio.internal.example/projects'
     )
@@ -43,7 +44,20 @@ describe('UserDashboardQuickActions Studio V2 entry', () => {
     expect(() => buildQCanvasProjectsURL('https://studio.example?tenant=1')).toThrow('纯 origin')
   })
 
-  it('shows a native project link without batch-image access', () => {
+  it('shows an unconfigured state when VITE_QCANVAS_BASE_URL is missing', () => {
+    vi.stubEnv('VITE_QCANVAS_BASE_URL', '')
+    const wrapper = mount(UserDashboardQuickActions, {
+      global: { stubs: { Icon: true } }
+    })
+
+    expect(wrapper.find('[data-testid="studio-v2-entry"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="studio-v2-entry-unconfigured"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('QCanvas 未配置')
+    expect(routerPush).not.toHaveBeenCalled()
+  })
+
+  it('shows a native project link when QCanvas is configured', () => {
+    vi.stubEnv('VITE_QCANVAS_BASE_URL', 'http://127.0.0.1:5174')
     const wrapper = mount(UserDashboardQuickActions, {
       global: { stubs: { Icon: true } }
     })

@@ -237,7 +237,7 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 	}
 
 	allowImageGeneration := input.AllowImageGeneration || defaultAllowImageGenerationForPlatform(platform)
-	allowBatchImageGeneration := input.AllowBatchImageGeneration && allowImageGeneration && platform == PlatformGemini
+	allowBatchImageGeneration := input.AllowBatchImageGeneration && allowImageGeneration && (platform == PlatformGemini || platform == PlatformHCAtom)
 
 	// 如果指定了复制账号的源分组，先获取账号 ID 列表
 	var accountIDsToCopy []int64
@@ -489,7 +489,7 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	if input.AllowBatchImageGeneration != nil {
 		group.AllowBatchImageGeneration = *input.AllowBatchImageGeneration
 	}
-	if !group.AllowImageGeneration || group.Platform != PlatformGemini {
+	if !group.AllowImageGeneration || (group.Platform != PlatformGemini && group.Platform != PlatformHCAtom) {
 		group.AllowBatchImageGeneration = false
 	}
 	if input.ImageRateIndependent != nil {
@@ -938,15 +938,15 @@ func (s *adminServiceImpl) AdminResetAPIKeyRateLimitUsage(ctx context.Context, k
 	if err != nil {
 		return nil, err
 	}
+	if err := s.apiKeyRepo.ResetRateLimitUsage(ctx, keyID); err != nil {
+		return nil, fmt.Errorf("reset api key rate limit usage: %w", err)
+	}
 	apiKey.Usage5h = 0
 	apiKey.Usage1d = 0
 	apiKey.Usage7d = 0
 	apiKey.Window5hStart = nil
 	apiKey.Window1dStart = nil
 	apiKey.Window7dStart = nil
-	if err := s.apiKeyRepo.Update(ctx, apiKey); err != nil {
-		return nil, fmt.Errorf("reset api key rate limit usage: %w", err)
-	}
 	if s.authCacheInvalidator != nil {
 		s.authCacheInvalidator.InvalidateAuthCacheByKey(ctx, apiKey.Key)
 	}

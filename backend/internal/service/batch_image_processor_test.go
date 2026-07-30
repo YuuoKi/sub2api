@@ -4,9 +4,11 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -295,6 +297,63 @@ func TestBatchImageProviderProcessor_StatusFlow(t *testing.T) {
 		require.Equal(t, "BAD_PROMPT", batchImageDerefString(repo.jobs["imgbatch_flow"].LastErrorCode))
 	})
 
+	t.Run("failed provider secret echo is sanitized before persistence", func(t *testing.T) {
+		sentinel := strings.Join([]string{"hc-review", "processor", "secret"}, "-")
+		repo := newFakeBatchImageRepository()
+		repo.jobs["imgbatch_flow"] = newJob(BatchImageJobStatusRunning)
+		provider := &fakeProcessorProvider{status: &BatchProviderStatus{
+			InternalState: BatchProviderStateFailed,
+			RawState:      "FAILED",
+			ErrorCode:     "TOKEN_" + sentinel,
+			ErrorMessage:  "Bearer " + sentinel + " https://assets.example/out.png?token=" + sentinel,
+		}}
+
+		got, err := newTestBatchImageProcessor(repo, provider).Process(ctx, "imgbatch_flow")
+		require.NoError(t, err)
+		require.True(t, got.Terminal)
+		raw, err := json.Marshal(repo.jobs["imgbatch_flow"])
+		require.NoError(t, err)
+		require.NotContains(t, string(raw), sentinel)
+		require.Equal(t, "PROVIDER_BATCH_FAILED", batchImageDerefString(repo.jobs["imgbatch_flow"].LastErrorCode))
+		require.Equal(t, "provider batch failed", batchImageDerefString(repo.jobs["imgbatch_flow"].LastErrorMessage))
+	})
+
+	t.Run("HC failed provider echo is sanitized end to end before persistence", func(t *testing.T) {
+		sentinel := strings.Join([]string{"hc-review", "processor", "provider", "secret"}, "-")
+		cipher, account := hcAtomBatchTestAccount(t, "synthetic-key")
+		provider := NewHCAtomBatchImageProviderWithCredentialCipher(&fakeHCAtomBatchClient{task: &HCAtomBatchTask{
+			TaskID:    "hc-secret-failure",
+			Status:    "FAILED",
+			ErrorCode: "TOKEN_" + sentinel,
+			ErrorMsg: "Authorization: Bearer " + sentinel +
+				" result=https://assets.example/out.png?X-Amz-Signature=" + sentinel,
+		}}, cipher)
+		repo := newFakeBatchImageRepository()
+		repo.jobs["imgbatch_flow"] = &BatchImageJob{
+			BatchID:         "imgbatch_flow",
+			Status:          BatchImageJobStatusRunning,
+			Provider:        provider.Name(),
+			Model:           HCAtomImageGeminiModel,
+			AccountID:       &accountID,
+			ProviderJobName: &providerJob,
+		}
+		processor := &BatchImageProviderProcessor{
+			Repo:             repo,
+			ProviderRegistry: NewBatchImageProviderRegistry(provider),
+			AccountResolver:  &fakeBatchImageAccountResolver{account: account},
+			Indexer:          &BatchImageResultIndexer{Repo: repo},
+		}
+
+		got, err := processor.Process(ctx, "imgbatch_flow")
+		require.NoError(t, err)
+		require.True(t, got.Terminal)
+		raw, err := json.Marshal(repo.jobs["imgbatch_flow"])
+		require.NoError(t, err)
+		require.NotContains(t, string(raw), sentinel)
+		require.Equal(t, "HC_ATOM_TASK_FAILED", batchImageDerefString(repo.jobs["imgbatch_flow"].LastErrorCode))
+		require.Equal(t, "HC-ATOM task failed", batchImageDerefString(repo.jobs["imgbatch_flow"].LastErrorMessage))
+	})
+
 	t.Run("cancelled provider marks job cancelled", func(t *testing.T) {
 		repo := newFakeBatchImageRepository()
 		repo.jobs["imgbatch_flow"] = newJob(BatchImageJobStatusRunning)
@@ -315,6 +374,57 @@ func TestBatchImageProviderProcessor_StatusFlow(t *testing.T) {
 		require.Len(t, billing.releases, 1)
 		require.Equal(t, BatchImageReleaseRequestID("imgbatch_flow"), billing.releases[0].RequestID)
 	})
+}
+
+func TestBatchImageProviderProcessor_HCAtomOwnedResultRecoversAfterOutputRefPersistenceFailure(t *testing.T) {
+	ctx := context.Background()
+	resultTransport := hcAtomRoundTripFunc(func(*http.Request) (*http.Response, error) {
+		response := hcAtomHTTPResponse(http.StatusOK, "\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01")
+		response.Header.Set("Content-Type", "image/png")
+		return response, nil
+	})
+	cipher, account := hcAtomBatchTestAccount(t, "test")
+	client := &fakeHCAtomBatchClient{task: &HCAtomBatchTask{
+		TaskID: "hc-retry-task", Status: "SUCCESS", ResultURL: "https://8.8.8.8/result.png",
+	}}
+	provider := NewHCAtomBatchImageProviderWithOwnedResultStore(
+		client, &http.Client{Transport: resultTransport}, cipher, t.TempDir(),
+	)
+	accountID := int64(10)
+	taskID, customID := "hc-retry-task", "cover_001"
+	job := &BatchImageJob{
+		BatchID: "imgbatch_hc_retry", Status: BatchImageJobStatusSubmitted,
+		Provider: BatchImageProviderHCAtom, Model: HCAtomImageGeminiModel, AccountID: &accountID,
+		ProviderJobName: &taskID, ProviderInputRef: &customID, ItemCount: 1,
+	}
+	repo := newFakeBatchImageRepository()
+	repo.jobs[job.BatchID] = job
+	require.NoError(t, repo.BulkCreateBatchImageItems(ctx, []CreateBatchImageItemParams{{
+		JobID: job.BatchID, CustomID: customID, Status: BatchImageItemStatusPending,
+	}}))
+	repo.outputRefErr = errors.New("synthetic provider output ref persistence failure")
+	processor := &BatchImageProviderProcessor{
+		Repo: repo, ProviderRegistry: NewBatchImageProviderRegistry(provider),
+		AccountResolver: &fakeBatchImageAccountResolver{account: account},
+		Indexer:         &BatchImageResultIndexer{Repo: repo},
+	}
+
+	_, err := processor.Process(ctx, job.BatchID)
+	require.Error(t, err)
+	require.Equal(t, BatchImageJobStatusIndexing, repo.jobs[job.BatchID].Status)
+	require.Nil(t, repo.jobs[job.BatchID].ProviderOutputRef)
+	require.Equal(t, 2, client.getCalls)
+
+	repo.outputRefErr = nil
+	client.err = errors.New("upstream result expired")
+	got, err := processor.Process(ctx, job.BatchID)
+	require.NoError(t, err)
+	require.False(t, got.Terminal)
+	require.Equal(t, time.Millisecond, got.RequeueAfter)
+	require.Equal(t, BatchImageJobStatusSettling, repo.jobs[job.BatchID].Status)
+	require.Equal(t, hcAtomOwnedResultRef(job.BatchID), batchImageDerefString(repo.jobs[job.BatchID].ProviderOutputRef))
+	require.Equal(t, 2, client.getCalls)
+	require.Equal(t, BatchImageCounts{SuccessCount: 1, FailCount: 0}, repo.counts[job.BatchID])
 }
 
 func TestCanTransitionBatchImageJob_PR5DirectIndexing(t *testing.T) {
@@ -386,6 +496,7 @@ type fakeBatchImageRepository struct {
 	transitions   map[string][]string
 	events        map[string][]string
 	transitionErr error
+	outputRefErr  error
 	replaceCalls  int
 }
 
@@ -568,6 +679,10 @@ func (r *fakeBatchImageRepository) UpdateBatchImageJobProviderOutputRef(_ contex
 	job, ok := r.jobs[batchID]
 	if !ok {
 		return ErrBatchImageJobNotFound
+	}
+	if r.outputRefErr != nil {
+		job.ProviderOutputRef = nil
+		return r.outputRefErr
 	}
 	job.ProviderOutputRef = &providerOutputRef
 	return nil

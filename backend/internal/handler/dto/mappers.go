@@ -218,7 +218,11 @@ func AccountFromServiceShallow(a *service.Account) *Account {
 	if a == nil {
 		return nil
 	}
-	redactedCreds, credsStatus := RedactCredentials(a.Credentials)
+	credentials := a.Credentials
+	if a.Platform == service.PlatformHCAtom {
+		credentials = service.FilterHCAtomPersistedAccountCredentials(credentials)
+	}
+	redactedCreds, credsStatus := RedactCredentials(credentials)
 	out := &Account{
 		ID:                      a.ID,
 		Name:                    a.Name,

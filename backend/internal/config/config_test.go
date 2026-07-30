@@ -15,6 +15,30 @@ func resetViperWithJWTSecret(t *testing.T) {
 	t.Helper()
 	viper.Reset()
 	t.Setenv("JWT_SECRET", strings.Repeat("x", 32))
+	t.Setenv("TOTP_ENCRYPTION_KEY", strings.Repeat("ab", 32)) // 64 hex chars / 32 bytes
+}
+
+func TestLoadRejectsEmptyTOTPEncryptionKeyInStandardMode(t *testing.T) {
+	viper.Reset()
+	t.Setenv("JWT_SECRET", strings.Repeat("x", 32))
+	t.Setenv("TOTP_ENCRYPTION_KEY", "")
+	t.Setenv("RUN_MODE", RunModeStandard)
+
+	_, err := Load()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "TOTP_ENCRYPTION_KEY")
+}
+
+func TestLoadAllowsEphemeralTOTPEncryptionKeyInSimpleMode(t *testing.T) {
+	viper.Reset()
+	t.Setenv("JWT_SECRET", strings.Repeat("x", 32))
+	t.Setenv("TOTP_ENCRYPTION_KEY", "")
+	t.Setenv("RUN_MODE", RunModeSimple)
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.NotEmpty(t, cfg.Totp.EncryptionKey)
+	require.False(t, cfg.Totp.EncryptionKeyConfigured)
 }
 
 func TestLoadForBootstrapAllowsMissingJWTSecret(t *testing.T) {
@@ -34,6 +58,9 @@ func TestLoadVideoGatewayConfigFromEnvironment(t *testing.T) {
 	resetViperWithJWTSecret(t)
 	t.Setenv("VIDEO_GATEWAY_ENCRYPTION_KEY", strings.Repeat("a", 64))
 	t.Setenv("VIDEO_GATEWAY_WORKER_ENABLED", "true")
+	t.Setenv("VIDEO_GATEWAY_SEEDANCE_PRODUCTION_ENABLED", "true")
+	t.Setenv("VIDEO_GATEWAY_HC_ATOM_V3_PRODUCTION_ENABLED", "true")
+	t.Setenv("VIDEO_GATEWAY_HC_ATOM_V3_DISPATCH_ENABLED", "true")
 	t.Setenv("VIDEO_GATEWAY_WORKER_INTERVAL_SECONDS", "2")
 	t.Setenv("VIDEO_GATEWAY_HTTP_TIMEOUT_SECONDS", "180")
 	t.Setenv("VIDEO_GATEWAY_SEEDANCE_CNY_PER_MILLION_TOKENS", "9.5")
@@ -45,12 +72,28 @@ func TestLoadVideoGatewayConfigFromEnvironment(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, strings.Repeat("a", 64), cfg.VideoGateway.EncryptionKey)
 	require.True(t, cfg.VideoGateway.WorkerEnabled)
+	require.True(t, cfg.VideoGateway.SeedanceProductionEnabled)
+	require.True(t, cfg.VideoGateway.HCAtomV3ProductionEnabled)
+	require.True(t, cfg.VideoGateway.HCAtomV3DispatchEnabled)
 	require.Equal(t, 2, cfg.VideoGateway.WorkerIntervalSeconds)
 	require.Equal(t, 180, cfg.VideoGateway.HTTPTimeoutSeconds)
 	require.InDelta(t, 9.5, cfg.VideoGateway.SeedanceCNYPerMillionTokens, 1e-9)
 	require.InDelta(t, 7.2, cfg.VideoGateway.USDCNYExchangeRate, 1e-9)
 	require.InDelta(t, 1.25, cfg.VideoGateway.TinyRealEstimateCNY, 1e-9)
 	require.InDelta(t, 2.5, cfg.VideoGateway.TinyRealMaximumCNY, 1e-9)
+}
+
+func TestLoadVideoGatewayHCAtomDispatchDefaultsDisabled(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.False(t, cfg.VideoGateway.HCAtomV3DispatchEnabled)
+	require.False(t, cfg.VideoGateway.HCAtomV1DispatchEnabled)
+	require.False(t, cfg.VideoGateway.SeedanceProductionEnabled)
+	require.False(t, cfg.VideoGateway.HCAtomV3ProductionEnabled)
+	require.False(t, cfg.HCAtom.LLMEnabled)
+	require.False(t, cfg.HCAtom.SyncImageEnabled)
+	require.False(t, cfg.HCAtom.VideoV1Enabled)
 }
 
 func TestNormalizeRunMode(t *testing.T) {
@@ -343,8 +386,8 @@ func TestLoadDefaultIdempotencyConfig(t *testing.T) {
 		t.Fatalf("Load() error: %v", err)
 	}
 
-	if !cfg.Idempotency.ObserveOnly {
-		t.Fatalf("Idempotency.ObserveOnly = false, want true")
+	if cfg.Idempotency.ObserveOnly {
+		t.Fatalf("Idempotency.ObserveOnly = true, want false")
 	}
 	if cfg.Idempotency.DefaultTTLSeconds != 86400 {
 		t.Fatalf("Idempotency.DefaultTTLSeconds = %d, want 86400", cfg.Idempotency.DefaultTTLSeconds)
@@ -362,17 +405,120 @@ func TestLoadDefaultBatchImageQueueDisabled(t *testing.T) {
 	require.False(t, cfg.BatchImage.QueueEnabled)
 }
 
+func TestLoadHCAtomImageCredentialDomainDefaultsDenied(t *testing.T) {
+	resetViperWithJWTSecret(t)
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.False(t, cfg.BatchImage.HCAtomEnabled)
+	require.Empty(t, cfg.BatchImage.HCAtomEncryptionKey)
+}
+
+func TestLoadHCAtomImageCredentialDomainUsesDedicatedEnvironmentKey(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("VIDEO_GATEWAY_ENCRYPTION_KEY", strings.Repeat("a", 64))
+	t.Setenv("BATCH_IMAGE_HC_ATOM_ENABLED", "true")
+	t.Setenv("BATCH_IMAGE_HC_ATOM_ENCRYPTION_KEY", strings.Repeat("b", 64))
+	t.Setenv("BATCH_IMAGE_HC_ATOM_OWNED_RESULT_DIR", t.TempDir())
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.True(t, cfg.BatchImage.HCAtomEnabled)
+	require.Equal(t, strings.Repeat("b", 64), cfg.BatchImage.HCAtomEncryptionKey)
+	require.NotEqual(t, cfg.VideoGateway.EncryptionKey, cfg.BatchImage.HCAtomEncryptionKey)
+	require.NotEqual(t, cfg.JWT.Secret, cfg.BatchImage.HCAtomEncryptionKey)
+}
+
+func TestLoadHCAtomImageCredentialDomainRejectsMissingDedicatedKey(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("BATCH_IMAGE_HC_ATOM_ENABLED", "true")
+	t.Setenv("BATCH_IMAGE_HC_ATOM_ENCRYPTION_KEY", "")
+
+	_, err := Load()
+	require.ErrorContains(t, err, "batch_image.hc_atom_encryption_key")
+}
+
+func TestLoadHCAtomImageCredentialDomainAcceptsDedicatedKeyWhileDispatchDisabled(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("BATCH_IMAGE_HC_ATOM_ENCRYPTION_KEY", strings.Repeat("b", 64))
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.False(t, cfg.BatchImage.HCAtomEnabled)
+	require.False(t, cfg.HCAtom.LLMEnabled)
+	require.False(t, cfg.HCAtom.SyncImageEnabled)
+	require.Equal(t, strings.Repeat("b", 64), cfg.BatchImage.HCAtomEncryptionKey)
+}
+
+func TestLoadHCAtomImageCredentialDomainRejectsMalformedConfiguredKeyWhileDispatchDisabled(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("BATCH_IMAGE_HC_ATOM_ENCRYPTION_KEY", "not-a-32-byte-hex-key")
+
+	_, err := Load()
+	require.ErrorContains(t, err, "batch_image.hc_atom_encryption_key must be a 32-byte hex key")
+}
+
+func TestLoadHCAtomImageCredentialDomainRejectsReusedConfiguredKeyWhileDispatchDisabled(t *testing.T) {
+	t.Run("video encryption key", func(t *testing.T) {
+		resetViperWithJWTSecret(t)
+		key := strings.Repeat("b", 64)
+		t.Setenv("VIDEO_GATEWAY_ENCRYPTION_KEY", key)
+		t.Setenv("BATCH_IMAGE_HC_ATOM_ENCRYPTION_KEY", key)
+
+		_, err := Load()
+		require.ErrorContains(t, err, "must not reuse video_gateway.encryption_key")
+	})
+
+	t.Run("JWT secret", func(t *testing.T) {
+		viper.Reset()
+		key := strings.Repeat("b", 64)
+		t.Setenv("JWT_SECRET", key)
+		t.Setenv("TOTP_ENCRYPTION_KEY", strings.Repeat("ab", 32))
+		t.Setenv("BATCH_IMAGE_HC_ATOM_ENCRYPTION_KEY", key)
+
+		_, err := Load()
+		require.ErrorContains(t, err, "must not reuse jwt.secret")
+	})
+}
+
+func TestValidateHCAtomOwnedResultDirectoryRequiredAndWritable(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("BATCH_IMAGE_HC_ATOM_ENABLED", "true")
+	t.Setenv("BATCH_IMAGE_HC_ATOM_ENCRYPTION_KEY", strings.Repeat("b", 64))
+	t.Setenv("BATCH_IMAGE_HC_ATOM_OWNED_RESULT_DIR", t.TempDir())
+
+	cfg, err := Load()
+	require.NoError(t, err)
+
+	cfg.BatchImage.HCAtomOwnedResultDir = ""
+	require.ErrorContains(t, cfg.Validate(), "batch_image.hc_atom_owned_result_dir")
+
+	cfg.BatchImage.HCAtomOwnedResultDir = filepath.VolumeName(t.TempDir()) + string(os.PathSeparator)
+	require.ErrorContains(t, cfg.Validate(), "batch_image.hc_atom_owned_result_dir")
+
+	filePath := filepath.Join(t.TempDir(), "not-a-directory")
+	require.NoError(t, os.WriteFile(filePath, []byte("x"), 0o600))
+	cfg.BatchImage.HCAtomOwnedResultDir = filePath
+	require.ErrorContains(t, cfg.Validate(), "batch_image.hc_atom_owned_result_dir")
+
+	cfg.BatchImage.HCAtomOwnedResultDir = filepath.Join(t.TempDir(), "created-by-validation")
+	require.NoError(t, cfg.Validate())
+	info, err := os.Stat(cfg.BatchImage.HCAtomOwnedResultDir)
+	require.NoError(t, err)
+	require.True(t, info.IsDir())
+}
+
 func TestLoadIdempotencyConfigFromEnv(t *testing.T) {
 	resetViperWithJWTSecret(t)
-	t.Setenv("IDEMPOTENCY_OBSERVE_ONLY", "false")
+	t.Setenv("IDEMPOTENCY_OBSERVE_ONLY", "true")
 	t.Setenv("IDEMPOTENCY_DEFAULT_TTL_SECONDS", "600")
 
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Load() error: %v", err)
 	}
-	if cfg.Idempotency.ObserveOnly {
-		t.Fatalf("Idempotency.ObserveOnly = true, want false")
+	if !cfg.Idempotency.ObserveOnly {
+		t.Fatalf("Idempotency.ObserveOnly = false, want true (env override)")
 	}
 	if cfg.Idempotency.DefaultTTLSeconds != 600 {
 		t.Fatalf("Idempotency.DefaultTTLSeconds = %d, want 600", cfg.Idempotency.DefaultTTLSeconds)
@@ -1558,10 +1704,28 @@ func TestValidateConfigErrors(t *testing.T) {
 		{
 			name: "gateway usage record sample percent required for sample policy",
 			mutate: func(c *Config) {
+				c.RunMode = RunModeSimple
 				c.Gateway.UsageRecord.OverflowPolicy = UsageRecordOverflowPolicySample
 				c.Gateway.UsageRecord.OverflowSamplePercent = 0
 			},
 			wantErr: "gateway.usage_record.overflow_sample_percent must be positive",
+		},
+		{
+			name: "gateway usage record drop rejected in standard mode",
+			mutate: func(c *Config) {
+				c.RunMode = RunModeStandard
+				c.Gateway.UsageRecord.OverflowPolicy = UsageRecordOverflowPolicyDrop
+			},
+			wantErr: "gateway.usage_record.overflow_policy \"drop\" is not allowed",
+		},
+		{
+			name: "gateway usage record sample rejected in standard mode",
+			mutate: func(c *Config) {
+				c.RunMode = RunModeStandard
+				c.Gateway.UsageRecord.OverflowPolicy = UsageRecordOverflowPolicySample
+				c.Gateway.UsageRecord.OverflowSamplePercent = 10
+			},
+			wantErr: "gateway.usage_record.overflow_policy \"sample\" is not allowed",
 		},
 		{
 			name: "gateway usage record auto scale max gte min",
@@ -1885,6 +2049,17 @@ func TestValidateConfig_OpenAIWSRules(t *testing.T) {
 
 		require.NoError(t, cfg.Validate())
 	})
+}
+
+func TestValidateConfig_UsageRecordDropAllowedInSimpleMode(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	cfg.RunMode = RunModeSimple
+	cfg.Gateway.UsageRecord.OverflowPolicy = UsageRecordOverflowPolicyDrop
+	require.NoError(t, cfg.Validate())
 }
 
 func TestValidateConfig_AutoScaleDisabledIgnoreAutoScaleFields(t *testing.T) {

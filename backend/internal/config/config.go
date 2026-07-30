@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -101,17 +102,30 @@ type Config struct {
 	Idempotency             IdempotencyConfig             `mapstructure:"idempotency"`
 	BatchImage              BatchImageConfig              `mapstructure:"batch_image"`
 	VideoGateway            VideoGatewayConfig            `mapstructure:"video_gateway"`
+	HCAtom                  HCAtomConfig                  `mapstructure:"hc_atom"`
+}
+
+// HCAtomConfig gates every newly exposed HC capability independently. All
+// values default false; configuring an HC account never enables paid traffic.
+type HCAtomConfig struct {
+	LLMEnabled       bool `mapstructure:"llm_enabled"`
+	SyncImageEnabled bool `mapstructure:"sync_image_enabled"`
+	VideoV1Enabled   bool `mapstructure:"video_v1_enabled"`
 }
 
 type VideoGatewayConfig struct {
 	EncryptionKey               string  `mapstructure:"encryption_key"`
 	WorkerEnabled               bool    `mapstructure:"worker_enabled"`
+	SeedanceProductionEnabled   bool    `mapstructure:"seedance_production_enabled"`
+	HCAtomV3ProductionEnabled   bool    `mapstructure:"hc_atom_v3_production_enabled"`
 	WorkerIntervalSeconds       int     `mapstructure:"worker_interval_seconds"`
 	HTTPTimeoutSeconds          int     `mapstructure:"http_timeout_seconds"`
 	SeedanceCNYPerMillionTokens float64 `mapstructure:"seedance_cny_per_million_tokens"`
 	USDCNYExchangeRate          float64 `mapstructure:"usd_cny_exchange_rate"`
 	TinyRealEstimateCNY         float64 `mapstructure:"tiny_real_estimate_cny"`
 	TinyRealMaximumCNY          float64 `mapstructure:"tiny_real_maximum_cny"`
+	HCAtomV3DispatchEnabled     bool    `mapstructure:"hc_atom_v3_dispatch_enabled"`
+	HCAtomV1DispatchEnabled     bool    `mapstructure:"hc_atom_v1_dispatch_enabled"`
 }
 
 type LogConfig struct {
@@ -196,6 +210,9 @@ type IdempotencyConfig struct {
 
 type BatchImageConfig struct {
 	Enabled                           bool   `mapstructure:"enabled"`
+	HCAtomEnabled                     bool   `mapstructure:"hc_atom_enabled"`
+	HCAtomEncryptionKey               string `mapstructure:"hc_atom_encryption_key"`
+	HCAtomOwnedResultDir              string `mapstructure:"hc_atom_owned_result_dir"`
 	MaxItemsPerJobDefault             int    `mapstructure:"max_items_per_job_default"`
 	MaxItemsPerJobTrial               int    `mapstructure:"max_items_per_job_trial"`
 	MaxOutputImagesPerJob             int    `mapstructure:"max_output_images_per_job"`
@@ -1615,16 +1632,22 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 		cfg.Gateway.UserMessageQueue.Mode = ""
 	}
 
-	// Auto-generate TOTP encryption key if not set (32 bytes = 64 hex chars for AES-256)
+	// TOTP encryption key: production/standard must use a persistent key so 2FA
+	// (and any payment config encrypted with the same key domain) survives restarts.
+	// simple mode and bootstrap (AUTO_SETUP) may still auto-generate for local demos.
 	cfg.Totp.EncryptionKey = strings.TrimSpace(cfg.Totp.EncryptionKey)
 	if cfg.Totp.EncryptionKey == "" {
+		allowEphemeralTOTP := allowMissingJWTSecret || NormalizeRunMode(cfg.RunMode) == RunModeSimple
+		if !allowEphemeralTOTP {
+			return nil, fmt.Errorf("totp.encryption_key (TOTP_ENCRYPTION_KEY) is required in %s mode; generate with 'openssl rand -hex 32' and set a persistent value", NormalizeRunMode(cfg.RunMode))
+		}
 		key, err := generateJWTSecret(32) // Reuse the same random generation function
 		if err != nil {
 			return nil, fmt.Errorf("generate totp encryption key error: %w", err)
 		}
 		cfg.Totp.EncryptionKey = key
 		cfg.Totp.EncryptionKeyConfigured = false
-		slog.Warn("TOTP encryption key auto-generated. Consider setting a fixed key for production.")
+		slog.Warn("TOTP encryption key auto-generated for demo/bootstrap. Set a fixed TOTP_ENCRYPTION_KEY before production.")
 	} else {
 		cfg.Totp.EncryptionKeyConfigured = true
 	}
@@ -1674,6 +1697,13 @@ func setDefaults() {
 	// explicitly provide the dedicated key, pricing and both runtime gates.
 	viper.SetDefault("video_gateway.encryption_key", "")
 	viper.SetDefault("video_gateway.worker_enabled", false)
+	viper.SetDefault("video_gateway.seedance_production_enabled", false)
+	viper.SetDefault("video_gateway.hc_atom_v3_production_enabled", false)
+	viper.SetDefault("video_gateway.hc_atom_v3_dispatch_enabled", false)
+	viper.SetDefault("video_gateway.hc_atom_v1_dispatch_enabled", false)
+	viper.SetDefault("hc_atom.llm_enabled", false)
+	viper.SetDefault("hc_atom.sync_image_enabled", false)
+	viper.SetDefault("hc_atom.video_v1_enabled", false)
 	viper.SetDefault("video_gateway.worker_interval_seconds", 5)
 	viper.SetDefault("video_gateway.http_timeout_seconds", 30)
 	viper.SetDefault("video_gateway.seedance_cny_per_million_tokens", 0)
@@ -1862,6 +1892,9 @@ func setDefaults() {
 
 	// Batch Image queue
 	viper.SetDefault("batch_image.enabled", false)
+	viper.SetDefault("batch_image.hc_atom_enabled", false)
+	viper.SetDefault("batch_image.hc_atom_encryption_key", "")
+	viper.SetDefault("batch_image.hc_atom_owned_result_dir", "data/batch-image")
 	viper.SetDefault("batch_image.max_items_per_job_default", 200)
 	viper.SetDefault("batch_image.max_items_per_job_trial", 50)
 	viper.SetDefault("batch_image.max_output_images_per_job", 200)
@@ -1996,7 +2029,7 @@ func setDefaults() {
 	viper.SetDefault("usage_cleanup.task_timeout_seconds", 1800)
 
 	// Idempotency
-	viper.SetDefault("idempotency.observe_only", true)
+	viper.SetDefault("idempotency.observe_only", false)
 	viper.SetDefault("idempotency.default_ttl_seconds", 86400)
 	viper.SetDefault("idempotency.system_operation_ttl_seconds", 3600)
 	viper.SetDefault("idempotency.processing_timeout_seconds", 30)
@@ -2172,6 +2205,41 @@ func setDefaults() {
 	viper.SetDefault("subscription_maintenance.worker_count", 2)
 	viper.SetDefault("subscription_maintenance.queue_size", 1024)
 
+}
+
+func validateHCAtomOwnedResultDir(raw string) error {
+	if strings.TrimSpace(raw) == "" {
+		return fmt.Errorf("must not be empty when hc_atom is enabled")
+	}
+	absolute, err := filepath.Abs(raw)
+	if err != nil {
+		return fmt.Errorf("cannot resolve directory")
+	}
+	absolute = filepath.Clean(absolute)
+	volumeRoot := filepath.VolumeName(absolute) + string(filepath.Separator)
+	if absolute == volumeRoot {
+		return fmt.Errorf("must not be a filesystem root")
+	}
+	if err := os.MkdirAll(absolute, 0o700); err != nil {
+		return fmt.Errorf("cannot create directory")
+	}
+	info, err := os.Stat(absolute)
+	if err != nil || !info.IsDir() {
+		return fmt.Errorf("must be a directory")
+	}
+	probe, err := os.CreateTemp(absolute, ".hc-atom-write-probe-*")
+	if err != nil {
+		return fmt.Errorf("directory is not writable")
+	}
+	probeName := probe.Name()
+	if err := probe.Close(); err != nil {
+		_ = os.Remove(probeName)
+		return fmt.Errorf("directory is not writable")
+	}
+	if err := os.Remove(probeName); err != nil {
+		return fmt.Errorf("directory write probe cannot be removed")
+	}
+	return nil
 }
 
 func (c *Config) Validate() error {
@@ -2538,6 +2606,28 @@ func (c *Config) Validate() error {
 		}
 		if c.BatchImage.RecoverLimit <= 0 {
 			return fmt.Errorf("batch_image.recover_limit must be positive")
+		}
+	}
+	hcAtomAccountDispatchEnabled := c.BatchImage.HCAtomEnabled || c.HCAtom.LLMEnabled || c.HCAtom.SyncImageEnabled
+	keyHex := strings.TrimSpace(c.BatchImage.HCAtomEncryptionKey)
+	if hcAtomAccountDispatchEnabled && keyHex == "" {
+		return fmt.Errorf("batch_image.hc_atom_encryption_key is required when any HC-ATOM account capability is enabled")
+	}
+	if keyHex != "" {
+		key, err := hex.DecodeString(keyHex)
+		if err != nil || len(key) != 32 {
+			return fmt.Errorf("batch_image.hc_atom_encryption_key must be a 32-byte hex key")
+		}
+		if strings.EqualFold(keyHex, strings.TrimSpace(c.VideoGateway.EncryptionKey)) {
+			return fmt.Errorf("batch_image.hc_atom_encryption_key must not reuse video_gateway.encryption_key")
+		}
+		if strings.EqualFold(keyHex, strings.TrimSpace(c.JWT.Secret)) {
+			return fmt.Errorf("batch_image.hc_atom_encryption_key must not reuse jwt.secret")
+		}
+	}
+	if c.BatchImage.HCAtomEnabled {
+		if err := validateHCAtomOwnedResultDir(c.BatchImage.HCAtomOwnedResultDir); err != nil {
+			return fmt.Errorf("batch_image.hc_atom_owned_result_dir invalid: %w", err)
 		}
 	}
 	if c.BatchImage.VertexEnabled {
@@ -2944,7 +3034,8 @@ func (c *Config) Validate() error {
 	if c.Gateway.UsageRecord.TaskTimeoutSeconds <= 0 {
 		return fmt.Errorf("gateway.usage_record.task_timeout_seconds must be positive")
 	}
-	switch strings.ToLower(strings.TrimSpace(c.Gateway.UsageRecord.OverflowPolicy)) {
+	overflowPolicy := strings.ToLower(strings.TrimSpace(c.Gateway.UsageRecord.OverflowPolicy))
+	switch overflowPolicy {
 	case UsageRecordOverflowPolicyDrop, UsageRecordOverflowPolicySample, UsageRecordOverflowPolicySync:
 	default:
 		return fmt.Errorf("gateway.usage_record.overflow_policy must be one of: %s/%s/%s",
@@ -2953,9 +3044,17 @@ func (c *Config) Validate() error {
 	if c.Gateway.UsageRecord.OverflowSamplePercent < 0 || c.Gateway.UsageRecord.OverflowSamplePercent > 100 {
 		return fmt.Errorf("gateway.usage_record.overflow_sample_percent must be between 0-100")
 	}
-	if strings.EqualFold(strings.TrimSpace(c.Gateway.UsageRecord.OverflowPolicy), UsageRecordOverflowPolicySample) &&
+	if overflowPolicy == UsageRecordOverflowPolicySample &&
 		c.Gateway.UsageRecord.OverflowSamplePercent <= 0 {
 		return fmt.Errorf("gateway.usage_record.overflow_sample_percent must be positive when overflow_policy=sample")
+	}
+	// Fail-closed for production/standard: drop/sample can silently lose billing usage records.
+	// simple/demo/AUTO_SETUP-style local modes may still use them for load experiments.
+	if NormalizeRunMode(c.RunMode) != RunModeSimple {
+		if overflowPolicy == UsageRecordOverflowPolicyDrop || overflowPolicy == UsageRecordOverflowPolicySample {
+			return fmt.Errorf("gateway.usage_record.overflow_policy %q is not allowed in run_mode=%s; use %s",
+				overflowPolicy, NormalizeRunMode(c.RunMode), UsageRecordOverflowPolicySync)
+		}
 	}
 	if c.Gateway.UsageRecord.AutoScaleEnabled {
 		if c.Gateway.UsageRecord.AutoScaleMinWorkers <= 0 {

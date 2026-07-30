@@ -27,7 +27,15 @@ func ProvideVideoGatewayWorker(repo VideoGatewayRuntimeRepository, encryptor Vid
 		timeout = 30 * time.Second
 	}
 	client := &http.Client{Timeout: timeout}
-	return NewVideoGatewayWorker(repo, encryptor, func(baseURL, key string) *SeedanceAdapter { return NewSeedanceAdapter(client, baseURL, key) }, authCache, billingCache, cfg, gate, archiver)
+	return NewVideoGatewayWorker(repo, encryptor, func(provider, baseURL, key string) VideoProviderClient {
+		if provider == HCAtomVideoV1Provider {
+			return NewHCAtomV1Adapter(client, baseURL, key)
+		}
+		if provider == HCAtomSeedanceV3Provider {
+			return NewHCAtomV3Adapter(client, baseURL, key)
+		}
+		return NewSeedanceAdapter(client, baseURL, key)
+	}, authCache, billingCache, cfg, gate, archiver)
 }
 
 func ProvideVideoGatewayRuntime(worker *VideoGatewayWorker, cfg *config.Config, gate *SingleSmokeAuthorization) *VideoGatewayRuntime {
@@ -37,7 +45,7 @@ func ProvideVideoGatewayRuntime(worker *VideoGatewayWorker, cfg *config.Config, 
 }
 
 func (r *VideoGatewayRuntime) Start() {
-	if r == nil || r.worker == nil || r.cfg == nil || !r.cfg.VideoGateway.WorkerEnabled || r.gate == nil || !r.gate.Allowed() {
+	if r == nil || r.worker == nil || r.cfg == nil || !r.cfg.VideoGateway.WorkerEnabled {
 		return
 	}
 	r.mu.Lock()

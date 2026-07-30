@@ -229,13 +229,15 @@ func (r *userRepository) Update(ctx context.Context, userIn *service.User) error
 	}
 	oldEmail := existing.Email
 
+	// Balance and total_recharged are intentionally omitted: concurrent billing
+	// uses DeductBalance/UpdateBalance/SetBalance. A Get→mutate→Update path must
+	// never rewind those counters from a stale snapshot.
 	updateOp := txClient.User.UpdateOneID(userIn.ID).
 		SetEmail(userIn.Email).
 		SetUsername(userIn.Username).
 		SetNotes(userIn.Notes).
 		SetPasswordHash(userIn.PasswordHash).
 		SetRole(userIn.Role).
-		SetBalance(userIn.Balance).
 		SetConcurrency(userIn.Concurrency).
 		SetStatus(userIn.Status).
 		SetMustChangePassword(userIn.MustChangePassword).
@@ -244,7 +246,6 @@ func (r *userRepository) Update(ctx context.Context, userIn *service.User) error
 		SetBalanceNotifyThresholdType(userIn.BalanceNotifyThresholdType).
 		SetNillableBalanceNotifyThreshold(userIn.BalanceNotifyThreshold).
 		SetBalanceNotifyExtraEmails(marshalExtraEmails(userIn.BalanceNotifyExtraEmails)).
-		SetTotalRecharged(userIn.TotalRecharged).
 		SetRpmLimit(userIn.RPMLimit)
 	if userIn.SignupSource != "" {
 		updateOp = updateOp.SetSignupSource(userIn.SignupSource)
@@ -755,6 +756,29 @@ func (r *userRepository) UpdateBalance(ctx context.Context, id int64, amount flo
 		return translatePersistenceError(err, service.ErrUserNotFound, nil)
 	}
 	if n == 0 {
+		return service.ErrUserNotFound
+	}
+	return nil
+}
+
+// SetBalance atomically replaces the user's balance. It never touches total_recharged
+// or other profile fields, so concurrent DeductBalance cannot be overwritten.
+func (r *userRepository) SetBalance(ctx context.Context, id int64, balance float64) error {
+	const updateSQL = `
+		UPDATE users
+		SET balance = $1, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $2 AND deleted_at IS NULL
+	`
+	client := clientFromContext(ctx, r.client)
+	result, err := client.ExecContext(ctx, updateSQL, balance, id)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
 		return service.ErrUserNotFound
 	}
 	return nil

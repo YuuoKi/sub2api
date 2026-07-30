@@ -8,15 +8,28 @@ import (
 )
 
 type fakeVideoAdminRepo struct {
-	created   VideoProviderAccount
-	updated   VideoProviderAdminUpdate
-	task      *VideoTask
-	deletedID int64
-	deleteErr error
+	created        VideoProviderAccount
+	updated        VideoProviderAdminUpdate
+	task           *VideoTask
+	deletedID      int64
+	deleteErr      error
+	providers      []VideoProviderAccount
+	credential     *VideoProviderAccount
+	credentialRead bool
 }
 
 func (f *fakeVideoAdminRepo) ListVideoProviders(context.Context) ([]VideoProviderAccount, error) {
-	return nil, nil
+	if f.providers != nil {
+		return f.providers, nil
+	}
+	return []VideoProviderAccount{{ID: 1, Provider: "seedance"}}, nil
+}
+func (f *fakeVideoAdminRepo) GetVideoProviderCredential(context.Context, int64) (*VideoProviderAccount, error) {
+	f.credentialRead = true
+	if f.credential == nil {
+		return nil, ErrVideoProviderNotFound
+	}
+	return f.credential, nil
 }
 func (f *fakeVideoAdminRepo) CreateVideoProvider(_ context.Context, provider VideoProviderAccount) (*VideoProviderAccount, error) {
 	f.created = provider
@@ -78,8 +91,8 @@ func TestLookupVideoProvider(t *testing.T) {
 	require.False(t, ok)
 
 	registry := VideoProviderRegistry()
-	require.Len(t, registry, 4)
-	for _, provider := range []string{"seedance", "jimeng", "veo", "kling"} {
+	require.Len(t, registry, 6)
+	for _, provider := range []string{"seedance", HCAtomVideoV1Provider, HCAtomSeedanceV3Provider, "jimeng", "veo", "kling"} {
 		_, found := lookupVideoProvider(provider)
 		require.True(t, found, provider)
 	}
@@ -144,6 +157,16 @@ func TestVideoAdminServicePartialUpdateKeepsCustomEndpointAndModel(t *testing.T)
 	// 字段缺席必须保持 nil，由 repo 层 CASE WHEN 保留原值，不能强制重置自定义中转配置
 	require.Nil(t, repo.updated.BaseURL)
 	require.Nil(t, repo.updated.DefaultModel)
+}
+
+func TestVideoAdminServiceUpdateUsesHCProviderDefaults(t *testing.T) {
+	repo := &fakeVideoAdminRepo{providers: []VideoProviderAccount{{ID: 1, Provider: HCAtomSeedanceV3Provider}}}
+	svc := NewVideoAdminService(repo, fakeVideoEncryptor{})
+	empty := ""
+	_, err := svc.UpdateProvider(context.Background(), 1, VideoProviderAdminUpdate{BaseURL: &empty, DefaultModel: &empty})
+	require.NoError(t, err)
+	require.Equal(t, HCAtomSeedanceV3BaseURL, derefString(repo.updated.BaseURL))
+	require.Equal(t, HCAtomSeedanceV3PublicModel, derefString(repo.updated.DefaultModel))
 }
 
 func TestVideoAdminServiceDeleteProvider(t *testing.T) {

@@ -45,7 +45,7 @@ func ProvideVideoGatewayRuntime(worker *VideoGatewayWorker, cfg *config.Config, 
 }
 
 func (r *VideoGatewayRuntime) Start() {
-	if r == nil || r.worker == nil || r.cfg == nil || !r.cfg.VideoGateway.WorkerEnabled || r.gate == nil || !r.gate.Allowed() {
+	if r == nil || r.worker == nil || r.cfg == nil || !r.cfg.VideoGateway.WorkerEnabled {
 		return
 	}
 	r.mu.Lock()

@@ -22,6 +22,9 @@ type pricingVideoAdminRepo struct {
 func (r *pricingVideoAdminRepo) ListVideoProviders(context.Context) ([]service.VideoProviderAccount, error) {
 	return nil, nil
 }
+func (r *pricingVideoAdminRepo) GetVideoProviderCredential(context.Context, int64) (*service.VideoProviderAccount, error) {
+	return nil, nil
+}
 func (r *pricingVideoAdminRepo) CreateVideoProvider(context.Context, service.VideoProviderAccount) (*service.VideoProviderAccount, error) {
 	return nil, nil
 }

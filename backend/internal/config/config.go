@@ -116,6 +116,8 @@ type HCAtomConfig struct {
 type VideoGatewayConfig struct {
 	EncryptionKey               string  `mapstructure:"encryption_key"`
 	WorkerEnabled               bool    `mapstructure:"worker_enabled"`
+	SeedanceProductionEnabled   bool    `mapstructure:"seedance_production_enabled"`
+	HCAtomV3ProductionEnabled   bool    `mapstructure:"hc_atom_v3_production_enabled"`
 	WorkerIntervalSeconds       int     `mapstructure:"worker_interval_seconds"`
 	HTTPTimeoutSeconds          int     `mapstructure:"http_timeout_seconds"`
 	SeedanceCNYPerMillionTokens float64 `mapstructure:"seedance_cny_per_million_tokens"`
@@ -1695,6 +1697,8 @@ func setDefaults() {
 	// explicitly provide the dedicated key, pricing and both runtime gates.
 	viper.SetDefault("video_gateway.encryption_key", "")
 	viper.SetDefault("video_gateway.worker_enabled", false)
+	viper.SetDefault("video_gateway.seedance_production_enabled", false)
+	viper.SetDefault("video_gateway.hc_atom_v3_production_enabled", false)
 	viper.SetDefault("video_gateway.hc_atom_v3_dispatch_enabled", false)
 	viper.SetDefault("video_gateway.hc_atom_v1_dispatch_enabled", false)
 	viper.SetDefault("hc_atom.llm_enabled", false)

@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"math"
 	"regexp"
 	"testing"
@@ -12,6 +13,35 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/stretchr/testify/require"
 )
+
+func TestListEnabledVideoProvidersKeepsSecretsSanitizedButCatalogMetadata(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	repo := NewVideoGatewayRuntimeRepository(db)
+	mock.ExpectQuery("SELECT id, group_id, provider, display_name, enabled, '', masked_key, base_url, default_model").
+		WithArgs(int64(9)).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "group_id", "provider", "display_name", "enabled",
+			"encrypted_api_key", "masked_key", "base_url", "default_model",
+		}).AddRow(
+			int64(7), int64(9), service.HCAtomSeedanceV3Provider, "HC V3", true,
+			"", "yh****perx", service.HCAtomSeedanceV3BaseURL, service.HCAtomSeedanceV3PublicModel,
+		))
+
+	items, err := repo.ListEnabledVideoProviders(context.Background(), 9)
+
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	require.True(t, items[0].APIKeyConfigured)
+	require.Empty(t, items[0].EncryptedAPIKey)
+	require.Equal(t, service.HCAtomSeedanceV3BaseURL, items[0].BaseURL)
+	encoded, err := json.Marshal(items[0])
+	require.NoError(t, err)
+	require.NotContains(t, string(encoded), service.HCAtomSeedanceV3BaseURL)
+	require.NotContains(t, string(encoded), "encrypted_api_key")
+	require.NoError(t, mock.ExpectationsWereMet())
+}
 
 func TestVideoGatewayRepositoryRejectsInvalidPricingSnapshotBeforeTransaction(t *testing.T) {
 	tests := []struct {
@@ -259,6 +289,30 @@ func TestVideoGatewayRepositoryBeginHCAtomV3DispatchRequiresFixedEnabledProvider
 	ok, err = repo.BeginHCAtomV3Dispatch(context.Background(), 8, 3)
 	require.NoError(t, err)
 	require.False(t, ok)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestVideoGatewayRepositoryBeginProductionDispatchRequiresLiveBillingAndProviderState(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	repo := NewVideoGatewayRuntimeRepository(db)
+
+	mock.ExpectExec("UPDATE video_tasks task SET[\\s\\S]+task.reservation_state=\\$6[\\s\\S]+provider.encrypted_api_key<>''[\\s\\S]+candidate.models_list_config[\\s\\S]+video_price_720p[\\s\\S]+key.status=\\$7").
+		WithArgs(
+			int64(7), int64(3), service.HCAtomSeedanceV3Provider,
+			service.HCAtomSeedanceV3BaseURL, service.HCAtomSeedanceV3PublicModel,
+			service.VideoReservationReserved, service.StatusAPIKeyActive,
+		).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	ok, err := repo.BeginProductionDispatch(
+		context.Background(), 7, 3, service.HCAtomSeedanceV3Provider,
+		service.HCAtomSeedanceV3BaseURL, service.HCAtomSeedanceV3PublicModel,
+	)
+
+	require.NoError(t, err)
+	require.True(t, ok)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

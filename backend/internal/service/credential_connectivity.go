@@ -277,16 +277,9 @@ func (s *VideoAdminService) CheckProviderConnectivity(ctx context.Context, id in
 	if id <= 0 {
 		return nil, ErrVideoProviderNotFound
 	}
-	providers, err := s.repo.ListVideoProviders(ctx)
+	provider, err := s.repo.GetVideoProviderCredential(ctx, id)
 	if err != nil {
 		return nil, err
-	}
-	var provider *VideoProviderAccount
-	for index := range providers {
-		if providers[index].ID == id {
-			provider = &providers[index]
-			break
-		}
 	}
 	if provider == nil {
 		return nil, ErrVideoProviderNotFound

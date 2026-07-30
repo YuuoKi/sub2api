@@ -223,7 +223,7 @@ func resolvedHCAtomPricingUsable(resolved *ResolvedPricing) bool {
 }
 
 func (s *VideoGatewayService) AuthorizedHCAtomVideoModels(ctx context.Context, scope VideoTaskScope, group *Group) []PublicModel {
-	if s == nil || s.cfg == nil || s.repo == nil || s.gate == nil || !s.gate.Allowed() ||
+	if s == nil || s.cfg == nil || s.repo == nil || !anyVideoDispatchAllowed(s.cfg, s.gate) ||
 		group == nil || group.ID != scope.GroupID || group.Platform != PlatformHCAtom || !group.IsActive() ||
 		group.VideoPrice480P == nil || *group.VideoPrice480P <= 0 ||
 		group.VideoPrice720P == nil || *group.VideoPrice720P <= 0 ||
@@ -234,20 +234,21 @@ func (s *VideoGatewayService) AuthorizedHCAtomVideoModels(ctx context.Context, s
 	if err != nil {
 		return []PublicModel{}
 	}
+	allowedModels := qcanvasGroupModels(group)
 	enabledV1, enabledV3 := false, false
 	for _, provider := range providers {
-		if !provider.Enabled || !provider.APIKeyConfigured || strings.TrimSpace(provider.EncryptedAPIKey) == "" ||
+		if !provider.Enabled || !provider.APIKeyConfigured ||
 			strings.TrimRight(strings.TrimSpace(provider.BaseURL), "/") != HCAtomMediaOrigin {
 			continue
 		}
 		switch provider.Provider {
 		case HCAtomVideoV1Provider:
-			if provider.DefaultModel == HCAtomVideoV1PublicModel {
+			if _, allowed := allowedModels[HCAtomVideoV1PublicModel]; allowed && provider.DefaultModel == HCAtomVideoV1PublicModel {
 				enabledV1 = enabledV1 || (s.cfg.HCAtom.VideoV1Enabled && s.cfg.VideoGateway.HCAtomV1DispatchEnabled)
 			}
 		case HCAtomSeedanceV3Provider:
-			if provider.DefaultModel == HCAtomSeedanceV3PublicModel {
-				enabledV3 = enabledV3 || s.cfg.VideoGateway.HCAtomV3DispatchEnabled
+			if _, allowed := allowedModels[HCAtomSeedanceV3PublicModel]; allowed && provider.DefaultModel == HCAtomSeedanceV3PublicModel {
+				enabledV3 = enabledV3 || (s.cfg.VideoGateway.HCAtomV3ProductionEnabled && s.cfg.VideoGateway.HCAtomV3DispatchEnabled)
 			}
 		}
 	}

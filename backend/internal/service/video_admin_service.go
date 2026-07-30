@@ -48,6 +48,7 @@ type VideoSystemCheck struct {
 
 type VideoAdminRepository interface {
 	ListVideoProviders(context.Context) ([]VideoProviderAccount, error)
+	GetVideoProviderCredential(context.Context, int64) (*VideoProviderAccount, error)
 	CreateVideoProvider(context.Context, VideoProviderAccount) (*VideoProviderAccount, error)
 	UpdateVideoProvider(context.Context, int64, VideoProviderAdminUpdate) (*VideoProviderAccount, error)
 	DeleteVideoProvider(context.Context, int64) error

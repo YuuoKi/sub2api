@@ -14,14 +14,15 @@ import (
 )
 
 type workerRepoStub struct {
-	task         *VideoTask
-	reservedTask *VideoTask
-	provider     VideoProviderAccount
-	begin        bool
-	finalized    []VideoTaskFinalization
-	progress     []string
-	reserved     float64
-	beginCalls   int
+	task                 *VideoTask
+	reservedTask         *VideoTask
+	provider             VideoProviderAccount
+	begin                bool
+	finalized            []VideoTaskFinalization
+	progress             []string
+	reserved             float64
+	beginCalls           int
+	productionBeginCalls int
 }
 
 type videoAssetArchiverStub struct {
@@ -31,6 +32,20 @@ type videoAssetArchiverStub struct {
 	resultURL          string
 	sawFinalizedBefore bool
 	err                error
+}
+
+type productionVideoClientStub struct {
+	create *VideoProviderTask
+}
+
+func (s *productionVideoClientStub) Create(context.Context, VideoCreateRequest) (*VideoProviderTask, error) {
+	return s.create, nil
+}
+func (s *productionVideoClientStub) Poll(context.Context, string) (*VideoProviderTask, error) {
+	return nil, nil
+}
+func (s *productionVideoClientStub) Cancel(context.Context, string) (*VideoProviderTask, error) {
+	return nil, nil
 }
 
 func (s *videoAssetArchiverStub) Archive(_ context.Context, taskID int64, resultURL string) error {
@@ -135,7 +150,10 @@ func (r *workerRepoStub) GetVideoProvider(context.Context, int64, int64) (*Video
 }
 
 func TestVideoGatewayCreateRequiresWorkerAndReservesServerMaximum(t *testing.T) {
-	repo := &workerRepoStub{provider: VideoProviderAccount{ID: 10, GroupID: 9, Provider: "seedance", Enabled: true}}
+	repo := &workerRepoStub{provider: VideoProviderAccount{
+		ID: 10, GroupID: 9, Provider: "seedance", Enabled: true,
+		BaseURL: SeedanceBaseURL, DefaultModel: SeedanceModel,
+	}}
 	cmd := VideoTaskCreateCommand{Scope: VideoTaskScope{UserID: 1, APIKeyID: 2, GroupID: 9}, ProviderAccountID: 10, Prompt: "x", Duration: 4, Resolution: "720p"}
 	cfg := &config.Config{VideoGateway: config.VideoGatewayConfig{SeedanceCNYPerMillionTokens: 2, USDCNYExchangeRate: 7, TinyRealEstimateCNY: 0.7, TinyRealMaximumCNY: 1.4}}
 	authCache := &videoAuthInvalidatorStub{}
@@ -174,6 +192,48 @@ func TestVideoGatewayCreateRequiresWorkerAndReservesServerMaximum(t *testing.T) 
 	}
 }
 
+func TestVideoGatewayCreateAllowsExplicitProductionDispatchWithoutSmokeGate(t *testing.T) {
+	repo := &workerRepoStub{provider: VideoProviderAccount{
+		ID: 10, GroupID: 9, Provider: "seedance", Enabled: true,
+		BaseURL: SeedanceBaseURL, DefaultModel: SeedanceModel,
+		TinyRealAuthorizedAt: func() *time.Time { value := time.Now().UTC(); return &value }(),
+	}}
+	cmd := VideoTaskCreateCommand{Scope: VideoTaskScope{UserID: 1, APIKeyID: 2, GroupID: 9}, ProviderAccountID: 10, Prompt: "x", Duration: 4, Resolution: "720p"}
+	cfg := &config.Config{VideoGateway: config.VideoGatewayConfig{
+		WorkerEnabled: true, SeedanceProductionEnabled: true,
+		SeedanceCNYPerMillionTokens: 2, USDCNYExchangeRate: 7,
+		TinyRealEstimateCNY: 0.7, TinyRealMaximumCNY: 1.4,
+	}}
+	task, err := NewVideoGatewayService(repo, NewSingleSmokeAuthorization(false), cfg, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}).CreateTask(context.Background(), cmd)
+	require.NoError(t, err)
+	require.NotNil(t, task)
+}
+
+func TestVideoGatewayCreateAllowsHCAtomV3ProductionWithoutSmokeGate(t *testing.T) {
+	repo := &workerRepoStub{provider: VideoProviderAccount{
+		ID: 10, GroupID: 9, Provider: HCAtomSeedanceV3Provider, Enabled: true,
+		BaseURL: HCAtomSeedanceV3BaseURL, DefaultModel: HCAtomSeedanceV3PublicModel,
+	}}
+	cmd := VideoTaskCreateCommand{
+		Scope:             VideoTaskScope{UserID: 1, APIKeyID: 2, GroupID: 9},
+		ProviderAccountID: 10, Model: HCAtomSeedanceV3PublicModel,
+		Prompt: "x", Duration: 4, Resolution: "720p",
+	}
+	cfg := &config.Config{VideoGateway: config.VideoGatewayConfig{
+		WorkerEnabled: true, HCAtomV3ProductionEnabled: true, HCAtomV3DispatchEnabled: true,
+		SeedanceCNYPerMillionTokens: 2, USDCNYExchangeRate: 7,
+		TinyRealEstimateCNY: 0.7, TinyRealMaximumCNY: 1.4,
+	}}
+	task, err := NewVideoGatewayService(repo, NewSingleSmokeAuthorization(false), cfg, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}).CreateTask(context.Background(), cmd)
+	require.NoError(t, err)
+	require.NotNil(t, task)
+	require.Equal(t, HCAtomSeedanceV3Provider, task.Provider)
+
+	cfg.VideoGateway.HCAtomV3DispatchEnabled = false
+	_, err = NewVideoGatewayService(repo, NewSingleSmokeAuthorization(false), cfg, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}).CreateTask(context.Background(), cmd)
+	require.ErrorIs(t, err, ErrVideoRealDispatchDenied)
+}
+
 func TestVideoActualUSDForTaskUsesImmutableSnapshot(t *testing.T) {
 	price, rate, maximum := 2.0, 8.0, 1.4
 	task := &VideoTask{
@@ -205,27 +265,49 @@ func TestVideoActualUSDForTaskUsesExplicitLegacyConfigFallback(t *testing.T) {
 	require.Equal(t, 0.25, actual)
 }
 
-func TestVideoGatewayRuntimeStartsOnlyWithExplicitWorkerAndRealGate(t *testing.T) {
+func TestVideoGatewayRuntimeStartsWithWorkerSoAcceptedTasksKeepPolling(t *testing.T) {
 	cfg := &config.Config{VideoGateway: config.VideoGatewayConfig{WorkerEnabled: true, WorkerIntervalSeconds: 1}}
 	w := NewVideoGatewayWorker(&workerRepoStub{}, keyDecryptStub{}, func(string, string, string) VideoProviderClient { return nil }, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}, cfg, NewSingleSmokeAuthorization(false))
-	denied := ProvideVideoGatewayRuntime(w, cfg, NewSingleSmokeAuthorization(false))
-	if denied.Running() {
-		t.Fatal("runtime started without real gate")
-	}
-	allowed := ProvideVideoGatewayRuntime(w, cfg, NewSingleSmokeAuthorization(true))
-	if !allowed.Running() {
+	runtime := ProvideVideoGatewayRuntime(w, cfg, NewSingleSmokeAuthorization(false))
+	if !runtime.Running() {
 		t.Fatal("runtime did not start")
 	}
-	allowed.Stop()
-	if allowed.Running() {
+	runtime.Stop()
+	if runtime.Running() {
 		t.Fatal("runtime did not stop")
 	}
+
+	disabledCfg := &config.Config{VideoGateway: config.VideoGatewayConfig{WorkerEnabled: false}}
+	disabled := ProvideVideoGatewayRuntime(w, disabledCfg, NewSingleSmokeAuthorization(true))
+	require.False(t, disabled.Running())
+}
+
+func TestVideoGatewayRuntimeStartsWithProductionDispatchWithoutSmokeGate(t *testing.T) {
+	cfg := &config.Config{VideoGateway: config.VideoGatewayConfig{WorkerEnabled: true, SeedanceProductionEnabled: true, WorkerIntervalSeconds: 1}}
+	w := NewVideoGatewayWorker(&workerRepoStub{}, keyDecryptStub{}, func(string, string, string) VideoProviderClient { return nil }, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}, cfg, NewSingleSmokeAuthorization(false))
+	runtime := ProvideVideoGatewayRuntime(w, cfg, NewSingleSmokeAuthorization(false))
+	require.True(t, runtime.Running())
+	runtime.Stop()
+}
+
+func TestVideoGatewayRuntimeStartsWithHCAtomV3ProductionWithoutSmokeGate(t *testing.T) {
+	cfg := &config.Config{VideoGateway: config.VideoGatewayConfig{
+		WorkerEnabled: true, HCAtomV3ProductionEnabled: true, HCAtomV3DispatchEnabled: true, WorkerIntervalSeconds: 1,
+	}}
+	w := NewVideoGatewayWorker(&workerRepoStub{}, keyDecryptStub{}, func(string, string, string) VideoProviderClient { return nil }, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}, cfg, NewSingleSmokeAuthorization(false))
+	runtime := ProvideVideoGatewayRuntime(w, cfg, NewSingleSmokeAuthorization(false))
+	require.True(t, runtime.Running())
+	runtime.Stop()
 }
 func (r *workerRepoStub) BeginRealDispatch(context.Context, int64, int64) (bool, error) {
 	r.beginCalls++
 	return r.begin, nil
 }
 func (r *workerRepoStub) BeginHCAtomV3Dispatch(context.Context, int64, int64) (bool, error) {
+	return r.begin, nil
+}
+func (r *workerRepoStub) BeginProductionDispatch(context.Context, int64, int64, string, string, string) (bool, error) {
+	r.productionBeginCalls++
 	return r.begin, nil
 }
 func (r *workerRepoStub) MarkVideoSubmitted(context.Context, int64, int64, string) error { return nil }
@@ -260,6 +342,47 @@ func TestVideoWorkerConsumesProcessGateAfterAtomicDBClaim(t *testing.T) {
 	w := NewVideoGatewayWorker(repo, keyDecryptStub{}, func(string, string, string) VideoProviderClient { return nil }, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}, &config.Config{}, gate)
 	require.NoError(t, w.RunOnce(context.Background()))
 	require.NoError(t, gate.Consume(), "DB denial must not consume process gate")
+}
+
+func TestVideoWorkerProductionDispatchBypassesSingleSmokeConsumption(t *testing.T) {
+	repo := &workerRepoStub{
+		begin:    true,
+		task:     &VideoTask{ID: 7, GroupID: 9, ProviderAccountID: 10, Provider: "seedance", Model: SeedanceModel, Status: VideoStatusQueued, Version: 1, ReservedCostUSD: 0.2, ReservationState: VideoReservationReserved},
+		provider: VideoProviderAccount{ID: 10, GroupID: 9, Provider: "seedance", Enabled: true, BaseURL: SeedanceBaseURL, DefaultModel: SeedanceModel, EncryptedAPIKey: "cipher"},
+	}
+	gate := NewSingleSmokeAuthorization(false)
+	client := &productionVideoClientStub{create: &VideoProviderTask{UpstreamTaskID: "up-prod-7", Status: VideoStatusSubmitted}}
+	cfg := &config.Config{VideoGateway: config.VideoGatewayConfig{SeedanceProductionEnabled: true}}
+	w := NewVideoGatewayWorker(repo, keyDecryptStub{}, func(string, string, string) VideoProviderClient { return client }, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}, cfg, gate)
+	require.NoError(t, w.RunOnce(context.Background()))
+	require.Equal(t, 1, repo.productionBeginCalls)
+	require.Zero(t, repo.beginCalls)
+	require.False(t, gate.Allowed())
+}
+
+func TestVideoWorkerHCAtomV3ProductionDispatchBypassesSingleSmokeConsumption(t *testing.T) {
+	repo := &workerRepoStub{
+		begin: true,
+		task: &VideoTask{
+			ID: 7, GroupID: 9, ProviderAccountID: 10, Provider: HCAtomSeedanceV3Provider,
+			Model: HCAtomSeedanceV3PublicModel, Status: VideoStatusQueued, Version: 1,
+			ReservedCostUSD: 0.2, ReservationState: VideoReservationReserved,
+		},
+		provider: VideoProviderAccount{
+			ID: 10, GroupID: 9, Provider: HCAtomSeedanceV3Provider, Enabled: true,
+			BaseURL: HCAtomSeedanceV3BaseURL, DefaultModel: HCAtomSeedanceV3PublicModel, EncryptedAPIKey: "cipher",
+		},
+	}
+	gate := NewSingleSmokeAuthorization(false)
+	client := &productionVideoClientStub{create: &VideoProviderTask{UpstreamTaskID: "up-v3-prod-7", Status: VideoStatusSubmitted}}
+	cfg := &config.Config{VideoGateway: config.VideoGatewayConfig{
+		HCAtomV3ProductionEnabled: true, HCAtomV3DispatchEnabled: true,
+	}}
+	w := NewVideoGatewayWorker(repo, keyDecryptStub{}, func(string, string, string) VideoProviderClient { return client }, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}, cfg, gate)
+	require.NoError(t, w.RunOnce(context.Background()))
+	require.Equal(t, 1, repo.productionBeginCalls)
+	require.Zero(t, repo.beginCalls)
+	require.False(t, gate.Allowed())
 }
 
 func TestVideoWorkerDelegatesSuccessfulAtomicCapture(t *testing.T) {

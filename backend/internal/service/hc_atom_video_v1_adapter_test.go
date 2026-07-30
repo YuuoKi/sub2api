@@ -108,7 +108,10 @@ func TestHCAtomVideoV1AdapterPollAndCancelUseTaskPath(t *testing.T) {
 }
 
 func TestHCAtomVideoV1CreateTaskKeepsProviderSpecificCatalogModel(t *testing.T) {
-	repo := &workerRepoStub{provider: VideoProviderAccount{ID: 10, GroupID: 9, Provider: HCAtomVideoV1Provider, Enabled: true}}
+	repo := &workerRepoStub{provider: VideoProviderAccount{
+		ID: 10, GroupID: 9, Provider: HCAtomVideoV1Provider, Enabled: true,
+		BaseURL: HCAtomSeedanceV3BaseURL, DefaultModel: HCAtomVideoV1PublicModel,
+	}}
 	cfg := &config.Config{
 		HCAtom: config.HCAtomConfig{VideoV1Enabled: true},
 		VideoGateway: config.VideoGatewayConfig{
@@ -134,7 +137,11 @@ func TestAuthorizedHCAtomVideoModelsRequiresPriceProviderAndGates(t *testing.T) 
 	repo := &workerRepoStub{provider: provider}
 	cfg := &config.Config{HCAtom: config.HCAtomConfig{VideoV1Enabled: true}, VideoGateway: config.VideoGatewayConfig{HCAtomV1DispatchEnabled: true}}
 	service := NewVideoGatewayService(repo, NewSingleSmokeAuthorization(true), cfg, nil, nil)
-	group := &Group{ID: 9, Platform: PlatformHCAtom, Status: StatusActive, VideoPrice480P: &price, VideoPrice720P: &price, VideoPrice1080P: &price}
+	group := &Group{
+		ID: 9, Platform: PlatformHCAtom, Status: StatusActive,
+		VideoPrice480P: &price, VideoPrice720P: &price, VideoPrice1080P: &price,
+		ModelsListConfig: GroupModelsListConfig{Enabled: true, Models: []string{HCAtomVideoV1PublicModel}},
+	}
 	models := service.AuthorizedHCAtomVideoModels(context.Background(), VideoTaskScope{UserID: 1, APIKeyID: 2, GroupID: 9}, group)
 	require.Len(t, models, 1)
 	require.Equal(t, HCAtomVideoV1PublicModel, models[0].Model)
@@ -146,15 +153,21 @@ func TestAuthorizedHCAtomVideoModelsRequiresPriceProviderAndGates(t *testing.T) 
 func TestAuthorizedHCAtomVideoModelsReturnsV1AndV3Independently(t *testing.T) {
 	price := 0.2
 	repo := &videoCatalogRepoStub{providers: []VideoProviderAccount{
-		{ID: 10, GroupID: 9, Provider: HCAtomVideoV1Provider, Enabled: true, APIKeyConfigured: true, EncryptedAPIKey: "v1-cipher", BaseURL: HCAtomMediaOrigin, DefaultModel: HCAtomVideoV1PublicModel},
-		{ID: 11, GroupID: 9, Provider: HCAtomSeedanceV3Provider, Enabled: true, APIKeyConfigured: true, EncryptedAPIKey: "v3-cipher", BaseURL: HCAtomMediaOrigin, DefaultModel: HCAtomSeedanceV3PublicModel},
+		{ID: 10, GroupID: 9, Provider: HCAtomVideoV1Provider, Enabled: true, APIKeyConfigured: true, BaseURL: HCAtomMediaOrigin, DefaultModel: HCAtomVideoV1PublicModel},
+		{ID: 11, GroupID: 9, Provider: HCAtomSeedanceV3Provider, Enabled: true, APIKeyConfigured: true, BaseURL: HCAtomMediaOrigin, DefaultModel: HCAtomSeedanceV3PublicModel},
 	}}
 	cfg := &config.Config{
 		HCAtom:       config.HCAtomConfig{VideoV1Enabled: true},
-		VideoGateway: config.VideoGatewayConfig{HCAtomV1DispatchEnabled: true, HCAtomV3DispatchEnabled: true},
+		VideoGateway: config.VideoGatewayConfig{HCAtomV1DispatchEnabled: true, HCAtomV3DispatchEnabled: true, HCAtomV3ProductionEnabled: true},
 	}
 	service := NewVideoGatewayService(repo, NewSingleSmokeAuthorization(true), cfg, nil, nil)
-	group := &Group{ID: 9, Platform: PlatformHCAtom, Status: StatusActive, VideoPrice480P: &price, VideoPrice720P: &price, VideoPrice1080P: &price}
+	group := &Group{
+		ID: 9, Platform: PlatformHCAtom, Status: StatusActive,
+		VideoPrice480P: &price, VideoPrice720P: &price, VideoPrice1080P: &price,
+		ModelsListConfig: GroupModelsListConfig{
+			Enabled: true, Models: []string{HCAtomVideoV1PublicModel, HCAtomSeedanceV3PublicModel},
+		},
+	}
 
 	models := service.AuthorizedHCAtomVideoModels(context.Background(), VideoTaskScope{UserID: 1, APIKeyID: 2, GroupID: 9}, group)
 	require.Len(t, models, 2)
@@ -166,8 +179,38 @@ func TestAuthorizedHCAtomVideoModelsReturnsV1AndV3Independently(t *testing.T) {
 	require.Equal(t, HCAtomSeedanceV3PublicModel, models[0].Model)
 
 	cfg.VideoGateway.HCAtomV1DispatchEnabled = true
+	cfg.VideoGateway.HCAtomV3ProductionEnabled = false
+	models = service.AuthorizedHCAtomVideoModels(context.Background(), VideoTaskScope{UserID: 1, APIKeyID: 2, GroupID: 9}, group)
+	require.Len(t, models, 1)
+	require.Equal(t, HCAtomVideoV1PublicModel, models[0].Model)
+
+	cfg.VideoGateway.HCAtomV3ProductionEnabled = true
 	cfg.VideoGateway.HCAtomV3DispatchEnabled = false
 	models = service.AuthorizedHCAtomVideoModels(context.Background(), VideoTaskScope{UserID: 1, APIKeyID: 2, GroupID: 9}, group)
 	require.Len(t, models, 1)
 	require.Equal(t, HCAtomVideoV1PublicModel, models[0].Model)
+}
+
+func TestAuthorizedHCAtomVideoModelsAllowsV3ProductionWithoutSmokeGate(t *testing.T) {
+	price := 0.2
+	repo := &videoCatalogRepoStub{providers: []VideoProviderAccount{{
+		ID: 11, GroupID: 9, Provider: HCAtomSeedanceV3Provider, Enabled: true,
+		APIKeyConfigured: true, BaseURL: HCAtomMediaOrigin, DefaultModel: HCAtomSeedanceV3PublicModel,
+	}}}
+	cfg := &config.Config{VideoGateway: config.VideoGatewayConfig{
+		HCAtomV3ProductionEnabled: true, HCAtomV3DispatchEnabled: true,
+	}}
+	service := NewVideoGatewayService(repo, NewSingleSmokeAuthorization(false), cfg, nil, nil)
+	group := &Group{
+		ID: 9, Platform: PlatformHCAtom, Status: StatusActive,
+		VideoPrice480P: &price, VideoPrice720P: &price, VideoPrice1080P: &price,
+		ModelsListConfig: GroupModelsListConfig{Enabled: true, Models: []string{HCAtomSeedanceV3PublicModel}},
+	}
+
+	models := service.AuthorizedHCAtomVideoModels(
+		context.Background(), VideoTaskScope{UserID: 1, APIKeyID: 2, GroupID: 9}, group,
+	)
+
+	require.Len(t, models, 1)
+	require.Equal(t, HCAtomSeedanceV3PublicModel, models[0].Model)
 }

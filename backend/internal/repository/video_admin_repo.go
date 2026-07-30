@@ -57,6 +57,22 @@ func (r *videoAdminRepository) ListVideoProviders(ctx context.Context) ([]servic
 	}
 	return items, rows.Err()
 }
+
+func (r *videoAdminRepository) GetVideoProviderCredential(ctx context.Context, id int64) (*service.VideoProviderAccount, error) {
+	var item service.VideoProviderAccount
+	err := r.db.QueryRowContext(ctx, `SELECT id, provider, encrypted_api_key, base_url, default_model
+		FROM video_provider_accounts WHERE id=$1`, id).Scan(
+		&item.ID, &item.Provider, &item.EncryptedAPIKey, &item.BaseURL, &item.DefaultModel,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, service.ErrVideoProviderNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
 func (r *videoAdminRepository) CreateVideoProvider(ctx context.Context, item service.VideoProviderAccount) (*service.VideoProviderAccount, error) {
 	valid, conflict, err := r.validateVideoProviderTarget(ctx, item.GroupID, item.Provider, item.DefaultModel, 0)
 	if err != nil {

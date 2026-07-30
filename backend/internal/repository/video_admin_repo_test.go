@@ -39,6 +39,24 @@ func TestListVideoProvidersReturnsLatestSanitizedProviderError(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestGetVideoProviderCredentialLoadsCiphertextWithoutChangingSanitizedList(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	repo := &videoAdminRepository{db: db}
+	mock.ExpectQuery(`SELECT id, provider, encrypted_api_key, base_url, default_model[\s\S]+FROM video_provider_accounts WHERE id=\$1`).
+		WithArgs(int64(7)).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "provider", "encrypted_api_key", "base_url", "default_model"}).
+			AddRow(int64(7), service.HCAtomSeedanceV3Provider, "ciphertext", service.HCAtomSeedanceV3BaseURL, service.HCAtomSeedanceV3PublicModel))
+
+	item, err := repo.GetVideoProviderCredential(context.Background(), 7)
+
+	require.NoError(t, err)
+	require.Equal(t, "ciphertext", item.EncryptedAPIKey)
+	require.Equal(t, service.HCAtomSeedanceV3Provider, item.Provider)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestCreateVideoProviderDetectsConflictOnCustomModel(t *testing.T) {
 	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
 	require.NoError(t, err)

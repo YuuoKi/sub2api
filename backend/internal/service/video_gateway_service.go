@@ -77,6 +77,35 @@ func NewVideoGatewayService(repo VideoGatewayRuntimeRepository, gate *SingleSmok
 	return &VideoGatewayService{repo: repo, gate: gate, cfg: cfg, authCache: authCache, billingCache: billingCache, assetStore: assetStore}
 }
 
+func videoProductionDispatchEnabled(cfg *config.Config, provider string) bool {
+	if cfg == nil {
+		return false
+	}
+	switch provider {
+	case "seedance":
+		return cfg.VideoGateway.SeedanceProductionEnabled
+	case HCAtomSeedanceV3Provider:
+		return cfg.VideoGateway.HCAtomV3ProductionEnabled && cfg.VideoGateway.HCAtomV3DispatchEnabled
+	default:
+		return false
+	}
+}
+
+func videoDispatchAllowed(cfg *config.Config, gate *SingleSmokeAuthorization, provider string) bool {
+	if videoProductionDispatchEnabled(cfg, provider) {
+		return true
+	}
+	return gate != nil && gate.Allowed()
+}
+
+func anyVideoDispatchAllowed(cfg *config.Config, gate *SingleSmokeAuthorization) bool {
+	if cfg != nil && (cfg.VideoGateway.SeedanceProductionEnabled ||
+		(cfg.VideoGateway.HCAtomV3ProductionEnabled && cfg.VideoGateway.HCAtomV3DispatchEnabled)) {
+		return true
+	}
+	return gate != nil && gate.Allowed()
+}
+
 func (s *VideoGatewayService) ListProviders(ctx context.Context, scope VideoTaskScope) ([]VideoProviderAccount, error) {
 	if s == nil || s.repo == nil {
 		return nil, errors.New("video gateway repository is required")
@@ -91,7 +120,7 @@ func (s *VideoGatewayService) CreateTask(ctx context.Context, cmd VideoTaskCreat
 	if cmd.Scope.UserID <= 0 || cmd.Scope.APIKeyID <= 0 || cmd.Scope.GroupID <= 0 {
 		return nil, errors.New("complete employee video scope is required")
 	}
-	if s.cfg == nil || !s.cfg.VideoGateway.WorkerEnabled || s.gate == nil || !s.gate.Allowed() {
+	if s.cfg == nil || !s.cfg.VideoGateway.WorkerEnabled {
 		return nil, ErrVideoRealDispatchDenied
 	}
 	provider, err := s.repo.GetVideoProvider(ctx, cmd.ProviderAccountID, cmd.Scope.GroupID)
@@ -100,6 +129,16 @@ func (s *VideoGatewayService) CreateTask(ctx context.Context, cmd VideoTaskCreat
 	}
 	if !provider.Enabled || (provider.Provider != "seedance" && provider.Provider != HCAtomVideoV1Provider && provider.Provider != HCAtomSeedanceV3Provider) {
 		return nil, ErrVideoProviderNotFound
+	}
+	if !videoDispatchAllowed(s.cfg, s.gate, provider.Provider) {
+		return nil, ErrVideoRealDispatchDenied
+	}
+	spec, registered := lookupVideoProvider(provider.Provider)
+	if !registered || !spec.AdapterReady || provider.BaseURL != spec.DefaultBaseURL || provider.DefaultModel != spec.DefaultModel {
+		return nil, ErrVideoProviderNotFound
+	}
+	if provider.Provider == "seedance" && videoProductionDispatchEnabled(s.cfg, provider.Provider) && provider.TinyRealAuthorizedAt == nil {
+		return nil, ErrVideoRealDispatchDenied
 	}
 	if provider.Provider == HCAtomVideoV1Provider && (!s.cfg.VideoGateway.HCAtomV1DispatchEnabled || !s.cfg.HCAtom.VideoV1Enabled) {
 		return nil, ErrVideoRealDispatchDenied

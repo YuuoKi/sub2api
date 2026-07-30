@@ -8,12 +8,14 @@ import (
 )
 
 type fakeVideoAdminRepo struct {
-	created   VideoProviderAccount
-	updated   VideoProviderAdminUpdate
-	task      *VideoTask
-	deletedID int64
-	deleteErr error
-	providers []VideoProviderAccount
+	created        VideoProviderAccount
+	updated        VideoProviderAdminUpdate
+	task           *VideoTask
+	deletedID      int64
+	deleteErr      error
+	providers      []VideoProviderAccount
+	credential     *VideoProviderAccount
+	credentialRead bool
 }
 
 func (f *fakeVideoAdminRepo) ListVideoProviders(context.Context) ([]VideoProviderAccount, error) {
@@ -21,6 +23,13 @@ func (f *fakeVideoAdminRepo) ListVideoProviders(context.Context) ([]VideoProvide
 		return f.providers, nil
 	}
 	return []VideoProviderAccount{{ID: 1, Provider: "seedance"}}, nil
+}
+func (f *fakeVideoAdminRepo) GetVideoProviderCredential(context.Context, int64) (*VideoProviderAccount, error) {
+	f.credentialRead = true
+	if f.credential == nil {
+		return nil, ErrVideoProviderNotFound
+	}
+	return f.credential, nil
 }
 func (f *fakeVideoAdminRepo) CreateVideoProvider(_ context.Context, provider VideoProviderAccount) (*VideoProviderAccount, error) {
 	f.created = provider

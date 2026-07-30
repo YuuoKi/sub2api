@@ -123,11 +123,17 @@ func TestVideoConnectivityUsesProviderSpecificPollContractsWithoutPOST(t *testin
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			repo := &fakeVideoAdminRepo{providers: []VideoProviderAccount{{
-				ID:              31,
-				Provider:        test.provider,
-				EncryptedAPIKey: "video-connectivity-secret",
-			}}}
+			repo := &fakeVideoAdminRepo{
+				providers: []VideoProviderAccount{{
+					ID:              31,
+					Provider:        test.provider,
+					EncryptedAPIKey: "",
+				}},
+				credential: &VideoProviderAccount{
+					ID:              31,
+					Provider:        test.provider,
+					EncryptedAPIKey: "video-connectivity-secret",
+				}}
 			var request *http.Request
 			service := NewVideoAdminService(repo, fakeVideoEncryptor{})
 			service.connectivityClient = connectivityHTTPClient(func(req *http.Request) (*http.Response, error) {
@@ -147,6 +153,7 @@ func TestVideoConnectivityUsesProviderSpecificPollContractsWithoutPOST(t *testin
 			require.Equal(t, http.MethodGet, request.Method)
 			require.Contains(t, request.URL.Path, test.expectedPath)
 			require.Equal(t, "Bearer video-connectivity-secret", request.Header.Get("Authorization"))
+			require.True(t, repo.credentialRead, "connectivity must use the dedicated credential lookup, not the sanitized list")
 		})
 	}
 }

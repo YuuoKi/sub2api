@@ -28,7 +28,7 @@ func (r *videoGatewayRepository) ListEnabledVideoProviders(ctx context.Context, 
 	if err != nil {
 		return nil, err
 	}
-	rows, err := db.QueryContext(ctx, `SELECT id, group_id, provider, display_name, enabled, '', masked_key, '', default_model
+	rows, err := db.QueryContext(ctx, `SELECT id, group_id, provider, display_name, enabled, '', masked_key, base_url, default_model
 		FROM video_provider_accounts WHERE enabled=TRUE AND group_id=$1 ORDER BY id`, groupID)
 	if err != nil {
 		return nil, err
@@ -40,6 +40,7 @@ func (r *videoGatewayRepository) ListEnabledVideoProviders(ctx context.Context, 
 		if err := rows.Scan(&item.ID, &item.GroupID, &item.Provider, &item.DisplayName, &item.Enabled, &item.EncryptedAPIKey, &item.MaskedKey, &item.BaseURL, &item.DefaultModel); err != nil {
 			return nil, err
 		}
+		item.APIKeyConfigured = strings.TrimSpace(item.MaskedKey) != ""
 		items = append(items, item)
 	}
 	return items, rows.Err()
@@ -51,9 +52,11 @@ func (r *videoGatewayRepository) GetVideoProvider(ctx context.Context, id, group
 		return nil, err
 	}
 	var item service.VideoProviderAccount
-	err = db.QueryRowContext(ctx, `SELECT id, group_id, provider, display_name, enabled, encrypted_api_key, masked_key, base_url, default_model
+	err = db.QueryRowContext(ctx, `SELECT id, group_id, provider, display_name, enabled, encrypted_api_key, masked_key, base_url, default_model,
+		tiny_real_authorized_at, COALESCE(tiny_real_authorized_by,0), tiny_real_consumed_at
 		FROM video_provider_accounts WHERE id=$1 AND group_id=$2`, id, groupID).Scan(&item.ID, &item.GroupID, &item.Provider, &item.DisplayName, &item.Enabled,
-		&item.EncryptedAPIKey, &item.MaskedKey, &item.BaseURL, &item.DefaultModel)
+		&item.EncryptedAPIKey, &item.MaskedKey, &item.BaseURL, &item.DefaultModel,
+		&item.TinyRealAuthorizedAt, &item.TinyRealAuthorizedBy, &item.TinyRealConsumedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, service.ErrVideoProviderNotFound
 	}
@@ -122,6 +125,50 @@ func (r *videoGatewayRepository) BeginHCAtomV3Dispatch(ctx context.Context, id, 
 		return false, err
 	}
 	result, err := db.ExecContext(ctx, `UPDATE video_tasks task SET real_dispatch_count=1, dispatch_state='dispatching', version=task.version+1, updated_at=NOW() FROM video_provider_accounts provider, groups candidate WHERE task.id=$1 AND task.version=$2 AND task.status='queued' AND task.real_dispatch_count=0 AND provider.id=task.provider_account_id AND provider.group_id=task.group_id AND candidate.id=task.group_id AND candidate.status='active' AND candidate.subscription_type='standard' AND candidate.deleted_at IS NULL AND provider.enabled=TRUE AND provider.provider=$3 AND provider.base_url=$4 AND provider.default_model=$5`, id, version, service.HCAtomSeedanceV3Provider, service.HCAtomSeedanceV3BaseURL, service.HCAtomSeedanceV3PublicModel)
+	if err != nil {
+		return false, err
+	}
+	n, err := result.RowsAffected()
+	return n == 1, err
+}
+
+func (r *videoGatewayRepository) BeginProductionDispatch(ctx context.Context, id, version int64, providerName, baseURL, model string) (bool, error) {
+	db, err := r.requireDB()
+	if err != nil {
+		return false, err
+	}
+	result, err := db.ExecContext(ctx, `UPDATE video_tasks task SET
+		real_dispatch_count=1, dispatch_state='dispatching', version=task.version+1, updated_at=NOW()
+		FROM video_provider_accounts provider, groups candidate, api_keys key, users owner
+		WHERE task.id=$1 AND task.version=$2 AND task.status='queued'
+		AND task.real_dispatch_count=0 AND task.dispatch_state='pending'
+		AND task.reservation_state=$6 AND task.reserved_cost_usd>0
+		AND task.pricing_cny_per_million_completion_tokens>0
+		AND task.pricing_usd_cny_exchange_rate>0 AND task.pricing_maximum_cny>0
+		AND task.provider=$3 AND task.model=$5
+		AND provider.id=task.provider_account_id AND provider.group_id=task.group_id
+		AND provider.enabled=TRUE AND provider.provider=$3
+		AND provider.base_url=$4 AND provider.default_model=$5
+		AND provider.encrypted_api_key<>''
+		AND ($3<>'seedance' OR provider.tiny_real_authorized_at IS NOT NULL)
+		AND candidate.id=task.group_id AND candidate.status='active'
+		AND candidate.subscription_type='standard' AND candidate.deleted_at IS NULL
+		AND ($3<>'hc_atom_seedance_v3' OR (
+			candidate.platform='hc_atom'
+			AND COALESCE((candidate.models_list_config->>'enabled')::boolean,FALSE)=TRUE
+			AND candidate.models_list_config->'models' ? $5
+			AND CASE task.resolution
+				WHEN '480p' THEN candidate.video_price_480p
+				WHEN '720p' THEN candidate.video_price_720p
+				WHEN '1080p' THEN candidate.video_price_1080p
+				ELSE NULL
+			END > 0
+		))
+		AND key.id=task.api_key_id AND key.user_id=task.created_by
+		AND key.group_id=task.group_id AND key.status=$7
+		AND key.deleted_at IS NULL AND (key.expires_at IS NULL OR key.expires_at>NOW())
+		AND owner.id=task.created_by AND owner.status='active' AND owner.deleted_at IS NULL`,
+		id, version, providerName, baseURL, model, service.VideoReservationReserved, service.StatusAPIKeyActive)
 	if err != nil {
 		return false, err
 	}

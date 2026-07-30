@@ -198,7 +198,10 @@ func TestHCAtomV3CreateUnknownStatusRetainsUpstreamIDAsUncertain(t *testing.T) {
 }
 
 func TestHCAtomV3CreateContractKeepsLegacyPromptAndAllowsV3Fields(t *testing.T) {
-	repo := &workerRepoStub{provider: VideoProviderAccount{ID: 10, GroupID: 9, Provider: HCAtomSeedanceV3Provider, Enabled: true, DefaultModel: HCAtomSeedanceV3PublicModel}}
+	repo := &workerRepoStub{provider: VideoProviderAccount{
+		ID: 10, GroupID: 9, Provider: HCAtomSeedanceV3Provider, Enabled: true,
+		BaseURL: HCAtomSeedanceV3BaseURL, DefaultModel: HCAtomSeedanceV3PublicModel,
+	}}
 	cfg := &config.Config{VideoGateway: config.VideoGatewayConfig{WorkerEnabled: true, HCAtomV3DispatchEnabled: true, SeedanceCNYPerMillionTokens: 2, USDCNYExchangeRate: 7, TinyRealEstimateCNY: .7, TinyRealMaximumCNY: 1.4}}
 	created, err := NewVideoGatewayService(repo, NewSingleSmokeAuthorization(true), cfg, &videoAuthInvalidatorStub{}, &videoBillingInvalidatorStub{}).CreateTask(context.Background(), VideoTaskCreateCommand{Scope: VideoTaskScope{UserID: 1, APIKeyID: 2, GroupID: 9}, ProviderAccountID: 10, Prompt: "legacy prompt", Duration: 8, Resolution: "1080p", Ratio: "16:9", GenerateAudio: true})
 	if err != nil || created == nil || created.Model != HCAtomSeedanceV3PublicModel || created.DurationSeconds != 8 || len(created.CreateRequest.Content) != 1 || created.CreateRequest.Content[0].Text != "legacy prompt" {

@@ -104,7 +104,8 @@ func (w *VideoGatewayWorker) RunOnce(ctx context.Context) error {
 			Currency: "USD", Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()}, polled))
 		return err
 	}
-	if w.gate == nil || !w.gate.Allowed() {
+	productionDispatch := videoProductionDispatchEnabled(w.cfg, provider.Provider)
+	if !productionDispatch && (w.gate == nil || !w.gate.Allowed()) {
 		finalizeErr := w.finalize(ctx, task, VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version, Status: VideoStatusFailed,
 			ProviderErrorCode: "process_gate_denied", ProviderErrorMessage: "process safety gate denied dispatch", ErrorMessage: "process safety gate denied dispatch", Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()})
 		if finalizeErr != nil {
@@ -112,30 +113,48 @@ func (w *VideoGatewayWorker) RunOnce(ctx context.Context) error {
 		}
 		return ErrVideoRealDispatchDenied
 	}
-	started, err := w.repo.BeginRealDispatch(ctx, task.ID, task.Version)
-	if provider.Provider == HCAtomVideoV1Provider && (!w.cfg.VideoGateway.HCAtomV1DispatchEnabled || !w.cfg.HCAtom.VideoV1Enabled) {
-		started = false
-		err = nil
-	}
-	if provider.Provider == HCAtomSeedanceV3Provider {
-		if !w.cfg.VideoGateway.HCAtomV3DispatchEnabled {
+	var started bool
+	if productionDispatch {
+		spec, ok := lookupVideoProvider(provider.Provider)
+		if !ok || !spec.AdapterReady || provider.BaseURL != spec.DefaultBaseURL || provider.DefaultModel != spec.DefaultModel {
+			started = false
+		} else {
+			started, err = w.repo.BeginProductionDispatch(ctx, task.ID, task.Version, spec.Provider, spec.DefaultBaseURL, spec.DefaultModel)
+		}
+	} else {
+		started, err = w.repo.BeginRealDispatch(ctx, task.ID, task.Version)
+		if provider.Provider == HCAtomVideoV1Provider && (!w.cfg.VideoGateway.HCAtomV1DispatchEnabled || !w.cfg.HCAtom.VideoV1Enabled) {
 			started = false
 			err = nil
-		} else {
-			started, err = w.repo.BeginHCAtomV3Dispatch(ctx, task.ID, task.Version)
+		}
+		if provider.Provider == HCAtomSeedanceV3Provider {
+			if !w.cfg.VideoGateway.HCAtomV3DispatchEnabled {
+				started = false
+				err = nil
+			} else {
+				started, err = w.repo.BeginHCAtomV3Dispatch(ctx, task.ID, task.Version)
+			}
 		}
 	}
 	if err != nil {
 		return err
 	}
 	if !started {
+		errorCode := "gate_consumed"
+		errorMessage := "single smoke authorization already consumed"
+		if productionDispatch {
+			errorCode = "production_dispatch_conflict"
+			errorMessage = "production dispatch claim was rejected"
+		}
 		finalizeErr := w.finalize(ctx, task, VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version, Status: VideoStatusFailed,
-			ProviderErrorCode: "gate_consumed", ProviderErrorMessage: "single smoke authorization already consumed", ErrorMessage: "single smoke authorization already consumed", Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()})
+			ProviderErrorCode: errorCode, ProviderErrorMessage: errorMessage, ErrorMessage: errorMessage, Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()})
 		return finalizeErr
 	}
-	if err = w.gate.Consume(); err != nil {
-		return w.finalize(ctx, task, VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version + 1, Status: VideoStatusFailed,
-			ProviderErrorCode: "process_gate_denied", ProviderErrorMessage: "process safety gate denied dispatch", ErrorMessage: "process safety gate denied dispatch", Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()})
+	if !productionDispatch {
+		if err = w.gate.Consume(); err != nil {
+			return w.finalize(ctx, task, VideoTaskFinalization{TaskID: task.ID, ExpectedVersion: task.Version + 1, Status: VideoStatusFailed,
+				ProviderErrorCode: "process_gate_denied", ProviderErrorMessage: "process safety gate denied dispatch", ErrorMessage: "process safety gate denied dispatch", Settlement: VideoSettlementRelease, CompletedAt: time.Now().UTC()})
+		}
 	}
 	request := task.CreateRequest
 	if request.Prompt == "" && len(request.Content) == 0 {

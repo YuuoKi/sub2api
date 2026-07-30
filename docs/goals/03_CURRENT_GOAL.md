@@ -1,10 +1,11 @@
 # 当前目标：Sub2API 本地分支收口
 
 日期：2026-07-30
-整合分支：`codex/consolidate-sub2api-20260730`
-整合目录：`D:\sub2api-trunk\.worktrees\consolidate-sub2api-20260730`
+主分支：`main`
+执行目录：`D:\sub2api-trunk`
 整合代码 HEAD：`74daac1e7408ae24db46885e3c9280a3917c2603`
-状态：**本地合流与验证通过，待 main 快进和冗余 refs 清理**
+门禁审查提交：`8023abdd16b1d9ba3e163344fb848288f41a133d`
+状态：**本地分支收口完成 / 仅保留 main 与主工作树 / 未 push、未部署**
 
 ## 目标
 
@@ -42,10 +43,10 @@
 - 不执行 fetch、push、部署、reset、clean 或 rebase。
 - 任一最终 Git 验收失败时停止删除 refs，并在审查包中标记“已阻塞”。
 
-## 完成条件
+## 完成结果
 
-1. `main` 以 `--ff-only` 前移到已验证整合结果。
-2. 显式移除四个旧关联 worktree。
-3. 删除八个冗余本地分支和临时整合分支。
+1. `main` 已以 `--ff-only` 前移到已验证整合结果。
+2. 五个旧/临时关联 worktree 已显式移除。
+3. 八个冗余本地分支和临时整合分支已删除。
 4. 最终仅剩 `main` 与 `D:\sub2api-trunk` 主工作树。
-5. 两个 archive 标签可解析到原始 SHA，主工作树干净。
+5. 两个 archive 标签均可解析到原始 SHA，主工作树干净。

@@ -13,15 +13,16 @@
 </head>
 <body>
   <h1>Sub2API 本地分支收口审查包</h1>
-  <p class="warn"><strong>当前状态：</strong>本地合流与全部门禁通过；待将结果快进到 <code>main</code> 并显式清理冗余本地 refs。未 fetch、push、部署或调用真实供应商。</p>
+  <p class="ok"><strong>当前状态：</strong>本地分支收口完成；仅保留 <code>main</code> 与主工作树。未 fetch、push、部署或调用真实供应商。</p>
 
   <section class="card">
     <h2>目标与背景</h2>
     <p>将 9 个本地分支和 5 个 worktree 收口为单一 <code>main</code>，同时保留最新 Key Vault 功能、staff 部署 checkpoint、原 main 审计提交和计费旁支恢复锚点。</p>
     <table>
-      <tr><th>执行目录</th><td><code>D:\sub2api-trunk\.worktrees\consolidate-sub2api-20260730</code></td></tr>
-      <tr><th>整合分支</th><td><code>codex/consolidate-sub2api-20260730</code></td></tr>
+      <tr><th>执行目录</th><td><code>D:\sub2api-trunk</code></td></tr>
+      <tr><th>最终分支</th><td><code>main</code></td></tr>
       <tr><th>整合代码 HEAD</th><td><code>74daac1e7408ae24db46885e3c9280a3917c2603</code></td></tr>
+      <tr><th>门禁审查提交</th><td><code>8023abdd16b1d9ba3e163344fb848288f41a133d</code></td></tr>
       <tr><th>远端影响</th><td>无；远端 refs 仅作为本地快照读取</td></tr>
     </table>
   </section>
@@ -31,6 +32,7 @@
     <ul>
       <li><code>fd2aad9bc</code>：将 <code>codex/hc-key-vault-ux-20260729@d605aa51d7</code> 合入原 <code>main@8c2d2a7ed7</code>。</li>
       <li><code>74daac1e7</code>：合入 <code>fix/staff-console-hotfix-20260726@4e0290fb3</code>，保留部署 checkpoint。</li>
+      <li><code>main</code> 已通过 <code>--ff-only</code> 前移到收口结果；本地分支由 9 个降为 1 个，worktree 由 5 个降为 1 个。</li>
       <li>未直接合并 <code>fix/runtime-billing-blockers-20260725@cadc1b0d8</code>；该分支与最新集成线存在 9 个冲突 hunk。</li>
       <li>以 <code>b2378efa1</code> 作为计费竞态保护的适配实现；余额、quota、独立 reset 与 nil cache 四项不变量均有当前实现和测试证据。</li>
       <li>未新增公开 API、数据库迁移、配置契约或前端交互；本轮新增内容仅为 Git 合流记录与真相文档。</li>
@@ -89,19 +91,20 @@ PASS</pre>
     <ul>
       <li>未执行 fetch，远端跟踪 refs 不是远端服务器实时证明；本轮明确不清理远端分支。</li>
       <li>没有执行真实供应商 E2E、生产部署或线上回归；本审查包只证明本地分支收口和工程门禁。</li>
+      <li>Windows 首次删除临时 HC worktree 时触发长路径错误；Git 注册已移除，剩余目录经精确路径清理。其余旧目录仅残留被忽略的 <code>node_modules</code>，确认无源码/WIP 后删除。</li>
       <li>回滚锚点：<code>archive/pre-consolidation-main-20260730</code> → 原 main，<code>archive/runtime-billing-blockers-20260725</code> → 原计费旁支。</li>
       <li>禁止 reset/clean/rebase；需要回滚时使用 <code>git revert</code> 撤销合流或文档提交。</li>
     </ul>
   </section>
 
   <section class="card">
-    <h2>文件索引、下一步与后续提示词</h2>
+    <h2>文件索引、最终状态与后续提示词</h2>
     <ul>
       <li><code>docs/goals/03_CURRENT_GOAL.md</code>：当前收口目标和完成条件。</li>
       <li><code>docs/reviews/LATEST_REVIEW_PACKAGE.html</code>：本单一自包含审查包。</li>
       <li><code>docs/goals/SUB2API_RELEASE_20260728.md</code>：计费与 HC-ATOM 适配来源。</li>
     </ul>
-    <p>下一步：提交两份文档，以 <code>--ff-only</code> 更新 <code>main</code>，逐个移除已确认干净的旧 worktree，再删除已被包含或已归档的本地分支，最后刷新本页状态。</p>
+    <p>最终状态：<code>refs/heads/main</code> 是唯一的本地分支，<code>D:\sub2api-trunk</code> 是唯一注册 worktree；两个 archive 标签均已解析验证。后续如需远端同步或部署，必须另行授权。</p>
     <p><strong>可复制后续提示词：</strong><code>请只读核对 D:\sub2api-trunk 最终 Git 状态：确认仅剩 main 和主工作树，两个 archive 标签可解析，main 包含 d605aa51d7、4e0290fb3、8c2d2a7ed7，并且没有 fetch、push 或部署记录。</code></p>
   </section>
 </body>

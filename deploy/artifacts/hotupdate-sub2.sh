@@ -4,7 +4,7 @@
 set -euo pipefail
 
 HOST=${GZ_HOST:-ubuntu@114.132.50.149}
-SUB2_SHA=${SUB2_SHA:-f8cc438f6}
+SUB2_SHA=${SUB2_SHA:-758f5c419}
 QC_SHA=${QC_SHA:-d6e54a8}
 LOCAL_TAR=${LOCAL_TAR:-/mnt/c/Temp/sub2api-deploy/wujie-sub2api-staff-hotfix-${SUB2_SHA}.tar}
 REMOTE_TAR=/tmp/wujie-sub2api-staff-hotfix-${SUB2_SHA}.tar
@@ -44,7 +44,7 @@ ARCHIVE_DIR=$5
 docker load -i "${REMOTE_TAR}"
 SRC="wujie-sub2api:staff-hotfix-${SUB2_SHA}"
 docker tag "${SRC}" wujie-production-sub2api:latest
-docker tag "${SRC}" "wujie-sub2api:20260726-r1"
+docker tag "${SRC}" "wujie-sub2api:20260726-r3"
 docker tag "${SRC}" wujie-sub2api:local
 
 cd "${ACTIVE_DIR}"
@@ -55,8 +55,8 @@ docker compose --env-file .env -f compose.production.yml ps sub2api
 curl -fsS http://127.0.0.1:8081/health
 echo
 
-python3 - <<'PY'
-import json,re,urllib.request
+EXPECTED_SHA="${SUB2_SHA}" python3 - <<'PY'
+import json,os,re,urllib.request
 html=urllib.request.urlopen('http://127.0.0.1:8081/',timeout=15).read().decode('utf-8','replace')
 m=re.search(r'window\.__APP_CONFIG__=(\{.*?\});</script>',html)
 assert m, 'missing __APP_CONFIG__'
@@ -64,8 +64,9 @@ cfg=json.loads(m.group(1))
 for k in ('version','build_commit','build_date'):
     print(f'{k}={cfg.get(k)}')
 commit=str(cfg.get('build_commit') or '')
-if not commit.startswith('f8cc438'):
-    raise SystemExit(f'UNEXPECTED_COMMIT {commit}')
+expected=os.environ.get('EXPECTED_SHA','')
+if not expected or not commit.startswith(expected[:7]):
+    raise SystemExit(f'UNEXPECTED_COMMIT {commit} want_prefix={expected[:7]}')
 print('COMMIT_OK')
 PY
 
@@ -106,13 +107,14 @@ echo REMOTE_DONE
 EOF
 
 echo "==> public verify"
-python3 - <<'PY'
-import json,re,urllib.request
+EXPECTED_SHA="${SUB2_SHA}" python3 - <<'PY'
+import json,os,re,urllib.request
 html=urllib.request.urlopen('http://114.132.50.149/',timeout=20).read().decode('utf-8','replace')
 cfg=json.loads(re.search(r'window\.__APP_CONFIG__=(\{.*?\});</script>',html).group(1))
 for k in ('version','build_commit','build_date'):
     print(f'public_{k}={cfg.get(k)}')
-assert str(cfg.get('build_commit','')).startswith('f8cc438'), cfg
+expected=os.environ.get('EXPECTED_SHA','')
+assert expected and str(cfg.get('build_commit','')).startswith(expected[:7]), cfg
 print('PUBLIC_OK')
 PY
 curl -fsS http://114.132.50.149/health

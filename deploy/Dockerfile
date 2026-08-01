@@ -18,7 +18,11 @@ ARG GOSUMDB=sum.golang.google.cn
 FROM ${NODE_IMAGE} AS frontend-builder
 
 WORKDIR /app/frontend
-ENV NODE_OPTIONS=--max-old-space-size=1536
+# The Vue typecheck/build exceeds 1.5 GiB on the current dependency graph.
+# Keep the larger heap scoped to the disposable builder stage so the runtime
+# image remains unchanged while release builds do not fail nondeterministically
+# with an out-of-memory error.
+ENV NODE_OPTIONS=--max-old-space-size=3072
 
 # Install pnpm. Keep this pinned to the lockfile-compatible major version so
 # Docker builds remain reproducible when pnpm changes config validation rules.

@@ -12,7 +12,7 @@
 - embedded frontend 已将 `/sub2api/` 纳入 API bypass；无 Key 或无效 Key 必须返回 JSON 401，不得返回 SPA HTML。
 - PostgreSQL migration advisory lock 使用同一个专用 `sql.Conn` 获取与释放，并有并发 session 集成测试。
 - delivery preflight 要求显式 `RepoRoot`、`ReleaseRoot`、`ExpectedBranch`、`RequiredProductCommit`；构建身份由 `VERSION/COMMIT/DATE` 写入 manifest。
-- 已通过：key-context/route/auth/unit 定向测试、migration 定向测试、delivery preflight 离线契约测试、`go test ./... -count=1`。`-tags embed` 编译因该 worktree 缺少生成的 `internal/web/dist` 被阻塞；前端全量门禁、Docker canary 尚未在当前环境重新证明。
+- 已通过：key-context/route/auth/unit 定向测试、migration 定向测试、delivery preflight 离线契约测试、`go test ./... -count=1`。并发 advisory-lock 集成测试已尝试，但因 Docker 不可用按 harness 规则跳过；`-tags embed` 编译因该 worktree 缺少生成的 `internal/web/dist` 被阻塞；前端全量门禁、Docker canary 尚未在当前环境重新证明。
 - 服务器严格 host key 校验通过，但 `ubuntu@114.132.50.149` 返回 `Permission denied (publickey,password)`；在 SSH 恢复前禁止部署、备份、密码操作或付费任务。
 - 公网 HTTP 管理入口是已接受的长期安全例外；本轮密码操作只允许用户自行通过 SSH 隧道完成，Agent 不读取、保存、打印或输入秘密。
 

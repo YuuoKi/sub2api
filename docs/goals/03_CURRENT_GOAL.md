@@ -13,7 +13,7 @@
 - 代码实现提交：`66fe36c16`；真相源随后有一笔仅文档提交，发布前必须以 `git rev-parse HEAD` 作为精确 SHA。
 - 目标：完成可追溯构建、部署前验证和真实一图一视频闭环；任一门禁失败即停止并保留回滚证据。
 - 已落地：Sub2 key-context 合约、`/sub2api/*` embed bypass、专用连接 advisory lock、显式 delivery roots/commit、构建身份 manifest。
-- 已验证：key-context/route/auth/unit 定向测试、migration 定向测试、delivery preflight 离线契约测试、`go test ./... -count=1`；`-tags embed` 因缺少生成的 `internal/web/dist` 阻塞。
+- 已验证：key-context/route/auth/unit 定向测试、migration 定向测试、delivery preflight 离线契约测试、`go test ./... -count=1`；并发 advisory-lock 集成测试因 Docker 不可用按 harness 规则跳过；`-tags embed` 因缺少生成的 `internal/web/dist` 阻塞。
 - 未完成：服务器只读盘点、完整备份、Sub2 canary/正式切换、QCanvas green 切换、浏览器闭环、用户 SSH 隧道输入密码、真实图片/视频付费验收。
 - 阻塞证据：严格 host key 校验可通过；`ssh ... ubuntu@114.132.50.149` 返回 `Permission denied (publickey,password)`。禁止绕过验证或读取秘密。
 - 回滚原则：旧容器、compose/Caddy、镜像、卷、dump 和发布目录在用户另行授权清理前全部保留；线上失败只恢复旧镜像/compose。

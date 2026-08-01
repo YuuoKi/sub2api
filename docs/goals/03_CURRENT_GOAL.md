@@ -10,6 +10,7 @@
 ## 2026-08-02 生产收口目标（最新覆盖）
 
 - 发布分支：`codex/sub2api-production-readiness-20260802`。
+- 代码实现提交：`66fe36c16`；真相源随后有一笔仅文档提交，发布前必须以 `git rev-parse HEAD` 作为精确 SHA。
 - 目标：完成可追溯构建、部署前验证和真实一图一视频闭环；任一门禁失败即停止并保留回滚证据。
 - 已落地：Sub2 key-context 合约、`/sub2api/*` embed bypass、专用连接 advisory lock、显式 delivery roots/commit、构建身份 manifest。
 - 已验证：key-context/route/auth/unit 定向测试、migration 定向测试、delivery preflight 离线契约测试、`go test ./... -count=1`；`-tags embed` 因缺少生成的 `internal/web/dist` 阻塞。

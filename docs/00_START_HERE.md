@@ -6,7 +6,7 @@
 
 > 当前状态：**待复核 / 已阻塞（BLOCKED_AUTH）**。本分支只证明代码与离线门禁；服务器活动栈、备份、canary、切换、线上回归和真实供应商闭环尚未证明。
 
-- 发布分支：`codex/sub2api-production-readiness-20260802`
+- 发布分支：`codex/sub2api-production-readiness-20260802`，已推送到 `fork`；未推送 Sub2API 上游 `origin`，未触碰任何 `main`。
 - 代码实现提交：`66fe36c16`；key-context 实现父提交为 `2c109008ef4d3ea9732b7fd903d916483cbeb828`。本次真相源提交后，发布前以 `git rev-parse HEAD` 获取精确 SHA。
 - `GET /v1/key-context` 只返回 `object`、稳定非敏感 `subject_id`、`group_id`、`model_kinds`；不返回原始 Key、余额、供应商凭据或敏感账号信息。
 - embedded frontend 已将 `/sub2api/` 纳入 API bypass；无 Key 或无效 Key 必须返回 JSON 401，不得返回 SPA HTML。

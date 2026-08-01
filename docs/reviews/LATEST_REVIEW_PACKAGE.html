@@ -13,7 +13,7 @@
 </head>
 <body>
   <h1>Sub2API 本地分支收口审查包</h1>
-  <p class="ok"><strong>当前状态：</strong>本地分支收口完成；仅保留 <code>main</code> 与主工作树。未 fetch、push、部署或调用真实供应商。</p>
+  <p class="blocked"><strong>当前状态：</strong>发布分支已推送到 <code>fork</code>；生产状态仍为待复核 / BLOCKED_AUTH。未备份、未 canary、未部署、未执行密码操作或真实供应商调用。</p>
 
   <section class="card">
     <h2>目标与背景</h2>
@@ -111,7 +111,7 @@ PASS</pre>
     <h2>2026-08-02 production-readiness delta (latest)</h2>
     <p class="blocked"><strong>Current state: PENDING REVIEW / BLOCKED_AUTH.</strong> The release branch contains local implementation and targeted evidence, but the active production stack cannot be confirmed because verified SSH authentication to <code>ubuntu@114.132.50.149</code> returned <code>Permission denied</code>. No backup, canary, production cutover, credential operation, or paid provider call was performed.</p>
     <table>
-      <tr><th>Release branch</th><td><code>codex/sub2api-production-readiness-20260802</code></td></tr>
+      <tr><th>Release branch</th><td><code>codex/sub2api-production-readiness-20260802</code>, pushed only to <code>fork</code>; Sub2API upstream <code>origin</code> and all <code>main</code> refs were not touched.</td></tr>
       <tr><th>Implementation commit</th><td><code>66fe36c16</code> (<code>fix(release): harden migration lock and delivery identity</code>), parent <code>2c109008e</code>. The later truth-source-only commit must be checked with <code>git rev-parse HEAD</code> before release.</td></tr>
       <tr><th>Required API contracts</th><td><code>GET /v1/key-context</code> returns only <code>object</code>, stable opaque <code>subject_id</code>, <code>group_id</code>, and ordered <code>model_kinds</code>; <code>/sub2api/*</code> is excluded from embedded SPA fallback and remains JSON-authenticated.</td></tr>
       <tr><th>Migration safety</th><td>Advisory lock acquisition and release use one dedicated <code>sql.Conn</code>; concurrent-session coverage is present as an integration test.</td></tr>

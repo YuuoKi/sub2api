@@ -67,6 +67,16 @@ func TestVideoGatewayCanonicalRoutesAreRegistered(t *testing.T) {
 	}
 }
 
+func TestQCanvasKeyContextRouteIsRegistered(t *testing.T) {
+	router := newGatewayRoutesTestRouter(service.PlatformHCAtom)
+	for _, route := range router.Routes() {
+		if route.Method == http.MethodGet && route.Path == "/v1/key-context" {
+			return
+		}
+	}
+	t.Fatal("GET /v1/key-context is not registered")
+}
+
 func TestVideoGatewaySub2CompatibilityRoutesAreRegistered(t *testing.T) {
 	router := newGatewayRoutesTestRouter(service.PlatformHCAtom)
 	wanted := map[string]bool{

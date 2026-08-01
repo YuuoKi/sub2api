@@ -146,8 +146,8 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 
 		// ── 5. 加载订阅（订阅模式时始终加载） ───────────────────────
 
-		// skipBilling: /v1/usage 只需鉴权，跳过所有计费执行
-		skipBilling := c.Request.URL.Path == "/v1/usage"
+		// 鉴权检查端点无需计费执行；身份、用户、分组、IP 与禁用状态仍会校验。
+		skipBilling := apiKeyAuthSkipsBilling(c.Request.URL.Path)
 
 		var subscription *service.UserSubscription
 		isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
@@ -241,6 +241,13 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 
 		c.Next()
 	}
+}
+
+// apiKeyAuthSkipsBilling identifies endpoints that only inspect an already
+// authenticated key. All identity, user, group, IP and disabled-key checks are
+// still enforced before these endpoints run.
+func apiKeyAuthSkipsBilling(path string) bool {
+	return path == "/v1/usage" || path == "/v1/key-context"
 }
 
 // GetAPIKeyFromContext 从上下文中获取API key

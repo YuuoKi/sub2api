@@ -1152,12 +1152,70 @@ func TestAPIKeyAuthRejectsExhaustedBalance(t *testing.T) {
 	requireAPIKeyAuthError(t, w, "INSUFFICIENT_BALANCE", "Insufficient account balance")
 }
 
+func TestAPIKeyAuthKeyContextRequiresAuthenticationAndSkipsBilling(t *testing.T) {
+	groupID := int64(301)
+	user := &service.User{ID: 201, Status: service.StatusActive, Balance: 0}
+	group := &service.Group{ID: groupID, Status: service.StatusActive, Platform: service.PlatformHCAtom}
+	apiKey := &service.APIKey{
+		ID:      401,
+		UserID:  user.ID,
+		Key:     "key-context-test-key",
+		GroupID: &groupID,
+		Status:  service.StatusAPIKeyQuotaExhausted,
+		User:    user,
+		Group:   group,
+	}
+	repo := &stubApiKeyRepo{getByKey: func(_ context.Context, key string) (*service.APIKey, error) {
+		if key != apiKey.Key {
+			return nil, service.ErrAPIKeyNotFound
+		}
+		clone := *apiKey
+		return &clone, nil
+	}}
+	cfg := &config.Config{RunMode: config.RunModeStandard}
+	apiKeyService := service.NewAPIKeyService(repo, nil, nil, nil, nil, nil, cfg)
+	router := newAuthTestRouter(apiKeyService, nil, cfg)
+
+	t.Run("missing key", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/v1/key-context", nil))
+		require.Equal(t, http.StatusUnauthorized, w.Code)
+		requireAPIKeyAuthError(t, w, "API_KEY_REQUIRED", "API key is required in Authorization header (Bearer scheme), x-api-key header, or x-goog-api-key header")
+	})
+
+	t.Run("invalid key", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/v1/key-context", nil)
+		req.Header.Set("Authorization", "Bearer invalid")
+		router.ServeHTTP(w, req)
+		require.Equal(t, http.StatusUnauthorized, w.Code)
+		requireAPIKeyAuthError(t, w, "INVALID_API_KEY", "Invalid API key")
+	})
+
+	t.Run("valid issued key bypasses quota and balance enforcement", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/v1/key-context", nil)
+		req.Header.Set("Authorization", "Bearer "+apiKey.Key)
+		router.ServeHTTP(w, req)
+		require.Equal(t, http.StatusOK, w.Code)
+	})
+}
+
+func TestAPIKeyAuthSkipsBilling(t *testing.T) {
+	require.True(t, apiKeyAuthSkipsBilling("/v1/usage"))
+	require.True(t, apiKeyAuthSkipsBilling("/v1/key-context"))
+	require.False(t, apiKeyAuthSkipsBilling("/v1/models"))
+	require.False(t, apiKeyAuthSkipsBilling("/sub2api/v1/models"))
+}
+
 func newAuthTestRouter(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, cfg *config.Config) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, subscriptionService, cfg)))
-	router.GET("/t", func(c *gin.Context) {
+	okHandler := func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"ok": true})
-	})
+	}
+	router.GET("/t", okHandler)
+	router.GET("/v1/key-context", okHandler)
 	return router
 }
 

@@ -6,9 +6,37 @@ import (
 	"context"
 	"database/sql"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
+
+func TestMigrationsRunner_AdvisoryLockSerializesConcurrentSessions(t *testing.T) {
+	ctx := context.Background()
+	holder, err := integrationDB.Conn(ctx)
+	require.NoError(t, err)
+	defer func() { _ = holder.Close() }()
+
+	_, err = holder.ExecContext(ctx, "SELECT pg_advisory_lock($1)", migrationsAdvisoryLockID)
+	require.NoError(t, err)
+
+	contender, err := integrationDB.Conn(ctx)
+	require.NoError(t, err)
+	defer func() { _ = contender.Close() }()
+
+	blockedCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	defer cancel()
+	blocked := make(chan error, 1)
+	go func() { blocked <- pgAdvisoryLock(blockedCtx, contender) }()
+	require.Error(t, <-blocked, "a second session must not acquire the migration lock while the holder owns it")
+
+	_, err = holder.ExecContext(ctx, "SELECT pg_advisory_unlock($1)", migrationsAdvisoryLockID)
+	require.NoError(t, err)
+	acquiredCtx, acquiredCancel := context.WithTimeout(ctx, 2*time.Second)
+	defer acquiredCancel()
+	require.NoError(t, pgAdvisoryLock(acquiredCtx, contender))
+	require.NoError(t, pgAdvisoryUnlock(context.Background(), contender))
+}
 
 func TestMigrationsRunner_IsIdempotent_AndSchemaIsUpToDate(t *testing.T) {
 	tx := testTx(t)

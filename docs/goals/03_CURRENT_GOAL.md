@@ -5,7 +5,17 @@
 执行目录：`D:\sub2api-trunk`
 整合代码 HEAD：`74daac1e7408ae24db46885e3c9280a3917c2603`
 门禁审查提交：`8023abdd16b1d9ba3e163344fb848288f41a133d`
-状态：**本地分支收口完成 / 仅保留 main 与主工作树 / 未 push、未部署**
+状态：**本地历史收口已被本轮生产收口目标覆盖；当前待复核 / 已阻塞（BLOCKED_AUTH）**
+
+## 2026-08-02 生产收口目标（最新覆盖）
+
+- 发布分支：`codex/sub2api-production-readiness-20260802`。
+- 目标：完成可追溯构建、部署前验证和真实一图一视频闭环；任一门禁失败即停止并保留回滚证据。
+- 已落地：Sub2 key-context 合约、`/sub2api/*` embed bypass、专用连接 advisory lock、显式 delivery roots/commit、构建身份 manifest。
+- 已验证：key-context/route/auth/unit 定向测试、migration 定向测试、delivery preflight 离线契约测试、`go test ./... -count=1`；`-tags embed` 因缺少生成的 `internal/web/dist` 阻塞。
+- 未完成：服务器只读盘点、完整备份、Sub2 canary/正式切换、QCanvas green 切换、浏览器闭环、用户 SSH 隧道输入密码、真实图片/视频付费验收。
+- 阻塞证据：严格 host key 校验可通过；`ssh ... ubuntu@114.132.50.149` 返回 `Permission denied (publickey,password)`。禁止绕过验证或读取秘密。
+- 回滚原则：旧容器、compose/Caddy、镜像、卷、dump 和发布目录在用户另行授权清理前全部保留；线上失败只恢复旧镜像/compose。
 
 ## 目标
 

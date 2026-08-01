@@ -6,8 +6,17 @@
 
 ```powershell
 # cwd: repository root
-./deploy/wujie-delivery-preflight.ps1 Check
-./deploy/wujie-delivery-preflight.ps1 Build
+./deploy/wujie-delivery-preflight.ps1 Check `
+  -RepoRoot (Get-Location).Path `
+  -ReleaseRoot (Join-Path (Get-Location) 'release') `
+  -ExpectedBranch 'codex/sub2api-production-readiness-20260802' `
+  -RequiredProductCommit (git rev-parse HEAD)
+./deploy/wujie-delivery-preflight.ps1 Build `
+  -RepoRoot (Get-Location).Path `
+  -ReleaseRoot (Join-Path (Get-Location) 'release') `
+  -ExpectedBranch 'codex/sub2api-production-readiness-20260802' `
+  -RequiredProductCommit (git rev-parse HEAD) `
+  -Commit (git rev-parse HEAD)
 ./deploy/wujie-local-entry.ps1 Start
 ./deploy/wujie-local-entry.ps1 Status
 ```

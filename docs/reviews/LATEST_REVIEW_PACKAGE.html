@@ -107,5 +107,19 @@ PASS</pre>
     <p>最终状态：<code>refs/heads/main</code> 是唯一的本地分支，<code>D:\sub2api-trunk</code> 是唯一注册 worktree；两个 archive 标签均已解析验证。后续如需远端同步或部署，必须另行授权。</p>
     <p><strong>可复制后续提示词：</strong><code>请只读核对 D:\sub2api-trunk 最终 Git 状态：确认仅剩 main 和主工作树，两个 archive 标签可解析，main 包含 d605aa51d7、4e0290fb3、8c2d2a7ed7，并且没有 fetch、push 或部署记录。</code></p>
   </section>
+  <section class="card" id="production-readiness-20260802">
+    <h2>2026-08-02 production-readiness delta (latest)</h2>
+    <p class="blocked"><strong>Current state: PENDING REVIEW / BLOCKED_AUTH.</strong> The release branch contains local implementation and targeted evidence, but the active production stack cannot be confirmed because verified SSH authentication to <code>ubuntu@114.132.50.149</code> returned <code>Permission denied</code>. No backup, canary, production cutover, credential operation, or paid provider call was performed.</p>
+    <table>
+      <tr><th>Release branch</th><td><code>codex/sub2api-production-readiness-20260802</code></td></tr>
+      <tr><th>Current HEAD</th><td><code>2c109008ef4d3ea9732b7fd903d916483cbeb828</code> plus the pending release-hardening commit after this package update</td></tr>
+      <tr><th>Required API contracts</th><td><code>GET /v1/key-context</code> returns only <code>object</code>, stable opaque <code>subject_id</code>, <code>group_id</code>, and ordered <code>model_kinds</code>; <code>/sub2api/*</code> is excluded from embedded SPA fallback and remains JSON-authenticated.</td></tr>
+      <tr><th>Migration safety</th><td>Advisory lock acquisition and release use one dedicated <code>sql.Conn</code>; concurrent-session coverage is present as an integration test.</td></tr>
+      <tr><th>Delivery identity</th><td>Preflight now requires explicit repository/release roots, branch, and 40-hex product commit; Docker build writes <code>VERSION</code>/<code>COMMIT</code>/<code>DATE</code> into a release manifest.</td></tr>
+      <tr><th>Validation</th><td>Key-context/route/auth/unit targeted tests, migration targeted tests, the offline preflight contract, and <code>go test ./... -count=1</code> passed. The <code>-tags embed</code> compile is currently blocked because this worktree has no generated <code>internal/web/dist</code>; frontend suites and Docker canary remain pending.</td></tr>
+      <tr><th>Rollback</th><td>Preserve old containers, compose/Caddy, images, volumes, database dumps, and a timestamped release directory before any future cutover. If any online gate fails, restore the old compose and image without deleting evidence.</td></tr>
+    </table>
+    <p class="warn">The public HTTP management entry remains an accepted long-term exception. This release performs password operations only through a user-controlled SSH tunnel; the agent does not read, store, print, or enter secrets.</p>
+  </section>
 </body>
 </html>

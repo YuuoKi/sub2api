@@ -5,7 +5,15 @@
 执行目录：`D:\sub2api-trunk`
 整合代码 HEAD：`74daac1e7408ae24db46885e3c9280a3917c2603`
 门禁审查提交：`8023abdd16b1d9ba3e163344fb848288f41a133d`
-状态：**本地历史收口已被本轮生产收口目标覆盖；当前待复核 / BLOCKED_REMOTE_EXECUTION / IDENTITY_GATE**
+状态：**生产程序已切换 / REAL_E2E_PENDING；双 Key、价格和真实一图一视频闭环待复核**
+
+## 2026-08-02 23:08 CST 生产切换事实（最新）
+
+- 完整备份已完成：`/home/ubuntu/wujie/backups/production-readiness-20260802-20260802T141843Z`，包含两套 PostgreSQL dump、11 个数据卷、compose/Caddyfile、镜像归档与恢复脚本；SHA256/gzip 检查通过。
+- Sub2API 已先在 `127.0.0.1:18081` canary 验证，再替换正式服务。线上运行 SHA 为 `97d29909a4313a31c56aabdd3b2a6242f63ed53d`；无 Key 的 `/v1/key-context`、`/v1/*` 与 `/sub2api/*` 均返回 JSON 401，正式 video worker 已恢复启用。
+- QCanvas 已完成仅加列迁移、green 启动和 Caddy 公网切流；线上前后端 SHA 为 `b08fb288015d0a732b6d34fd1d94abd29aba941a`，真实 Chromium 资源请求全部 200、控制台 0 error。旧容器与全部回滚证据保留。
+- 新付费调用仍为 0。剩余目标：用户经 SSH 隧道登录 Sub2 管理端，核验同员工双 Key、模型可用性与准确价格；仅当一图一视频总预估不超过 ¥30 时，按图片后视频顺序各提交一次并证明 taskId、upstream ID、终态、资产、刷新恢复、History/Library、复用、usage/cost、结算和归档。
+- 任一 401/403/409/5xx、空目录、无 taskId、成功无资产、刷新丢失、scope 缺失或结算不一致均判失败；超时或失败不重试付费任务，不伪造 READY。
 
 ## 2026-08-02 生产收口目标（最新覆盖）
 
@@ -13,10 +21,10 @@
 - 代码实现提交：`66fe36c16`；真相源随后有一笔仅文档提交，发布前必须以 `git rev-parse HEAD` 作为精确 SHA。
 - 目标：完成可追溯构建、部署前验证和真实一图一视频闭环；任一门禁失败即停止并保留回滚证据。
 - 已落地：Sub2 key-context 合约、`/sub2api/*` embed bypass、专用连接 advisory lock、显式 delivery roots/commit、构建身份 manifest。
-- 已验证：key-context/route/auth/unit 定向测试、migration 定向测试、delivery preflight 离线契约测试、`go test ./... -count=1`；并发 advisory-lock 集成测试因 Docker 不可用按 harness 规则跳过；`-tags embed` 因缺少生成的 `internal/web/dist` 阻塞。
-- 未完成：服务器只读盘点、完整备份、Sub2 canary/正式切换、QCanvas green 切换、浏览器闭环、用户 SSH 隧道输入密码、真实图片/视频付费验收。
-- 只读核验增量：活动目录为 `/home/ubuntu/wujie/wujie-tencent-guangzhou-dualkey-d6e54a8-35d5f77`，9 服务运行、8 个健康检查通过；公网 `/v1/key-context` 为 404，`/sub2api/*` 仍回退 SPA HTML，旧二进制 build identity 仍在线。
-- 阻塞证据：严格 host key 校验可通过；`ssh ... ubuntu@114.132.50.149` 返回 `Permission denied (publickey,password)`。禁止绕过验证或读取秘密；在可写 SSH 恢复前不做生产备份、部署或付费任务。
+- 已验证：key-context/route/auth/unit 定向测试、migration 定向测试、delivery preflight 离线契约测试、`go test ./... -count=1`、前端 test/typecheck/build 与 `-tags embed` Docker 构建；并发 advisory-lock 集成测试因本地 harness 判断 Docker 不可用而明确跳过，未伪报通过。
+- 已完成：服务器盘点、完整备份、Sub2 canary/正式切换、QCanvas green/公网切换和未登录浏览器门禁。
+- 旧只读核验中的 404、SPA HTML 与旧 build identity 已由正式发布修复；部署后的运行证据见上方最新事实与发布证据目录。
+- SSH 写通道已通过用户完成密码认证后的 ControlMaster 恢复；Agent 不保存密码。Sub2 管理密码和员工 Key 仍仅由用户在本机 SSH 隧道页面输入。
 - 回滚原则：旧容器、compose/Caddy、镜像、卷、dump 和发布目录在用户另行授权清理前全部保留；线上失败只恢复旧镜像/compose。
 
 ## 目标

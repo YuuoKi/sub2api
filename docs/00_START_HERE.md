@@ -4,7 +4,7 @@
 
 ## 2026-08-02 生产收口事实（最新）
 
-> 当前状态：**待复核 / 已阻塞（BLOCKED_AUTH）**。本分支只证明代码与离线门禁；服务器活动栈、备份、canary、切换、线上回归和真实供应商闭环尚未证明。
+> 当前状态：**待复核 / BLOCKED_REMOTE_EXECUTION / IDENTITY_GATE**。操作者已提供线上只读核验并由公网请求复核；服务器可用但当前生产仍未切换到本发布分支，构建身份和 `/sub2api/*` API 绕过尚未上线。
 
 - 发布分支：`codex/sub2api-production-readiness-20260802`，已推送到 `fork`；未推送 Sub2API 上游 `origin`，未触碰任何 `main`。
 - 代码实现提交：`66fe36c16`；key-context 实现父提交为 `2c109008ef4d3ea9732b7fd903d916483cbeb828`。本次真相源提交后，发布前以 `git rev-parse HEAD` 获取精确 SHA。
@@ -14,6 +14,8 @@
 - delivery preflight 要求显式 `RepoRoot`、`ReleaseRoot`、`ExpectedBranch`、`RequiredProductCommit`；构建身份由 `VERSION/COMMIT/DATE` 写入 manifest。
 - 已通过：key-context/route/auth/unit 定向测试、migration 定向测试、delivery preflight 离线契约测试、`go test ./... -count=1`。并发 advisory-lock 集成测试已尝试，但因 Docker 不可用按 harness 规则跳过；`-tags embed` 编译因该 worktree 缺少生成的 `internal/web/dist` 被阻塞；前端全量门禁、Docker canary 尚未在当前环境重新证明。
 - 服务器严格 host key 校验通过，但 `ubuntu@114.132.50.149` 返回 `Permission denied (publickey,password)`；在 SSH 恢复前禁止部署、备份、密码操作或付费任务。
+- 操作者只读核验确认活动目录为 `/home/ubuntu/wujie/wujie-tencent-guangzhou-dualkey-d6e54a8-35d5f77`，9 个服务运行、8 个健康检查通过；本次发布备份仍需重新制作，不能以 2026-07-30 历史备份替代。
+- 公网复核确认：`/v1/models?kind=text` 无 Key 为 JSON 401；`/v1/key-context` 为 404；`/sub2api/v1/models` 与 `/sub2api/v1/video/providers` 仍返回 SPA HTML。因此线上运行的是旧路由/旧构建，不是本发布分支。
 - 公网 HTTP 管理入口是已接受的长期安全例外；本轮密码操作只允许用户自行通过 SSH 隧道完成，Agent 不读取、保存、打印或输入秘密。
 
 ## 一句话状态
